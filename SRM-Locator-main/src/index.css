@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  font-family: "Space Mono", monospace;
+  background-color: #000;
+  color: #fff;
+  box-sizing: border-box;
+}
+
+.font-dot {
+  font-family: 'DotGothic16', sans-serif;
+  letter-spacing: 0.1em;
+}
+
+.font-inter {
+  font-family: 'Inter', sans-serif;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-left: 1px dashed rgba(255, 255, 255, 0.2);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #fff;
+  border-radius: 0;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #f00;
+}
+
+/* Dark mode sleek map */
+.dark-map {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) sepia(10%);
+}
+
+.leaflet-div-icon { background: transparent !important; border: none !important; }
+
+.glass-panel {
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* NOTHING Style Classes */
+.nothing-panel {
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Dotted background */
+.bg-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Red accents */
+.text-nothing-red {
+  color: #f00;
+}
+.bg-nothing-red {
+  background-color: #f00;
+}
+.border-nothing-red {
+  border-color: #f00;
+}
+
