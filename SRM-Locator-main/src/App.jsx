@@ -366,7 +366,7 @@ const App = () => {
     });
 
     return () => socket.off('users-update');
-  }, []);
+  }, [squadCode]);
 
   // 2. Broadcast your live GPS data to the network
   // 2. Broadcast your live GPS data to the network
