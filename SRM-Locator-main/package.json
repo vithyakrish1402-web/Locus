@@ -10,11 +10,11 @@
     "tunnel": "npx localtunnel --port 5181",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\" \"npm run tunnel\""
   },
-
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "firebase": "^12.10.0",
     "framer-motion": "^12.35.2",
     "google-map-react": "^2.2.5",
     "lucide-react": "^0.577.0",
