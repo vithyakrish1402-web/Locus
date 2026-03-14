@@ -13,6 +13,7 @@ import {
 import { auth, googleProvider } from './firebase';
 import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 
+
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 const socket = io(BACKEND_URL, {
@@ -333,7 +334,9 @@ const App = () => {
 
   const [users, setUsers] = useState([]);
   const [liveLocation, setLiveLocation] = useState(null);
-  
+
+  const [squadCode, setSquadCode] = useState('');
+  const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
   // --- ADDED: FIREBASE AUTH LISTENER ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -366,8 +369,10 @@ const App = () => {
   }, []);
 
   // 2. Broadcast your live GPS data to the network
+  // 2. Broadcast your live GPS data to the network
   useEffect(() => {
-    if (!user) return; // Only track if logged in
+    // SECURITY: Don't track location until they log in AND join a squad!
+    if (!user || !hasJoinedSquad) return; 
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -377,10 +382,11 @@ const App = () => {
         // Blast the coordinates and GOOGLE INFO through the WebSocket
         socket.emit('update-location', {
           id: socket.id,
-          name: user.displayName, // Send Google Name
-          photo: user.photoURL,   // Send Google Photo
+          name: user.displayName, 
+          photo: user.photoURL,   
           lat: latitude,
-          lng: longitude
+          lng: longitude,
+          roomCode: squadCode // <--- THIS TELLS THE SERVER WHICH ROOM YOU ARE IN
         });
       },
       (error) => console.error("🚨 [SYS_ERROR] Geolocation lost:", error.message),
@@ -388,7 +394,7 @@ const App = () => {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [user]);
+  }, [user, hasJoinedSquad, squadCode]); // <--- Added new triggers here
 
   // 3. Listen for incoming P2P Pings
   useEffect(() => {
@@ -623,6 +629,33 @@ const App = () => {
     );
   }
 
+  // --- SQUAD ENTRY GATE ---
+  if (user && !hasJoinedSquad) {
+    return (
+      <div className="h-screen w-full bg-black flex flex-col items-center justify-center text-white p-6 bg-dots">
+        <div className="w-full max-w-md p-12 border border-white/20 bg-black relative shadow-[0_0_100px_rgba(255,0,0,0.1)] text-center">
+          <ShieldCheck size={48} className="text-red-500 mx-auto mb-6" />
+          <h2 className="text-3xl font-dot uppercase tracking-widest mb-2">SECURE_CHANNEL</h2>
+          <p className="text-zinc-500 font-dot text-[10px] uppercase mb-10 tracking-widest">Enter Squad Designation</p>
+          
+          <input 
+            type="text" 
+            placeholder="E.G. ALPHA_TEAM"
+            className="w-full bg-black border border-white/30 py-4 text-center font-dot text-lg uppercase tracking-widest focus:outline-none focus:border-red-500 mb-8 text-white transition-colors"
+            value={squadCode}
+            onChange={(e) => setSquadCode(e.target.value.toUpperCase())}
+            maxLength={12}
+          />
+          <button 
+            onClick={() => squadCode.trim() && setHasJoinedSquad(true)}
+            className="w-full py-5 bg-white text-black font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-500 hover:text-white transition-all"
+          >
+            ESTABLISH_LINK
+          </button>
+        </div>
+      </div>
+    );
+  }
   // --- DASHBOARD ---
   return (
     <div className="h-screen w-full bg-black flex overflow-hidden text-white font-inter selection:bg-red-500/30 bg-dots">

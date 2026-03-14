@@ -1,53 +1,73 @@
-import express from "express";
-import cors from "cors";
-import { createServer } from "http";
-import { Server } from "socket.io";
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
 
 const app = express();
-const server = createServer(app);
+app.use(cors());
 
-// Origin "*" is fine for hackathons, allows any frontend to connect
+const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*"
+    origin: "*", // Allows your Vercel frontend to connect
+    methods: ["GET", "POST"]
   }
 });
 
-let users = {};
+// Object to track all users globally
+const users = {};
 
-io.on("connection", (socket) => {
-  console.log("Node linked to Matrix:", socket.id);
+io.on('connection', (socket) => {
+  console.log(`🟢 Node Connected: ${socket.id}`);
 
-  // Handle incoming pings
-  socket.on("ping-user", ({ targetId, senderName }) => {
-    console.log(`⚡ [SYS_PING] Routing signal from ${senderName} to Node: ${targetId}`);
+  // 1. Handle Location & Squad Rooms
+  socket.on('update-location', (data) => {
+    const room = data.roomCode || 'GLOBAL'; 
     
-    // Sends the event ONLY to the specific target user
-    io.to(targetId).emit("receive-ping", { 
-      senderName: senderName, 
-      senderId: socket.id 
-    });
+    // Put the user in their Squad's specific "Room"
+    socket.join(room);
+
+    // Save their data to the server's memory
+    users[socket.id] = { ...data, roomCode: room };
+
+    // Filter: Gather ONLY the users who share this exact room code
+    const squadUsers = {};
+    for (const [id, user] of Object.entries(users)) {
+       if (user.roomCode === room) {
+           squadUsers[id] = user;
+       }
+    }
+
+    // Broadcast the filtered list ONLY to people in that room
+    io.to(room).emit('users-update', squadUsers);
   });
 
-  // Handle location updates
-  socket.on("update-location", (data) => {
-    users[socket.id] = data;
-    // Broadcast updated list to everyone
-    io.emit("users-update", users);
+  // 2. Handle the "Friend Ping" / Radar feature
+  socket.on('ping-user', ({ targetId, senderName }) => {
+    io.to(targetId).emit('receive-ping', { senderName });
   });
 
-  // Handle cleanup on disconnect
-  socket.on("disconnect", () => {
-    console.log("Node delinked:", socket.id);
-    delete users[socket.id];
-    io.emit("users-update", users);
+  // 3. Handle Disconnects (When someone closes the app)
+  socket.on('disconnect', () => {
+    console.log(`🔴 Node Disconnected: ${socket.id}`);
+    
+    const room = users[socket.id]?.roomCode;
+    delete users[socket.id]; // Remove them from the server
+    
+    // Update the squad so the marker disappears for everyone else
+    if (room) {
+      const squadUsers = {};
+      for (const [id, user] of Object.entries(users)) {
+         if (user.roomCode === room) {
+             squadUsers[id] = user;
+         }
+      }
+      io.to(room).emit('users-update', squadUsers);
+    }
   });
 });
 
-// CLOUD DEPLOYMENT PORT LOGIC
-// process.env.PORT tells the server to use whatever port the host (Render/Railway) provides.
 const PORT = process.env.PORT || 5000;
-
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 LOCUS Engine Online: Active on Port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Locus Core Server running on port ${PORT}`);
 });
