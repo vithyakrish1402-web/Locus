@@ -1,40 +1,53 @@
 import express from "express";
 import cors from "cors";
+import { createServer } from "http";
+import { Server } from "socket.io";
 
 const app = express();
+const server = createServer(app);
 
-app.use(cors());
-app.use(express.json());
-
-let locations = [
-  { id: 1, name: "Library", lat: 12.8231, lng: 80.0445 },
-  { id: 2, name: "Hostel", lat: 12.8245, lng: 80.0459 },
-  { id: 3, name: "Academic Block", lat: 12.8255, lng: 80.0463 }
-];
-
-app.get("/locations", (req, res) => {
-  res.json(locations);
-});
-
-app.post("/update-location", (req, res) => {
-  const { id, name, lat, lng } = req.body;
-
-  const existing = locations.find(user => user.id === id);
-
-  if (existing) {
-    existing.lat = lat;
-    existing.lng = lng;
-  } else {
-    locations.push({ id, name, lat, lng });
+// Origin "*" is fine for hackathons, allows any frontend to connect
+const io = new Server(server, {
+  cors: {
+    origin: "*"
   }
-
-  res.json({ message: "Location updated" });
 });
 
-app.get("/", (req, res) => {
-  res.send("LOCUS backend running 🚀");
+let users = {};
+
+io.on("connection", (socket) => {
+  console.log("Node linked to Matrix:", socket.id);
+
+  // Handle incoming pings
+  socket.on("ping-user", ({ targetId, senderName }) => {
+    console.log(`⚡ [SYS_PING] Routing signal from ${senderName} to Node: ${targetId}`);
+    
+    // Sends the event ONLY to the specific target user
+    io.to(targetId).emit("receive-ping", { 
+      senderName: senderName, 
+      senderId: socket.id 
+    });
+  });
+
+  // Handle location updates
+  socket.on("update-location", (data) => {
+    users[socket.id] = data;
+    // Broadcast updated list to everyone
+    io.emit("users-update", users);
+  });
+
+  // Handle cleanup on disconnect
+  socket.on("disconnect", () => {
+    console.log("Node delinked:", socket.id);
+    delete users[socket.id];
+    io.emit("users-update", users);
+  });
 });
 
-app.listen(5000, () => {
-  console.log("Backend running on http://localhost:5000");
+// CLOUD DEPLOYMENT PORT LOGIC
+// process.env.PORT tells the server to use whatever port the host (Render/Railway) provides.
+const PORT = process.env.PORT || 5000;
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 LOCUS Engine Online: Active on Port ${PORT}`);
 });

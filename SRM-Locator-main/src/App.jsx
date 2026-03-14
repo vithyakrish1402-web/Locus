@@ -1,3 +1,4 @@
+import { io } from "socket.io-client";
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
@@ -7,7 +8,15 @@ import {
   BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, Bluetooth, Radio, LocateFixed, OctagonAlert, Waypoints, Activity
 } from 'lucide-react';
+// This checks if a cloud URL exists, otherwise it falls back to your local machine
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
+const socket = io(BACKEND_URL, {
+  transports: ['websocket'],
+  // This helps keep the connection alive on free cloud hosting
+  reconnection: true,
+  reconnectionAttempts: 5
+});
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 }; 
 
 const BUILDINGS = [
@@ -346,50 +355,60 @@ const App = () => {
   const [users, setUsers] = useState([]);
   const [liveLocation, setLiveLocation] = useState(null);
   
+  // 1. Listen for real-time network updates from the server
   useEffect(() => {
-    const fetchLocations = async () => {
-      try {
-        const res = await fetch("http://localhost:5000/locations");
-        const data = await res.json();
-
-        const formattedUsers = data.map(loc => ({
-          id: "api-" + loc.id,
-          name: loc.name,
-          role: "Campus Node",
-          lat: loc.lat,
-          lng: loc.lng,
-          status: "Active",
-          permission: "accepted"
-        }));
-
-        setUsers(formattedUsers);
-      } catch (err) {
-        console.error("API error:", err);
-      }
-    };
-    
-    fetchLocations();
-  }, []);
-
-  useEffect(() => {
-    const watchId = navigator.geolocation.watchPosition((position) => {
-      const { latitude, longitude } = position.coords;
-      setLiveLocation({ lat: latitude, lng: longitude });
-      fetch("http://localhost:5000/update-location", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          id: "device-user",
-          name: "Live User",
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        })
-      });
+    socket.on('users-update', (activeUsers) => {
+      // Convert the backend dictionary into an array your map can render
+      const formattedUsers = Object.entries(activeUsers).map(([id, data]) => ({
+        id: id,
+        name: data.name || "Live User",
+        role: "Campus Node",
+        lat: data.lat,
+        lng: data.lng,
+        status: "Active",
+        permission: "accepted" // Auto-accepted for this test
+      }));
+      
+      setUsers(formattedUsers);
     });
 
+    // Clean up the listener when the component unmounts
+    return () => socket.off('users-update');
+  }, []);
+
+  // 2. Broadcast your live GPS data to the network
+  useEffect(() => {
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        // Update local state so you can see your own marker
+        setLiveLocation({ lat: latitude, lng: longitude });
+
+        // Blast the coordinates through the WebSocket
+        socket.emit('update-location', {
+          id: socket.id,
+          name: currentUser || "Live User",
+          lat: latitude,
+          lng: longitude
+        });
+      },
+      (error) => console.error("🚨 [SYS_ERROR] Geolocation lost:", error.message),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+    // 3. Listen for incoming P2P Ping
+
+    // Clean up the GPS watcher when the component unmounts
     return () => navigator.geolocation.clearWatch(watchId);
+  }, [currentUser]);
+  // 3. Listen for incoming P2P Pings
+  useEffect(() => {
+    socket.on('receive-ping', ({ senderName }) => {
+      // You can replace this standard alert with a cool custom UI toast later
+      alert(`🚨 [INCOMING_SIGNAL] \n\nNode '${senderName}' is pinging your location!`);
+    });
+
+    return () => socket.off('receive-ping');
   }, []);
 
   const [blockedUserIds, setBlockedUserIds] = useState([]);
@@ -450,6 +469,13 @@ const App = () => {
     setLoginMethod(null);
     setEmail('');
     setPassword('');
+  };
+  const sendPing = (targetId) => {
+    socket.emit('ping-user', {
+      targetId: targetId,
+      senderName: currentUser || "Ghost_Node"
+    });
+    console.log(`>> Signal transmitted to Node: ${targetId}`);
   };
 
   const generateBuildingInsights = async (building) => {
@@ -729,11 +755,24 @@ const App = () => {
                         <h4 className="font-dot text-sm uppercase tracking-widest">{user.name}</h4>
                         <p className="text-[10px] font-dot text-zinc-500">[{user.role}]</p>
                       </div>
-                      <div className="flex gap-3">
-                         {user.permission === 'accepted' ? <UserCheck size={18} className="text-white" /> : <Lock size={18} className="text-zinc-600"/>}
-                         <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors">
-                            <Ban size={18} />
-                         </button>
+                      <div className="flex gap-3 items-center">
+                        {/* NEW PING BUTTON */}
+                        <button 
+                          onClick={() => sendPing(user.id)} 
+                          className="text-emerald-400 hover:text-white transition-colors"
+                          title="Ping User"
+                          >
+                            <Radio size={18} className="animate-pulse" />
+                          </button>
+
+                          {/* Existing Auth Status */}
+                          {user.permission === 'accepted' ? <UserCheck size={18} className="text-white" /> : <Lock size={18} className="text-zinc-600"/>}
+
+                          {/* Existing Block Button */}
+                          <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors">
+                            <Ban size={18} /> 
+                          </button>
+
                       </div>
                     </div>
 
@@ -791,6 +830,16 @@ const App = () => {
             mapRef.current = map;
           }}
         >
+          {liveLocation && (
+             <CustomMarker 
+               key="live-user" 
+               lat={liveLocation.lat} 
+               lng={liveLocation.lng} 
+               isUser={true} 
+               name="YOU" 
+               onClick={() => handleFocus(liveLocation, null)} 
+             />
+          )}
           {activeTab === 'buildings' && editableBuildings.map(b => (
              <CustomMarker 
                key={b.id} 
