@@ -351,31 +351,39 @@ const App = () => {
 
   // 1. Listen for real-time network updates from the server
  // 1. Listen for real-time network updates from the server
+  // 1. Listen for real-time network updates from the server
   useEffect(() => {
-    // SECURITY: We only listen for updates if we are actually in a squad
     if (!hasJoinedSquad) return;
 
     socket.on('users-update', (activeUsers) => {
-      console.log(">>> Squad Data Received:", activeUsers);
-      const formattedUsers = Object.entries(activeUsers).map(([id, data]) => ({
-        id: id,
-        name: data.name || "Live User",
-        photo: data.photo,
-        role: "Campus Node",
-        lat: data.lat,
-        lng: data.lng,
-        status: "Active",
-        permission: "accepted" 
-      }));
+      const formattedUsers = [];
+      
+      Object.entries(activeUsers).forEach(([id, data]) => {
+        // 🛑 THE BULLETPROOF FILTER 🛑
+        // 1. Ignore yourself (id !== socket.id)
+        // 2. Ignore ANYONE who doesn't have your exact squad code
+        if (id !== socket.id && data.roomCode === squadCode) { 
+          formattedUsers.push({
+            id: id,
+            name: data.name || "Live User",
+            photo: data.photo,
+            role: "Campus Node",
+            lat: data.lat,
+            lng: data.lng,
+            status: "Active",
+            permission: "accepted" 
+          });
+        }
+      });
+      
       setUsers(formattedUsers);
     });
 
-    // CLEANUP: This runs when you leave a squad or close the app
     return () => {
       socket.off('users-update');
-      setUsers([]); // Clear the map markers immediately
+      setUsers([]); // Clear map when changing rooms
     };
-  }, [hasJoinedSquad, squadCode]); // RE-RUN whenever squad changes
+  }, [hasJoinedSquad, squadCode]); // The squadCode must be here! changes
 
   // 2. Broadcast your live GPS data to the network
   // 2. Broadcast your live GPS data to the network
