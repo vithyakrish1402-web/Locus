@@ -24,21 +24,23 @@ io.on('connection', (socket) => {
   socket.on('update-location', (data) => {
     const room = data.roomCode || 'GLOBAL'; 
     
-    // Put the user in their Squad's specific "Room"
+    // Join the specific room (this keeps the connection private)
     socket.join(room);
 
-    // Save their data to the server's memory
+    // Save user data to the global object
     users[socket.id] = { ...data, roomCode: room };
 
-    // Filter: Gather ONLY the users who share this exact room code
+    // --- THE FILTER ---
+    // Get all users, but only keep the ones who are in THIS room
     const squadUsers = {};
-    for (const [id, user] of Object.entries(users)) {
-       if (user.roomCode === room) {
-           squadUsers[id] = user;
-       }
-    }
+    Object.keys(users).forEach((id) => {
+      if (users[id].roomCode === room) {
+        squadUsers[id] = users[id];
+      }
+    });
 
-    // Broadcast the filtered list ONLY to people in that room
+    // --- THE BROADCAST ---
+    // Use io.to(room) so ONLY people with the same code receive this update
     io.to(room).emit('users-update', squadUsers);
   });
 
