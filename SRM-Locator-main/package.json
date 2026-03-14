@@ -15,7 +15,7 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "firebase": "^12.10.0",
-    "framer-motion": "^12.35.2",
+    "framer-motion": "^12.36.0",
     "google-map-react": "^2.2.5",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.577.0",
