@@ -350,12 +350,17 @@ const App = () => {
   }, []);
 
   // 1. Listen for real-time network updates from the server
+ // 1. Listen for real-time network updates from the server
   useEffect(() => {
+    // SECURITY: We only listen for updates if we are actually in a squad
+    if (!hasJoinedSquad) return;
+
     socket.on('users-update', (activeUsers) => {
+      console.log(">>> Squad Data Received:", activeUsers);
       const formattedUsers = Object.entries(activeUsers).map(([id, data]) => ({
         id: id,
         name: data.name || "Live User",
-        photo: data.photo, // Map photo from socket
+        photo: data.photo,
         role: "Campus Node",
         lat: data.lat,
         lng: data.lng,
@@ -365,8 +370,12 @@ const App = () => {
       setUsers(formattedUsers);
     });
 
-    return () => socket.off('users-update');
-  }, [squadCode]);
+    // CLEANUP: This runs when you leave a squad or close the app
+    return () => {
+      socket.off('users-update');
+      setUsers([]); // Clear the map markers immediately
+    };
+  }, [hasJoinedSquad, squadCode]); // RE-RUN whenever squad changes
 
   // 2. Broadcast your live GPS data to the network
   // 2. Broadcast your live GPS data to the network
