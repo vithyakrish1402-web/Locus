@@ -619,23 +619,30 @@ const App = () => {
     setAiResponse('');
     
     try {
-      // 1. Compile a live tactical snapshot of your squad's vitals
+      // 1. Compile live squad vitals
       const squadSnapshot = users.filter(u => !blockedUserIds.includes(u.id)).map(u => 
-        `Node [${u.name}]: Distance from me: ${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Speed: ${u.speed} KM/H, Battery: ${u.battery}%`
+        `Node [${u.name}]: Distance: ${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Speed: ${u.speed} KM/H, Battery: ${u.battery}%`
       ).join(' | ');
 
-      // 2. Inject this live data into Gemini's hidden instructions
+      // 2. NEW: Compile the campus map knowledge
+      const campusSnapshot = BUILDINGS.map(b => 
+        `[${b.name}] Category: ${b.category}, Intel: ${b.info}`
+      ).join(' | ');
+
+      // 3. Inject both into Gemini's brain
       const tacticalInstruction = `
         You are 'SYS_ORACLE', a highly advanced tactical AI assisting a user on the LOCUS network at SRM KTR campus.
-        Respond in a concise, cyberpunk, military-comms tone. Be highly observant and analytical.
+        Respond in a concise, cyberpunk, military-comms tone. Be highly observant.
         
         CURRENT LIVE SQUAD TELEMETRY:
-        ${squadSnapshot || "No other active nodes currently connected to this channel."}
+        ${squadSnapshot || "No other active nodes."}
+
+        CAMPUS DATABASE (SRM KTR):
+        ${campusSnapshot}
         
-        Answer the user's query utilizing the live telemetry data above. Do not mention that you were given a data text block; act as if you are reading it directly from their radar HUD in real-time. Keep responses under 3 sentences unless asked for details.
+        Answer the user's query utilizing the telemetry and campus data above. If they ask about a location, reference the Campus Database. Do not mention that you were given this data text block.
       `;
 
-      // 3. Fire the query using the custom tactical instructions
       const res = await callGemini(aiQuery, tacticalInstruction);
       setAiResponse(res);
     } catch (err) {
