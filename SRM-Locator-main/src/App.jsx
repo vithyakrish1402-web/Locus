@@ -483,13 +483,16 @@ const App = () => {
   const [aiQuery, setAiQuery] = useState('');
 
   // Gemini API Utility (KEPT YOUR EXACT KEY AND URL)
-  const callGemini = async (prompt, systemInstruction = "You are a helpful campus assistant for SRM KTR. Be concise, sleek, and highly observant. Use a cyberpunk or advanced-tech undertone.") => {
-    const apiKey = "AIzaSyBfPt0NLfm9sjzUSNgMJYQnEgOYk7u_mJgs"; 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+  const callGemini = async (prompt, systemInstruction = "You are a helpful campus assistant for SRM KTR.") => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     
+    // --- BULLETPROOF PAYLOAD ---
+    // We fuse the system data and the user query into one solid block
+    const combinedPrompt = `${systemInstruction}\n\nUSER_QUERY: ${prompt}`;
+
     const payload = {
-      contents: [{ parts: [{ text: prompt }] }],
-      systemInstruction: { parts: [{ text: systemInstruction }] }
+      contents: [{ parts: [{ text: combinedPrompt }] }]
     };
 
     let delay = 1000;
@@ -500,7 +503,14 @@ const App = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            if (!response.ok) throw new Error('API Error');
+            
+            // If it fails, log the EXACT reason to the console
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error("🚨 [GEMINI ERROR]:", errorData);
+                throw new Error('API Error');
+            }
+            
             const data = await response.json();
             return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response found.";
         } catch (err) {
@@ -607,11 +617,29 @@ const App = () => {
     if (!aiQuery.trim()) return;
     setAiLoading(true);
     setAiResponse('');
+    
     try {
-      const res = await callGemini(aiQuery);
+      // 1. Compile a live tactical snapshot of your squad's vitals
+      const squadSnapshot = users.filter(u => !blockedUserIds.includes(u.id)).map(u => 
+        `Node [${u.name}]: Distance from me: ${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Speed: ${u.speed} KM/H, Battery: ${u.battery}%`
+      ).join(' | ');
+
+      // 2. Inject this live data into Gemini's hidden instructions
+      const tacticalInstruction = `
+        You are 'SYS_ORACLE', a highly advanced tactical AI assisting a user on the LOCUS network at SRM KTR campus.
+        Respond in a concise, cyberpunk, military-comms tone. Be highly observant and analytical.
+        
+        CURRENT LIVE SQUAD TELEMETRY:
+        ${squadSnapshot || "No other active nodes currently connected to this channel."}
+        
+        Answer the user's query utilizing the live telemetry data above. Do not mention that you were given a data text block; act as if you are reading it directly from their radar HUD in real-time. Keep responses under 3 sentences unless asked for details.
+      `;
+
+      // 3. Fire the query using the custom tactical instructions
+      const res = await callGemini(aiQuery, tacticalInstruction);
       setAiResponse(res);
     } catch (err) {
-      setAiResponse("Something went wrong. Re-establishing link...");
+      setAiResponse("[SYS_FAILURE] Neural link to Oracle severed. Retrying connection...");
     } finally {
       setAiLoading(false);
       setAiQuery('');
