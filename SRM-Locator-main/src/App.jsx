@@ -384,6 +384,10 @@ const App = () => {
       
       setUsers(formattedUsers);
     });
+    // --- 🚨 ADD THE SOS BEACON RECEIVER HERE 🚨 ---
+    socket.on('receive-ping', ({ senderName }) => {
+      alert(`🚨 SOS BEACON DETECTED 🚨\n\n${senderName.toUpperCase()} requires immediate assistance at their coordinates!`);
+    });
 
     return () => {
       socket.off('users-update');
@@ -610,6 +614,21 @@ const App = () => {
     } finally {
       setAiLoading(false);
     }
+  };
+
+// --- SOS TRANSMITTER ---
+  const fireSOSBeacon = (targetNodeId, targetNodeName) => {
+    // Grab your name so the receiver knows who is in trouble
+    const myName = auth.currentUser?.displayName || "A Squad Member";
+    
+    // Fire the signal to the Render Mothership
+    socket.emit('ping-user', { 
+      targetId: targetNodeId, 
+      senderName: myName 
+    });
+    
+    // Local confirmation that the weapon fired
+    alert(`[SYSTEM] SOS Signal transmitted directly to node: ${targetNodeName}.`);
   };
 
  const handleGeneralAiQuery = async (e) => {
@@ -980,7 +999,12 @@ const App = () => {
                           <span className="text-[9px] font-dot text-zinc-500 uppercase tracking-tighter">{user.speed || 0} KM/H</span>
                         </div>
                       
-                          
+                        <button 
+                          onClick={() => fireSOSBeacon(user.id, user.name)}
+                          className="w-full mt-3 py-2 bg-red-900/30 border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+                        >
+                          FIRE_SOS_BEACON
+                          </button>
                         </div>
                       </div>
                       <div className="flex gap-3 items-center">
