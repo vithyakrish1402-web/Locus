@@ -416,12 +416,13 @@ const App = () => {
   // 3. Listen for incoming P2P Pings
   useEffect(() => {
     socket.on('receive-ping', ({ senderName }) => {
+      playSonarPing(); // <--- MAKES YOUR DEVICE BEEP
       alert(`🚨 [INCOMING_SIGNAL] \n\nNode '${senderName}' is pinging your location!`);
     });
 
     return () => socket.off('receive-ping');
   }, []);
-
+  
   const [blockedUserIds, setBlockedUserIds] = useState([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [modalTab, setModalTab] = useState('requests'); 
@@ -504,12 +505,40 @@ const App = () => {
     setSquadCode('');
     setUsers([]);
   };
-
+// --- CYBERPUNK SONAR AUDIO ENGINE ---
+  const playSonarPing = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      osc.type = 'sine'; 
+      osc.frequency.setValueAtTime(880, ctx.currentTime); 
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); 
+      
+      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); 
+      
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (e) {
+      console.log("Audio not supported.");
+    }
+  };
   const sendPing = (targetId) => {
     socket.emit('ping-user', {
       targetId: targetId,
       senderName: user ? user.displayName : "Ghost_Node"
     });
+    
+    playSonarPing(); // <--- TRIGGERS THE SOUND LOCALLY
+    
     console.log(`>> Signal transmitted to Node: ${targetId}`);
   };
 
