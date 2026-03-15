@@ -612,24 +612,24 @@ const App = () => {
     }
   };
 
-  const handleGeneralAiQuery = async (e) => {
+ const handleGeneralAiQuery = async (e) => {
     e.preventDefault();
     if (!aiQuery.trim()) return;
     setAiLoading(true);
     setAiResponse('');
     
     try {
-      // 1. Compile live squad vitals
+      // 1. Compile live squad vitals WITH RAW GPS COORDINATES
       const squadSnapshot = users.filter(u => !blockedUserIds.includes(u.id)).map(u => 
-        `Node [${u.name}]: Distance: ${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Speed: ${u.speed} KM/H, Battery: ${u.battery}%`
+        `Node [${u.name}]: Lat: ${u.lat}, Lng: ${u.lng}, Distance from me: ${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Speed: ${u.speed} KM/H, Battery: ${u.battery}%`
       ).join(' | ');
 
-      // 2. NEW: Compile the campus map knowledge
+      // 2. Compile the campus map knowledge WITH RAW GPS COORDINATES
       const campusSnapshot = BUILDINGS.map(b => 
-        `[${b.name}] Category: ${b.category}, Intel: ${b.info}`
+        `[${b.name}] Lat: ${b.lat}, Lng: ${b.lng}, Category: ${b.category}, Intel: ${b.info}`
       ).join(' | ');
 
-      // 3. Inject both into Gemini's brain
+      // 3. Inject into Gemini's brain with new spatial reasoning instructions
       const tacticalInstruction = `
         You are 'SYS_ORACLE', a highly advanced tactical AI assisting a user on the LOCUS network at SRM KTR campus.
         Respond in a concise, cyberpunk, military-comms tone. Be highly observant.
@@ -640,7 +640,8 @@ const App = () => {
         CAMPUS DATABASE (SRM KTR):
         ${campusSnapshot}
         
-        Answer the user's query utilizing the telemetry and campus data above. If they ask about a location, reference the Campus Database. Do not mention that you were given this data text block.
+        CRITICAL DIRECTIVE: If the user asks who is near a specific building, compare the Latitude (Lat) and Longitude (Lng) of the squad nodes to the Latitude and Longitude of the buildings in the Campus Database to determine proximity. 
+        Answer the user's query utilizing the telemetry and campus data. Do not mention that you were given this data text block.
       `;
 
       const res = await callGemini(aiQuery, tacticalInstruction);
@@ -652,7 +653,6 @@ const App = () => {
       setAiQuery('');
     }
   };
-
   const requestPermission = (userId) => {
     if (blockedUserIds.includes(userId)) return;
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, permission: 'requested' } : u));
