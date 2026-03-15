@@ -928,6 +928,25 @@ const App = () => {
                             </span>
                           )}
                         </div>
+                        {/* --- TACTICAL TELEMETRY OVERLAY --- */}
+                        <div className="flex gap-4 mt-2 border-t border-white/5 pt-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-3 border border-zinc-600 rounded-[1px] relative flex items-end overflow-hidden">
+                            <div
+                              className={`w-full ${user.battery < 25 ? 'bg-red-500' : 'bg-emerald-500'} transition-all duration-500`}
+                              style={{ height: `${user.battery}%` }}
+                            />
+                          </div>
+                          <span className="text-[9px] font-dot text-zinc-500 uppercase tracking-tighter">{user.battery || 0}% BAT</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <Activity size={10} className="text-blue-500 animate-pulse" />
+                          <span className="text-[9px] font-dot text-zinc-500 uppercase tracking-tighter">{user.speed || 0} KM/H</span>
+                        </div>
+                      
+                          
+                        </div>
                       </div>
                       <div className="flex gap-3 items-center">
                         {/* PING BUTTON */}
