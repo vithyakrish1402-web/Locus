@@ -28,8 +28,12 @@ const BUILDINGS = [
   { id: 1, name: "Tech Park", category: "Academic", lat: 12.82463, lng: 80.04495, info: "Home to CSE & IT departments. 15 floors of innovation." },
   { id: 2, name: "University Building (UB)", category: "Academic", lat: 12.82348, lng: 80.04255, info: "The administrative heart and main library block." },
   { id: 3, name: "T.P. Ganesan Auditorium", category: "Event", lat: 12.82470, lng: 80.04655, info: "One of Asia's largest auditoriums, near the main gate." },
-  { id: 4, name: "Main Block", category: "Academic", lat: 12.82360, lng: 80.04165, info: "The heritage block housing Mechanical and Civil Engineering." },
-  { id: 5, name: "Hi-Tech Block", category: "Research", lat: 12.82310, lng: 80.04185, info: "Specialized labs for ECE and EEE students." },
+  
+  // --- UPDATED COORDINATES ---
+  { id: 4, name: "Main Block", category: "Academic", lat: 12.82315, lng: 80.04125, info: "The heritage block housing Mechanical and Civil Engineering." },
+  { id: 5, name: "Hi-Tech Block", category: "Research", lat: 12.82285, lng: 80.04165, info: "Specialized labs for ECE and EEE students." },
+  // ---------------------------
+
   { id: 6, name: "SRM Medical College", category: "Medical", lat: 12.82104, lng: 80.04796, info: "Multi-specialty hospital and medical research center." },
   { id: 7, name: "Java Green", category: "Food", lat: 12.82120, lng: 80.04150, info: "Popular outdoor student hangout and food court." },
   { id: 8, name: "Bio-Tech Block", category: "Academic", lat: 12.82585, lng: 80.04585, info: "Genetic engineering and biotechnology research facility." }
