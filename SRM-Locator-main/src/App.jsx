@@ -413,16 +413,45 @@ const App = () => {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [user, hasJoinedSquad, squadCode]); // <--- Added new triggers here
 
+  
+  /// --- CYBERPUNK SONAR AUDIO ENGINE ---
+  // --- CYBERPUNK SONAR AUDIO ENGINE ---
+  const playSonarPing = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      osc.type = 'sine'; 
+      osc.frequency.setValueAtTime(880, ctx.currentTime); 
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); 
+      
+      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); 
+      
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (e) {
+      console.log("Audio not supported.");
+    }
+  };
+
   // 3. Listen for incoming P2P Pings
   useEffect(() => {
     socket.on('receive-ping', ({ senderName }) => {
-      playSonarPing(); // <--- MAKES YOUR DEVICE BEEP
+      playSonarPing(); // <--- The red line will vanish!
       alert(`🚨 [INCOMING_SIGNAL] \n\nNode '${senderName}' is pinging your location!`);
     });
 
     return () => socket.off('receive-ping');
   }, []);
-  
+
   const [blockedUserIds, setBlockedUserIds] = useState([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [modalTab, setModalTab] = useState('requests'); 
@@ -505,32 +534,31 @@ const App = () => {
     setSquadCode('');
     setUsers([]);
   };
-// --- CYBERPUNK SONAR AUDIO ENGINE ---
-  const playSonarPing = () => {
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-      
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      
-      osc.type = 'sine'; 
-      osc.frequency.setValueAtTime(880, ctx.currentTime); 
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); 
-      
-      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); 
-      
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      
-      osc.start();
-      osc.stop(ctx.currentTime + 0.5);
-    } catch (e) {
-      console.log("Audio not supported.");
+
+  // --- TACTICAL DISTANCE ENGINE (HAVERSINE FORMULA) ---
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return '[ SIGNAL_LOST ]';
+    
+    const R = 6371e3; // Earth's radius in meters
+    const rad = Math.PI / 180;
+    const phi1 = lat1 * rad;
+    const phi2 = lat2 * rad;
+    const deltaPhi = (lat2 - lat1) * rad;
+    const deltaLambda = (lon2 - lon1) * rad;
+
+    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c; // Distance in meters
+
+    // Format for tactical display
+    if (distance > 1000) {
+      return `[ ${(distance / 1000).toFixed(2)} KM ]`;
     }
+    return `[ ${Math.floor(distance)} M ]`;
   };
+
   const sendPing = (targetId) => {
     socket.emit('ping-user', {
       targetId: targetId,
@@ -867,7 +895,14 @@ const App = () => {
                       </div>
                       <div className="flex-1">
                         <h4 className="font-dot text-sm uppercase tracking-widest">{user.name}</h4>
-                        <p className="text-[10px] font-dot text-zinc-500">[{user.role}]</p>
+                        <div className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest flex items-center gap-2 mt-1">
+                          <span>[{user.role}]</span>
+                          {liveLocation && (
+                            <span className="text-red-500">
+                              {calculateDistance(liveLocation.lat, liveLocation.lng, user.lat, user.lng)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex gap-3 items-center">
                         {/* PING BUTTON */}
