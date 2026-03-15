@@ -868,8 +868,15 @@ const App = () => {
                     }`}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-dot text-sm uppercase tracking-widest">{building.name}</h3>
-                      <span className="text-[10px] font-dot text-zinc-400 uppercase">
+                      <div className="flex flex-col">
+                        <h3 className="font-dot text-sm uppercase tracking-widest">{building.name}</h3>
+                        {liveLocation && (
+                          <span className="text-[10px] text-red-500 font-dot mt-1">
+                            {calculateDistance(liveLocation.lat, liveLocation.lng, building.lat, building.lng)} AWAY
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">
                         [{building.category}]
                       </span>
                     </div>
