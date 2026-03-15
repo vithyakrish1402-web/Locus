@@ -374,6 +374,8 @@ const App = () => {
             role: "Campus Node",
             lat: data.lat,
             lng: data.lng,
+            speed: data.speed || 0,
+            battery: data.battery || 0,
             status: "Active",
             permission: "accepted" 
           });
@@ -389,25 +391,37 @@ const App = () => {
     };
   }, [hasJoinedSquad, squadCode]); // The squadCode must be here! changes
 
+
   // 2. Broadcast your live GPS data to the network
-  // 2. Broadcast your live GPS data to the network
+ // 2. Broadcast your live GPS + Telemetry data to the network
   useEffect(() => {
-    // SECURITY: Don't track location until they log in AND join a squad!
     if (!user || !hasJoinedSquad) return; 
 
     const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
+      async (position) => { // <--- Added async
+        const { latitude, longitude, speed } = position.coords;
         setLiveLocation({ lat: latitude, lng: longitude });
 
-        // Blast the coordinates and GOOGLE INFO through the WebSocket
+        // --- FETCH BATTERY TELEMETRY ---
+        let batteryLevel = null;
+        try {
+          if ('getBattery' in navigator) {
+            const battery = await navigator.getBattery();
+            batteryLevel = Math.round(battery.level * 100);
+          }
+        } catch (e) { console.log("Battery API blocked"); }
+
+        // ONLY broadcast if Ghost Mode is OFF (assuming we'll add the ghost toggle later)
+        // If you haven't added isGhostMode yet, you can remove that check.
         socket.emit('update-location', {
           id: socket.id,
           name: user.displayName, 
           photo: user.photoURL,   
           lat: latitude,
           lng: longitude,
-          roomCode: squadCode // <--- THIS TELLS THE SERVER WHICH ROOM YOU ARE IN
+          speed: speed ? Math.round(speed * 3.6) : 0, // Convert m/s to km/h
+          battery: batteryLevel,
+          roomCode: squadCode
         });
       },
       (error) => console.error("🚨 [SYS_ERROR] Geolocation lost:", error.message),
@@ -415,7 +429,7 @@ const App = () => {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [user, hasJoinedSquad, squadCode]); // <--- Added new triggers here
+  }, [user, hasJoinedSquad, squadCode]);
 
   
   /// --- CYBERPUNK SONAR AUDIO ENGINE ---
