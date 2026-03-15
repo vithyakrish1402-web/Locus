@@ -25,18 +25,18 @@ const socket = io(BACKEND_URL, {
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 }; 
 
 const BUILDINGS = [
-  { id: 1, name: "Tech Park", category: "Academic", lat: 12.82463, lng: 80.04495, info: "Home to CSE & IT departments. 15 floors of innovation." },
-  { id: 2, name: "University Building (UB)", category: "Academic", lat: 12.82348, lng: 80.04255, info: "The administrative heart and main library block." },
-  { id: 3, name: "T.P. Ganesan Auditorium", category: "Event", lat: 12.82470, lng: 80.04655, info: "One of Asia's largest auditoriums, near the main gate." },
+  { id: 1, name: "Tech Park", category: "Academic", lat: 12.825020924230433, lng: 80.0453233376537, info: "Home to CSE & IT departments. 15 floors of innovation." },
+  { id: 2, name: "University Building (UB)", category: "Academic", lat: 12.824353553512712, lng: 80.04221892231276, info: "The administrative heart and main library block." },
+  { id: 3, name: "T.P. Ganesan Auditorium", category: "Event", lat: 12.824880056150072, lng: 80.04668508123501, info: "One of Asia's largest auditoriums, near the main gate." },
   
   // --- UPDATED COORDINATES ---
-  { id: 4, name: "Main Block", category: "Academic", lat: 12.82315, lng: 80.04125, info: "The heritage block housing Mechanical and Civil Engineering." },
-  { id: 5, name: "Hi-Tech Block", category: "Research", lat: 12.82285, lng: 80.04165, info: "Specialized labs for ECE and EEE students." },
+  { id: 4, name: "CRC Block", category: "Academic", lat: 12.820344661045802, lng: 80.03784856136284, info: "The heritage block housing Mechanical and Civil Engineering." },
+  { id: 5, name: "Hi-Tech Block", category: "Research", lat: 12.821075984327978, lng: 80.03893573761148, info: "Specialized labs for ECE and EEE students." },
   // ---------------------------
 
-  { id: 6, name: "SRM Medical College", category: "Medical", lat: 12.82104, lng: 80.04796, info: "Multi-specialty hospital and medical research center." },
-  { id: 7, name: "Java Green", category: "Food", lat: 12.82120, lng: 80.04150, info: "Popular outdoor student hangout and food court." },
-  { id: 8, name: "Bio-Tech Block", category: "Academic", lat: 12.82585, lng: 80.04585, info: "Genetic engineering and biotechnology research facility." }
+  { id: 6, name: "SRM Medical College", category: "Medical", lat: 12.821098258984547, lng: 80.0481636983677, info: "Multi-specialty hospital and medical research center." },
+  { id: 7, name: "Java Green", category: "Food", lat: 12.823348807944917, lng: 80.04448904064235, info: "Popular outdoor student hangout and food court." },
+  { id: 8, name: "Bio-Tech Block", category: "Academic", lat: 12.825007113379733, lng: 80.04414300737659, info: "Genetic engineering and biotechnology research facility." }
 ];
 
 // MODIFIED: Added 'photo' support to your CustomMarker
