@@ -490,7 +490,8 @@ const App = () => {
   // Gemini API Utility (KEPT YOUR EXACT KEY AND URL)
   const callGemini = async (prompt, systemInstruction = "You are a helpful campus assistant for SRM KTR.") => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    // --- UPDATED TO FLASH-LITE FOR HIGHER QUOTA ---
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
     
     // --- BULLETPROOF PAYLOAD ---
     // We fuse the system data and the user query into one solid block
@@ -640,7 +641,7 @@ const App = () => {
 
  const handleGeneralAiQuery = async (e) => {
     e.preventDefault();
-    if (!aiQuery.trim()) return;
+    if (!aiQuery.trim() || aiLoading) return;
     setAiLoading(true);
     setAiResponse('');
     
