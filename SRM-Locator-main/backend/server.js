@@ -1,7 +1,7 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
 
 const app = express();
 app.use(cors());
@@ -14,21 +14,23 @@ const io = new Server(server, {
 let users = {};
 
 io.on('connection', (socket) => {
-  console.log(`Node Connected: ${socket.id}`);
+  console.log(`🟢 Node Connected: ${socket.id}`);
 
+  // --- LOCATION & ROOM ENGINE ---
   socket.on('update-location', (data) => {
     const newRoom = data.roomCode || 'GLOBAL';
     const oldRoom = users[socket.id]?.roomCode;
 
-    // Leave old room if switching
+    // 1. Leave old room if switching to a new squad
     if (oldRoom && oldRoom !== newRoom) {
       socket.leave(oldRoom);
     }
 
+    // 2. Join the new room
     socket.join(newRoom);
     users[socket.id] = { ...data, roomCode: newRoom };
-
-    // Get ONLY users in this specific room
+    
+    // 3. Get ONLY users in this specific room
     const roomUsers = {};
     Object.keys(users).forEach(id => {
       if (users[id].roomCode === newRoom) {
@@ -36,13 +38,22 @@ io.on('connection', (socket) => {
       }
     });
 
-    // Broadcast ONLY to the room
+    // 4. Broadcast ONLY to the specific room
     io.to(newRoom).emit('users-update', roomUsers);
   });
 
+  // --- RADAR PING ENGINE ---
+  socket.on('ping-user', ({ targetId, senderName }) => {
+    // Forward the ping specifically to the target user
+    io.to(targetId).emit('receive-ping', { senderName });
+  });
+
+  // --- DISCONNECT HANDLER ---
   socket.on('disconnect', () => {
+    console.log(`🔴 Node Disconnected: ${socket.id}`);
     const room = users[socket.id]?.roomCode;
     delete users[socket.id];
+    
     if (room) {
       const remaining = {};
       Object.keys(users).forEach(id => {
@@ -53,5 +64,8 @@ io.on('connection', (socket) => {
   });
 });
 
+// --- RENDER PORT ASSIGNMENT ---
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server on ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`🚀 LOCUS Server running on port ${PORT}`);
+});
