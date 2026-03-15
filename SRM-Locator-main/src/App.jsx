@@ -486,6 +486,24 @@ const App = () => {
   const handleLogout = () => {
     signOut(auth);
   };
+  const handleLeaveSquad = () => {
+    // 1. Move our marker to the 'GLOBAL' void so we disappear from our friends' maps instantly
+    if (user && liveLocation) {
+      socket.emit('update-location', {
+        id: socket.id,
+        name: user.displayName,
+        photo: user.photoURL,
+        lat: liveLocation.lat,
+        lng: liveLocation.lng,
+        roomCode: 'GLOBAL' 
+      });
+    }
+    
+    // 2. Reset our local interface back to the Entry Gate
+    setHasJoinedSquad(false);
+    setSquadCode('');
+    setUsers([]);
+  };
 
   const sendPing = (targetId) => {
     socket.emit('ping-user', {
@@ -746,6 +764,21 @@ const App = () => {
                <div className="flex items-center gap-2"><ShieldCheck size={18}/> NODE_ACCESS</div>
                {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
              </button>
+          )}
+          {/* --- NEW DISCONNECT BUTTON --- */}
+          {activeTab === 'users' && (
+             <div className="mb-4 flex items-center justify-between border border-red-500/30 bg-red-500/5 p-3">
+               <div className="flex flex-col">
+                 <span className="text-[10px] text-zinc-500 font-dot uppercase tracking-widest">ACTIVE_CHANNEL</span>
+                 <span className="font-dot text-sm text-red-500 tracking-widest">{squadCode}</span>
+               </div>
+               <button 
+                 onClick={handleLeaveSquad} 
+                 className="text-[10px] border border-red-500 text-red-500 hover:bg-red-500 hover:text-white px-3 py-2 transition-colors font-dot uppercase tracking-widest"
+               >
+                 DISCONNECT
+               </button>
+             </div>
           )}
           <div className="relative">
              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white" size={16} />
