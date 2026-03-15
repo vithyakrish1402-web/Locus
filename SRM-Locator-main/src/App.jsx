@@ -320,6 +320,7 @@ const CinematicLanding = ({
 }
 
 const App = () => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   // --- MODIFIED: FIREBASE AUTH STATE ---
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -559,6 +560,12 @@ const App = () => {
         lng: liveLocation.lng,
         roomCode: 'GLOBAL' 
       });
+      <button 
+        onClick={() => setIsMenuOpen(!isMenuOpen)}
+        className="md:hidden p-2 border border-white/20 mr-2"
+      >
+        {isMenuOpen ? <X size={20} /> : <Users size={20} />}
+      </button>
     }
     
     // 2. Reset our local interface back to the Entry Gate
@@ -856,16 +863,36 @@ const App = () => {
           >
              <LogOut size={18} />
           </button>
+          {/* 🚨 ADD THE MOBILE TOGGLE HERE 🚨 */}
+          <button 
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="md:hidden p-2 border border-white/20 ml-2 hover:bg-white hover:text-black transition-colors"
+          >
+            {isMenuOpen ? <X size={20} /> : <Users size={20} />}
+          </button>
         </div>
       </motion.nav>
 
       {/* Sidebar Panel */}
       <motion.div 
-        initial={{ x: -400, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ duration: 0.6 }}
-        className="absolute top-20 left-6 bottom-6 w-96 z-[900] bg-black border border-white/20 flex flex-col pointer-events-auto"
+        initial={false}
+        animate={{ 
+    // Slide up on mobile (y), slide in from left on desktop (x)
+          y: window.innerWidth < 768 ? (isMenuOpen ? 0 : '100%') : 0,
+          x: window.innerWidth < 768 ? 0 : 0,
+          opacity: 1
+        }}
+        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        className={`
+          fixed z-[900] bg-black border-white/20 flex flex-col pointer-events-auto
+          /* Desktop Sidebar Styles */
+          md:top-20 md:left-6 md:bottom-6 md:w-96 md:border md:h-auto
+          /* Mobile Bottom Sheet Styles */
+          max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:h-[70vh] max-md:w-full max-md:border-t-2 max-md:rounded-t-[32px]
+        `}
       >
+        {/* Mobile Drag Handle - Visual cue to pull down */}
+        <div className="md:hidden w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-4 mb-2 shrink-0" onClick={() => setIsMenuOpen(false)} />
         {/* Tabs */}
         <div className="flex border-b border-white/20">
            <button 
