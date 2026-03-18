@@ -13,7 +13,6 @@ import {
 import { auth, googleProvider } from './firebase';
 import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 
-
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 const socket = io(BACKEND_URL, {
@@ -23,28 +22,18 @@ const socket = io(BACKEND_URL, {
 });
 
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 }; 
-// Add these to your state declarations in App
-const [routeStart, setRouteStart] = useState(null);
-const [routeEnd, setRouteEnd] = useState(null);
-const [routeData, setRouteData] = useState(null); // Holds distance and time
-const directionsRendererRef = useRef(null);
 
 const BUILDINGS = [
   { id: 1, name: "Tech Park", category: "Academic", lat: 12.825020924230433, lng: 80.0453233376537, info: "Home to CSE & IT departments. 15 floors of innovation." },
   { id: 2, name: "University Building (UB)", category: "Academic", lat: 12.824353553512712, lng: 80.04221892231276, info: "The administrative heart and main library block." },
   { id: 3, name: "T.P. Ganesan Auditorium", category: "Event", lat: 12.824880056150072, lng: 80.04668508123501, info: "One of Asia's largest auditoriums, near the main gate." },
-  
-  // --- UPDATED COORDINATES ---
   { id: 4, name: "CRC Block", category: "Academic", lat: 12.820344661045802, lng: 80.03784856136284, info: "The heritage block housing Mechanical and Civil Engineering." },
   { id: 5, name: "Hi-Tech Block", category: "Research", lat: 12.821075984327978, lng: 80.03893573761148, info: "Specialized labs for ECE and EEE students." },
-  // ---------------------------
-
   { id: 6, name: "SRM Medical College", category: "Medical", lat: 12.821098258984547, lng: 80.0481636983677, info: "Multi-specialty hospital and medical research center." },
   { id: 7, name: "Java Green", category: "Food", lat: 12.823348807944917, lng: 80.04448904064235, info: "Popular outdoor student hangout and food court." },
   { id: 8, name: "Bio-Tech Block", category: "Academic", lat: 12.825007113379733, lng: 80.04414300737659, info: "Genetic engineering and biotechnology research facility." }
 ];
 
-// MODIFIED: Added 'photo' support to your CustomMarker
 const CustomMarker = ({ isUser, name, photo, onClick }) => {
   if (isUser) {
     return (
@@ -73,9 +62,7 @@ const CinematicLanding = ({
   email, setEmail, password, setPassword, showPassword, setShowPassword, handleLogin, loginMethod 
 }) => {
   const containerRef = useRef(null);
-  
   const { scrollYProgress } = useScroll({ target: containerRef });
-  
   const smoothProgress = useSpring(scrollYProgress, { stiffness: 50, damping: 15 });
 
   const heroOpacity = useTransform(smoothProgress, [0, 0.1, 0.15], [1, 1, 0]);
@@ -100,7 +87,6 @@ const CinematicLanding = ({
 
   return (
     <div ref={containerRef} className="relative w-full h-[800vh] bg-black text-white font-inter selection:bg-red-500/30">
-      
       <motion.nav 
         className="fixed top-0 left-0 w-full px-6 py-4 flex justify-between items-center z-50 bg-black/80 backdrop-blur-md border-b border-white/20"
       >
@@ -116,7 +102,6 @@ const CinematicLanding = ({
       </motion.nav>
 
       <div className="sticky top-0 w-full h-screen overflow-hidden flex items-center justify-center perspective-[1000px] bg-dots">
-        
         {/* --- SCENE 1: HERO & 3D CAMPUS --- */}
         <motion.div style={{ opacity: heroOpacity, scale: heroScale, y: 0 }} className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 w-full max-w-7xl mx-auto pointer-events-none">
            <div className="inline-block border border-white/20 px-3 py-1 font-dot text-xs text-zinc-400 uppercase tracking-widest mb-12">
@@ -140,7 +125,6 @@ const CinematicLanding = ({
                  </div>
               </div>
            </div>
-           
            <div className="absolute bottom-12 font-dot text-xs text-zinc-500 tracking-[0.3em] uppercase animate-pulse">
              SCROLL_TO_INITIALIZE_SYS
            </div>
@@ -265,7 +249,7 @@ const CinematicLanding = ({
                      type="button"
                      onClick={() => setShowPassword(!showPassword)}
                      className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
-                   >
+                     >
                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                    </button>
                  </div>
@@ -318,7 +302,6 @@ const CinematicLanding = ({
             </motion.div>
           )}
         </AnimatePresence>
-
       </div>
     </div>
   );
@@ -326,6 +309,13 @@ const CinematicLanding = ({
 
 const App = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  
+  // --- ADDED: ROUTING STATE ---
+  const [routeStart, setRouteStart] = useState(null);
+  const [routeEnd, setRouteEnd] = useState(null);
+  const [routeData, setRouteData] = useState(null); 
+  const directionsRendererRef = useRef(null);
+
   // --- MODIFIED: FIREBASE AUTH STATE ---
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -347,6 +337,7 @@ const App = () => {
 
   const [squadCode, setSquadCode] = useState('');
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
+
   // --- ADDED: FIREBASE AUTH LISTENER ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -360,8 +351,6 @@ const App = () => {
   }, []);
 
   // 1. Listen for real-time network updates from the server
- // 1. Listen for real-time network updates from the server
-  // 1. Listen for real-time network updates from the server
   useEffect(() => {
     if (!hasJoinedSquad) return;
 
@@ -369,9 +358,6 @@ const App = () => {
       const formattedUsers = [];
       
       Object.entries(activeUsers).forEach(([id, data]) => {
-        // 🛑 THE BULLETPROOF FILTER 🛑
-        // 1. Ignore yourself (id !== socket.id)
-        // 2. Ignore ANYONE who doesn't have your exact squad code
         if (id !== socket.id && data.roomCode === squadCode) { 
           formattedUsers.push({
             id: id,
@@ -390,29 +376,26 @@ const App = () => {
       
       setUsers(formattedUsers);
     });
-    // --- 🚨 ADD THE SOS BEACON RECEIVER HERE 🚨 ---
+
     socket.on('receive-ping', ({ senderName }) => {
       alert(`🚨 SOS BEACON DETECTED 🚨\n\n${senderName.toUpperCase()} requires immediate assistance at their coordinates!`);
     });
 
     return () => {
       socket.off('users-update');
-      setUsers([]); // Clear map when changing rooms
+      setUsers([]); 
     };
-  }, [hasJoinedSquad, squadCode]); // The squadCode must be here! changes
-
+  }, [hasJoinedSquad, squadCode]); 
 
   // 2. Broadcast your live GPS data to the network
- // 2. Broadcast your live GPS + Telemetry data to the network
   useEffect(() => {
     if (!user || !hasJoinedSquad) return; 
 
     const watchId = navigator.geolocation.watchPosition(
-      async (position) => { // <--- Added async
+      async (position) => { 
         const { latitude, longitude, speed } = position.coords;
         setLiveLocation({ lat: latitude, lng: longitude });
 
-        // --- FETCH BATTERY TELEMETRY ---
         let batteryLevel = null;
         try {
           if ('getBattery' in navigator) {
@@ -421,15 +404,13 @@ const App = () => {
           }
         } catch (e) { console.log("Battery API blocked"); }
 
-        // ONLY broadcast if Ghost Mode is OFF (assuming we'll add the ghost toggle later)
-        // If you haven't added isGhostMode yet, you can remove that check.
         socket.emit('update-location', {
           id: socket.id,
           name: user.displayName, 
           photo: user.photoURL,   
           lat: latitude,
           lng: longitude,
-          speed: speed ? Math.round(speed * 3.6) : 0, // Convert m/s to km/h
+          speed: speed ? Math.round(speed * 3.6) : 0, 
           battery: batteryLevel,
           roomCode: squadCode
         });
@@ -442,7 +423,6 @@ const App = () => {
   }, [user, hasJoinedSquad, squadCode]);
 
   
-  /// --- CYBERPUNK SONAR AUDIO ENGINE ---
   // --- CYBERPUNK SONAR AUDIO ENGINE ---
   const playSonarPing = () => {
     try {
@@ -473,12 +453,13 @@ const App = () => {
   // 3. Listen for incoming P2P Pings
   useEffect(() => {
     socket.on('receive-ping', ({ senderName }) => {
-      playSonarPing(); // <--- The red line will vanish!
+      playSonarPing(); 
       alert(`🚨 [INCOMING_SIGNAL] \n\nNode '${senderName}' is pinging your location!`);
     });
 
     return () => socket.off('receive-ping');
   }, []);
+
   useEffect(() => {
     clearRoute();
   }, [activeTab]);
@@ -495,14 +476,11 @@ const App = () => {
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
 
-  // Gemini API Utility (KEPT YOUR EXACT KEY AND URL)
+  // Gemini API Utility
   const callGemini = async (prompt, systemInstruction = "You are a helpful campus assistant for SRM KTR.") => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    // --- UPDATED TO FLASH-LITE FOR HIGHER QUOTA ---
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
     
-    // --- BULLETPROOF PAYLOAD ---
-    // We fuse the system data and the user query into one solid block
     const combinedPrompt = `${systemInstruction}\n\nUSER_QUERY: ${prompt}`;
 
     const payload = {
@@ -518,7 +496,6 @@ const App = () => {
                 body: JSON.stringify(payload)
             });
             
-            // If it fails, log the EXACT reason to the console
             if (!response.ok) {
                 const errorData = await response.json();
                 console.error("🚨 [GEMINI ERROR]:", errorData);
@@ -535,7 +512,6 @@ const App = () => {
     }
   };
 
-  // --- MODIFIED: FIREBASE LOGIN HANDLER ---
   const handleLogin = async (method) => {
     setLoginMethod(method);
     if (method === 'google') {
@@ -546,7 +522,6 @@ const App = () => {
          setLoginMethod(null);
        }
     } else {
-       // Kept your dummy timeout logic for email if they try to use it
        setTimeout(() => {
          setLoginMethod(null);
          alert("Email auth requires backend. Please click CONTINUE VIA GOOGLE");
@@ -554,14 +529,11 @@ const App = () => {
     }
   };
 
-  // --- MODIFIED: FIREBASE LOGOUT HANDLER ---
-  // --- MODIFIED: FIREBASE LOGOUT HANDLER ---
   const handleLogout = () => {
     signOut(auth);
   };
 
   const handleLeaveSquad = () => {
-    // 1. Move our marker to the 'GLOBAL' void so we disappear from our friends' maps instantly
     if (user && liveLocation) {
       socket.emit('update-location', {
         id: socket.id,
@@ -572,8 +544,6 @@ const App = () => {
         roomCode: 'GLOBAL' 
       });
     }
-    
-    // 2. Reset our local interface back to the Entry Gate
     setHasJoinedSquad(false);
     setSquadCode('');
     setUsers([]);
@@ -583,7 +553,7 @@ const App = () => {
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     if (!lat1 || !lon1 || !lat2 || !lon2) return '[ SIGNAL_LOST ]';
     
-    const R = 6371e3; // Earth's radius in meters
+    const R = 6371e3; 
     const rad = Math.PI / 180;
     const phi1 = lat1 * rad;
     const phi2 = lat2 * rad;
@@ -594,9 +564,8 @@ const App = () => {
               Math.cos(phi1) * Math.cos(phi2) *
               Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c; // Distance in meters
+    const distance = R * c; 
 
-    // Format for tactical display
     if (distance > 1000) {
       return `[ ${(distance / 1000).toFixed(2)} KM ]`;
     }
@@ -609,8 +578,7 @@ const App = () => {
       senderName: user ? user.displayName : "Ghost_Node"
     });
     
-    playSonarPing(); // <--- TRIGGERS THE SOUND LOCALLY
-    
+    playSonarPing(); 
     console.log(`>> Signal transmitted to Node: ${targetId}`);
   };
 
@@ -628,39 +596,33 @@ const App = () => {
     }
   };
 
-// --- SOS TRANSMITTER ---
+  // --- SOS TRANSMITTER ---
   const fireSOSBeacon = (targetNodeId, targetNodeName) => {
-    // Grab your name so the receiver knows who is in trouble
     const myName = auth.currentUser?.displayName || "A Squad Member";
     
-    // Fire the signal to the Render Mothership
     socket.emit('ping-user', { 
       targetId: targetNodeId, 
       senderName: myName 
     });
     
-    // Local confirmation that the weapon fired
     alert(`[SYSTEM] SOS Signal transmitted directly to node: ${targetNodeName}.`);
   };
 
- const handleGeneralAiQuery = async (e) => {
+  const handleGeneralAiQuery = async (e) => {
     e.preventDefault();
     if (!aiQuery.trim() || aiLoading) return;
     setAiLoading(true);
     setAiResponse('');
     
     try {
-      // 1. Compile live squad vitals WITH RAW GPS COORDINATES
       const squadSnapshot = users.filter(u => !blockedUserIds.includes(u.id)).map(u => 
         `Node [${u.name}]: Lat: ${u.lat}, Lng: ${u.lng}, Distance from me: ${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Speed: ${u.speed} KM/H, Battery: ${u.battery}%`
       ).join(' | ');
 
-      // 2. Compile the campus map knowledge WITH RAW GPS COORDINATES
       const campusSnapshot = BUILDINGS.map(b => 
         `[${b.name}] Lat: ${b.lat}, Lng: ${b.lng}, Category: ${b.category}, Intel: ${b.info}`
       ).join(' | ');
 
-      // 3. Inject into Gemini's brain with new spatial reasoning instructions
       const tacticalInstruction = `
         You are 'SYS_ORACLE', a highly advanced tactical AI assisting a user on the LOCUS network at SRM KTR campus.
         Respond in a concise, cyberpunk, military-comms tone. Be highly observant.
@@ -684,6 +646,7 @@ const App = () => {
       setAiQuery('');
     }
   };
+
   const requestPermission = (userId) => {
     if (blockedUserIds.includes(userId)) return;
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, permission: 'requested' } : u));
@@ -708,67 +671,67 @@ const App = () => {
 
   const handleMapClick = ({ lat, lng }) => {
     if (isEditMode && selectedItem && activeTab === 'buildings') {
-      console.log(`📍 [NEW COORDS] ${selectedItem.name}: lat: ${lat.toFixed(6)}, lng: ${lng.toFixed(6)}`);
-      
       setEditableBuildings(prev => prev.map(b => 
         b.id === selectedItem.id ? { ...b, lat, lng } : b
       ));
-      
       setSelectedItem(prev => ({ ...prev, lat, lng }));
     }
   };
 
   // --- TACTICAL ROUTING ENGINE ---
-const handleWaypointSelect = (targetCoords) => {
-  if (!routeStart) {
-    // If no start point, use the user's live GPS if available, otherwise prompt to select a start
-    if (liveLocation) {
-      setRouteStart({ name: "MY_LOCATION", ...liveLocation });
+  const handleWaypointSelect = (targetCoords) => {
+    if (!routeStart) {
+      if (liveLocation) {
+        setRouteStart({ name: "MY_LOCATION", ...liveLocation });
+        setRouteEnd(targetCoords);
+        calculateActualRoute({ name: "MY_LOCATION", ...liveLocation }, targetCoords);
+      } else {
+        setRouteStart(targetCoords);
+      }
+      setSelectedItem(null); 
+    } else if (!routeEnd && targetCoords.id !== routeStart.id) {
       setRouteEnd(targetCoords);
-      calculateActualRoute({ name: "MY_LOCATION", ...liveLocation }, targetCoords);
-    } else {
-      setRouteStart(targetCoords);
+      setSelectedItem(null);
+      calculateActualRoute(routeStart, targetCoords);
     }
-    setSelectedItem(null); // Close the info card
-  } else if (!routeEnd && targetCoords.id !== routeStart.id) {
-    // Set destination and calculate
-    setRouteEnd(targetCoords);
-    setSelectedItem(null);
-    calculateActualRoute(routeStart, targetCoords);
-  }
-};
+  };
 
-const calculateActualRoute = (start, end) => {
-  if (!window.google) return;
-  const directionsService = new window.google.maps.DirectionsService();
-  
-  directionsService.route({
-    origin: { lat: start.lat, lng: start.lng },
-    destination: { lat: end.lat, lng: end.lng },
-    travelMode: window.google.maps.TravelMode.WALKING // Crucial for campus paths
-  }, (result, status) => {
-    if (status === 'OK') {
-      directionsRendererRef.current.setDirections(result);
-      setRouteData(result.routes[0].legs[0]); // Extracts distance and duration
-    } else {
-      alert("[SYS_ERROR] UNAVAILABLE WALKING PATH.");
+  const calculateActualRoute = (start, end) => {
+    // BULLETPROOF SAFEGUARD
+    if (typeof window === 'undefined' || !window.google || !window.google.maps) {
+      console.error("🚨 [SYS_ERROR] Google Maps API is offline or blocked.");
+      alert("[SYS_ERROR] TACTICAL ROUTING OFFLINE. (API BLOCKED)");
+      return;
     }
-  });
-};
 
-const clearRoute = () => {
-  setRouteStart(null);
-  setRouteEnd(null);
-  setRouteData(null);
-  if (directionsRendererRef.current) {
-    directionsRendererRef.current.setDirections({ routes: [] }); // Clears the map line
-  }
-};
+    const directionsService = new window.google.maps.DirectionsService();
+    
+    directionsService.route({
+      origin: { lat: start.lat, lng: start.lng },
+      destination: { lat: end.lat, lng: end.lng },
+      travelMode: window.google.maps.TravelMode.WALKING 
+    }, (result, status) => {
+      if (status === 'OK') {
+        directionsRendererRef.current.setDirections(result);
+        setRouteData(result.routes[0].legs[0]); 
+      } else {
+        alert("[SYS_ERROR] UNAVAILABLE WALKING PATH.");
+      }
+    });
+  };
+
+  const clearRoute = () => {
+    setRouteStart(null);
+    setRouteEnd(null);
+    setRouteData(null);
+    if (directionsRendererRef.current) {
+      directionsRendererRef.current.setDirections({ routes: [] }); 
+    }
+  };
 
   const pendingRequests = users.filter(u => u.permission === 'requested' && !blockedUserIds.includes(u.id));
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
-  // Custom Map Dark Styles
   const createMapOptions = (maps) => {
     return {
       zoomControl: false,
@@ -833,10 +796,8 @@ const clearRoute = () => {
     };
   }
 
-  // Handle Firebase Loading state
   if (authLoading) return <div className="h-screen bg-black text-white flex justify-center items-center font-dot">INITIALIZING_SECURE_LINK...</div>;
 
-  // --- LANDING PAGE (Uses Firebase 'user' state) ---
   if (!user) {
     return (
       <CinematicLanding 
@@ -852,7 +813,6 @@ const clearRoute = () => {
     );
   }
 
-  // --- SQUAD ENTRY GATE ---
   if (user && !hasJoinedSquad) {
     return (
       <div className="h-screen w-full bg-black flex flex-col items-center justify-center text-white p-6 bg-dots">
@@ -879,7 +839,7 @@ const clearRoute = () => {
       </div>
     );
   }
-  // --- DASHBOARD ---
+
   return (
     <div className="h-screen w-full bg-black flex overflow-hidden text-white font-inter selection:bg-red-500/30 bg-dots">
       
@@ -901,7 +861,6 @@ const clearRoute = () => {
 
         <div className="flex items-center gap-6">
           <div className="hidden sm:flex items-center gap-3 px-4 py-2 border border-white/20 bg-black font-dot text-xs uppercase tracking-widest">
-            {/* Display Profile Pic if Available */}
             {user.photoURL ? (
               <img src={user.photoURL} className="w-6 h-6 rounded-full border border-white/50" alt="profile" />
             ) : (
@@ -915,7 +874,6 @@ const clearRoute = () => {
           >
              <LogOut size={18} />
           </button>
-          {/* 🚨 ADD THE MOBILE TOGGLE HERE 🚨 */}
           <button 
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="md:hidden p-2 border border-white/20 ml-2 hover:bg-white hover:text-black transition-colors"
@@ -924,50 +882,49 @@ const clearRoute = () => {
           </button>
         </div>
       </motion.nav>
-  {/* --- ACTIVE ROUTE HUD --- */}
-<AnimatePresence>
-  {(routeStart || routeData) && (
-    <motion.div 
-      initial={{ y: -50, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: -50, opacity: 0 }}
-      className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-md bg-black border border-red-500 pointer-events-auto shadow-[0_0_30px_rgba(239,68,68,0.2)]"
-    >
-      <div className="p-4 flex flex-col gap-2 relative">
-        <button onClick={clearRoute} className="absolute top-2 right-2 text-zinc-500 hover:text-white">
-          <X size={16} />
-        </button>
-        
-        <div className="flex items-center gap-2 text-red-500 font-dot text-xs uppercase tracking-widest">
-          <Waypoints size={14} className="animate-pulse" />
-          ACTIVE_WAYPOINT_TRACKING
-        </div>
-        
-        <div className="flex justify-between items-end mt-2">
-          <div className="flex flex-col font-dot text-sm text-white uppercase tracking-widest">
-            <span>{routeStart?.name || "AWAITING_START"}</span>
-            <span className="text-zinc-600">↓</span>
-            <span>{routeEnd?.name || "AWAITING_TARGET"}</span>
-          </div>
-          
-          {routeData && (
-            <div className="text-right flex flex-col">
-              <span className="text-2xl font-dot text-red-500 leading-none">{routeData.distance.text}</span>
-              <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ETA: {routeData.duration.text}</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  )}
-</AnimatePresence>
-  
 
+      {/* --- ACTIVE ROUTE HUD --- */}
+      <AnimatePresence>
+        {(routeStart || routeData) && (
+          <motion.div 
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -50, opacity: 0 }}
+            className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-md bg-black border border-red-500 pointer-events-auto shadow-[0_0_30px_rgba(239,68,68,0.2)]"
+          >
+            <div className="p-4 flex flex-col gap-2 relative">
+              <button onClick={clearRoute} className="absolute top-2 right-2 text-zinc-500 hover:text-white">
+                <X size={16} />
+              </button>
+              
+              <div className="flex items-center gap-2 text-red-500 font-dot text-xs uppercase tracking-widest">
+                <Waypoints size={14} className="animate-pulse" />
+                ACTIVE_WAYPOINT_TRACKING
+              </div>
+              
+              <div className="flex justify-between items-end mt-2">
+                <div className="flex flex-col font-dot text-sm text-white uppercase tracking-widest">
+                  <span>{routeStart?.name || "AWAITING_START"}</span>
+                  <span className="text-zinc-600">↓</span>
+                  <span>{routeEnd?.name || "AWAITING_TARGET"}</span>
+                </div>
+                
+                {routeData && (
+                  <div className="text-right flex flex-col">
+                    <span className="text-2xl font-dot text-red-500 leading-none">{routeData.distance.text}</span>
+                    <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ETA: {routeData.duration.text}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
       {/* Sidebar Panel */}
       <motion.div 
         initial={false}
         animate={{ 
-    // Slide up on mobile (y), slide in from left on desktop (x)
           y: window.innerWidth < 768 ? (isMenuOpen ? 0 : '100%') : 0,
           x: window.innerWidth < 768 ? 0 : 0,
           opacity: 1
@@ -975,14 +932,12 @@ const clearRoute = () => {
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
         className={`
           fixed z-[900] bg-black border-white/20 flex flex-col pointer-events-auto
-          /* Desktop Sidebar Styles */
           md:top-20 md:left-6 md:bottom-6 md:w-96 md:border md:h-auto
-          /* Mobile Bottom Sheet Styles */
           max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:h-[70vh] max-md:w-full max-md:border-t-2 max-md:rounded-t-[32px]
         `}
       >
-        {/* Mobile Drag Handle - Visual cue to pull down */}
         <div className="md:hidden w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-4 mb-2 shrink-0" onClick={() => setIsMenuOpen(false)} />
+        
         {/* Tabs */}
         <div className="flex border-b border-white/20">
            <button 
@@ -1011,7 +966,6 @@ const clearRoute = () => {
                {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
              </button>
           )}
-          {/* --- NEW DISCONNECT BUTTON --- */}
           {activeTab === 'users' && (
              <div className="mb-4 flex items-center justify-between border border-red-500/30 bg-red-500/5 p-3">
                <div className="flex flex-col">
@@ -1082,7 +1036,6 @@ const clearRoute = () => {
                     key={user.id} 
                     className="p-4 border border-white/20 relative"
                   >
-                    {/* Decorative square */}
                     <div className="absolute top-0 right-0 w-2 h-2 bg-white/20" />
                     
                     <div className="flex items-center gap-4 mb-4">
@@ -1099,7 +1052,6 @@ const clearRoute = () => {
                             </span>
                           )}
                         </div>
-                        {/* --- TACTICAL TELEMETRY OVERLAY --- */}
                         <div className="flex gap-4 mt-2 border-t border-white/5 pt-2">
                         <div className="flex items-center gap-1.5">
                           <div className="w-1.5 h-3 border border-zinc-600 rounded-[1px] relative flex items-end overflow-hidden">
@@ -1125,7 +1077,6 @@ const clearRoute = () => {
                         </div>
                       </div>
                       <div className="flex gap-3 items-center">
-                        {/* PING BUTTON */}
                         <button 
                           onClick={() => sendPing(user.id)} 
                           className="text-emerald-400 hover:text-white transition-colors"
@@ -1134,10 +1085,8 @@ const clearRoute = () => {
                             <Radio size={18} className="animate-pulse" />
                           </button>
 
-                          {/* Existing Auth Status */}
                           {user.permission === 'accepted' ? <UserCheck size={18} className="text-white" /> : <Lock size={18} className="text-zinc-600"/>}
 
-                          {/* Existing Block Button */}
                           <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors">
                             <Ban size={18} /> 
                           </button>
@@ -1165,7 +1114,6 @@ const clearRoute = () => {
 
            {activeTab === 'buildings' && (
              <motion.div layout className="mt-8 p-6 border border-white/20 relative overflow-hidden group">
-                {/* Decorative brackets */}
                 <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-white -translate-x-1 -translate-y-1" />
                 <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white translate-x-1 translate-y-1" />
                 
@@ -1186,7 +1134,7 @@ const clearRoute = () => {
         </div>
       </motion.div>
 
-      {/* FULLSCREEN GOOGLE MAP (KEPT YOUR EXACT API KEY) */}
+      {/* FULLSCREEN GOOGLE MAP */}
       <div className="absolute inset-0 z-0 bg-black">
         <GoogleMapReact
           bootstrapURLKeys={{ key: 'AIzaSyD10sWfHpczEuvmvwBkqkPHOu-QXQr8uM0' }}
@@ -1195,11 +1143,11 @@ const clearRoute = () => {
           options={{ ...createMapOptions(), draggableCursor: isEditMode && selectedItem ? 'crosshair' : 'grab' }}
           onClick={handleMapClick}
           yesIWantToUseGoogleMapApiInternals
-          onGoogleApiLoaded={({ map }) => {
+          onGoogleApiLoaded={({ map, maps }) => {
             mapRef.current = map;
             directionsRendererRef.current = new maps.DirectionsRenderer({
-              suppressMarkers: true, // We keep your custom cyberpunk markers
-              polylineOptions: { strokeColor: '#ef4444', strokeWeight: 4 } // Red line
+              suppressMarkers: true, 
+              polylineOptions: { strokeColor: '#ef4444', strokeWeight: 4 } 
             });
             directionsRendererRef.current.setMap(map);
           }}
@@ -1241,12 +1189,10 @@ const clearRoute = () => {
       {/* Map Interactive Layers */}
       <div className="absolute right-6 top-1/2 -translate-y-1/2 z-[500] flex flex-col gap-4 pointer-events-auto">
          
-         {/* 1. Existing Recenter Campus Button */}
          <button onClick={() => handleFocus(SRM_KTR_COORDS, null)} className="p-4 bg-black border border-white/20 text-white hover:bg-white hover:text-black transition-colors group" title="Recenter Campus">
             <MapPin size={24} />
          </button>
          
-         {/* 2. NEW: "Find Me" / Locate Signal Button */}
          {liveLocation && (
            <button 
              onClick={() => handleFocus(liveLocation, null)} 
@@ -1257,7 +1203,6 @@ const clearRoute = () => {
            </button>
          )}
          
-         {/* 3. Existing Edit Mode Button */}
          {activeTab === 'buildings' && (
            <button 
              onClick={() => setIsEditMode(!isEditMode)} 
@@ -1268,7 +1213,6 @@ const clearRoute = () => {
            </button>
          )}
 
-         {/* 4. Existing Edit Mode Coordinates Alert */}
          {isEditMode && selectedItem && (
             <div className="absolute top-1/2 -translate-y-1/2 right-[120%] whitespace-nowrap px-4 py-3 bg-red-500 text-white font-dot text-xs tracking-widest uppercase flex items-center gap-3">
               <span className="w-2 h-2 bg-white animate-pulse"></span>
@@ -1277,7 +1221,7 @@ const clearRoute = () => {
          )}
       </div>
 
-      {/* Selected Location - Compact Right Card */}
+      {/* Selected Location Card */}
       <AnimatePresence>
         {selectedItem && activeTab === 'buildings' && (
           <motion.div 
@@ -1287,7 +1231,6 @@ const clearRoute = () => {
             transition={{ duration: 0.4 }}
             className="absolute bottom-6 right-6 z-[600] w-80 bg-black border border-white/20 pointer-events-auto flex flex-col pt-6 pb-2"
           >
-             {/* Header */}
              <div className="px-6 pb-4 border-b border-white/20 flex justify-between items-start">
                <div className="flex-1 pr-4">
                  <span className="inline-block border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest px-2 py-0.5 mb-2">
@@ -1300,12 +1243,10 @@ const clearRoute = () => {
                </button>
              </div>
              
-             {/* Info */}
              <div className="p-6 pb-4">
                <p className="font-inter text-zinc-400 text-sm leading-relaxed">{selectedItem.info}</p>
              </div>
 
-             {/* Quick AI Button */}
              <div className="px-6 pb-4 flex gap-3">
                {!aiResponse && !aiLoading ? (
                  <button onClick={() => generateBuildingInsights(selectedItem)} className="flex-1 py-3 border border-white/20 hover:bg-white/10 font-dot text-[10px] text-white flex items-center justify-center gap-2 transition-colors uppercase tracking-widest">
@@ -1324,7 +1265,6 @@ const clearRoute = () => {
                 </button>
              </div>
 
-             {/* AI Response (if loaded) */} 
              {aiResponse && (
                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 pb-6 max-h-40 overflow-y-auto custom-scrollbar">
                  <div className="font-inter text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap border-l-2 border-red-500 pl-4 py-1">
@@ -1392,7 +1332,6 @@ const clearRoute = () => {
                   ) : (
                     pendingRequests.map(user => (
                       <div key={user.id} className="p-4 bg-black border border-white/20 flex flex-col gap-4 relative">
-                        {/* Decorative Corner */}
                         <div className="absolute top-0 right-0 w-2 h-2 bg-red-500" />
                         
                         <div className="flex items-center gap-4">
@@ -1453,7 +1392,6 @@ const clearRoute = () => {
               exit={{ scale: 0.95, opacity: 0 }}
               className="bg-black w-full max-w-3xl border-2 border-white flex flex-col h-[85vh] relative shadow-[0_0_50px_rgba(255,255,255,0.05)]"
             >
-              {/* Corner Accents */}
               <div className="absolute top-0 left-0 w-4 h-4 bg-white" />
               <div className="absolute top-0 right-0 w-4 h-4 bg-white" />
               <div className="absolute bottom-0 left-0 w-4 h-4 bg-white" />
