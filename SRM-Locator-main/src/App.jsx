@@ -310,6 +310,8 @@ const CinematicLanding = ({
 const App = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
+  const [buildingIntel, setBuildingIntel] = useState('');
+  
   // --- ADDED: ROUTING STATE ---
   const [routeStart, setRouteStart] = useState(null);
   const [routeEnd, setRouteEnd] = useState(null);
@@ -601,12 +603,10 @@ const App = () => {
 
   const generateBuildingInsights = async (building) => {
     setAiLoading(true);
-    setAiResponse('');
+    setBuildingIntel(''); // Clear previous building info only
     
-    // We use a 600ms timeout to simulate a "database fetch" 
-    // to keep the cyberpunk aesthetic without burning any actual API quota!
     setTimeout(() => {
-      setAiResponse(building.tacticalIntel || "[SYS_WARN] No tactical intel available for this node.");
+      setBuildingIntel(building.tacticalIntel || "[SYS_WARN] No tactical intel available.");
       setAiLoading(false);
     }, 600); 
   };
@@ -675,6 +675,7 @@ const App = () => {
 
   const handleFocus = (coords, item) => {
       setMapProps({ center: coords, zoom: 19 });
+      setBuildingIntel(''); // <--- THIS ENSURES OLD DATA VANISHES WHEN YOU CLICK A NEW PIN
       if (item) setSelectedItem(item);
   };
 
@@ -1395,10 +1396,10 @@ const App = () => {
                 </button>
              </div>
 
-             {aiResponse && (
+             {buildingIntel&& (
                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 pb-6 max-h-40 overflow-y-auto custom-scrollbar">
                  <div className="font-inter text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap border-l-2 border-red-500 pl-4 py-1">
-                   {aiResponse}
+                   {buildingIntel}
                  </div>
                </motion.div>
              )}
