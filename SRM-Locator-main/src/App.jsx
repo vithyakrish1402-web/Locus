@@ -436,9 +436,10 @@ const App = () => {
   }, [hasJoinedSquad, squadCode]); 
 
   // --- GATEKEEPER PROTOCOL LISTENERS ---
+  // --- GATEKEEPER PROTOCOL LISTENERS (FIXED) ---
   useEffect(() => {
     socket.on('access-granted', ({ role }) => {
-      setAccessStatus('granted');
+      setAccessStatus('granted'); // Correct: Use the set function
       setSquadRole(role);
     });
     
@@ -464,6 +465,10 @@ const App = () => {
       socket.off('promoted-to-owner');
     };
   }, []);
+
+  // --- REPLACED ILLEGAL ASSIGNMENT ---
+  // We calculate this derived data inside the component body, but we DON'T use '=' on the state itself.
+  const activePendingRequests = pendingRequests;
   /// 2. Broadcast your live GPS data to the network
   useEffect(() => {
     if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
@@ -862,7 +867,7 @@ const App = () => {
     }
   };
 
-  pendingRequests = users.filter(u => u.permission === 'requested' && !blockedUserIds.includes(u.id));
+ 
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
   const createMapOptions = (maps) => {
@@ -1292,6 +1297,20 @@ const App = () => {
            )}
         </div>
       </motion.div>
+{/* --- 1. WAITING ROOM OVERLAY --- */}
+      {hasJoinedSquad && accessStatus !== 'granted' && (
+        <div className="absolute inset-0 z-[1000] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center pointer-events-auto">
+          <Loader2 className="animate-spin text-red-500 mb-6" size={40} />
+          <h2 className="font-dot text-white text-2xl tracking-[0.3em] uppercase mb-2 text-center">
+            {accessStatus === 'denied' ? 'ACCESS_DENIED' : 'AWAITING_CLEARANCE'}
+          </h2>
+          <p className="font-inter text-zinc-500 text-sm text-center max-w-xs px-6">
+            {accessStatus === 'denied' 
+              ? 'Handshake rejected by Commander.' 
+              : 'Transmitting handshake to Squad Commander. Stand by...'}
+          </p>
+        </div>
+      )}
 
       {/* FULLSCREEN GOOGLE MAP */}
       <div className="absolute inset-0 z-0 bg-black">
