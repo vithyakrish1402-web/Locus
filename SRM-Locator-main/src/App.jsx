@@ -529,21 +529,27 @@ const App = () => {
     }
   };
 
+  // --- 🚨 KILL SWITCH LOGOUT HANDLER ---
   const handleLogout = () => {
+    // 1. Tell backend to wipe our data from RAM instantly
+    socket.emit('leave-squad');
+    
+    // 2. Wipe the local UI state
+    setHasJoinedSquad(false);
+    setSquadCode('');
+    setUsers([]);
+    setLiveLocation(null);
+    
+    // 3. Sever the Firebase Auth Link
     signOut(auth);
   };
 
+  // --- 🚨 KILL SWITCH DISCONNECT HANDLER ---
   const handleLeaveSquad = () => {
-    if (user && liveLocation) {
-      socket.emit('update-location', {
-        id: socket.id,
-        name: user.displayName,
-        photo: user.photoURL,
-        lat: liveLocation.lat,
-        lng: liveLocation.lng,
-        roomCode: 'GLOBAL' 
-      });
-    }
+    // 1. Tell backend to wipe our data from RAM instantly
+    socket.emit('leave-squad');
+    
+    // 2. Reset our local interface back to the Entry Gate
     setHasJoinedSquad(false);
     setSquadCode('');
     setUsers([]);

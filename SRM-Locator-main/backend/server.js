@@ -25,6 +25,25 @@ io.on('connection', (socket) => {
     if (oldRoom && oldRoom !== newRoom) {
       socket.leave(oldRoom);
     }
+    // --- 🚨 MEMORY LEAK PLUG 🚨 ---
+  
+  // 1. Triggered when the user explicitly clicks "Disconnect" or "Logout"
+  socket.on('leave-squad', () => {
+    if (activeUsers[socket.id]) {
+      console.log(`[SYS] Node ${socket.id} wiped from server RAM (Manual)`);
+      delete activeUsers[socket.id]; // Completely deletes the user object
+      io.emit('users-update', activeUsers); // Update everyone else's map
+    }
+  });
+
+  // 2. Triggered when the user closes the browser tab or their phone goes to sleep
+  socket.on('disconnect', () => {
+    if (activeUsers[socket.id]) {
+      console.log(`[SYS] Node ${socket.id} wiped from server RAM (Connection Lost)`);
+      delete activeUsers[socket.id]; 
+      io.emit('users-update', activeUsers);
+    }
+  });
 
     // 2. Join the new room
     socket.join(newRoom);
