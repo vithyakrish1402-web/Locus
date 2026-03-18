@@ -569,12 +569,6 @@ const App = () => {
         lng: liveLocation.lng,
         roomCode: 'GLOBAL' 
       });
-      <button 
-        onClick={() => setIsMenuOpen(!isMenuOpen)}
-        className="md:hidden p-2 border border-white/20 mr-2"
-      >
-        {isMenuOpen ? <X size={20} /> : <Users size={20} />}
-      </button>
     }
     
     // 2. Reset our local interface back to the Entry Gate
