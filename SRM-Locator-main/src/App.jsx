@@ -355,6 +355,11 @@ const App = () => {
 
   const [squadCode, setSquadCode] = useState('');
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
+  // --- SQUAD GATEKEEPER STATES ---
+  const [accessStatus, setAccessStatus] = useState(null); 
+  const [squadRole, setSquadRole] = useState(null); 
+  const [pendingRequests, setPendingRequests] = useState([]);
+  
 
   const handleJoinSquad = (e) => {
     // Prevent the page from refreshing if this is inside a form
@@ -857,7 +862,7 @@ const App = () => {
     }
   };
 
-  const pendingRequests = users.filter(u => u.permission === 'requested' && !blockedUserIds.includes(u.id));
+  pendingRequests = users.filter(u => u.permission === 'requested' && !blockedUserIds.includes(u.id));
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
   const createMapOptions = (maps) => {
