@@ -1584,29 +1584,42 @@ const App = () => {
                       <p className="font-dot tracking-widest text-sm uppercase">NO_PENDING_REQUESTS</p>
                     </div>
                   ) : (
-                    pendingRequests.map(user => (
-                      <div key={user.id} className="p-4 bg-black border border-white/20 flex flex-col gap-4 relative">
-                        <div className="absolute top-0 right-0 w-2 h-2 bg-red-500" />
-                        
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 border border-white/30 flex items-center justify-center font-dot text-xl text-zinc-400 overflow-hidden">
-                             {user.photo ? <img src={user.photo} className="w-full h-full object-cover" alt="" /> : user.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-dot uppercase tracking-widest text-white text-lg">{user.name}</p>
-                            <p className="text-[10px] font-dot text-red-500 uppercase tracking-widest">REQUESTING_ACCESS // NODE_LINK</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-3 mt-2">
-                           <button onClick={() => simulateAccept(user.id)} className="flex-1 bg-white text-black border border-white hover:bg-black hover:text-white py-3 font-dot text-xs uppercase tracking-widest transition-colors">
-                              GRANT_ACCESS
-                           </button>
-                           <button className="flex-1 bg-black text-white py-3 border border-white/20 hover:border-red-500 hover:text-red-500 font-dot text-xs uppercase tracking-widest transition-colors">
-                              DENY
-                           </button>
-                        </div>
-                      </div>
-                    ))
+                    pendingRequests.map(node => (
+  <div key={node.targetId} className="p-4 bg-black border border-white/20 flex flex-col gap-4 relative">
+    <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 animate-pulse" />
+    
+    <div className="flex items-center gap-4">
+      <div className="w-12 h-12 border border-white/30 flex items-center justify-center font-dot text-xl text-zinc-400 overflow-hidden">
+         {node.photo ? <img src={node.photo} className="w-full h-full object-cover" alt="" /> : node.name.charAt(0)}
+      </div>
+      <div>
+        <p className="font-dot uppercase tracking-widest text-white text-lg">{node.name}</p>
+        <p className="text-[10px] font-dot text-red-500 uppercase tracking-widest">REQUESTING_ACCESS // NODE_LINK</p>
+      </div>
+    </div>
+
+    <div className="flex gap-3 mt-2">
+       <button 
+         onClick={() => {
+           socket.emit('resolve-access', { targetId: node.targetId, roomCode: squadCode, approved: true });
+           setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
+         }} 
+         className="flex-1 bg-white text-black border border-white hover:bg-black hover:text-white py-3 font-dot text-xs uppercase tracking-widest transition-colors"
+       >
+         GRANT_ACCESS
+       </button>
+       <button 
+         onClick={() => {
+           socket.emit('resolve-access', { targetId: node.targetId, roomCode: squadCode, approved: false });
+           setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
+         }}
+         className="flex-1 bg-black text-white py-3 border border-white/20 hover:border-red-500 hover:text-red-500 font-dot text-xs uppercase tracking-widest transition-colors"
+       >
+         DENY
+       </button>
+    </div>
+  </div>
+))
                   )
                 ) : (
                   blockedUsers.length === 0 ? (
