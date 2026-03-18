@@ -24,14 +24,14 @@ const socket = io(BACKEND_URL, {
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 }; 
 
 const BUILDINGS = [
-  { id: 1, name: "Tech Park", category: "Academic", lat: 12.825020924230433, lng: 80.0453233376537, info: "Home to CSE & IT departments. 15 floors of innovation." },
-  { id: 2, name: "University Building (UB)", category: "Academic", lat: 12.824353553512712, lng: 80.04221892231276, info: "The administrative heart and main library block." },
-  { id: 3, name: "T.P. Ganesan Auditorium", category: "Event", lat: 12.824880056150072, lng: 80.04668508123501, info: "One of Asia's largest auditoriums, near the main gate." },
-  { id: 4, name: "CRC Block", category: "Academic", lat: 12.820344661045802, lng: 80.03784856136284, info: "The heritage block housing Mechanical and Civil Engineering." },
-  { id: 5, name: "Hi-Tech Block", category: "Research", lat: 12.821075984327978, lng: 80.03893573761148, info: "Specialized labs for ECE and EEE students." },
-  { id: 6, name: "SRM Medical College", category: "Medical", lat: 12.821098258984547, lng: 80.0481636983677, info: "Multi-specialty hospital and medical research center." },
-  { id: 7, name: "Java Green", category: "Food", lat: 12.823348807944917, lng: 80.04448904064235, info: "Popular outdoor student hangout and food court." },
-  { id: 8, name: "Bio-Tech Block", category: "Academic", lat: 12.825007113379733, lng: 80.04414300737659, info: "Genetic engineering and biotechnology research facility." }
+  { id: 1, name: "Tech Park", category: "Academic", lat: 12.825020924230433, lng: 80.0453233376537, info: "Home to CSE & IT departments. 15 floors of innovation.", tacticalIntel: "» FACT 01: Largest academic block on campus.\n» FACT 02: Houses the primary Apple Mac Lab and supercomputing facility.\n» FACT 03: Contains 15 floors of dedicated tech infrastructure." },
+  { id: 2, name: "University Building (UB)", category: "Academic", lat: 12.824353553512712, lng: 80.04221892231276, info: "The administrative heart and main library block.", tacticalIntel: "» FACT 01: Houses the massive Central Library spanning multiple floors.\n» FACT 02: Directorate of Admissions and main admin offices are located here.\n» FACT 03: Serves as the architectural centerpiece of SRM KTR." },
+  { id: 3, name: "T.P. Ganesan Auditorium", category: "Event", lat: 12.824880056150072, lng: 80.04668508123501, info: "One of Asia's largest auditoriums, near the main gate.", tacticalIntel: "» FACT 01: Seating capacity exceeds 3,000 students.\n» FACT 02: Frequently hosts international tech conferences and hackathons.\n» FACT 03: Equipped with stadium-grade acoustics and VIP holding rooms." },
+  { id: 4, name: "CRC Block", category: "Academic", lat: 12.820344661045802, lng: 80.03784856136284, info: "The heritage block housing Mechanical and Civil Engineering.", tacticalIntel: "» FACT 01: One of the oldest legacy structures on campus.\n» FACT 02: Contains heavy-machinery testing labs on the ground floor.\n» FACT 03: Known for its expansive open-air central courtyard." },
+  { id: 5, name: "Hi-Tech Block", category: "Research", lat: 12.821075984327978, lng: 80.03893573761148, info: "Specialized labs for ECE and EEE students.", tacticalIntel: "» FACT 01: Home to advanced robotics and circuitry labs.\n» FACT 02: Features specialized RF (Radio Frequency) isolated rooms.\n» FACT 03: Connects directly to the main research grid." },
+  { id: 6, name: "SRM Medical College", category: "Medical", lat: 12.821098258984547, lng: 80.0481636983677, info: "Multi-specialty hospital and medical research center.", tacticalIntel: "» FACT 01: Fully functional multi-specialty hospital serving the public.\n» FACT 02: Houses critical trauma centers and surgical wards.\n» FACT 03: Operates on an independent backup power grid." },
+  { id: 7, name: "Java Green", category: "Food", lat: 12.823348807944917, lng: 80.04448904064235, info: "Popular outdoor student hangout and food court.", tacticalIntel: "» FACT 01: The highest-density social node during lunch hours.\n» FACT 02: Features multiple distinct vendor stalls and shaded seating.\n» FACT 03: Prime location for student club recruitment drives." },
+  { id: 8, name: "Bio-Tech Block", category: "Academic", lat: 12.825007113379733, lng: 80.04414300737659, info: "Genetic engineering and biotechnology research facility.", tacticalIntel: "» FACT 01: Contains Level-2 Bio-Safety laboratories.\n» FACT 02: Features an advanced greenhouse and genetic testing wing.\n» FACT 03: Located adjacent to the core Tech Park network." }
 ];
 
 const CustomMarker = ({ isUser, name, photo, onClick }) => {
@@ -602,15 +602,13 @@ const App = () => {
   const generateBuildingInsights = async (building) => {
     setAiLoading(true);
     setAiResponse('');
-    try {
-      const prompt = `Give me 3 short, interesting facts about ${building.name} at SRM KTR.`;
-      const res = await callGemini(prompt);
-      setAiResponse(res);
-    } catch (err) {
-      setAiResponse("Failed to fetch AI insights. Neural link severed.");
-    } finally {
+    
+    // We use a 600ms timeout to simulate a "database fetch" 
+    // to keep the cyberpunk aesthetic without burning any actual API quota!
+    setTimeout(() => {
+      setAiResponse(building.tacticalIntel || "[SYS_WARN] No tactical intel available for this node.");
       setAiLoading(false);
-    }
+    }, 600); 
   };
 
   // --- SOS TRANSMITTER ---
@@ -632,27 +630,21 @@ const App = () => {
     setAiResponse('');
     
     try {
+      // 1. COMPRESSED TELEMETRY: Only send Name, Distance, Speed, Battery
       const squadSnapshot = users.filter(u => !blockedUserIds.includes(u.id)).map(u => 
-        `Node [${u.name}]: Lat: ${u.lat}, Lng: ${u.lng}, Distance from me: ${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Speed: ${u.speed} KM/H, Battery: ${u.battery}%`
+        `[${u.name}] Dist:${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Spd:${u.speed}km/h, Bat:${u.battery}%`
       ).join(' | ');
 
+      // 2. COMPRESSED MAP DATA: Only send Name and Coordinates (Drop the info descriptions)
       const campusSnapshot = BUILDINGS.map(b => 
-        `[${b.name}] Lat: ${b.lat}, Lng: ${b.lng}, Category: ${b.category}, Intel: ${b.info}`
+        `[${b.name}] Lat:${b.lat.toFixed(5)}, Lng:${b.lng.toFixed(5)}`
       ).join(' | ');
 
-      const tacticalInstruction = `
-        You are 'SYS_ORACLE', a highly advanced tactical AI assisting a user on the LOCUS network at SRM KTR campus.
-        Respond in a concise, cyberpunk, military-comms tone. Be highly observant.
-        
-        CURRENT LIVE SQUAD TELEMETRY:
-        ${squadSnapshot || "No other active nodes."}
-
-        CAMPUS DATABASE (SRM KTR):
-        ${campusSnapshot}
-        
-        CRITICAL DIRECTIVE: If the user asks who is near a specific building, compare the Latitude (Lat) and Longitude (Lng) of the squad nodes to the Latitude and Longitude of the buildings in the Campus Database to determine proximity. 
-        Answer the user's query utilizing the telemetry and campus data. Do not mention that you were given this data text block.
-      `;
+      // 3. LEAN INSTRUCTION: Force the AI to be concise to save output tokens
+      const tacticalInstruction = `You are 'SYS_ORACLE', a tactical AI on the LOCUS network at SRM KTR.
+        SQUAD DATA: ${squadSnapshot || "Empty"}
+        MAP DATA: ${campusSnapshot}
+        DIRECTIVE: Answer the user's query utilizing the data above. Keep answers under 3 sentences. Use a concise, military-comms tone.`;
 
       const res = await callGemini(aiQuery, tacticalInstruction);
       setAiResponse(res);
