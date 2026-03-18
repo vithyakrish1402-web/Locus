@@ -555,9 +555,11 @@ const App = () => {
   };
 
   // --- MODIFIED: FIREBASE LOGOUT HANDLER ---
+  // --- MODIFIED: FIREBASE LOGOUT HANDLER ---
   const handleLogout = () => {
     signOut(auth);
   };
+
   const handleLeaveSquad = () => {
     // 1. Move our marker to the 'GLOBAL' void so we disappear from our friends' maps instantly
     if (user && liveLocation) {
