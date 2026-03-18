@@ -356,6 +356,22 @@ const App = () => {
   const [squadCode, setSquadCode] = useState('');
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
 
+  const handleJoinSquad = (e) => {
+    // Prevent the page from refreshing if this is inside a form
+    if (e && e.preventDefault) e.preventDefault(); 
+    
+    // Don't do anything if the input is empty
+    if (!squadCode || !squadCode.trim()) return;
+
+    // 1. Send the knock to the server FIRST
+    socket.emit('request-join', { 
+      roomCode: squadCode, 
+      user: { name: user.displayName, photo: user.photoURL } 
+    });
+    
+    // 2. Trigger the waiting room UI
+    setHasJoinedSquad(true); 
+  };
   // --- FIREBASE AUTH LISTENER ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -414,9 +430,38 @@ const App = () => {
     };
   }, [hasJoinedSquad, squadCode]); 
 
+  // --- GATEKEEPER PROTOCOL LISTENERS ---
+  useEffect(() => {
+    socket.on('access-granted', ({ role }) => {
+      setAccessStatus('granted');
+      setSquadRole(role);
+    });
+    
+    socket.on('access-pending', () => setAccessStatus('pending'));
+    
+    socket.on('access-denied', () => {
+      setAccessStatus('denied');
+      setHasJoinedSquad(false);
+      alert("[SYS_REJECTED] The Squad Commander denied your entry.");
+    });
+    
+    socket.on('access-request', (requestData) => {
+      setPendingRequests(prev => [...prev, requestData]);
+    });
+    
+    socket.on('promoted-to-owner', () => setSquadRole('OWNER'));
+
+    return () => {
+      socket.off('access-granted');
+      socket.off('access-pending');
+      socket.off('access-denied');
+      socket.off('access-request');
+      socket.off('promoted-to-owner');
+    };
+  }, []);
   /// 2. Broadcast your live GPS data to the network
   useEffect(() => {
-    if (!user || !hasJoinedSquad) return; 
+    if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
 
     // 👻 GHOST MODE: Tell the server we are a ghost, then abort GPS tracking
     if (telemetryMode === 'GHOST') {
@@ -913,10 +958,9 @@ const App = () => {
             maxLength={12}
           />
           <button 
-            onClick={() => squadCode.trim() && setHasJoinedSquad(true)}
+            onClick={handleJoinSquad} className="your-existing-classes-stay-the-same">
             className="w-full py-5 bg-white text-black font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-500 hover:text-white transition-all"
-          >
-            ESTABLISH_LINK
+            JOIN SQUAD
           </button>
         </div>
       </div>
