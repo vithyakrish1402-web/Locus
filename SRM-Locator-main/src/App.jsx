@@ -351,6 +351,7 @@ const App = () => {
 
   const [users, setUsers] = useState([]);
   const [liveLocation, setLiveLocation] = useState(null);
+  const [telemetryMode, setTelemetryMode] = useState('ACTIVE');
 
   const [squadCode, setSquadCode] = useState('');
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
@@ -367,7 +368,8 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // 1. Listen for real-time network updates from the server
+  
+ // 1. Listen for real-time network updates from the server
   useEffect(() => {
     if (!hasJoinedSquad) return;
 
@@ -375,7 +377,8 @@ const App = () => {
       const formattedUsers = [];
       
       Object.entries(activeUsers).forEach(([id, data]) => {
-        if (id !== socket.id && data.roomCode === squadCode) { 
+        // 🚨 UPGRADED: We now completely ignore data.status === 'GHOST'
+        if (id !== socket.id && data.roomCode === squadCode && data.status !== 'GHOST') { 
           formattedUsers.push({
             id: id,
             name: data.name || "Live User",
@@ -385,13 +388,15 @@ const App = () => {
             lng: data.lng,
             speed: data.speed || 0,
             battery: data.battery || 0,
-            status: "Active",
+            status: data.status || "ACTIVE", // Capture their status
             permission: "accepted" 
           });
         }
       });
       setUsers(formattedUsers);
     });
+
+    // ... rest of the socket.on listeners remain the same ...
 
     socket.on('receive-ping', ({ senderName }) => {
       alert(`🚨 SOS BEACON DETECTED 🚨\n\n${senderName.toUpperCase()} requires immediate assistance at their coordinates!`);
@@ -409,10 +414,27 @@ const App = () => {
     };
   }, [hasJoinedSquad, squadCode]); 
 
-  // 2. Broadcast your live GPS data to the network
+  /// 2. Broadcast your live GPS data to the network
   useEffect(() => {
     if (!user || !hasJoinedSquad) return; 
 
+    // 👻 GHOST MODE: Tell the server we are a ghost, then abort GPS tracking
+    if (telemetryMode === 'GHOST') {
+      socket.emit('update-location', { id: socket.id, status: 'GHOST', roomCode: squadCode });
+      return; 
+    }
+
+    // 🧊 FROZEN MODE: Send static location once, then abort GPS tracking to save battery
+    if (telemetryMode === 'FROZEN' && liveLocation) {
+      socket.emit('update-location', {
+        id: socket.id, name: user.displayName, photo: user.photoURL,
+        lat: liveLocation.lat, lng: liveLocation.lng,
+        speed: 0, battery: 0, roomCode: squadCode, status: 'FROZEN'
+      });
+      return;
+    }
+
+    // 🟢 ACTIVE MODE: Standard live hardware tracking
     const watchId = navigator.geolocation.watchPosition(
       async (position) => { 
         const { latitude, longitude, speed } = position.coords;
@@ -427,14 +449,10 @@ const App = () => {
         } catch (e) { console.log("Battery API blocked"); }
 
         socket.emit('update-location', {
-          id: socket.id,
-          name: user.displayName, 
-          photo: user.photoURL,   
-          lat: latitude,
-          lng: longitude,
-          speed: speed ? Math.round(speed * 3.6) : 0, 
-          battery: batteryLevel,
-          roomCode: squadCode
+          id: socket.id, name: user.displayName, photo: user.photoURL,
+          lat: latitude, lng: longitude,
+          speed: speed ? Math.round(speed * 3.6) : 0, battery: batteryLevel,
+          roomCode: squadCode, status: 'ACTIVE'
         });
       },
       (error) => console.error("🚨 [SYS_ERROR] Geolocation lost:", error.message),
@@ -442,7 +460,7 @@ const App = () => {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [user, hasJoinedSquad, squadCode]);
+  }, [user, hasJoinedSquad, squadCode, telemetryMode]); // <--- Added telemetryMode dependency!
 
   
   // --- CYBERPUNK SONAR AUDIO ENGINE ---
@@ -1043,6 +1061,32 @@ const App = () => {
                >
                  DISCONNECT
                </button>
+             </div>
+          )}
+          {/* --- NEW: TELEMETRY CONTROL PANEL --- */}
+          {activeTab === 'users' && (
+             <div className="mb-4 flex flex-col gap-2 border border-white/20 p-2 bg-black">
+               <span className="text-[10px] font-dot uppercase tracking-widest text-zinc-500 text-center">TELEMETRY_CONTROL</span>
+               <div className="flex gap-2">
+                 <button 
+                   onClick={() => setTelemetryMode('ACTIVE')} 
+                   className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'ACTIVE' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
+                 >
+                   <Activity size={14} /> ACTIVE
+                 </button>
+                 <button 
+                   onClick={() => setTelemetryMode('FROZEN')} 
+                   className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'FROZEN' ? 'bg-blue-500/20 border-blue-500 text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
+                 >
+                   <LocateFixed size={14} /> FROZEN
+                 </button>
+                 <button 
+                   onClick={() => setTelemetryMode('GHOST')} 
+                   className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'GHOST' ? 'bg-zinc-800 border-zinc-500 text-zinc-300 shadow-[0_0_10px_rgba(113,113,122,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
+                 >
+                   <EyeOff size={14} /> GHOST
+                 </button>
+               </div>
              </div>
           )}
           <div className="relative">
