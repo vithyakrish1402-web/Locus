@@ -315,10 +315,25 @@ const App = () => {
   const [routeEnd, setRouteEnd] = useState(null);
   const [routeData, setRouteData] = useState(null); 
   const directionsRendererRef = useRef(null);
+  const customPolylineRef = useRef(null); 
 
   // --- MODIFIED: FIREBASE AUTH STATE ---
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+
+  // --- ADMIN PATH RECORDER STATE ---
+  const ADMIN_EMAIL = "vithyakrish1402@gmail.com"; // 🚨 REPLACE WITH YOUR EXACT GOOGLE LOGIN EMAIL
+  const isAdmin = user?.email === ADMIN_EMAIL;
+  
+  const [isRecordingPath, setIsRecordingPath] = useState(false);
+  const [recordedCoords, setRecordedCoords] = useState([]);
+  const [liveSecretRoutes, setLiveSecretRoutes] = useState({
+    "Tech Park_Java Green": {
+      distance: "450 M", eta: "4 MINS",
+      path: [ { lat: 12.825020, lng: 80.045323 }, { lat: 12.824500, lng: 80.044900 }, { lat: 12.823900, lng: 80.044600 }, { lat: 12.823348, lng: 80.044489 } ]
+    }
+  });
+  const recordingPolylineRef = useRef(null); 
   
   const [loginMethod, setLoginMethod] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -338,13 +353,13 @@ const App = () => {
   const [squadCode, setSquadCode] = useState('');
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
 
-  // --- ADDED: FIREBASE AUTH LISTENER ---
+  // --- FIREBASE AUTH LISTENER ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
       if (currentUser) {
-         setLoginMethod(null); // Clear loading overlay if logged in
+         setLoginMethod(null); 
       }
     });
     return () => unsubscribe();
@@ -373,7 +388,6 @@ const App = () => {
           });
         }
       });
-      
       setUsers(formattedUsers);
     });
 
@@ -381,8 +395,14 @@ const App = () => {
       alert(`🚨 SOS BEACON DETECTED 🚨\n\n${senderName.toUpperCase()} requires immediate assistance at their coordinates!`);
     });
 
+    // Listen for newly published admin routes
+    socket.on('new-custom-route', ({ key, data }) => {
+       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
+    });
+
     return () => {
       socket.off('users-update');
+      socket.off('new-custom-route');
       setUsers([]); 
     };
   }, [hasJoinedSquad, squadCode]); 
@@ -531,25 +551,16 @@ const App = () => {
 
   // --- 🚨 KILL SWITCH LOGOUT HANDLER ---
   const handleLogout = () => {
-    // 1. Tell backend to wipe our data from RAM instantly
     socket.emit('leave-squad');
-    
-    // 2. Wipe the local UI state
     setHasJoinedSquad(false);
     setSquadCode('');
     setUsers([]);
     setLiveLocation(null);
-    
-    // 3. Sever the Firebase Auth Link
     signOut(auth);
   };
 
-  // --- 🚨 KILL SWITCH DISCONNECT HANDLER ---
   const handleLeaveSquad = () => {
-    // 1. Tell backend to wipe our data from RAM instantly
     socket.emit('leave-squad');
-    
-    // 2. Reset our local interface back to the Entry Gate
     setHasJoinedSquad(false);
     setSquadCode('');
     setUsers([]);
@@ -675,7 +686,25 @@ const App = () => {
       if (item) setSelectedItem(item);
   };
 
+  // --- 🚨 MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
   const handleMapClick = ({ lat, lng }) => {
+    // 1. If Admin is recording a path, save the coordinate and draw it
+    if (isAdmin && isRecordingPath) {
+      const newCoords = [...recordedCoords, { lat, lng }];
+      setRecordedCoords(newCoords);
+      
+      if (!recordingPolylineRef.current) {
+        recordingPolylineRef.current = new window.google.maps.Polyline({
+          path: newCoords, strokeColor: '#eab308', // Yellow for recording
+          strokeOpacity: 1.0, strokeWeight: 4, map: mapRef.current
+        });
+      } else {
+        recordingPolylineRef.current.setPath(newCoords);
+      }
+      return; // Stop normal click behavior
+    }
+
+    // 2. Standard Edit Mode Logic
     if (isEditMode && selectedItem && activeTab === 'buildings') {
       setEditableBuildings(prev => prev.map(b => 
         b.id === selectedItem.id ? { ...b, lat, lng } : b
@@ -702,6 +731,7 @@ const App = () => {
     }
   };
 
+  // --- 🚨 MODIFIED: HYBRID ENGINE (Checks Custom Routes First) ---
   const calculateActualRoute = (start, end) => {
     // BULLETPROOF SAFEGUARD
     if (typeof window === 'undefined' || !window.google || !window.google.maps) {
@@ -710,14 +740,46 @@ const App = () => {
       return;
     }
 
+    // 1. CHECK FOR SECRET SHORTCUT OVERRIDES FIRST
+    const routeKey = `${start.name}_${end.name}`;
+    const reverseRouteKey = `${end.name}_${start.name}`;
+    const secretData = liveSecretRoutes[routeKey] || liveSecretRoutes[reverseRouteKey];
+
+    // Only trigger secret route if going Building-to-Building (not from live GPS)
+    if (secretData && start.name !== "MY_LOCATION") {
+      console.log("🕵️‍♂️ [OVERRIDE] Secret route detected. Bypassing Google.");
+      
+      // Clear standard red line if it exists
+      if (directionsRendererRef.current) directionsRendererRef.current.setDirections({ routes: [] });
+      if (customPolylineRef.current) customPolylineRef.current.setMap(null);
+
+      // Draw custom emerald green path
+      const pathCoords = liveSecretRoutes[routeKey] ? secretData.path : [...secretData.path].reverse();
+      customPolylineRef.current = new window.google.maps.Polyline({
+        path: pathCoords,
+        geodesic: true,
+        strokeColor: '#10b981', // Emerald green
+        strokeOpacity: 1.0,
+        strokeWeight: 5,
+        map: mapRef.current
+      });
+
+      setRouteData({
+        distance: { text: secretData.distance },
+        duration: { text: secretData.eta }
+      });
+      return; // Abort Google request completely
+    }
+
+    // 2. FALLBACK: STANDARD GOOGLE MAPS ROUTING
     const directionsService = new window.google.maps.DirectionsService();
-    
     directionsService.route({
       origin: { lat: start.lat, lng: start.lng },
       destination: { lat: end.lat, lng: end.lng },
       travelMode: window.google.maps.TravelMode.WALKING 
     }, (result, status) => {
       if (status === 'OK') {
+        if (customPolylineRef.current) customPolylineRef.current.setMap(null); // Clear green line
         directionsRendererRef.current.setDirections(result);
         setRouteData(result.routes[0].legs[0]); 
       } else {
@@ -732,6 +794,10 @@ const App = () => {
     setRouteData(null);
     if (directionsRendererRef.current) {
       directionsRendererRef.current.setDirections({ routes: [] }); 
+    }
+    if (customPolylineRef.current) {
+      customPolylineRef.current.setMap(null);
+      customPolylineRef.current = null;
     }
   };
 
@@ -1146,7 +1212,7 @@ const App = () => {
           bootstrapURLKeys={{ key: 'AIzaSyD10sWfHpczEuvmvwBkqkPHOu-QXQr8uM0' }}
           center={mapProps.center}
           zoom={mapProps.zoom}
-          options={{ ...createMapOptions(), draggableCursor: isEditMode && selectedItem ? 'crosshair' : 'grab' }}
+          options={{ ...createMapOptions(), draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab') }}
           onClick={handleMapClick}
           yesIWantToUseGoogleMapApiInternals
           onGoogleApiLoaded={({ map, maps }) => {
@@ -1191,6 +1257,72 @@ const App = () => {
           ))}
         </GoogleMapReact>
       </div>
+
+      {/* --- ADMIN OVERRIDE PANEL --- */}
+      {isAdmin && (
+        <div className="absolute top-24 right-6 z-[600] flex flex-col gap-2 pointer-events-auto">
+          {!isRecordingPath ? (
+            <button 
+              onClick={() => setIsRecordingPath(true)}
+              className="p-3 bg-black border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors font-dot text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(234,179,8,0.3)]"
+            >
+              [ADMIN] RECORD_PATH
+            </button>
+          ) : (
+            <div className="bg-black border border-yellow-500 p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
+              <div className="text-yellow-500 font-dot text-xs tracking-widest animate-pulse">RECORDING_NODES: {recordedCoords.length}</div>
+              
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    const startName = prompt("Enter START Building Name (e.g., Tech Park):");
+                    const endName = prompt("Enter END Building Name (e.g., Java Green):");
+                    
+                    if (startName && endName && recordedCoords.length > 1) {
+                      const newRouteData = {
+                        distance: "CUSTOM", eta: "TACTICAL",
+                        path: recordedCoords
+                      };
+                      
+                      // Save to local state
+                      setLiveSecretRoutes(prev => ({
+                        ...prev,
+                        [`${startName}_${endName}`]: newRouteData
+                      }));
+
+                      // Broadcast to backend
+                      socket.emit('publish-custom-route', {
+                        key: `${startName}_${endName}`,
+                        data: newRouteData
+                      });
+
+                      setIsRecordingPath(false);
+                      setRecordedCoords([]);
+                      if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
+                      recordingPolylineRef.current = null;
+                      alert(`[SYS] Route ${startName} -> ${endName} published successfully.`);
+                    }
+                  }}
+                  className="flex-1 p-2 bg-yellow-500 text-black font-dot text-[10px] hover:bg-yellow-400 transition-colors"
+                >
+                  PUBLISH
+                </button>
+                <button 
+                  onClick={() => {
+                    setIsRecordingPath(false);
+                    setRecordedCoords([]);
+                    if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
+                    recordingPolylineRef.current = null;
+                  }}
+                  className="flex-1 p-2 border border-red-500 text-red-500 font-dot text-[10px] hover:bg-red-500 hover:text-white transition-colors"
+                >
+                  ABORT
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Map Interactive Layers */}
       <div className="absolute right-6 top-1/2 -translate-y-1/2 z-[500] flex flex-col gap-4 pointer-events-auto">

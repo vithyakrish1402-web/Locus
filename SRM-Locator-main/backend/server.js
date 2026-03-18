@@ -15,6 +15,12 @@ let users = {};
 
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
+  // --- CUSTOM ADMIN ROUTE BROADCASTER ---
+  socket.on('publish-custom-route', (payload) => {
+    console.log(`[SYS] Admin published new map route: ${payload.key}`);
+    // Bounces the custom route data to EVERYONE connected
+    socket.broadcast.emit('new-custom-route', payload); 
+  });
 
   // --- LOCATION & ROOM ENGINE ---
   socket.on('update-location', (data) => {
