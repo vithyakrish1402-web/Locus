@@ -958,9 +958,10 @@ const App = () => {
             maxLength={12}
           />
           <button 
-            onClick={handleJoinSquad} className="your-existing-classes-stay-the-same">
+            onClick={handleJoinSquad} 
             className="w-full py-5 bg-white text-black font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-500 hover:text-white transition-all"
-            JOIN SQUAD
+          > 
+            JOIN SQUAD 
           </button>
         </div>
       </div>
