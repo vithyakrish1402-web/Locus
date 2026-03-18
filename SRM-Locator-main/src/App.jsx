@@ -1378,23 +1378,33 @@ const App = () => {
                <p className="font-inter text-zinc-400 text-sm leading-relaxed">{selectedItem.info}</p>
              </div>
 
-             <div className="px-6 pb-4 flex gap-3">
-               {!aiResponse && !aiLoading ? (
-                 <button onClick={() => generateBuildingInsights(selectedItem)} className="flex-1 py-3 border border-white/20 hover:bg-white/10 font-dot text-[10px] text-white flex items-center justify-center gap-2 transition-colors uppercase tracking-widest">
-                   <Sparkles size={14} className="text-red-500" /> QUERY_DATA
-                 </button>
-               ) : aiLoading ? (
-                 <div className="flex-1 py-3 border border-white/20 font-dot text-[10px] text-zinc-500 flex items-center justify-center gap-2 uppercase tracking-widest">
-                   <Loader2 className="animate-spin text-red-500" size={14} /> FETCHING...
-                 </div>
-               ) : null}
-               <button 
-                  onClick={() => handleWaypointSelect(selectedItem)}
-                  className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
-                >
-                  <Navigation size={14} /> {routeStart && !routeEnd ? "SET_DESTINATION" : "WAYPOINT"}
-                </button>
-             </div>
+             
+               <div className="px-6 pb-4 flex gap-3">
+  {/* If no intel is loaded and we aren't fetching, show the button */}
+  {!buildingIntel && !aiLoading && (
+    <button 
+      onClick={() => generateBuildingInsights(selectedItem)} 
+      className="flex-1 py-3 border border-white/20 hover:bg-white/10 font-dot text-[10px] text-white flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
+    >
+      <Sparkles size={14} className="text-red-500" /> QUERY_DATA
+    </button>
+  )}
+
+  {/* If we ARE fetching, show the loader */}
+  {aiLoading && (
+    <div className="flex-1 py-3 border border-white/20 font-dot text-[10px] text-zinc-500 flex items-center justify-center gap-2 uppercase tracking-widest">
+      <Loader2 className="animate-spin text-red-500" size={14} /> FETCHING...
+    </div>
+  )}
+
+  {/* Always show the Waypoint/Destination button */}
+  <button 
+    onClick={() => handleWaypointSelect(selectedItem)}
+    className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
+  >
+    <Navigation size={14} /> {routeStart && !routeEnd ? "SET_DESTINATION" : "WAYPOINT"}
+  </button>
+</div>
 
              {buildingIntel&& (
                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 pb-6 max-h-40 overflow-y-auto custom-scrollbar">
