@@ -23,6 +23,11 @@ const socket = io(BACKEND_URL, {
 });
 
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 }; 
+// Add these to your state declarations in App
+const [routeStart, setRouteStart] = useState(null);
+const [routeEnd, setRouteEnd] = useState(null);
+const [routeData, setRouteData] = useState(null); // Holds distance and time
+const directionsRendererRef = useRef(null);
 
 const BUILDINGS = [
   { id: 1, name: "Tech Park", category: "Academic", lat: 12.825020924230433, lng: 80.0453233376537, info: "Home to CSE & IT departments. 15 floors of innovation." },
@@ -474,6 +479,9 @@ const App = () => {
 
     return () => socket.off('receive-ping');
   }, []);
+  useEffect(() => {
+    clearRoute();
+  }, [activeTab]);
 
   const [blockedUserIds, setBlockedUserIds] = useState([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
@@ -714,6 +722,53 @@ const App = () => {
     }
   };
 
+  // --- TACTICAL ROUTING ENGINE ---
+const handleWaypointSelect = (targetCoords) => {
+  if (!routeStart) {
+    // If no start point, use the user's live GPS if available, otherwise prompt to select a start
+    if (liveLocation) {
+      setRouteStart({ name: "MY_LOCATION", ...liveLocation });
+      setRouteEnd(targetCoords);
+      calculateActualRoute({ name: "MY_LOCATION", ...liveLocation }, targetCoords);
+    } else {
+      setRouteStart(targetCoords);
+    }
+    setSelectedItem(null); // Close the info card
+  } else if (!routeEnd && targetCoords.id !== routeStart.id) {
+    // Set destination and calculate
+    setRouteEnd(targetCoords);
+    setSelectedItem(null);
+    calculateActualRoute(routeStart, targetCoords);
+  }
+};
+
+const calculateActualRoute = (start, end) => {
+  if (!window.google) return;
+  const directionsService = new window.google.maps.DirectionsService();
+  
+  directionsService.route({
+    origin: { lat: start.lat, lng: start.lng },
+    destination: { lat: end.lat, lng: end.lng },
+    travelMode: window.google.maps.TravelMode.WALKING // Crucial for campus paths
+  }, (result, status) => {
+    if (status === 'OK') {
+      directionsRendererRef.current.setDirections(result);
+      setRouteData(result.routes[0].legs[0]); // Extracts distance and duration
+    } else {
+      alert("[SYS_ERROR] UNAVAILABLE WALKING PATH.");
+    }
+  });
+};
+
+const clearRoute = () => {
+  setRouteStart(null);
+  setRouteEnd(null);
+  setRouteData(null);
+  if (directionsRendererRef.current) {
+    directionsRendererRef.current.setDirections({ routes: [] }); // Clears the map line
+  }
+};
+
   const pendingRequests = users.filter(u => u.permission === 'requested' && !blockedUserIds.includes(u.id));
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
@@ -873,6 +928,44 @@ const App = () => {
           </button>
         </div>
       </motion.nav>
+  {/* --- ACTIVE ROUTE HUD --- */}
+<AnimatePresence>
+  {(routeStart || routeData) && (
+    <motion.div 
+      initial={{ y: -50, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: -50, opacity: 0 }}
+      className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-md bg-black border border-red-500 pointer-events-auto shadow-[0_0_30px_rgba(239,68,68,0.2)]"
+    >
+      <div className="p-4 flex flex-col gap-2 relative">
+        <button onClick={clearRoute} className="absolute top-2 right-2 text-zinc-500 hover:text-white">
+          <X size={16} />
+        </button>
+        
+        <div className="flex items-center gap-2 text-red-500 font-dot text-xs uppercase tracking-widest">
+          <Waypoints size={14} className="animate-pulse" />
+          ACTIVE_WAYPOINT_TRACKING
+        </div>
+        
+        <div className="flex justify-between items-end mt-2">
+          <div className="flex flex-col font-dot text-sm text-white uppercase tracking-widest">
+            <span>{routeStart?.name || "AWAITING_START"}</span>
+            <span className="text-zinc-600">↓</span>
+            <span>{routeEnd?.name || "AWAITING_TARGET"}</span>
+          </div>
+          
+          {routeData && (
+            <div className="text-right flex flex-col">
+              <span className="text-2xl font-dot text-red-500 leading-none">{routeData.distance.text}</span>
+              <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ETA: {routeData.duration.text}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  )}
+</AnimatePresence>
+  
 
       {/* Sidebar Panel */}
       <motion.div 
@@ -1108,6 +1201,11 @@ const App = () => {
           yesIWantToUseGoogleMapApiInternals
           onGoogleApiLoaded={({ map }) => {
             mapRef.current = map;
+            directionsRendererRef.current = new maps.DirectionsRenderer({
+              suppressMarkers: true, // We keep your custom cyberpunk markers
+              polylineOptions: { strokeColor: '#ef4444', strokeWeight: 4 } // Red line
+            });
+            directionsRendererRef.current.setMap(map);
           }}
         >
           {liveLocation && (
@@ -1222,9 +1320,12 @@ const App = () => {
                    <Loader2 className="animate-spin text-red-500" size={14} /> FETCHING...
                  </div>
                ) : null}
-               <button className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest">
-                 <Navigation size={14} /> WAYPOINT
-               </button>
+               <button 
+                  onClick={() => handleWaypointSelect(selectedItem)}
+                  className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
+                >
+                  <Navigation size={14} /> {routeStart && !routeEnd ? "SET_DESTINATION" : "WAYPOINT"}
+                </button>
              </div>
 
              {/* AI Response (if loaded) */} 
