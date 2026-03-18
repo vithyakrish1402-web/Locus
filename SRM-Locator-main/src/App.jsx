@@ -515,7 +515,8 @@ const App = () => {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [user, hasJoinedSquad, squadCode, telemetryMode]); // <--- Added telemetryMode dependency!
+  // This is at the very end of the GPS useEffect block (around line 520)
+}, [user, hasJoinedSquad, squadCode, telemetryMode, accessStatus]);
 
   
   // --- CYBERPUNK SONAR AUDIO ENGINE ---
