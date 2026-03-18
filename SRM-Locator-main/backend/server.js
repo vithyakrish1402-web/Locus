@@ -10,11 +10,55 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
+// --- NEW: SQUAD REGISTRY ---
+const activeSquads = {}; 
+
 
 let users = {};
 
-io.on('connection', (socket) => {
-  console.log(`🟢 Node Connected: ${socket.id}`);
+
+
+  io.on('connection', (socket) => {
+    console.log(`🟢 Node Connected: ${socket.id}`);
+
+    // --- UPGRADED: GATEKEEPER ENTRY PROTOCOL ---
+    socket.on('request-join', (data) => {
+      const { roomCode, user } = data;
+
+      if (!activeSquads[roomCode] || activeSquads[roomCode].members.length === 0) {
+        activeSquads[roomCode] = { ownerId: socket.id, members: [socket.id] };
+        socket.join(roomCode);
+        socket.emit('access-granted', { role: 'OWNER', roomCode });
+        console.log(`👑 [SYS_NODE] ${user.name} established new squad: ${roomCode}`);
+      } else {
+        console.log(`🛡️ [SYS_NODE] ${user.name} requesting access to ${roomCode}`);
+        const commanderId = activeSquads[roomCode].ownerId;
+        io.to(commanderId).emit('access-request', {
+          targetId: socket.id, name: user.name, photo: user.photo, roomCode: roomCode
+        });
+        socket.emit('access-pending'); 
+      }
+    });
+
+    // --- NEW: COMMANDER RESOLUTION PROTOCOL ---
+    socket.on('resolve-access', ({ targetId, roomCode, approved }) => {
+      if (activeSquads[roomCode] && activeSquads[roomCode].ownerId === socket.id) {
+        if (approved) {
+          activeSquads[roomCode].members.push(targetId);
+          const targetSocket = io.sockets.sockets.get(targetId);
+          if (targetSocket) {
+            targetSocket.join(roomCode);
+            targetSocket.emit('access-granted', { role: 'MEMBER', roomCode });
+            console.log(`✅ [SYS_NODE] Access granted to node: ${targetId}`);
+          }
+        } else {
+          io.to(targetId).emit('access-denied');
+          console.log(`❌ [SYS_NODE] Access denied for node: ${targetId}`);
+        }
+      }
+    });
+
+    // ... CUSTOM ADMIN ROUTE BROADCASTER (Line 22) stays below this ...
   // --- CUSTOM ADMIN ROUTE BROADCASTER ---
   socket.on('publish-custom-route', (payload) => {
     console.log(`[SYS] Admin published new map route: ${payload.key}`);
@@ -48,6 +92,19 @@ io.on('connection', (socket) => {
       console.log(`[SYS] Node ${socket.id} wiped from server RAM (Connection Lost)`);
       delete activeUsers[socket.id]; 
       io.emit('users-update', activeUsers);
+      // --- NEW: SQUAD SUCCESSION ---
+    for (const roomCode in activeSquads) {
+      const squad = activeSquads[roomCode];
+      squad.members = squad.members.filter(id => id !== socket.id);
+
+      if (squad.members.length === 0) {
+        delete activeSquads[roomCode];
+      } else if (squad.ownerId === socket.id) {
+        squad.ownerId = squad.members[0];
+        io.to(squad.ownerId).emit('promoted-to-owner', { roomCode });
+        console.log(`👑 [SYS_NODE] Command of ${roomCode} transferred to ${squad.ownerId}`);
+      }
+    }
     }
   });
 
