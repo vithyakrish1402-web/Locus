@@ -445,7 +445,24 @@ const App = () => {
   };
   
   
-  
+  // --- 🕸️ P2P DATA DECODER ---
+  const handleP2PData = (rawPayload) => {
+    try {
+      const parsed = JSON.parse(rawPayload);
+      if (parsed.type === 'P2P_LOCATION') {
+        // Update the target user's coordinates directly in the React state
+        setUsers(prev => prev.map(u => {
+          if (u.id === parsed.id) {
+             return { ...u, lat: parsed.lat, lng: parsed.lng, speed: parsed.speed, battery: parsed.battery };
+          }
+          return u;
+        }));
+      }
+    } catch (e) { 
+      console.error("[P2P] Payload decode failed:", e); 
+    }
+  };
+
   // --- 🌐 GEOFENCE PERIMETER LISTENER ---
   useEffect(() => {
     socket.on('geofence-alert', (alertData) => {
@@ -566,6 +583,19 @@ const App = () => {
 
           // FILTER THEIR INCOMING DATA
           const smoothedSquadNode = squadPrecognition.current[id].filter(data.lat, data.lng);
+          if (!peersRef.current[id] && socket.id > id) {
+            console.log(`[P2P] Initiating secure laser-link to Node ${data.name}...`);
+            const peer = new Peer({ initiator: true, trickle: true });
+
+            peer.on('signal', (offer) => {
+              socket.emit('webrtc-offer', { targetId: id, offer: offer });
+            });
+
+            // Route incoming P2P data to our new decoder
+            peer.on('data', handleP2PData);
+            
+            peersRef.current[id] = peer;
+          }
 
           formattedUsers.push({
             id: id,
@@ -728,12 +758,23 @@ const App = () => {
         } catch (e) { console.log("Battery API blocked"); }
 
         // Broadcast the smoothed coordinates to the squad, not the messy ones
-        socket.emit('update-location', {
-          id: socket.id, name: user.displayName, photo: user.photoURL,
-          lat: smoothed.lat, lng: smoothed.lng,
-          speed: speed ? Math.round(speed * 3.6) : 0, battery: batteryLevel,
-          roomCode: squadCode, status: 'ACTIVE'
+        // 🚀 THE P2P TRANSMITTER
+        // We package the smoothed data...
+        const p2pPayload = JSON.stringify({
+          type: 'P2P_LOCATION',
+          id: socket.id,
+          lat: smoothed.lat,
+          lng: smoothed.lng,
+          speed: speed ? Math.round(speed * 3.6) : 0,
+          battery: batteryLevel
         });
+
+        // ...and fire it directly at the other phones! (Bypassing the server)
+        Object.values(peersRef.current).forEach(peer => {
+          try {
+            if (peer.connected) peer.send(p2pPayload);
+          } catch (err) { /* ignore disconnected peers */ }
+        }); 
       },
       (error) => console.error("🚨 [SYS_ERROR] Geolocation lost:", error.message),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
