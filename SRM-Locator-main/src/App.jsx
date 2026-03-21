@@ -446,25 +446,29 @@ const App = () => {
   
   
   // --- 🕸️ P2P DATA DECODER ---
+  // --- 🕸️ P2P DATA DECODER ---
   const handleP2PData = (rawPayload) => {
     try {
-      const parsed = JSON.parse(rawPayload);
+      // 🚨 WEBRTC BINARY DECODER: simple-peer sends data as binary Uint8Arrays.
+      // We MUST decode it into text before JSON.parse can read it!
+      const payloadString = typeof rawPayload === 'string' 
+        ? rawPayload 
+        : new TextDecoder().decode(rawPayload);
+        
+      const parsed = JSON.parse(payloadString);
+      
       if (parsed.type === 'P2P_LOCATION') {
-        // BUG FIX: Parse and save the incoming status flag so GHOST/FROZEN
-        // state changes from peers are reflected in the local React state.
         setUsers(prev => prev.map(u => {
           if (u.id === parsed.id) {
-            // If the peer is going GHOST, save that status but keep last known coords
             if (parsed.status === 'GHOST') {
               return { ...u, status: 'GHOST' };
             }
-            // Otherwise update coords + status normally
             return { 
               ...u, 
               lat: parsed.lat, 
               lng: parsed.lng, 
               speed: parsed.speed, 
-              battery: parsed.battery,
+              battery: parsed.battery, // Now correctly receives numbers
               status: parsed.status || 'ACTIVE'
             };
           }
@@ -475,7 +479,6 @@ const App = () => {
       console.error("[P2P] Payload decode failed:", e); 
     }
   };
-
   // --- 🌐 GEOFENCE PERIMETER LISTENER ---
   useEffect(() => {
     socket.on('geofence-alert', (alertData) => {
@@ -758,11 +761,12 @@ const App = () => {
       const currentLoc = liveLocationRef.current; // <-- READS FROM THE REF
       if (!currentLoc) return; 
 
-      let currentBattery = 'Unknown';
+      // 🚨 FIX: Battery must be a NUMBER, not a string with '%', or CSS breaks!
+      let currentBattery = 100; 
       try {
         if ('getBattery' in navigator) {
           const battery = await navigator.getBattery();
-          currentBattery = `${Math.round(battery.level * 100)}%`;
+          currentBattery = Math.round(battery.level * 100);
         }
       } catch (e) { }
       
@@ -771,19 +775,18 @@ const App = () => {
         latitude: currentLoc.lat,
         longitude: currentLoc.lng,
         timestamp: new Date().toISOString(),
-        batteryLevel: currentBattery
+        batteryLevel: `${currentBattery}%` // Server still expects the string
       });
 
       // 2. 🕸️ P2P MESH SYNCHRONIZER
-      // Forces your location onto squad maps even if stationary
       if (telemetryMode === 'ACTIVE') {
         const syncPayload = JSON.stringify({
           type: 'P2P_LOCATION',
           id: socket.id,
           lat: currentLoc.lat,
           lng: currentLoc.lng,
-          speed: 0, // Stationary fallback
-          battery: currentBattery,
+          speed: 0, 
+          battery: currentBattery, // Passed as a pure number to the mesh
           status: 'ACTIVE'
         });
 
@@ -859,11 +862,8 @@ const App = () => {
   // This is at the very end of the GPS useEffect block
   }, [user, hasJoinedSquad, squadCode, telemetryMode, accessStatus]);
 // --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
-  // --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
   useEffect(() => {
-    const currentLoc = liveLocationRef.current; // <-- READS FROM THE UN-TRAPPED REF
-    
-    // We can't broadcast if we don't have our own location yet
+    const currentLoc = liveLocationRef.current; 
     if (!currentLoc || !socket) return; 
 
     let overridePayload;
@@ -876,20 +876,17 @@ const App = () => {
         id: socket.id, 
         lat: currentLoc.lat, 
         lng: currentLoc.lng,
-        speed: 0, // Fallback for stationary pulse
-        battery: 'Active', 
+        speed: 0, 
+        battery: 100, // 🚨 FIX: Fallback to 100 so the CSS doesn't crash
         status: 'ACTIVE'
       });
     } else {
-      return; // If FROZEN, we explicitly send nothing.
+      return; 
     }
 
-    // Blast the new status through the laser-links instantly
     Object.values(peersRef.current).forEach(peer => {
       try { if (peer.connected) peer.send(overridePayload); } catch (e) {}
     });
-    
-  // This hook runs the exact millisecond you click a telemetry button
   }, [telemetryMode]);
 
   
