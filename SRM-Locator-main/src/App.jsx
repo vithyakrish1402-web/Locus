@@ -450,10 +450,23 @@ const App = () => {
     try {
       const parsed = JSON.parse(rawPayload);
       if (parsed.type === 'P2P_LOCATION') {
-        // Update the target user's coordinates directly in the React state
+        // BUG FIX: Parse and save the incoming status flag so GHOST/FROZEN
+        // state changes from peers are reflected in the local React state.
         setUsers(prev => prev.map(u => {
           if (u.id === parsed.id) {
-             return { ...u, lat: parsed.lat, lng: parsed.lng, speed: parsed.speed, battery: parsed.battery };
+            // If the peer is going GHOST, save that status but keep last known coords
+            if (parsed.status === 'GHOST') {
+              return { ...u, status: 'GHOST' };
+            }
+            // Otherwise update coords + status normally
+            return { 
+              ...u, 
+              lat: parsed.lat, 
+              lng: parsed.lng, 
+              speed: parsed.speed, 
+              battery: parsed.battery,
+              status: parsed.status || 'ACTIVE'
+            };
           }
           return u;
         }));
@@ -656,13 +669,7 @@ const App = () => {
       });
 
       // Handle incoming P2P data (This is where the GPS will flow!)
-      peer.on('data', (rawPayload) => {
-        const parsed = JSON.parse(rawPayload);
-        if (parsed.type === 'P2P_LOCATION') {
-          console.log(`[P2P] Direct GPS packet received from ${parsed.name}`);
-          // We will wire this to update the map in the next step
-        }
-      });
+      peer.on('data', handleP2PData);
 
       // Accept their security key
       peer.signal(data.offer);
@@ -1776,7 +1783,8 @@ const App = () => {
              />
           ))}
           {/* ... other markers ... */}
-{activeTab === 'users' && users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id)).map(u => (
+{/* BUG FIX: Filter out GHOST-status users so their markers are removed from the map */}
+{activeTab === 'users' && users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST').map(u => (
    <CustomMarker 
      key={u.id} 
      lat={u.lat} 
