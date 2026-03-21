@@ -595,12 +595,19 @@ const App = () => {
       // Initiate WebRTC connections OUTSIDE the state updater to avoid React StrictMode double-invoke bugs
       Object.entries(activeUsers).forEach(([id, data]) => {
         if (id !== socket.id && data.roomCode === squadCode && !ghostStatusRef.current[id]) {
-          if (!peersRef.current[id] && socket.id > id) {
-            console.log(`[P2P] Initiating secure laser-link to Node ${data.name}...`);
-            const peer = new Peer({ initiator: true, trickle: true });
-            peer.on('signal', (offer) => socket.emit('webrtc-offer', { targetId: id, offer: offer }));
-            peer.on('data', handleP2PData);
-            peersRef.current[id] = peer;
+          if (!peersRef.current[id]) {
+            // Use localeCompare as a deterministic tiebreaker.
+            // One side gets +1 (initiates), the other gets -1 (waits for offer).
+            // This guarantees exactly ONE peer initiates — never both, never neither.
+            const iInitiate = socket.id.localeCompare(id) > 0;
+            if (iInitiate) {
+              console.log(`[P2P] Initiating secure laser-link to Node ${data.name}...`);
+              const peer = new Peer({ initiator: true, trickle: true });
+              peer.on('signal', (offer) => socket.emit('webrtc-offer', { targetId: id, offer: offer }));
+              peer.on('data', handleP2PData);
+              peersRef.current[id] = peer;
+            }
+            // The other side will create its peer when it receives 'webrtc-offer'
           }
         }
       });
@@ -1811,8 +1818,8 @@ const App = () => {
              />
           ))}
           {/* ... other markers ... */}
-{/* BUG FIX: Filter out GHOST-status users so their markers are removed from the map */}
-{activeTab === 'users' && users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST').map(u => (
+{/* Filter out: blocked, ghost, and users with no coordinates yet */}
+{activeTab === 'users' && users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng).map(u => (
    <CustomMarker 
      key={u.id} 
      lat={u.lat} 
