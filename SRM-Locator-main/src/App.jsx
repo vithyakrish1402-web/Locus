@@ -426,6 +426,9 @@ const App = () => {
   const [squadRole, setSquadRole] = useState(null); 
   const [pendingRequests, setPendingRequests] = useState([]);
   const liveLocationRef = useRef(null);
+  // Tracks which peer IDs have gone GHOST via P2P. Lives in a ref so it
+  // survives the users-update server tick that rebuilds the users array.
+  const ghostStatusRef = useRef({});
 
   const handleJoinSquad = (e) => {
     // Prevent the page from refreshing if this is inside a form
@@ -446,39 +449,38 @@ const App = () => {
   
   
   // --- 🕸️ P2P DATA DECODER ---
-  // --- 🕸️ P2P DATA DECODER ---
   const handleP2PData = (rawPayload) => {
     try {
-      // 🚨 WEBRTC BINARY DECODER: simple-peer sends data as binary Uint8Arrays.
-      // We MUST decode it into text before JSON.parse can read it!
-      const payloadString = typeof rawPayload === 'string' 
-        ? rawPayload 
-        : new TextDecoder().decode(rawPayload);
-        
-      const parsed = JSON.parse(payloadString);
-      
+      const parsed = JSON.parse(rawPayload);
       if (parsed.type === 'P2P_LOCATION') {
-        setUsers(prev => prev.map(u => {
-          if (u.id === parsed.id) {
-            if (parsed.status === 'GHOST') {
-              return { ...u, status: 'GHOST' };
+        if (parsed.status === 'GHOST') {
+          // Write into the ref so this survives the next users-update server rebuild
+          ghostStatusRef.current[parsed.id] = true;
+          // Also immediately hide the marker in current state
+          setUsers(prev => prev.filter(u => u.id !== parsed.id));
+        } else {
+          // Coming back from GHOST — clear the flag
+          delete ghostStatusRef.current[parsed.id];
+          setUsers(prev => prev.map(u => {
+            if (u.id === parsed.id) {
+              return { 
+                ...u, 
+                lat: parsed.lat, 
+                lng: parsed.lng, 
+                speed: parsed.speed, 
+                battery: parsed.battery,
+                status: parsed.status || 'ACTIVE'
+              };
             }
-            return { 
-              ...u, 
-              lat: parsed.lat, 
-              lng: parsed.lng, 
-              speed: parsed.speed, 
-              battery: parsed.battery, // Now correctly receives numbers
-              status: parsed.status || 'ACTIVE'
-            };
-          }
-          return u;
-        }));
+            return u;
+          }));
+        }
       }
     } catch (e) { 
       console.error("[P2P] Payload decode failed:", e); 
     }
   };
+
   // --- 🌐 GEOFENCE PERIMETER LISTENER ---
   useEffect(() => {
     socket.on('geofence-alert', (alertData) => {
@@ -587,22 +589,27 @@ const App = () => {
     if (!hasJoinedSquad) return;
 
    socket.on('users-update', (activeUsers) => {
+      // Initiate WebRTC connections OUTSIDE the state updater to avoid React StrictMode double-invoke bugs
+      Object.entries(activeUsers).forEach(([id, data]) => {
+        if (id !== socket.id && data.roomCode === squadCode && !ghostStatusRef.current[id]) {
+          if (!peersRef.current[id] && socket.id > id) {
+            console.log(`[P2P] Initiating secure laser-link to Node ${data.name}...`);
+            const peer = new Peer({ initiator: true, trickle: true });
+            peer.on('signal', (offer) => socket.emit('webrtc-offer', { targetId: id, offer: offer }));
+            peer.on('data', handleP2PData);
+            peersRef.current[id] = peer;
+          }
+        }
+      });
+
       // 🛑 UPGRADE: Use React state updater to preserve our P2P Mesh coordinates
       setUsers(prevUsers => {
         const formattedUsers = [];
         
         Object.entries(activeUsers).forEach(([id, data]) => {
-          if (id !== socket.id && data.roomCode === squadCode && data.status !== 'GHOST') { 
+          // Skip self, wrong room, and any peer that sent us a GHOST payload via P2P
+          if (id !== socket.id && data.roomCode === squadCode && !ghostStatusRef.current[id]) { 
             
-            // Initiate WebRTC if we haven't already
-            if (!peersRef.current[id] && socket.id > id) {
-              console.log(`[P2P] Initiating secure laser-link to Node ${data.name}...`);
-              const peer = new Peer({ initiator: true, trickle: true });
-              peer.on('signal', (offer) => socket.emit('webrtc-offer', { targetId: id, offer: offer }));
-              peer.on('data', handleP2PData);
-              peersRef.current[id] = peer;
-            }
-
             // --- 🛡️ THE P2P PRESERVATION LAYER ---
             // Find if we already have live data for this user from the WebRTC Mesh
             const existingUser = prevUsers.find(u => u.id === id);
@@ -749,6 +756,15 @@ const App = () => {
         const smoothed = localPrecognition.current.filter(latitude, longitude);
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
+
+        // FIX: Immediately push to the server so peers get a users-update
+        // with your coordinates right away, not after the 5s heartbeat fires.
+        socket.emit('safety-ping', {
+          latitude: smoothed.lat,
+          longitude: smoothed.lng,
+          timestamp: new Date().toISOString(),
+          batteryLevel: 'Unknown'
+        });
       },
       (err) => console.log("[SYS] Initial GPS lock delayed..."),
       { enableHighAccuracy: true }
@@ -761,12 +777,11 @@ const App = () => {
       const currentLoc = liveLocationRef.current; // <-- READS FROM THE REF
       if (!currentLoc) return; 
 
-      // 🚨 FIX: Battery must be a NUMBER, not a string with '%', or CSS breaks!
-      let currentBattery = 100; 
+      let currentBattery = 'Unknown';
       try {
         if ('getBattery' in navigator) {
           const battery = await navigator.getBattery();
-          currentBattery = Math.round(battery.level * 100);
+          currentBattery = `${Math.round(battery.level * 100)}%`;
         }
       } catch (e) { }
       
@@ -775,18 +790,19 @@ const App = () => {
         latitude: currentLoc.lat,
         longitude: currentLoc.lng,
         timestamp: new Date().toISOString(),
-        batteryLevel: `${currentBattery}%` // Server still expects the string
+        batteryLevel: currentBattery
       });
 
       // 2. 🕸️ P2P MESH SYNCHRONIZER
+      // Forces your location onto squad maps even if stationary
       if (telemetryMode === 'ACTIVE') {
         const syncPayload = JSON.stringify({
           type: 'P2P_LOCATION',
           id: socket.id,
           lat: currentLoc.lat,
           lng: currentLoc.lng,
-          speed: 0, 
-          battery: currentBattery, // Passed as a pure number to the mesh
+          speed: 0, // Stationary fallback
+          battery: currentBattery,
           status: 'ACTIVE'
         });
 
@@ -862,8 +878,11 @@ const App = () => {
   // This is at the very end of the GPS useEffect block
   }, [user, hasJoinedSquad, squadCode, telemetryMode, accessStatus]);
 // --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
+  // --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
   useEffect(() => {
-    const currentLoc = liveLocationRef.current; 
+    const currentLoc = liveLocationRef.current; // <-- READS FROM THE UN-TRAPPED REF
+    
+    // We can't broadcast if we don't have our own location yet
     if (!currentLoc || !socket) return; 
 
     let overridePayload;
@@ -876,17 +895,20 @@ const App = () => {
         id: socket.id, 
         lat: currentLoc.lat, 
         lng: currentLoc.lng,
-        speed: 0, 
-        battery: 100, // 🚨 FIX: Fallback to 100 so the CSS doesn't crash
+        speed: 0, // Fallback for stationary pulse
+        battery: 'Active', 
         status: 'ACTIVE'
       });
     } else {
-      return; 
+      return; // If FROZEN, we explicitly send nothing.
     }
 
+    // Blast the new status through the laser-links instantly
     Object.values(peersRef.current).forEach(peer => {
       try { if (peer.connected) peer.send(overridePayload); } catch (e) {}
     });
+    
+  // This hook runs the exact millisecond you click a telemetry button
   }, [telemetryMode]);
 
   
