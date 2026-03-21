@@ -72,18 +72,7 @@ io.on('connection', (socket) => {
       io.to(roomCode).emit('users-update', remaining);
     }
   });
-  // --- SAFETY PING ENGINE (LAST KNOWN LOCATION) ---
-  socket.on('safety-ping', (data) => {
-    const { latitude, longitude, timestamp, batteryLevel } = data;
-    
-    // Silently update the cache. We only keep the most recent ping to save RAM.
-    locationCache[socket.id] = {
-      latitude,
-      longitude,
-      timestamp,
-      batteryLevel: batteryLevel || 'Unknown'
-    };
-  });
+  
   // --- TACTICAL TELEMETRY SYNC (COMMANDERS ONLY) ---
   socket.on('request-telemetry', (roomCode) => {
     const squad = activeSquads[roomCode];
