@@ -327,8 +327,47 @@ const CinematicLanding = ({
     </div>
   );
 }
+// --- 🔮 THE PRECOGNITION ENGINE (KALMAN FILTER) ---
+class PrecognitionFilter {
+  constructor(q = 0.0001, r = 0.001) {
+    this.q = q; // Trajectory Variance (How fast the target can actually change direction)
+    this.r = r; // Sensor Distrust (How messy we assume the phone's GPS is)
+    this.latEstimate = null;
+    this.lngEstimate = null;
+    this.latError = 1;
+    this.lngError = 1;
+  }
 
+  filter(lat, lng) {
+    if (!this.latEstimate) {
+      this.latEstimate = lat;
+      this.lngEstimate = lng;
+      return { lat, lng };
+    }
+    // 1. Predict next state
+    let pLat = this.latError + this.q;
+    let pLng = this.lngError + this.q;
+    
+    // 2. Calculate Precognition Gain (How much do we trust the new GPS point?)
+    let kLat = pLat / (pLat + this.r);
+    let kLng = pLng / (pLng + this.r);
+    
+    // 3. Calculate final smoothed coordinates
+    this.latEstimate = this.latEstimate + kLat * (lat - this.latEstimate);
+    this.lngEstimate = this.lngEstimate + kLng * (lng - this.lngEstimate);
+    
+    // 4. Update error margin for the next calculation
+    this.latError = (1 - kLat) * pLat;
+    this.lngError = (1 - kLng) * pLng;
+
+    return { lat: this.latEstimate, lng: this.lngEstimate };
+  }
+}
 const App = () => {
+  // --- PRECOGNITION TRACKERS ---
+  const localPrecognition = useRef(new PrecognitionFilter());
+  const squadPrecognition = useRef({}); // Tracks separate math for every squad member
+
   const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -506,6 +545,7 @@ const App = () => {
 
   
  // 1. Listen for real-time network updates from the server
+  // 1. Listen for real-time network updates from the server
   useEffect(() => {
     if (!hasJoinedSquad) return;
 
@@ -513,18 +553,26 @@ const App = () => {
       const formattedUsers = [];
       
       Object.entries(activeUsers).forEach(([id, data]) => {
-        // 🚨 UPGRADED: We now completely ignore data.status === 'GHOST'
         if (id !== socket.id && data.roomCode === squadCode && data.status !== 'GHOST') { 
+          
+          // 🔮 INITIALIZE A PRECOGNITION TRACKER FOR NEW MEMBERS
+          if (!squadPrecognition.current[id]) {
+            squadPrecognition.current[id] = new PrecognitionFilter();
+          }
+
+          // FILTER THEIR INCOMING DATA
+          const smoothedSquadNode = squadPrecognition.current[id].filter(data.lat, data.lng);
+
           formattedUsers.push({
             id: id,
             name: data.name || "Live User",
             photo: data.photo,
             role: "Campus Node",
-            lat: data.lat,
-            lng: data.lng,
+            lat: smoothedSquadNode.lat,
+            lng: smoothedSquadNode.lng,
             speed: data.speed || 0,
             battery: data.battery || 0,
-            status: data.status || "ACTIVE", // Capture their status
+            status: data.status || "ACTIVE",
             permission: "accepted" 
           });
         }
@@ -605,10 +653,16 @@ const App = () => {
     }
 
     // 🟢 ACTIVE MODE: Standard live hardware tracking
+    // 🟢 ACTIVE MODE: Standard live hardware tracking
     const watchId = navigator.geolocation.watchPosition(
       async (position) => { 
         const { latitude, longitude, speed } = position.coords;
-        setLiveLocation({ lat: latitude, lng: longitude });
+        
+        // 🔮 RUN PRECOGNITION PATHING ON RAW GPS
+        const smoothed = localPrecognition.current.filter(latitude, longitude);
+
+        // Update the map using the mathematically smoothed coordinates
+        setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
 
         let batteryLevel = null;
         try {
@@ -618,9 +672,10 @@ const App = () => {
           }
         } catch (e) { console.log("Battery API blocked"); }
 
+        // Broadcast the smoothed coordinates to the squad, not the messy ones
         socket.emit('update-location', {
           id: socket.id, name: user.displayName, photo: user.photoURL,
-          lat: latitude, lng: longitude,
+          lat: smoothed.lat, lng: smoothed.lng,
           speed: speed ? Math.round(speed * 3.6) : 0, battery: batteryLevel,
           roomCode: squadCode, status: 'ACTIVE'
         });
