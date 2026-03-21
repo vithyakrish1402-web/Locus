@@ -214,6 +214,33 @@ io.on('connection', (socket) => {
 
     io.to(newRoom).emit('users-update', roomUsers);
   });
+  // --- 🕸️ WEBRTC P2P SIGNALING SERVER (THE MATCHMAKER) ---
+  
+  // 1. Phone A generates a secure lock (Offer) and asks the server to hand it to Phone B
+  socket.on('webrtc-offer', (data) => {
+    console.log(`🕸️ [P2P] Routing WebRTC Offer from ${socket.id} to ${data.targetId}`);
+    io.to(data.targetId).emit('webrtc-offer', {
+      senderId: socket.id,
+      offer: data.offer
+    });
+  });
+
+  // 2. Phone B creates the key (Answer) and asks the server to hand it back to Phone A
+  socket.on('webrtc-answer', (data) => {
+    console.log(`🕸️ [P2P] Routing WebRTC Answer from ${socket.id} to ${data.targetId}`);
+    io.to(data.targetId).emit('webrtc-answer', {
+      senderId: socket.id,
+      answer: data.answer
+    });
+  });
+
+  // 3. Both phones whisper their router IP addresses (ICE Candidates) to each other to bypass firewalls
+  socket.on('webrtc-ice-candidate', (data) => {
+    io.to(data.targetId).emit('webrtc-ice-candidate', {
+      senderId: socket.id,
+      candidate: data.candidate
+    });
+  });
 
   // --- RADAR PING ENGINE ---
   socket.on('ping-user', ({ targetId, senderName }) => {

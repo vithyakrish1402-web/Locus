@@ -4,7 +4,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>campus-locator</title>
+    
+    <script>
+      if (typeof global === 'undefined') {
+        window.global = window;
+      }
+      if (typeof process === 'undefined') {
+        window.process = { env: {} };
+      }
+    </script>
+    
+    <title>Locator SRM</title>
   </head>
   <body>
     <div id="root"></div>

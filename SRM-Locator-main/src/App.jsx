@@ -1,3 +1,4 @@
+import Peer from 'simple-peer';
 import { io } from "socket.io-client";
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
@@ -364,6 +365,9 @@ class PrecognitionFilter {
   }
 }
 const App = () => {
+  // --- 🕸️ P2P MESH VAULT ---
+  // Stores direct WebRTC connections to every squad member
+  const peersRef = useRef({});
   // --- PRECOGNITION TRACKERS ---
   const localPrecognition = useRef(new PrecognitionFilter());
   const squadPrecognition = useRef({}); // Tracks separate math for every squad member
@@ -598,6 +602,57 @@ const App = () => {
     };
   }, [hasJoinedSquad, squadCode]); 
 
+  // --- 🕸️ THE WEBRTC P2P HANDSHAKE ENGINE ---
+  useEffect(() => {
+    // 1. Someone wants to connect to us (Incoming Offer)
+    socket.on('webrtc-offer', (data) => {
+      console.log(`[P2P] Incoming connection request from ${data.senderId}`);
+      
+      const peer = new Peer({
+        initiator: false, // We are answering, not initiating
+        trickle: true,
+      });
+
+      // Handle connection establishment
+      peer.on('signal', (answer) => {
+        socket.emit('webrtc-answer', { targetId: data.senderId, answer: answer });
+      });
+
+      // Handle incoming P2P data (This is where the GPS will flow!)
+      peer.on('data', (rawPayload) => {
+        const parsed = JSON.parse(rawPayload);
+        if (parsed.type === 'P2P_LOCATION') {
+          console.log(`[P2P] Direct GPS packet received from ${parsed.name}`);
+          // We will wire this to update the map in the next step
+        }
+      });
+
+      // Accept their security key
+      peer.signal(data.offer);
+      peersRef.current[data.senderId] = peer;
+    });
+
+    // 2. Someone accepted our connection (Incoming Answer)
+    socket.on('webrtc-answer', (data) => {
+      console.log(`[P2P] Connection accepted by ${data.senderId}`);
+      if (peersRef.current[data.senderId]) {
+        peersRef.current[data.senderId].signal(data.answer);
+      }
+    });
+
+    // 3. Bypassing Firewalls (ICE Candidates)
+    socket.on('webrtc-ice-candidate', (data) => {
+      if (peersRef.current[data.senderId]) {
+        peersRef.current[data.senderId].signal(data.candidate);
+      }
+    });
+
+    return () => {
+      socket.off('webrtc-offer');
+      socket.off('webrtc-answer');
+      socket.off('webrtc-ice-candidate');
+    };
+  }, []);
   // --- GATEKEEPER PROTOCOL LISTENERS ---
   // --- GATEKEEPER PROTOCOL LISTENERS (FIXED) ---
   useEffect(() => {
