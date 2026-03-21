@@ -377,6 +377,57 @@ const App = () => {
     // 2. Trigger the waiting room UI
     setHasJoinedSquad(true); 
   };
+  // --- 📡 ADDITION 1: THE SAFETY PING (HEARTBEAT) ---
+  useEffect(() => {
+    // Only fire if the user is in a squad and has a GPS lock
+    if (!squadCode || !liveLocation) return;
+
+    const pingInterval = setInterval(async () => {
+      let currentBattery = 'Unknown';
+      
+      if (navigator.getBattery) {
+        try {
+          const battery = await navigator.getBattery();
+          currentBattery = `${Math.round(battery.level * 100)}%`;
+        } catch (err) {
+          console.log("Battery API blocked by browser.");
+        }
+      }
+
+      // Fire the whisper to the Node server
+      socket.emit('safety-ping', {
+        latitude: liveLocation.lat,
+        longitude: liveLocation.lng,
+        timestamp: new Date().toISOString(),
+        batteryLevel: currentBattery
+      });
+      
+    }, 5000); // 5000ms = 5 seconds
+
+    return () => clearInterval(pingInterval);
+  }, [squadCode, liveLocation]);
+  // --- 🚨 ADDITION 2: THE DEAD MAN'S SWITCH INTERCEPTOR ---
+  useEffect(() => {
+    socket.on('member-signal-lost', (emergencyData) => {
+      const { name, lastKnownLocation, disconnectTime } = emergencyData;
+      
+      console.error(`🚨 [CRITICAL ALERT] Signal lost for ${name}`);
+      
+      // Trigger the Sonar Ping audio if it exists
+      if (typeof playSonarPing === 'function') {
+        playSonarPing();
+      }
+
+      // Tactical Alert
+      alert(`[CRITICAL DISCONNECT] \n\nUnit '${name}' has gone offline.\n\n📍 Last Known Coordinates: \nLAT: ${lastKnownLocation.latitude.toFixed(5)} \nLNG: ${lastKnownLocation.longitude.toFixed(5)} \n🔋 Battery at time of drop: ${lastKnownLocation.batteryLevel}`);
+      
+      // TODO: Render a static red "LKL" Marker on the GoogleMapReact component
+    });
+
+    return () => {
+      socket.off('member-signal-lost');
+    };
+  }, []);
   // --- FIREBASE AUTH LISTENER ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -1099,16 +1150,21 @@ const App = () => {
 
         {/* Search */}
         <div className="p-4 border-b border-white/20 bg-black">
-          {activeTab === 'users' && (
+          {/* --- UPGRADED: ONLY THE COMMANDER SEES THE GATEKEEPER BUTTON --- */}
+          {activeTab === 'users' && squadRole === 'OWNER' && (
              <button onClick={() => setShowRequestsModal(true)} className="w-full mb-4 px-4 py-3 border border-red-500 text-sm font-dot uppercase tracking-widest flex items-center justify-between hover:bg-red-500 hover:text-white transition-colors text-red-500">
                <div className="flex items-center gap-2"><ShieldCheck size={18}/> NODE_ACCESS</div>
                {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
              </button>
           )}
+
           {activeTab === 'users' && (
              <div className="mb-4 flex items-center justify-between border border-red-500/30 bg-red-500/5 p-3">
                <div className="flex flex-col">
-                 <span className="text-[10px] text-zinc-500 font-dot uppercase tracking-widest">ACTIVE_CHANNEL</span>
+                 {/* --- UPGRADED: DISPLAYS YOUR EXACT ROLE IN THE HUD --- */}
+                 <span className="text-[10px] text-zinc-500 font-dot uppercase tracking-widest">
+                   ACTIVE_CHANNEL // <span className={squadRole === 'OWNER' ? 'text-yellow-500' : 'text-blue-400'}>{squadRole || 'MEMBER'}</span>
+                 </span>
                  <span className="font-dot text-sm text-red-500 tracking-widest">{squadCode}</span>
                </div>
                <button 
