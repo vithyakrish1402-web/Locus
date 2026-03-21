@@ -31,6 +31,28 @@ io.on('connection', (socket) => {
       batteryLevel: batteryLevel || 'Unknown'
     };
   });
+  // --- TACTICAL TELEMETRY SYNC (COMMANDERS ONLY) ---
+  socket.on('request-telemetry', (roomCode) => {
+    const squad = activeSquads[roomCode];
+    
+    // 1. SECURITY CHECK: Verify the requester is actually the Commander of this room
+    if (squad && squad.ownerId === socket.id) {
+      console.log(`📡 [SYS] Commander ${socket.id} requested telemetry for ${roomCode}`);
+      
+      // 2. DATA EXTRACTION: Pull only the cache data for this specific squad
+      const squadTelemetry = {};
+      squad.members.forEach(memberId => {
+        if (locationCache[memberId]) {
+          squadTelemetry[memberId] = locationCache[memberId];
+        }
+      });
+
+      // 3. SECURE TRANSMISSION: Send the data specifically back to the Commander
+      socket.emit('telemetry-sync-complete', squadTelemetry);
+    } else {
+      console.log(`⚠️ [SECURITY] Unauthorized telemetry request from ${socket.id}`);
+    }
+  });
 
   // --- GATEKEEPER ENTRY PROTOCOL ---
   socket.on('request-join', (data) => {

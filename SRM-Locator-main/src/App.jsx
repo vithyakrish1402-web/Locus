@@ -428,6 +428,19 @@ const App = () => {
       socket.off('member-signal-lost');
     };
   }, []);
+  // --- 📊 ADDITION 3: TELEMETRY DATA RECEIVER ---
+  useEffect(() => {
+    socket.on('telemetry-sync-complete', (data) => {
+      console.log("📊 [TACTICAL TELEMETRY DUMP]:", data);
+      
+      // For now, we are just alerting it so you can confirm it works.
+      // Next, we will map this data directly into your UI.
+      const nodeCount = Object.keys(data).length;
+      alert(`[SYS_SYNC] Telemetry data acquired for ${nodeCount} active nodes. Check browser console for raw data.`);
+    });
+
+    return () => socket.off('telemetry-sync-complete');
+  }, []);
   // --- FIREBASE AUTH LISTENER ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -1157,6 +1170,23 @@ const App = () => {
                {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
              </button>
           )}
+          {/* --- ONLY THE COMMANDER SEES THESE BUTTONS --- */}
+          {activeTab === 'users' && squadRole === 'OWNER' && (
+            <div className="flex flex-col gap-2 mb-4">
+               <button onClick={() => setShowRequestsModal(true)} className="w-full px-4 py-3 border border-red-500 text-sm font-dot uppercase tracking-widest flex items-center justify-between hover:bg-red-500 hover:text-white transition-colors text-red-500">
+                 <div className="flex items-center gap-2"><ShieldCheck size={18}/> NODE_ACCESS</div>
+                 {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
+               </button>
+               
+               {/* --- NEW: TELEMETRY SYNC BUTTON --- */}
+               <button 
+                 onClick={() => socket.emit('request-telemetry', squadCode)} 
+                 className="w-full px-4 py-3 border border-yellow-500 text-sm font-dot uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-yellow-500 hover:text-black transition-colors text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]"
+               >
+                 <Activity size={18}/> SYNC_TELEMETRY
+               </button>
+            </div>
+          )}
 
           {activeTab === 'users' && (
              <div className="mb-4 flex items-center justify-between border border-red-500/30 bg-red-500/5 p-3">
@@ -1175,6 +1205,7 @@ const App = () => {
                </button>
              </div>
           )}
+          
           {/* --- NEW: TELEMETRY CONTROL PANEL --- */}
           {activeTab === 'users' && (
              <div className="mb-4 flex flex-col gap-2 border border-white/20 p-2 bg-black">
