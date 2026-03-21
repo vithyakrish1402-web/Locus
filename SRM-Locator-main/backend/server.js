@@ -208,19 +208,20 @@ io.on('connection', (socket) => {
       const lastLocation = locationCache[socket.id];
       const squad = activeSquads[room];
 
-      if (lastLocation && squad && squad.ownerId !== socket.id) {
-        console.log(`🚨 [EMERGENCY] Signal lost for ${userName}. Dispatching LKL to Commander.`);
-        
-        // Fire a high-priority alert directly to the Commander
-        io.to(squad.ownerId).emit('member-signal-lost', {
-          targetId: socket.id,
-          name: userName,
-          photo: userData.photo,
-          lastKnownLocation: lastLocation,
-          disconnectTime: new Date().toISOString()
-        });
-      }
-
+      // Inside server.js -> socket.on('disconnect')
+    if (lastLocation && squad && squad.ownerId !== socket.id) {
+      console.log(`🔥 [SUCCESS] Sending Ghost Data to Commander!`); // Add this
+      io.to(squad.ownerId).emit('member-signal-lost', {
+        targetId: socket.id,
+        name: userData.name,
+        photo: userData.photo,
+        lastKnownLocation: lastLocation,
+        disconnectTime: new Date().toISOString()
+      });
+    } else {
+      // Add this to see WHY it's failing
+      console.log(`❌ [ABORTED GHOST] HasLocation: ${!!lastLocation}, HasSquad: ${!!squad}, IsOwner: ${squad?.ownerId === socket.id}`); 
+    }
       // 2. Wipe memory
       delete users[socket.id];
       delete locationCache[socket.id]; // Prevent memory leaks

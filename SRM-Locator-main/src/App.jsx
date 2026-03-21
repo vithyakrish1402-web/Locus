@@ -438,6 +438,7 @@ const App = () => {
       // ✅ FIX: Added 'photo' to the destructuring extraction
       const { targetId, name, photo, lastKnownLocation, disconnectTime } = emergencyData;
 
+      console.log("🔥 [FRONTEND] Received Ghost Data:", emergencyData);
       console.error(`🚨 [CRITICAL ALERT] Signal lost for ${name}`);
 
       if (typeof playSonarPing === 'function') {
