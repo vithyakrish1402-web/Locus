@@ -429,6 +429,9 @@ const App = () => {
   // Tracks which peer IDs have gone GHOST via P2P. Lives in a ref so it
   // survives the users-update server tick that rebuilds the users array.
   const ghostStatusRef = useRef({});
+  // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
+  // always read the current value — they close over the ref, not the stale state.
+  const telemetryModeRef = useRef('ACTIVE');
 
   const handleJoinSquad = (e) => {
     // Prevent the page from refreshing if this is inside a form
@@ -795,7 +798,7 @@ const App = () => {
 
       // 2. 🕸️ P2P MESH SYNCHRONIZER
       // Forces your location onto squad maps even if stationary
-      if (telemetryMode === 'ACTIVE') {
+      if (telemetryModeRef.current === 'ACTIVE') {
         const syncPayload = JSON.stringify({
           type: 'P2P_LOCATION',
           id: socket.id,
@@ -808,6 +811,12 @@ const App = () => {
 
         Object.values(peersRef.current).forEach(peer => {
           try { if (peer.connected) peer.send(syncPayload); } catch (err) {}
+        });
+      } else if (telemetryModeRef.current === 'GHOST') {
+        // Heartbeat also needs to keep broadcasting GHOST so late-joining peers get it
+        const ghostPayload = JSON.stringify({ type: 'P2P_LOCATION', id: socket.id, status: 'GHOST' });
+        Object.values(peersRef.current).forEach(peer => {
+          try { if (peer.connected) peer.send(ghostPayload); } catch (err) {}
         });
       }
     }, 5000);
@@ -833,13 +842,13 @@ const App = () => {
         } catch (e) { console.log("Battery API blocked"); }
 
         // 🛑 TELEMETRY CONTROL OVERRIDE
-        if (telemetryMode === 'FROZEN') {
+        if (telemetryModeRef.current === 'FROZEN') {
           return; // Do absolutely nothing. Marker freezes.
         }
 
         let p2pPayload;
 
-        if (telemetryMode === 'GHOST') {
+        if (telemetryModeRef.current === 'GHOST') {
           // Tell the squad to wipe your marker from their maps
           p2pPayload = JSON.stringify({
             type: 'P2P_LOCATION',
@@ -876,7 +885,7 @@ const App = () => {
     };
      
   // This is at the very end of the GPS useEffect block
-  }, [user, hasJoinedSquad, squadCode, telemetryMode, accessStatus]);
+  }, [user, hasJoinedSquad, squadCode, accessStatus]);
 // --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
   // --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
   useEffect(() => {
@@ -1535,19 +1544,19 @@ const App = () => {
                <span className="text-[10px] font-dot uppercase tracking-widest text-zinc-500 text-center">TELEMETRY_CONTROL</span>
                <div className="flex gap-2">
                  <button 
-                   onClick={() => setTelemetryMode('ACTIVE')} 
+                   onClick={() => { telemetryModeRef.current = 'ACTIVE'; setTelemetryMode('ACTIVE'); }} 
                    className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'ACTIVE' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
                  >
                    <Activity size={14} /> ACTIVE
                  </button>
                  <button 
-                   onClick={() => setTelemetryMode('FROZEN')} 
+                   onClick={() => { telemetryModeRef.current = 'FROZEN'; setTelemetryMode('FROZEN'); }} 
                    className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'FROZEN' ? 'bg-blue-500/20 border-blue-500 text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
                  >
                    <LocateFixed size={14} /> FROZEN
                  </button>
                  <button 
-                   onClick={() => setTelemetryMode('GHOST')} 
+                   onClick={() => { telemetryModeRef.current = 'GHOST'; setTelemetryMode('GHOST'); }} 
                    className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'GHOST' ? 'bg-zinc-800 border-zinc-500 text-zinc-300 shadow-[0_0_10px_rgba(113,113,122,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
                  >
                    <EyeOff size={14} /> GHOST
