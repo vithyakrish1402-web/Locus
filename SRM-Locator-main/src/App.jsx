@@ -34,12 +34,34 @@ const BUILDINGS = [
   { id: 8, name: "Bio-Tech Block", category: "Academic", lat: 12.825007113379733, lng: 80.04414300737659, info: "Genetic engineering and biotechnology research facility.", tacticalIntel: "» FACT 01: Contains Level-2 Bio-Safety laboratories.\n» FACT 02: Features an advanced greenhouse and genetic testing wing.\n» FACT 03: Located adjacent to the core Tech Park network." }
 ];
 
-const CustomMarker = ({ isUser, name, photo, onClick }) => {
+const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
+  // --- NEW: THE GHOST MARKER (LAST KNOWN LOCATION) ---
+  if (isOffline) {
+    return (
+      <div 
+        onClick={onClick}
+        className="w-10 h-10 -ml-5 -mt-5 bg-zinc-900/90 backdrop-blur-md rounded-full border-2 border-zinc-600 border-dashed shadow-[0_0_15px_rgba(113,113,122,0.4)] flex items-center justify-center text-zinc-400 font-bold tracking-tighter cursor-pointer overflow-hidden relative z-[45]"
+        title={`SIGNAL LOST: ${name}`}
+      >
+        {/* Flashing red distress indicator */}
+        <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-600 rounded-full animate-ping z-50" />
+        <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full z-50" />
+        
+        {photo ? (
+          <img src={photo} alt={name} className="w-full h-full object-cover opacity-40 grayscale mix-blend-luminosity" />
+        ) : (
+          <span className="text-[10px] uppercase font-dot text-zinc-500">LKL</span>
+        )}
+      </div>
+    )
+  }
+
+  // --- EXISTING LIVE MARKERS ---
   if (isUser) {
     return (
       <div 
         onClick={onClick}
-        className="w-10 h-10 -ml-5 -mt-5 bg-gradient-to-br from-emerald-400/80 to-teal-500/80 backdrop-blur-md rounded-full border border-emerald-200/50 shadow-[0_0_15px_rgba(52,211,153,0.6)] flex items-center justify-center text-white font-bold tracking-tighter cursor-pointer overflow-hidden"
+        className="w-10 h-10 -ml-5 -mt-5 bg-gradient-to-br from-emerald-400/80 to-teal-500/80 backdrop-blur-md rounded-full border border-emerald-200/50 shadow-[0_0_15px_rgba(52,211,153,0.6)] flex items-center justify-center text-white font-bold tracking-tighter cursor-pointer overflow-hidden relative z-50"
       >
         {photo ? <img src={photo} alt={name} className="w-full h-full object-cover" /> : name?.charAt(0)}
       </div>
@@ -48,7 +70,7 @@ const CustomMarker = ({ isUser, name, photo, onClick }) => {
   return (
     <div 
       onClick={onClick}
-      className="w-10 h-10 -ml-5 -mt-5 bg-gradient-to-br from-indigo-500/80 to-purple-600/80 backdrop-blur-md rounded-full border border-white/20 shadow-[0_0_15px_rgba(99,102,241,0.6)] flex items-center justify-center text-white cursor-pointer"
+      className="w-10 h-10 -ml-5 -mt-5 bg-gradient-to-br from-indigo-500/80 to-purple-600/80 backdrop-blur-md rounded-full border border-white/20 shadow-[0_0_15px_rgba(99,102,241,0.6)] flex items-center justify-center text-white cursor-pointer z-40"
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
@@ -57,7 +79,6 @@ const CustomMarker = ({ isUser, name, photo, onClick }) => {
     </div>
   )
 }
-
 const CinematicLanding = ({ 
   email, setEmail, password, setPassword, showPassword, setShowPassword, handleLogin, loginMethod 
 }) => {
@@ -308,6 +329,7 @@ const CinematicLanding = ({
 }
 
 const App = () => {
+  const [offlineNodes, setOfflineNodes] = useState([]); // <-- NEW: Tracks dead signals
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   const [buildingIntel, setBuildingIntel] = useState('');
@@ -407,21 +429,33 @@ const App = () => {
     return () => clearInterval(pingInterval);
   }, [squadCode, liveLocation]);
   // --- 🚨 ADDITION 2: THE DEAD MAN'S SWITCH INTERCEPTOR ---
+  // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
-      const { name, lastKnownLocation, disconnectTime } = emergencyData;
+      const { targetId, name, lastKnownLocation, disconnectTime } = emergencyData;
       
       console.error(`🚨 [CRITICAL ALERT] Signal lost for ${name}`);
       
-      // Trigger the Sonar Ping audio if it exists
       if (typeof playSonarPing === 'function') {
         playSonarPing();
       }
 
-      // Tactical Alert
-      alert(`[CRITICAL DISCONNECT] \n\nUnit '${name}' has gone offline.\n\n📍 Last Known Coordinates: \nLAT: ${lastKnownLocation.latitude.toFixed(5)} \nLNG: ${lastKnownLocation.longitude.toFixed(5)} \n🔋 Battery at time of drop: ${lastKnownLocation.batteryLevel}`);
-      
-      // TODO: Render a static red "LKL" Marker on the GoogleMapReact component
+      // 1. Save the dead node to the map state
+      setOfflineNodes(prev => {
+        // Remove them if they somehow already exist to prevent duplicates
+        const filtered = prev.filter(node => node.id !== targetId);
+        return [...filtered, {
+          id: targetId,
+          name: name,
+          lat: lastKnownLocation.latitude,
+          lng: lastKnownLocation.longitude,
+          battery: lastKnownLocation.batteryLevel,
+          time: disconnectTime
+        }];
+      });
+
+      // 2. Tactical UI Alert
+      alert(`[CRITICAL DISCONNECT] \n\nUnit '${name}' has gone offline.\n📍 Last Known Coordinates locked onto map. \n🔋 Battery at time of drop: ${lastKnownLocation.batteryLevel}`);
     });
 
     return () => {
@@ -440,6 +474,26 @@ const App = () => {
     });
 
     return () => socket.off('telemetry-sync-complete');
+  }, []);
+  // --- 💀 ADDITION: MUTINY LISTENER ---
+  useEffect(() => {
+    socket.on('exiled', () => {
+      // 1. Sound the alarm
+      alert("💀 [SYS_MUTINY] You have been democratically exiled from the squad by majority vote.");
+      
+      // 2. Trigger your existing leave function to wipe local state and return to the join screen
+      handleLeaveSquad();
+    });
+
+    // Optional: Listen for active mutiny votes against people to show a warning
+    socket.on('mutiny-status', ({ targetId, votes, required }) => {
+       console.log(`[MUTINY DETECTED] Node ${targetId} has ${votes}/${required} votes for exile.`);
+    });
+
+    return () => {
+      socket.off('exiled');
+      socket.off('mutiny-status');
+    };
   }, []);
   // --- FIREBASE AUTH LISTENER ---
   useEffect(() => {
@@ -1322,21 +1376,34 @@ const App = () => {
                           </button>
                         </div>
                       </div>
-                      <div className="flex gap-3 items-center">
+                     <div className="flex gap-3 items-center">
                         <button 
                           onClick={() => sendPing(user.id)} 
                           className="text-emerald-400 hover:text-white transition-colors"
                           title="Ping User"
-                          >
+                        >
                             <Radio size={18} className="animate-pulse" />
-                          </button>
+                        </button>
 
-                          {user.permission === 'accepted' ? <UserCheck size={18} className="text-white" /> : <Lock size={18} className="text-zinc-600"/>}
+                        {user.permission === 'accepted' ? <UserCheck size={18} className="text-white" /> : <Lock size={18} className="text-zinc-600"/>}
 
-                          <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors">
+                        {/* COMMANDER ONLY: Instant Ban */}
+                        {squadRole === 'OWNER' && (
+                          <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors" title="Instant Ban">
                             <Ban size={18} /> 
                           </button>
+                        )}
 
+                        {/* EVERYONE: Democratic Mutiny Vote */}
+                        {user.id !== socket.id && (
+                          <button 
+                            onClick={() => socket.emit('vote-to-kick', { targetId: user.id, roomCode: squadCode })}
+                            className="px-2 py-1 border border-zinc-600 text-[9px] font-dot uppercase tracking-widest text-zinc-500 hover:border-red-500 hover:text-red-500 transition-colors"
+                            title="Vote to Exile"
+                          >
+                            [VOTE_KICK]
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -1443,6 +1510,20 @@ const App = () => {
                onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)} 
              />
           ))}
+          {/* --- NEW: RENDER GHOST NODES (LKL) --- */}
+          {activeTab === 'users' && offlineNodes.map(node => (
+             <CustomMarker 
+               key={`ghost-${node.id}`} 
+               lat={node.lat} 
+               lng={node.lng} 
+               isOffline={true} 
+               name={node.name}
+               photo={null} // You can pass their photo here if you want it to render in greyscale
+               onClick={() => handleFocus({ lat: node.lat, lng: node.lng }, null)} 
+             />
+          ))}
+
+          {/* ... Your existing users.filter map loop stays exactly the same below this ... */}
         </GoogleMapReact>
       </div>
 

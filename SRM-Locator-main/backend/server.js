@@ -19,6 +19,59 @@ const locationCache = {}; // For potential future use (e.g., last known location
 
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
+  // --- ⚖️ THE MUTINY PROTOCOL (DEMOCRATIC KICK) ---
+  socket.on('vote-to-kick', ({ targetId, roomCode }) => {
+    const squad = activeSquads[roomCode];
+    
+    // 1. Validation: Ensure squad exists and both users are actually in it
+    if (!squad || !squad.members.includes(socket.id) || !squad.members.includes(targetId)) return;
+
+    // 2. Initialize the voting ledger for this squad if it's new
+    if (!squad.kickVotes) squad.kickVotes = {};
+    if (!squad.kickVotes[targetId]) squad.kickVotes[targetId] = new Set();
+
+    // 3. Register the vote (Sets automatically prevent duplicate votes from the same user)
+    squad.kickVotes[targetId].add(socket.id);
+
+    // 4. Calculate the 50% threshold
+    // Using Math.ceil ensures a squad of 3 requires 2 votes, a squad of 4 requires 2, etc.
+    const requiredVotes = Math.max(2, Math.ceil(squad.members.length / 2)); 
+    const currentVotes = squad.kickVotes[targetId].size;
+
+    console.log(`⚖️ [MUTINY] Node ${socket.id} voted to exile ${targetId}. (${currentVotes}/${requiredVotes} votes)`);
+
+    // 5. Broadcast the escalating tension to the room
+    io.to(roomCode).emit('mutiny-status', {
+      targetId: targetId,
+      votes: currentVotes,
+      required: requiredVotes
+    });
+
+    // 6. EXECUTE THE EXILE IF THRESHOLD MET
+    if (currentVotes >= requiredVotes) {
+      console.log(`💀 [MUTINY] Threshold met. Ejecting node ${targetId} from ${roomCode}.`);
+
+      // A. Tell the target's app to self-destruct the connection
+      io.to(targetId).emit('exiled');
+
+      // B. Wipe their voting record to keep RAM clean
+      delete squad.kickVotes[targetId];
+
+      // C. Trigger the standard succession/cleanup logic we already built
+      if (users[targetId]) {
+        delete users[targetId];
+        delete locationCache[targetId]; // If you added this cache earlier
+      }
+      handleSquadSuccession(targetId);
+
+      // D. Update the map for the survivors
+      const remaining = {};
+      Object.keys(users).forEach(id => {
+        if (users[id].roomCode === roomCode) remaining[id] = users[id];
+      });
+      io.to(roomCode).emit('users-update', remaining);
+    }
+  });
   // --- SAFETY PING ENGINE (LAST KNOWN LOCATION) ---
   socket.on('safety-ping', (data) => {
     const { latitude, longitude, timestamp, batteryLevel } = data;
