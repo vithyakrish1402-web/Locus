@@ -215,6 +215,7 @@ io.on('connection', (socket) => {
         io.to(squad.ownerId).emit('member-signal-lost', {
           targetId: socket.id,
           name: userName,
+          photo: userData.photo,
           lastKnownLocation: lastLocation,
           disconnectTime: new Date().toISOString()
         });

@@ -452,6 +452,7 @@ const App = () => {
       [targetId]: {
         id: targetId,
         name: name,
+        photo: photo,
         lat: lastKnownLocation.latitude,
         lng: lastKnownLocation.longitude,
         battery: lastKnownLocation.batteryLevel,
@@ -1503,17 +1504,32 @@ const App = () => {
                onClick={() => handleFocus({ lat: b.lat, lng: b.lng }, b)} 
              />
           ))}
-          {activeTab === 'users' && users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id)).map(u => (
-             <CustomMarker 
-               key={u.id} 
-               lat={u.lat} 
-               lng={u.lng} 
-               isUser={true} 
-               name={u.name}
-               photo={u.photo}
-               onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)} 
-             />
-          ))}
+          {/* ... other markers ... */}
+{activeTab === 'users' && users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id)).map(u => (
+   <CustomMarker 
+     key={u.id} 
+     lat={u.lat} 
+     lng={u.lng} 
+     isUser={true} 
+     name={u.name}
+     photo={u.photo}
+     onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)} 
+   />
+))}
+
+{/* ADD THIS SECTION BELOW TO RENDER GHOSTS */}
+{activeTab === 'users' && Object.values(offlineNodes).map(ghost => (
+  <CustomMarker 
+    key={`ghost-${ghost.id}`} 
+    lat={ghost.lat} 
+    lng={ghost.lng} 
+    isUser={false} 
+    isOffline={true} // This triggers the grey dashed UI you already wrote
+    name={ghost.name}
+    photo={ghost.photo}
+    onClick={() => handleFocus({ lat: ghost.lat, lng: ghost.lng }, { name: `LOST: ${ghost.name}`, info: `Last seen with ${ghost.battery} battery.` })} 
+  />
+))}
           
 
           {/* ... Your existing users.filter map loop stays exactly the same below this ... */}
