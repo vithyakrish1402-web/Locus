@@ -17,6 +17,29 @@ const activeSquads = {};
 const users = {}; // Unified user tracking
 const locationCache = {}; // For potential future use (e.g., last known locations)
 
+const GEOFENCE_RADIUS = 50; // Detection radius in meters
+const TACTICAL_NODES = [
+  { id: 'NODE_01', name: "Tech Park", lat: 12.825020, lng: 80.045323 },
+  { id: 'NODE_02', name: "University Building (UB)", lat: 12.824353, lng: 80.042218 },
+  { id: 'NODE_03', name: "Java Green", lat: 12.823348, lng: 80.044489 },
+  { id: 'NODE_04', name: "T.P. Ganesan", lat: 12.824880, lng: 80.046685 }
+];
+
+// High-speed spatial distance calculator
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
+  const R = 6371e3; // Earth radius in meters
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLon = (lon2 - lon1) * rad;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * rad) * Math.cos(lat2 * rad) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Returns distance in meters
+}
+
+
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
   // --- ⚖️ THE MUTINY PROTOCOL (DEMOCRATIC KICK) ---
@@ -140,6 +163,7 @@ io.on('connection', (socket) => {
   });
 
   // --- LOCATION & ROOM ENGINE ---
+  // --- LOCATION & GEOFENCE ENGINE ---
   socket.on('update-location', (data) => {
     const newRoom = data.roomCode || 'GLOBAL';
     const oldRoom = users[socket.id]?.roomCode;
@@ -147,15 +171,45 @@ io.on('connection', (socket) => {
     if (oldRoom && oldRoom !== newRoom) {
       socket.leave(oldRoom);
     }
-
     socket.join(newRoom);
-    users[socket.id] = { ...data, roomCode: newRoom };
+
+    // 1. SPATIAL GEOFENCE CHECK
+    let currentZone = null;
+    for (const node of TACTICAL_NODES) {
+      if (calculateDistance(data.lat, data.lng, node.lat, node.lng) <= GEOFENCE_RADIUS) {
+        currentZone = node.name;
+        break; // Stop checking once we find the zone they are in
+      }
+    }
+
+    // 2. DETECT PERIMETER BREACH (Entry or Exit)
+    const previousZone = users[socket.id]?.currentZone;
     
+    if (currentZone && previousZone !== currentZone) {
+      // User entered a new zone
+      io.to(newRoom).emit('geofence-alert', {
+         userName: data.name || 'Unknown Unit',
+         zoneName: currentZone,
+         type: 'ENTER'
+      });
+      console.log(`🌐 [GEOFENCE] ${data.name} entered ${currentZone}`);
+    } else if (!currentZone && previousZone) {
+      // User left a zone and is back in the open map
+      io.to(newRoom).emit('geofence-alert', {
+         userName: data.name || 'Unknown Unit',
+         zoneName: previousZone,
+         type: 'EXIT'
+      });
+      console.log(`🌐 [GEOFENCE] ${data.name} departed ${previousZone}`);
+    }
+
+    // 3. Save new data including their current zone
+    users[socket.id] = { ...data, roomCode: newRoom, currentZone };
+    
+    // 4. Broadcast updated users to the squad
     const roomUsers = {};
     Object.keys(users).forEach(id => {
-      if (users[id].roomCode === newRoom) {
-        roomUsers[id] = users[id];
-      }
+      if (users[id].roomCode === newRoom) roomUsers[id] = users[id];
     });
 
     io.to(newRoom).emit('users-update', roomUsers);

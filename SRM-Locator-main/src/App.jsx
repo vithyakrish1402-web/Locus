@@ -329,6 +329,7 @@ const CinematicLanding = ({
 }
 
 const App = () => {
+  const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
@@ -402,6 +403,27 @@ const App = () => {
   
   
   
+  // --- 🌐 GEOFENCE PERIMETER LISTENER ---
+  useEffect(() => {
+    socket.on('geofence-alert', (alertData) => {
+      const newAlert = {
+        id: Date.now(),
+        ...alertData
+      };
+      
+      // Add the alert to the HUD
+      setZoneAlerts(prev => [...prev, newAlert]);
+
+      // Optional: Play a subtle notification sound here if you have one
+      
+      // Auto-remove the alert from the screen after 6 seconds
+      setTimeout(() => {
+        setZoneAlerts(prev => prev.filter(a => a.id !== newAlert.id));
+      }, 6000);
+    });
+
+    return () => socket.off('geofence-alert');
+  }, []);
   // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
  useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
@@ -1435,7 +1457,34 @@ const App = () => {
           </p>
         </div>
       )}
-
+{/* --- 🌐 TACTICAL GEOFENCE HUD --- */}
+      <div className="absolute top-24 right-6 z-[1000] flex flex-col gap-2 w-72 pointer-events-none">
+        <AnimatePresence>
+          {zoneAlerts.map(alert => (
+            <motion.div
+              key={alert.id}
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.9 }}
+              className={`p-3 border backdrop-blur-md flex flex-col gap-1 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
+                alert.type === 'ENTER' 
+                  ? 'bg-emerald-950/80 border-emerald-500' 
+                  : 'bg-zinc-900/80 border-zinc-500'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Waypoints size={14} className={alert.type === 'ENTER' ? 'text-emerald-400' : 'text-zinc-400'} />
+                <span className={`text-[10px] font-dot tracking-widest uppercase ${alert.type === 'ENTER' ? 'text-emerald-500' : 'text-zinc-500'}`}>
+                  PERIMETER {alert.type === 'ENTER' ? 'BREACH' : 'DEPARTURE'}
+                </span>
+              </div>
+              <p className="font-dot text-sm text-white uppercase tracking-widest leading-tight">
+                <span className="text-blue-400">{alert.userName}</span> has {alert.type === 'ENTER' ? 'entered' : 'left'} <span className="text-yellow-400">{alert.zoneName}</span>
+              </p>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
       {/* FULLSCREEN GOOGLE MAP */}
       <div className="absolute inset-0 z-0 bg-black">
         <GoogleMapReact
