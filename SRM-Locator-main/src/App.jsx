@@ -434,39 +434,38 @@ const App = () => {
   // --- 🚨 ADDITION 2: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   useEffect(() => {
-  socket.on('member-signal-lost', (emergencyData) => {
-    const { targetId, name, lastKnownLocation, disconnectTime } = emergencyData;
+    socket.on('member-signal-lost', (emergencyData) => {
+      // ✅ FIX: Added 'photo' to the destructuring extraction
+      const { targetId, name, photo, lastKnownLocation, disconnectTime } = emergencyData;
 
-    console.error(`🚨 [CRITICAL ALERT] Signal lost for ${name}`);
+      console.error(`🚨 [CRITICAL ALERT] Signal lost for ${name}`);
 
-    if (typeof playSonarPing === 'function') {
-      playSonarPing();
-    }
-
-    // ✅ STEP 3 — REMOVE FROM LIVE USERS (PUT IT HERE)
-    setUsers(prev => prev.filter(u => u.id !== targetId));
-
-    // ✅ STORE AS OBJECT (STEP 1 + 2 FIX)
-    setOfflineNodes(prev => ({
-      ...prev,
-      [targetId]: {
-        id: targetId,
-        name: name,
-        photo: photo,
-        lat: lastKnownLocation.latitude,
-        lng: lastKnownLocation.longitude,
-        battery: lastKnownLocation.batteryLevel,
-        time: Date.now()
+      if (typeof playSonarPing === 'function') {
+        playSonarPing();
       }
-    }));
 
-    alert(`[CRITICAL DISCONNECT]\n\n${name} went offline.`);
-  });
+      setUsers(prev => prev.filter(u => u.id !== targetId));
 
-  return () => {
-    socket.off('member-signal-lost');
-  };
-}, []);
+      setOfflineNodes(prev => ({
+        ...prev,
+        [targetId]: {
+          id: targetId,
+          name: name,
+          photo: photo, // ✅ This will now work without crashing
+          lat: lastKnownLocation.latitude,
+          lng: lastKnownLocation.longitude,
+          battery: lastKnownLocation.batteryLevel,
+          time: Date.now()
+        }
+      }));
+
+      alert(`[CRITICAL DISCONNECT]\n\n${name} went offline.`);
+    });
+
+    return () => {
+      socket.off('member-signal-lost');
+    };
+  }, []);
   // --- 📊 ADDITION 3: TELEMETRY DATA RECEIVER ---
   useEffect(() => {
     socket.on('telemetry-sync-complete', (data) => {
