@@ -452,17 +452,21 @@ const App = () => {
   
   
   // --- 🕸️ P2P DATA DECODER ---
+  // --- 🕸️ P2P DATA DECODER ---
   const handleP2PData = (rawPayload) => {
     try {
-      const parsed = JSON.parse(rawPayload);
+      // 🚨 WEBRTC BINARY DECODER: Translates WebRTC binary back to text
+      const payloadString = typeof rawPayload === 'string' 
+        ? rawPayload 
+        : new TextDecoder().decode(rawPayload);
+        
+      const parsed = JSON.parse(payloadString);
+      
       if (parsed.type === 'P2P_LOCATION') {
         if (parsed.status === 'GHOST') {
-          // Write into the ref so this survives the next users-update server rebuild
           ghostStatusRef.current[parsed.id] = true;
-          // Also immediately hide the marker in current state
           setUsers(prev => prev.filter(u => u.id !== parsed.id));
         } else {
-          // Coming back from GHOST — clear the flag
           delete ghostStatusRef.current[parsed.id];
           setUsers(prev => prev.map(u => {
             if (u.id === parsed.id) {
@@ -471,7 +475,7 @@ const App = () => {
                 lat: parsed.lat, 
                 lng: parsed.lng, 
                 speed: parsed.speed, 
-                battery: parsed.battery,
+                battery: parsed.battery, // <--- Now safely receives a number
                 status: parsed.status || 'ACTIVE'
               };
             }
@@ -787,11 +791,11 @@ const App = () => {
       const currentLoc = liveLocationRef.current; // <-- READS FROM THE REF
       if (!currentLoc) return; 
 
-      let currentBattery = 'Unknown';
+      let currentBattery = 100; // 🚨 FIX: Pure number
       try {
         if ('getBattery' in navigator) {
           const battery = await navigator.getBattery();
-          currentBattery = `${Math.round(battery.level * 100)}%`;
+          currentBattery = Math.round(battery.level * 100);
         }
       } catch (e) { }
       
@@ -800,19 +804,18 @@ const App = () => {
         latitude: currentLoc.lat,
         longitude: currentLoc.lng,
         timestamp: new Date().toISOString(),
-        batteryLevel: currentBattery
+        batteryLevel: `${currentBattery}%` // Server keeps the string
       });
 
       // 2. 🕸️ P2P MESH SYNCHRONIZER
-      // Forces your location onto squad maps even if stationary
       if (telemetryModeRef.current === 'ACTIVE') {
         const syncPayload = JSON.stringify({
           type: 'P2P_LOCATION',
           id: socket.id,
           lat: currentLoc.lat,
           lng: currentLoc.lng,
-          speed: 0, // Stationary fallback
-          battery: currentBattery,
+          speed: 0, 
+          battery: currentBattery, // 🚨 Send pure number to the mesh
           status: 'ACTIVE'
         });
 
@@ -820,7 +823,6 @@ const App = () => {
           try { if (peer.connected) peer.send(syncPayload); } catch (err) {}
         });
       } else if (telemetryModeRef.current === 'GHOST') {
-        // Heartbeat also needs to keep broadcasting GHOST so late-joining peers get it
         const ghostPayload = JSON.stringify({ type: 'P2P_LOCATION', id: socket.id, status: 'GHOST' });
         Object.values(peersRef.current).forEach(peer => {
           try { if (peer.connected) peer.send(ghostPayload); } catch (err) {}
@@ -894,11 +896,9 @@ const App = () => {
   // This is at the very end of the GPS useEffect block
   }, [user, hasJoinedSquad, squadCode, accessStatus]);
 // --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
-  // --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
   useEffect(() => {
-    const currentLoc = liveLocationRef.current; // <-- READS FROM THE UN-TRAPPED REF
+    const currentLoc = liveLocationRef.current; 
     
-    // We can't broadcast if we don't have our own location yet
     if (!currentLoc || !socket) return; 
 
     let overridePayload;
@@ -911,22 +911,19 @@ const App = () => {
         id: socket.id, 
         lat: currentLoc.lat, 
         lng: currentLoc.lng,
-        speed: 0, // Fallback for stationary pulse
-        battery: 'Active', 
+        speed: 0, 
+        battery: 100, // 🚨 FIX: Pure number fallback
         status: 'ACTIVE'
       });
     } else {
-      return; // If FROZEN, we explicitly send nothing.
+      return; 
     }
 
-    // Blast the new status through the laser-links instantly
     Object.values(peersRef.current).forEach(peer => {
       try { if (peer.connected) peer.send(overridePayload); } catch (e) {}
     });
     
-  // This hook runs the exact millisecond you click a telemetry button
   }, [telemetryMode]);
-
   
   // --- CYBERPUNK SONAR AUDIO ENGINE ---
   const playSonarPing = () => {
