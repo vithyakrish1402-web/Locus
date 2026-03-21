@@ -329,7 +329,7 @@ const CinematicLanding = ({
 }
 
 const App = () => {
-  const [offlineNodes, setOfflineNodes] = useState([]); // <-- NEW: Tracks dead signals
+  const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   const [buildingIntel, setBuildingIntel] = useState('');
@@ -415,8 +415,11 @@ const App = () => {
           console.log("Battery API blocked by browser.");
         }
       }
+      
 
       // Fire the whisper to the Node server
+      
+      
       socket.emit('safety-ping', {
         latitude: liveLocation.lat,
         longitude: liveLocation.lng,
@@ -431,37 +434,38 @@ const App = () => {
   // --- 🚨 ADDITION 2: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   useEffect(() => {
-    socket.on('member-signal-lost', (emergencyData) => {
-      const { targetId, name, lastKnownLocation, disconnectTime } = emergencyData;
-      
-      console.error(`🚨 [CRITICAL ALERT] Signal lost for ${name}`);
-      
-      if (typeof playSonarPing === 'function') {
-        playSonarPing();
+  socket.on('member-signal-lost', (emergencyData) => {
+    const { targetId, name, lastKnownLocation, disconnectTime } = emergencyData;
+
+    console.error(`🚨 [CRITICAL ALERT] Signal lost for ${name}`);
+
+    if (typeof playSonarPing === 'function') {
+      playSonarPing();
+    }
+
+    // ✅ STEP 3 — REMOVE FROM LIVE USERS (PUT IT HERE)
+    setUsers(prev => prev.filter(u => u.id !== targetId));
+
+    // ✅ STORE AS OBJECT (STEP 1 + 2 FIX)
+    setOfflineNodes(prev => ({
+      ...prev,
+      [targetId]: {
+        id: targetId,
+        name: name,
+        lat: lastKnownLocation.latitude,
+        lng: lastKnownLocation.longitude,
+        battery: lastKnownLocation.batteryLevel,
+        time: Date.now()
       }
+    }));
 
-      // 1. Save the dead node to the map state
-      setOfflineNodes(prev => {
-        // Remove them if they somehow already exist to prevent duplicates
-        const filtered = prev.filter(node => node.id !== targetId);
-        return [...filtered, {
-          id: targetId,
-          name: name,
-          lat: lastKnownLocation.latitude,
-          lng: lastKnownLocation.longitude,
-          battery: lastKnownLocation.batteryLevel,
-          time: disconnectTime
-        }];
-      });
+    alert(`[CRITICAL DISCONNECT]\n\n${name} went offline.`);
+  });
 
-      // 2. Tactical UI Alert
-      alert(`[CRITICAL DISCONNECT] \n\nUnit '${name}' has gone offline.\n📍 Last Known Coordinates locked onto map. \n🔋 Battery at time of drop: ${lastKnownLocation.batteryLevel}`);
-    });
-
-    return () => {
-      socket.off('member-signal-lost');
-    };
-  }, []);
+  return () => {
+    socket.off('member-signal-lost');
+  };
+}, []);
   // --- 📊 ADDITION 3: TELEMETRY DATA RECEIVER ---
   useEffect(() => {
     socket.on('telemetry-sync-complete', (data) => {
@@ -1510,18 +1514,7 @@ const App = () => {
                onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)} 
              />
           ))}
-          {/* --- NEW: RENDER GHOST NODES (LKL) --- */}
-          {activeTab === 'users' && offlineNodes.map(node => (
-             <CustomMarker 
-               key={`ghost-${node.id}`} 
-               lat={node.lat} 
-               lng={node.lng} 
-               isOffline={true} 
-               name={node.name}
-               photo={null} // You can pass their photo here if you want it to render in greyscale
-               onClick={() => handleFocus({ lat: node.lat, lng: node.lng }, null)} 
-             />
-          ))}
+          
 
           {/* ... Your existing users.filter map loop stays exactly the same below this ... */}
         </GoogleMapReact>
