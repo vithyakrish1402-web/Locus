@@ -425,7 +425,7 @@ const App = () => {
   const [accessStatus, setAccessStatus] = useState(null); 
   const [squadRole, setSquadRole] = useState(null); 
   const [pendingRequests, setPendingRequests] = useState([]);
-  
+  const liveLocationRef = useRef(null);
 
   const handleJoinSquad = (e) => {
     // Prevent the page from refreshing if this is inside a form
@@ -718,12 +718,14 @@ const App = () => {
   // We calculate this derived data inside the component body, but we DON'T use '=' on the state itself.
   const activePendingRequests = pendingRequests;
   /// 2. Broadcast your live GPS data to the network
+ /// 2. Broadcast your live GPS data to the network
   useEffect(() => {
     if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
 
     // --- 📡 THE HEARTBEAT MONITOR & MESH SYNCHRONIZER ---
     const heartbeatInterval = setInterval(async () => {
-      if (!liveLocation) return; 
+      const currentLoc = liveLocationRef.current; // <-- READS FROM THE REF
+      if (!currentLoc) return; 
 
       let currentBattery = 'Unknown';
       try {
@@ -735,8 +737,8 @@ const App = () => {
       
       // 1. Server Sync (For Geofence Engine)
       socket.emit('safety-ping', {
-        latitude: liveLocation.lat,
-        longitude: liveLocation.lng,
+        latitude: currentLoc.lat,
+        longitude: currentLoc.lng,
         timestamp: new Date().toISOString(),
         batteryLevel: currentBattery
       });
@@ -747,8 +749,8 @@ const App = () => {
         const syncPayload = JSON.stringify({
           type: 'P2P_LOCATION',
           id: socket.id,
-          lat: liveLocation.lat,
-          lng: liveLocation.lng,
+          lat: currentLoc.lat,
+          lng: currentLoc.lng,
           speed: 0, // Stationary fallback
           battery: currentBattery,
           status: 'ACTIVE'
@@ -761,7 +763,6 @@ const App = () => {
     }, 5000);
 
     // 🟢 ACTIVE MODE: Standard live hardware tracking
-    // 🟢 ACTIVE MODE: Standard live hardware tracking
     const watchId = navigator.geolocation.watchPosition(
       async (position) => { 
         const { latitude, longitude, speed } = position.coords;
@@ -769,8 +770,9 @@ const App = () => {
         // 🔮 RUN PRECOGNITION PATHING ON RAW GPS
         const smoothed = localPrecognition.current.filter(latitude, longitude);
 
-        // Update the map using the mathematically smoothed coordinates
+        // Update BOTH the React State AND the Ref!
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
+        liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
 
         let batteryLevel = null;
         try {
@@ -780,11 +782,9 @@ const App = () => {
           }
         } catch (e) { console.log("Battery API blocked"); }
 
-        // Broadcast the smoothed coordinates to the squad, not the messy ones
         // 🛑 TELEMETRY CONTROL OVERRIDE
         if (telemetryMode === 'FROZEN') {
-          // Do absolutely nothing. Your marker will freeze in place on everyone else's screen.
-          return; 
+          return; // Do absolutely nothing. Marker freezes.
         }
 
         let p2pPayload;
@@ -798,11 +798,6 @@ const App = () => {
           });
         } else {
           // 🚀 ACTIVE MODE: Transmit the precognition coordinates
-          const smoothed = localPrecognition.current.filter(latitude, longitude);
-          
-          // Update your own map
-          setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
-
           p2pPayload = JSON.stringify({
             type: 'P2P_LOCATION',
             id: socket.id,
@@ -828,14 +823,17 @@ const App = () => {
     return () =>{
       clearInterval(heartbeatInterval);
       navigator.geolocation.clearWatch(watchId);
-      };
+    };
      
-  // This is at the very end of the GPS useEffect block (around line 520)
-}, [user, hasJoinedSquad, squadCode, telemetryMode, accessStatus]);
+  // This is at the very end of the GPS useEffect block
+  }, [user, hasJoinedSquad, squadCode, telemetryMode, accessStatus]);
 // --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
+  // --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
   useEffect(() => {
+    const currentLoc = liveLocationRef.current; // <-- READS FROM THE UN-TRAPPED REF
+    
     // We can't broadcast if we don't have our own location yet
-    if (!liveLocation || !socket) return; 
+    if (!currentLoc || !socket) return; 
 
     let overridePayload;
 
@@ -845,8 +843,8 @@ const App = () => {
       overridePayload = JSON.stringify({
         type: 'P2P_LOCATION', 
         id: socket.id, 
-        lat: liveLocation.lat, 
-        lng: liveLocation.lng,
+        lat: currentLoc.lat, 
+        lng: currentLoc.lng,
         speed: 0, // Fallback for stationary pulse
         battery: 'Active', 
         status: 'ACTIVE'
