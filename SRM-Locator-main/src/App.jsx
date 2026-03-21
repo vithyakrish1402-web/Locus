@@ -721,21 +721,44 @@ const App = () => {
   useEffect(() => {
     if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
 
-    // 👻 GHOST MODE: Tell the server we are a ghost, then abort GPS tracking
-    if (telemetryMode === 'GHOST') {
-      socket.emit('update-location', { id: socket.id, status: 'GHOST', roomCode: squadCode });
-      return; 
-    }
+    // --- 📡 THE HEARTBEAT MONITOR & MESH SYNCHRONIZER ---
+    const heartbeatInterval = setInterval(async () => {
+      if (!liveLocation) return; 
 
-    // 🧊 FROZEN MODE: Send static location once, then abort GPS tracking to save battery
-    if (telemetryMode === 'FROZEN' && liveLocation) {
-      socket.emit('update-location', {
-        id: socket.id, name: user.displayName, photo: user.photoURL,
-        lat: liveLocation.lat, lng: liveLocation.lng,
-        speed: 0, battery: 0, roomCode: squadCode, status: 'FROZEN'
+      let currentBattery = 'Unknown';
+      try {
+        if ('getBattery' in navigator) {
+          const battery = await navigator.getBattery();
+          currentBattery = `${Math.round(battery.level * 100)}%`;
+        }
+      } catch (e) { }
+      
+      // 1. Server Sync (For Geofence Engine)
+      socket.emit('safety-ping', {
+        latitude: liveLocation.lat,
+        longitude: liveLocation.lng,
+        timestamp: new Date().toISOString(),
+        batteryLevel: currentBattery
       });
-      return;
-    }
+
+      // 2. 🕸️ P2P MESH SYNCHRONIZER
+      // Forces your location onto squad maps even if stationary
+      if (telemetryMode === 'ACTIVE') {
+        const syncPayload = JSON.stringify({
+          type: 'P2P_LOCATION',
+          id: socket.id,
+          lat: liveLocation.lat,
+          lng: liveLocation.lng,
+          speed: 0, // Stationary fallback
+          battery: currentBattery,
+          status: 'ACTIVE'
+        });
+
+        Object.values(peersRef.current).forEach(peer => {
+          try { if (peer.connected) peer.send(syncPayload); } catch (err) {}
+        });
+      }
+    }, 5000);
 
     // 🟢 ACTIVE MODE: Standard live hardware tracking
     // 🟢 ACTIVE MODE: Standard live hardware tracking
@@ -802,9 +825,43 @@ const App = () => {
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    return () =>{
+      clearInterval(heartbeatInterval);
+      navigator.geolocation.clearWatch(watchId);
+      };
+     
   // This is at the very end of the GPS useEffect block (around line 520)
 }, [user, hasJoinedSquad, squadCode, telemetryMode, accessStatus]);
+// --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
+  useEffect(() => {
+    // We can't broadcast if we don't have our own location yet
+    if (!liveLocation || !socket) return; 
+
+    let overridePayload;
+
+    if (telemetryMode === 'GHOST') {
+      overridePayload = JSON.stringify({ type: 'P2P_LOCATION', id: socket.id, status: 'GHOST' });
+    } else if (telemetryMode === 'ACTIVE') {
+      overridePayload = JSON.stringify({
+        type: 'P2P_LOCATION', 
+        id: socket.id, 
+        lat: liveLocation.lat, 
+        lng: liveLocation.lng,
+        speed: 0, // Fallback for stationary pulse
+        battery: 'Active', 
+        status: 'ACTIVE'
+      });
+    } else {
+      return; // If FROZEN, we explicitly send nothing.
+    }
+
+    // Blast the new status through the laser-links instantly
+    Object.values(peersRef.current).forEach(peer => {
+      try { if (peer.connected) peer.send(overridePayload); } catch (e) {}
+    });
+    
+  // This hook runs the exact millisecond you click a telemetry button
+  }, [telemetryMode]);
 
   
   // --- CYBERPUNK SONAR AUDIO ENGINE ---
