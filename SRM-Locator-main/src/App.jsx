@@ -400,34 +400,34 @@ const App = () => {
     setHasJoinedSquad(true); 
   };
   // --- 📡 ADDITION 1: THE SAFETY PING (HEARTBEAT) ---
+  // --- 📡 ADDITION 1: THE SAFETY PING (HEARTBEAT) ---
   useEffect(() => {
-    // Only fire if the user is in a squad and has a GPS lock
-    if (!squadCode || !liveLocation) return;
+    // TEMPORARY FIX: Removed the !liveLocation block so it fires even without GPS
+    if (!squadCode) return;
 
     const pingInterval = setInterval(async () => {
       let currentBattery = 'Unknown';
-      
       if (navigator.getBattery) {
         try {
           const battery = await navigator.getBattery();
           currentBattery = `${Math.round(battery.level * 100)}%`;
-        } catch (err) {
-          console.log("Battery API blocked by browser.");
-        }
+        } catch (err) { console.log("Battery API blocked"); }
       }
       
+      // Fallback to SRM coordinates if GPS hasn't locked on yet
+      const safeLat = liveLocation?.lat || 12.8237;
+      const safeLng = liveLocation?.lng || 80.0444;
 
-      // Fire the whisper to the Node server
-      
-      
+      console.log(`[DEBUG] Firing heartbeat: Lat ${safeLat}, Lng ${safeLng}`);
+
       socket.emit('safety-ping', {
-        latitude: liveLocation.lat,
-        longitude: liveLocation.lng,
+        latitude: safeLat,
+        longitude: safeLng,
         timestamp: new Date().toISOString(),
         batteryLevel: currentBattery
       });
       
-    }, 5000); // 5000ms = 5 seconds
+    }, 5000); 
 
     return () => clearInterval(pingInterval);
   }, [squadCode, liveLocation]);
