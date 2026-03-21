@@ -570,48 +570,55 @@ const App = () => {
   useEffect(() => {
     if (!hasJoinedSquad) return;
 
-    socket.on('users-update', (activeUsers) => {
-      const formattedUsers = [];
-      
-      Object.entries(activeUsers).forEach(([id, data]) => {
-        if (id !== socket.id && data.roomCode === squadCode && data.status !== 'GHOST') { 
-          
-          // 🔮 INITIALIZE A PRECOGNITION TRACKER FOR NEW MEMBERS
-          if (!squadPrecognition.current[id]) {
-            squadPrecognition.current[id] = new PrecognitionFilter();
-          }
-
-          // FILTER THEIR INCOMING DATA
-          const smoothedSquadNode = squadPrecognition.current[id].filter(data.lat, data.lng);
-          if (!peersRef.current[id] && socket.id > id) {
-            console.log(`[P2P] Initiating secure laser-link to Node ${data.name}...`);
-            const peer = new Peer({ initiator: true, trickle: true });
-
-            peer.on('signal', (offer) => {
-              socket.emit('webrtc-offer', { targetId: id, offer: offer });
-            });
-
-            // Route incoming P2P data to our new decoder
-            peer.on('data', handleP2PData);
+   socket.on('users-update', (activeUsers) => {
+      // 🛑 UPGRADE: Use React state updater to preserve our P2P Mesh coordinates
+      setUsers(prevUsers => {
+        const formattedUsers = [];
+        
+        Object.entries(activeUsers).forEach(([id, data]) => {
+          if (id !== socket.id && data.roomCode === squadCode && data.status !== 'GHOST') { 
             
-            peersRef.current[id] = peer;
-          }
+            // Initiate WebRTC if we haven't already
+            if (!peersRef.current[id] && socket.id > id) {
+              console.log(`[P2P] Initiating secure laser-link to Node ${data.name}...`);
+              const peer = new Peer({ initiator: true, trickle: true });
+              peer.on('signal', (offer) => socket.emit('webrtc-offer', { targetId: id, offer: offer }));
+              peer.on('data', handleP2PData);
+              peersRef.current[id] = peer;
+            }
 
-          formattedUsers.push({
-            id: id,
-            name: data.name || "Live User",
-            photo: data.photo,
-            role: "Campus Node",
-            lat: smoothedSquadNode.lat,
-            lng: smoothedSquadNode.lng,
-            speed: data.speed || 0,
-            battery: data.battery || 0,
-            status: data.status || "ACTIVE",
-            permission: "accepted" 
-          });
-        }
+            // --- 🛡️ THE P2P PRESERVATION LAYER ---
+            // Find if we already have live data for this user from the WebRTC Mesh
+            const existingUser = prevUsers.find(u => u.id === id);
+
+            // If we have P2P data, KEEP IT. Never let the server overwrite it.
+            let finalLat = existingUser ? existingUser.lat : data.lat;
+            let finalLng = existingUser ? existingUser.lng : data.lng;
+
+            // Only run precognition if this is their very first coordinate
+            if (!existingUser && data.lat && data.lng) {
+               if (!squadPrecognition.current[id]) squadPrecognition.current[id] = new PrecognitionFilter();
+               const smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
+               finalLat = smoothed.lat;
+               finalLng = smoothed.lng;
+            }
+
+            formattedUsers.push({
+              id: id,
+              name: data.name || "Live User",
+              photo: data.photo,
+              role: data.role || existingUser?.role || "Campus Node",
+              lat: finalLat,
+              lng: finalLng,
+              speed: existingUser ? existingUser.speed : (data.speed || 0),
+              battery: existingUser ? existingUser.battery : (data.battery || 0),
+              status: existingUser ? existingUser.status : (data.status || "ACTIVE"),
+              permission: "accepted" 
+            });
+          }
+        });
+        return formattedUsers; // Returns the protected array to the React UI
       });
-      setUsers(formattedUsers);
     });
 
     // ... rest of the socket.on listeners remain the same ...
@@ -722,7 +729,24 @@ const App = () => {
   useEffect(() => {
     if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
 
+    
     // --- 📡 THE HEARTBEAT MONITOR & MESH SYNCHRONIZER ---
+    // --- 🚀 FORCE INITIAL GPS LOCK ---
+    // Grabs your location instantly so the P2P Mesh doesn't wait for you to move
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const smoothed = localPrecognition.current.filter(latitude, longitude);
+        setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
+        liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
+      },
+      (err) => console.log("[SYS] Initial GPS lock delayed..."),
+      { enableHighAccuracy: true }
+    );
+
+    
+    
+      // ... your existing heartbeat code remains below ...
     const heartbeatInterval = setInterval(async () => {
       const currentLoc = liveLocationRef.current; // <-- READS FROM THE REF
       if (!currentLoc) return; 
