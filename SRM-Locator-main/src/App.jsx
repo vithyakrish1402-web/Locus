@@ -758,27 +758,49 @@ const App = () => {
         } catch (e) { console.log("Battery API blocked"); }
 
         // Broadcast the smoothed coordinates to the squad, not the messy ones
-        // 🚀 THE P2P TRANSMITTER
-        // We package the smoothed data...
-        const p2pPayload = JSON.stringify({
-          type: 'P2P_LOCATION',
-          id: socket.id,
-          lat: smoothed.lat,
-          lng: smoothed.lng,
-          speed: speed ? Math.round(speed * 3.6) : 0,
-          battery: batteryLevel
-        });
+        // 🛑 TELEMETRY CONTROL OVERRIDE
+        if (telemetryMode === 'FROZEN') {
+          // Do absolutely nothing. Your marker will freeze in place on everyone else's screen.
+          return; 
+        }
 
-        // ...and fire it directly at the other phones! (Bypassing the server)
+        let p2pPayload;
+
+        if (telemetryMode === 'GHOST') {
+          // Tell the squad to wipe your marker from their maps
+          p2pPayload = JSON.stringify({
+            type: 'P2P_LOCATION',
+            id: socket.id,
+            status: 'GHOST' 
+          });
+        } else {
+          // 🚀 ACTIVE MODE: Transmit the precognition coordinates
+          const smoothed = localPrecognition.current.filter(latitude, longitude);
+          
+          // Update your own map
+          setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
+
+          p2pPayload = JSON.stringify({
+            type: 'P2P_LOCATION',
+            id: socket.id,
+            lat: smoothed.lat,
+            lng: smoothed.lng,
+            speed: speed ? Math.round(speed * 3.6) : 0,
+            battery: batteryLevel,
+            status: 'ACTIVE'
+          });
+        }
+
+        // Fire the payload directly at the other phones!
         Object.values(peersRef.current).forEach(peer => {
           try {
             if (peer.connected) peer.send(p2pPayload);
           } catch (err) { /* ignore disconnected peers */ }
-        }); 
-      },
-      (error) => console.error("🚨 [SYS_ERROR] Geolocation lost:", error.message),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+        });
+    },
+    (error) => console.error("🚨 [SYS_ERROR] Geolocation lost:", error.message),
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
 
     return () => navigator.geolocation.clearWatch(watchId);
   // This is at the very end of the GPS useEffect block (around line 520)
