@@ -1163,13 +1163,7 @@ const App = () => {
 
         {/* Search */}
         <div className="p-4 border-b border-white/20 bg-black">
-          {/* --- UPGRADED: ONLY THE COMMANDER SEES THE GATEKEEPER BUTTON --- */}
-          {activeTab === 'users' && squadRole === 'OWNER' && (
-             <button onClick={() => setShowRequestsModal(true)} className="w-full mb-4 px-4 py-3 border border-red-500 text-sm font-dot uppercase tracking-widest flex items-center justify-between hover:bg-red-500 hover:text-white transition-colors text-red-500">
-               <div className="flex items-center gap-2"><ShieldCheck size={18}/> NODE_ACCESS</div>
-               {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
-             </button>
-          )}
+        
           {/* --- ONLY THE COMMANDER SEES THESE BUTTONS --- */}
           {activeTab === 'users' && squadRole === 'OWNER' && (
             <div className="flex flex-col gap-2 mb-4">
