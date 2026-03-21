@@ -433,13 +433,11 @@ const App = () => {
   }, [squadCode, liveLocation]);
   // --- 🚨 ADDITION 2: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
-  useEffect(() => {
+ useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
-      // ✅ FIX: Added 'photo' to the destructuring extraction
       const { targetId, name, photo, lastKnownLocation, disconnectTime } = emergencyData;
 
-      console.log("🔥 [FRONTEND] Received Ghost Data:", emergencyData);
-      console.error(`🚨 [CRITICAL ALERT] Signal lost for ${name}`);
+      console.log("🔥 [FRONTEND] Received Ghost Data:", emergencyData); 
 
       if (typeof playSonarPing === 'function') {
         playSonarPing();
@@ -447,14 +445,16 @@ const App = () => {
 
       setUsers(prev => prev.filter(u => u.id !== targetId));
 
+      // ✅ ADD A TINY OFFSET SO IT DOESN'T HIDE BEHIND YOU
       setOfflineNodes(prev => ({
         ...prev,
         [targetId]: {
           id: targetId,
           name: name,
-          photo: photo, // ✅ This will now work without crashing
-          lat: lastKnownLocation.latitude,
-          lng: lastKnownLocation.longitude,
+          photo: photo,
+          // Offset by roughly ~20 meters so it pops out next to the live marker
+          lat: lastKnownLocation.latitude + 0.0002, 
+          lng: lastKnownLocation.longitude + 0.0002,
           battery: lastKnownLocation.batteryLevel,
           time: Date.now()
         }
