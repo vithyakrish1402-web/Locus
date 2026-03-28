@@ -1,4 +1,3 @@
-import Peer from 'simple-peer';
 import { io } from "socket.io-client";
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
@@ -365,12 +364,9 @@ class PrecognitionFilter {
   }
 }
 const App = () => {
-  // --- 🕸️ P2P MESH VAULT ---
-  // Stores direct WebRTC connections to every squad member
-  const peersRef = useRef({});
   // --- PRECOGNITION TRACKERS ---
   const localPrecognition = useRef(new PrecognitionFilter());
-  const squadPrecognition = useRef({}); // Tracks separate math for every squad member
+  const squadPrecognition = useRef({}); // Tracks separate Kalman math for every squad member
 
   const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
@@ -426,9 +422,6 @@ const App = () => {
   const [squadRole, setSquadRole] = useState(null); 
   const [pendingRequests, setPendingRequests] = useState([]);
   const liveLocationRef = useRef(null);
-  // Tracks which peer IDs have gone GHOST via P2P. Lives in a ref so it
-  // survives the users-update server tick that rebuilds the users array.
-  const ghostStatusRef = useRef({});
   // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
   // always read the current value — they close over the ref, not the stale state.
   const telemetryModeRef = useRef('ACTIVE');
@@ -451,61 +444,6 @@ const App = () => {
   };
   
   
-  // --- 🕸️ P2P DATA DECODER ---
-  // --- 🕸️ P2P DATA DECODER ---
-  // --- 🕸️ P2P DATA DECODER ---
-  const handleP2PData = (rawPayload) => {
-    try {
-      const payloadString = typeof rawPayload === 'string' 
-        ? rawPayload 
-        : new TextDecoder().decode(rawPayload);
-        
-      const parsed = JSON.parse(payloadString);
-      
-      if (parsed.type === 'P2P_LOCATION') {
-        if (parsed.status === 'GHOST') {
-          // Hide them and mark as ghost
-          ghostStatusRef.current[parsed.id] = true;
-          setUsers(prev => prev.filter(u => u.id !== parsed.id));
-        } else {
-          // They are ACTIVE or FROZEN
-          delete ghostStatusRef.current[parsed.id];
-          
-          setUsers(prev => {
-            const existingUser = prev.find(u => u.id === parsed.id);
-            
-            if (existingUser) {
-              // UPDATE EXISTING NODE
-              return prev.map(u => u.id === parsed.id ? { 
-                  ...u, 
-                  lat: parsed.lat, 
-                  lng: parsed.lng, 
-                  speed: parsed.speed, 
-                  battery: parsed.battery, 
-                  status: parsed.status || 'ACTIVE'
-              } : u);
-            } else {
-              // RE-ADD NODE (They came back from Ghost mode)
-              return [...prev, {
-                id: parsed.id,
-                name: parsed.name || "Squad Node", // Fallback if missing
-                photo: parsed.photo,
-                lat: parsed.lat,
-                lng: parsed.lng,
-                speed: parsed.speed,
-                battery: parsed.battery,
-                status: parsed.status || 'ACTIVE',
-                permission: "accepted" 
-              }];
-            }
-          });
-        }
-      }
-    } catch (e) { 
-      console.error("[P2P] Payload decode failed:", e); 
-    }
-  };
-
   // --- 🌐 GEOFENCE PERIMETER LISTENER ---
   useEffect(() => {
     socket.on('geofence-alert', (alertData) => {
@@ -609,136 +547,59 @@ const App = () => {
 
   
  // 1. Listen for real-time network updates from the server
-  // 1. Listen for real-time network updates from the server
   useEffect(() => {
     if (!hasJoinedSquad) return;
 
-   socket.on('users-update', (activeUsers) => {
-      // Initiate WebRTC connections OUTSIDE the state updater to avoid React StrictMode double-invoke bugs
-      Object.entries(activeUsers).forEach(([id, data]) => {
-        if (id !== socket.id && data.roomCode === squadCode && !ghostStatusRef.current[id]) {
-          if (!peersRef.current[id]) {
-            // Use localeCompare as a deterministic tiebreaker.
-            // One side gets +1 (initiates), the other gets -1 (waits for offer).
-            // This guarantees exactly ONE peer initiates — never both, never neither.
-            const iInitiate = socket.id.localeCompare(id) > 0;
-            if (iInitiate) {
-              console.log(`[P2P] Initiating secure laser-link to Node ${data.name}...`);
-              const peer = new Peer({ initiator: true, trickle: true });
-              peer.on('signal', (offer) => socket.emit('webrtc-offer', { targetId: id, offer: offer }));
-              peer.on('data', handleP2PData);
-              peersRef.current[id] = peer;
-            }
-            // The other side will create its peer when it receives 'webrtc-offer'
-          }
-        }
-      });
-
-      // 🛑 UPGRADE: Use React state updater to preserve our P2P Mesh coordinates
-      setUsers(prevUsers => {
+    socket.on('users-update', (activeUsers) => {
+      setUsers(() => {
         const formattedUsers = [];
-        
         Object.entries(activeUsers).forEach(([id, data]) => {
-          // Skip self, wrong room, and any peer that sent us a GHOST payload via P2P
-          if (id !== socket.id && data.roomCode === squadCode && !ghostStatusRef.current[id]) { 
-            
-            // --- 🛡️ THE P2P PRESERVATION LAYER ---
-            // Find if we already have live data for this user from the WebRTC Mesh
-            const existingUser = prevUsers.find(u => u.id === id);
+          // Skip self, wrong room, and GHOST nodes (server still sends them so others
+          // can see their last position, but we hide them from our own map/list)
+          if (id === socket.id) return;
+          if (data.roomCode !== squadCode) return;
+          if (data.status === 'GHOST') return;
+          if (!data.lat || !data.lng) return;
 
-            // If we have P2P data, KEEP IT. Never let the server overwrite it.
-            let finalLat = existingUser ? existingUser.lat : data.lat;
-            let finalLng = existingUser ? existingUser.lng : data.lng;
-
-            // Only run precognition if this is their very first coordinate
-            if (!existingUser && data.lat && data.lng) {
-               if (!squadPrecognition.current[id]) squadPrecognition.current[id] = new PrecognitionFilter();
-               const smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
-               finalLat = smoothed.lat;
-               finalLng = smoothed.lng;
-            }
-
-            formattedUsers.push({
-              id: id,
-              name: data.name || "Live User",
-              photo: data.photo,
-              role: data.role || existingUser?.role || "Campus Node",
-              lat: finalLat,
-              lng: finalLng,
-              speed: existingUser ? existingUser.speed : (data.speed || 0),
-              battery: existingUser ? existingUser.battery : (data.battery || 0),
-              status: existingUser ? existingUser.status : (data.status || "ACTIVE"),
-              permission: "accepted" 
-            });
+          // Run Kalman smoothing on every incoming coordinate
+          if (!squadPrecognition.current[id]) {
+            squadPrecognition.current[id] = new PrecognitionFilter();
           }
+          const smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
+
+          formattedUsers.push({
+            id,
+            name: data.name || 'Squad Node',
+            photo: data.photo,
+            role: data.role || 'Campus Node',
+            lat: smoothed.lat,
+            lng: smoothed.lng,
+            speed: data.speed || 0,
+            battery: data.battery || 0,
+            status: data.status || 'ACTIVE',
+            permission: 'accepted',
+          });
         });
-        return formattedUsers; // Returns the protected array to the React UI
+        return formattedUsers;
       });
     });
-
-    // ... rest of the socket.on listeners remain the same ...
 
     socket.on('receive-ping', ({ senderName }) => {
       alert(`🚨 SOS BEACON DETECTED 🚨\n\n${senderName.toUpperCase()} requires immediate assistance at their coordinates!`);
     });
 
-    // Listen for newly published admin routes
     socket.on('new-custom-route', ({ key, data }) => {
-       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
+      setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
     });
 
     return () => {
       socket.off('users-update');
+      socket.off('receive-ping');
       socket.off('new-custom-route');
-      setUsers([]); 
+      setUsers([]);
     };
-  }, [hasJoinedSquad, squadCode]); 
+  }, [hasJoinedSquad, squadCode]);
 
-  // --- 🕸️ THE WEBRTC P2P HANDSHAKE ENGINE ---
-  useEffect(() => {
-    // 1. Someone wants to connect to us (Incoming Offer)
-    socket.on('webrtc-offer', (data) => {
-      console.log(`[P2P] Incoming connection request from ${data.senderId}`);
-      
-      const peer = new Peer({
-        initiator: false, // We are answering, not initiating
-        trickle: true,
-      });
-
-      // Handle connection establishment
-      peer.on('signal', (answer) => {
-        socket.emit('webrtc-answer', { targetId: data.senderId, answer: answer });
-      });
-
-      // Handle incoming P2P data (This is where the GPS will flow!)
-      peer.on('data', handleP2PData);
-
-      // Accept their security key
-      peer.signal(data.offer);
-      peersRef.current[data.senderId] = peer;
-    });
-
-    // 2. Someone accepted our connection (Incoming Answer)
-    socket.on('webrtc-answer', (data) => {
-      console.log(`[P2P] Connection accepted by ${data.senderId}`);
-      if (peersRef.current[data.senderId]) {
-        peersRef.current[data.senderId].signal(data.answer);
-      }
-    });
-
-    // 3. Bypassing Firewalls (ICE Candidates)
-    socket.on('webrtc-ice-candidate', (data) => {
-      if (peersRef.current[data.senderId]) {
-        peersRef.current[data.senderId].signal(data.candidate);
-      }
-    });
-
-    return () => {
-      socket.off('webrtc-offer');
-      socket.off('webrtc-answer');
-      socket.off('webrtc-ice-candidate');
-    };
-  }, []);
   // --- GATEKEEPER PROTOCOL LISTENERS ---
   // --- GATEKEEPER PROTOCOL LISTENERS (FIXED) ---
   useEffect(() => {
@@ -778,175 +639,109 @@ const App = () => {
   useEffect(() => {
     if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
 
-    
-    // --- 📡 THE HEARTBEAT MONITOR & MESH SYNCHRONIZER ---
     // --- 🚀 FORCE INITIAL GPS LOCK ---
-    // Grabs your location instantly so the P2P Mesh doesn't wait for you to move
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         const smoothed = localPrecognition.current.filter(latitude, longitude);
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
-
-        // FIX: Immediately push to the server so peers get a users-update
-        // with your coordinates right away, not after the 5s heartbeat fires.
-        socket.emit('safety-ping', {
-          latitude: smoothed.lat,
-          longitude: smoothed.lng,
-          timestamp: new Date().toISOString(),
-          batteryLevel: 'Unknown'
+        // Immediately register our position on the server
+        socket.emit('update-location', {
+          name: user.displayName, photo: user.photoURL,
+          lat: smoothed.lat, lng: smoothed.lng,
+          speed: 0, battery: 100,
+          status: telemetryModeRef.current,
+          roomCode: squadCode,
         });
       },
-      (err) => console.log("[SYS] Initial GPS lock delayed..."),
+      (err) => console.log('[SYS] Initial GPS lock delayed...'),
       { enableHighAccuracy: true }
     );
 
-    
-    
-      // ... your existing heartbeat code remains below ...
+    // --- 📡 HEARTBEAT: keeps server state fresh every 5 seconds ---
     const heartbeatInterval = setInterval(async () => {
-      const currentLoc = liveLocationRef.current; // <-- READS FROM THE REF
-      if (!currentLoc) return; 
+      const currentLoc = liveLocationRef.current;
+      if (!currentLoc) return;
 
-      let currentBattery = 100; // 🚨 FIX: Pure number
+      let currentBattery = 100;
       try {
         if ('getBattery' in navigator) {
           const battery = await navigator.getBattery();
           currentBattery = Math.round(battery.level * 100);
         }
-      } catch (e) { }
-      
-      // 1. Server Sync (For Geofence Engine)
+      } catch (e) {}
+
+      // Always keep the server location cache fresh for the geofence engine
       socket.emit('safety-ping', {
-        latitude: currentLoc.lat,
-        longitude: currentLoc.lng,
-        timestamp: new Date().toISOString(),
-        batteryLevel: `${currentBattery}%` // Server keeps the string
+        latitude: currentLoc.lat, longitude: currentLoc.lng,
+        timestamp: new Date().toISOString(), batteryLevel: `${currentBattery}%`,
       });
 
-      // 2. 🕸️ P2P MESH SYNCHRONIZER
-      if (telemetryModeRef.current === 'ACTIVE') {
-        const syncPayload = JSON.stringify({
-          type: 'P2P_LOCATION',
-          id: socket.id,
-          name: user.displayName,
-          photo: user.photoURL,
-          lat: currentLoc.lat,
-          lng: currentLoc.lng,
-          speed: 0, 
-          battery: currentBattery, // 🚨 Send pure number to the mesh
-          status: 'ACTIVE'
-        });
-
-        Object.values(peersRef.current).forEach(peer => {
-          try { if (peer.connected) peer.send(syncPayload); } catch (err) {}
-        });
-      } else if (telemetryModeRef.current === 'GHOST') {
-        const ghostPayload = JSON.stringify({ type: 'P2P_LOCATION', id: socket.id, status: 'GHOST' });
-        Object.values(peersRef.current).forEach(peer => {
-          try { if (peer.connected) peer.send(ghostPayload); } catch (err) {}
+      // Only broadcast position to squad if not GHOST
+      if (telemetryModeRef.current !== 'GHOST') {
+        socket.emit('update-location', {
+          name: user.displayName, photo: user.photoURL,
+          lat: currentLoc.lat, lng: currentLoc.lng,
+          speed: 0, battery: currentBattery,
+          status: telemetryModeRef.current,
+          roomCode: squadCode,
         });
       }
     }, 5000);
 
-    // 🟢 ACTIVE MODE: Standard live hardware tracking
+    // --- 🟢 LIVE GPS TRACKING ---
     const watchId = navigator.geolocation.watchPosition(
-      async (position) => { 
+      async (position) => {
         const { latitude, longitude, speed } = position.coords;
-        
-        // 🔮 RUN PRECOGNITION PATHING ON RAW GPS
         const smoothed = localPrecognition.current.filter(latitude, longitude);
 
-        // Update BOTH the React State AND the Ref!
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
 
-        let batteryLevel = null;
+        let batteryLevel = 100;
         try {
           if ('getBattery' in navigator) {
             const battery = await navigator.getBattery();
             batteryLevel = Math.round(battery.level * 100);
           }
-        } catch (e) { console.log("Battery API blocked"); }
+        } catch (e) {}
 
-        // 🛑 TELEMETRY CONTROL OVERRIDE
-        if (telemetryModeRef.current === 'FROZEN') {
-          return; // Do absolutely nothing. Marker freezes.
-        }
+        // FROZEN: update our own marker locally but don't tell the squad
+        if (telemetryModeRef.current === 'FROZEN') return;
 
-        let p2pPayload;
-
-        if (telemetryModeRef.current === 'GHOST') {
-          // Tell the squad to wipe your marker from their maps
-          p2pPayload = JSON.stringify({
-            type: 'P2P_LOCATION',
-            id: socket.id,
-            status: 'GHOST' 
-          });
-        } else {
-          // 🚀 ACTIVE MODE: Transmit the precognition coordinates
-          p2pPayload = JSON.stringify({
-            type: 'P2P_LOCATION',
-            id: socket.id,
-            name: user.displayName,
-            photo: user.photoURL,
-            lat: smoothed.lat,
-            lng: smoothed.lng,
-            speed: speed ? Math.round(speed * 3.6) : 0,
-            battery: batteryLevel,
-            status: 'ACTIVE'
-          });
-        }
-
-        // Fire the payload directly at the other phones!
-        Object.values(peersRef.current).forEach(peer => {
-          try {
-            if (peer.connected) peer.send(p2pPayload);
-          } catch (err) { /* ignore disconnected peers */ }
+        socket.emit('update-location', {
+          name: user.displayName, photo: user.photoURL,
+          lat: smoothed.lat, lng: smoothed.lng,
+          speed: speed ? Math.round(speed * 3.6) : 0,
+          battery: batteryLevel,
+          status: telemetryModeRef.current, // ACTIVE or GHOST
+          roomCode: squadCode,
         });
-    },
-    (error) => console.error("🚨 [SYS_ERROR] Geolocation lost:", error.message),
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-  );
+      },
+      (error) => console.error('🚨 [SYS_ERROR] Geolocation lost:', error.message),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
 
-    return () =>{
+    return () => {
       clearInterval(heartbeatInterval);
       navigator.geolocation.clearWatch(watchId);
     };
-     
-  // This is at the very end of the GPS useEffect block
   }, [user, hasJoinedSquad, squadCode, accessStatus]);
-// --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
+// --- ⚡ INSTANT MODE OVERRIDE ---
+  // Fires the moment a telemetry button is clicked so the server gets the new
+  // status immediately, without waiting for the next watchPosition tick.
   useEffect(() => {
-    const currentLoc = liveLocationRef.current; 
-    
-    if (!currentLoc || !socket) return; 
+    const currentLoc = liveLocationRef.current;
+    if (!currentLoc || !user || !hasJoinedSquad) return;
 
-    let overridePayload;
-
-    if (telemetryMode === 'GHOST') {
-      overridePayload = JSON.stringify({ type: 'P2P_LOCATION', id: socket.id, status: 'GHOST' });
-    } else if (telemetryMode === 'ACTIVE') {
-      overridePayload = JSON.stringify({
-        type: 'P2P_LOCATION', 
-        id: socket.id, 
-        name: user.displayName,
-        photo: user.photoURL,
-        lat: currentLoc.lat, 
-        lng: currentLoc.lng,
-        speed: 0, 
-        battery: 100, // 🚨 FIX: Pure number fallback
-        status: 'ACTIVE'
-      });
-    } else {
-      return; 
-    }
-
-    Object.values(peersRef.current).forEach(peer => {
-      try { if (peer.connected) peer.send(overridePayload); } catch (e) {}
+    socket.emit('update-location', {
+      name: user.displayName, photo: user.photoURL,
+      lat: currentLoc.lat, lng: currentLoc.lng,
+      speed: 0, battery: 100,
+      status: telemetryMode, // use state here — this effect re-runs when it changes
+      roomCode: squadCode,
     });
-    
   }, [telemetryMode]);
   
   // --- CYBERPUNK SONAR AUDIO ENGINE ---
