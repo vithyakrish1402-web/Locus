@@ -2068,12 +2068,16 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
                   {/* Table Body (Cross-referencing live users with raw cache) */}
                   {users.filter(u => u.permission === 'accepted').map(userNode => {
-                    const cacheData = rawTelemetryData[userNode.id];
+                    
+                    // 🛡️ FIX 1: Added '?.' to prevent the crash during exit animations
+                    const cacheData = rawTelemetryData?.[userNode.id];
+                    
                     const freshness = getSignalFreshness(cacheData?.timestamp);
                     const batteryColor = cacheData && parseInt(cacheData.batteryLevel) < 20 ? 'text-red-500' : 'text-emerald-500';
 
                     return (
-                      <div key={userNode.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-0 border-b border-white/10 p-4 font-dot text-xs tracking-widest uppercase text-white hover:bg-white/5 transition-colors md:items-center">
+                      // 📱 FIX 2: Responsive Grid (grid-cols-1 on mobile, md:grid-cols-4 on laptop)
+                      <div key={userNode.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-0 border-b border-white/10 p-4 font-dot text-xs tracking-widest uppercase text-white hover:bg-white/5 transition-colors items-start md:items-center">
                         
                         {/* 1. NODE NAME */}
                         <div className="flex items-center gap-3">
