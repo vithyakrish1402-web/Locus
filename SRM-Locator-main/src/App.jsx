@@ -925,33 +925,49 @@ const App = () => {
   const handleGeneralAiQuery = async (e) => {
     e.preventDefault();
     if (!aiQuery.trim() || aiLoading) return;
-    setAiLoading(true);
-    setAiResponse('');
+    setAiLoading(true); setAiResponse('');
     
     try {
-      // 1. COMPRESSED TELEMETRY: Only send Name, Distance, Speed, Battery
-      const squadSnapshot = users.filter(u => !blockedUserIds.includes(u.id)).map(u => 
-        `[${u.name}] Dist:${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Spd:${u.speed}km/h, Bat:${u.battery}%`
-      ).join(' | ');
+      // --- 🧠 SYS_ORACLE TACTICAL COMPRESSOR ---
+      
+      // 1. Squad Context: Compress active nodes and ghosts into dense strings
+      const activeNodes = users.filter(u => u.permission === 'accepted' && u.status !== 'GHOST' && !blockedUserIds.includes(u.id));
+      const ghostNodes = Object.values(offlineNodes);
 
-      // 2. COMPRESSED MAP DATA: Only send Name and Coordinates (Drop the info descriptions)
-      const campusSnapshot = BUILDINGS.map(b => 
-        `[${b.name}] Lat:${b.lat.toFixed(5)}, Lng:${b.lng.toFixed(5)}`
-      ).join(' | ');
+      let squadStr = activeNodes.length > 0 
+        ? activeNodes.map(u => `[NODE:${u.name}|DIST:${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}|BAT:${u.battery}%|SPD:${u.speed}kmh]`).join('')
+        : "NO_ACTIVE_NODES";
 
-      // 3. LEAN INSTRUCTION: Force the AI to be concise to save output tokens
-      const tacticalInstruction = `You are 'SYS_ORACLE', a tactical AI on the LOCUS network at SRM KTR.
-        SQUAD DATA: ${squadSnapshot || "Empty"}
-        MAP DATA: ${campusSnapshot}
-        DIRECTIVE: Answer the user's query utilizing the data above. Keep answers under 3 sentences. Use a concise, military-comms tone.`;
+      if (ghostNodes.length > 0) {
+         squadStr += ` | GHOSTS: ${ghostNodes.map(g => `[${g.name}(Lost Signal)]`).join('')}`;
+      }
 
-      const res = await callGemini(aiQuery, tacticalInstruction);
+      // 2. Map Context: Calculate distance and ONLY send the 3 closest buildings to save tokens
+      let mapStr = "UNKNOWN";
+      if (liveLocation) {
+         const nearbyBuildings = BUILDINGS.map(b => {
+           const distStr = calculateDistance(liveLocation.lat, liveLocation.lng, b.lat, b.lng);
+           const isKM = distStr.includes('KM');
+           const num = parseFloat(distStr.replace(/[^0-9.]/g, ''));
+           return { name: b.name, distStr, val: isKM ? num * 1000 : num };
+         }).sort((a, b) => a.val - b.val).slice(0, 3); // Extract top 3
+
+         mapStr = nearbyBuildings.map(b => `[${b.name}:${b.distStr}]`).join('');
+      }
+
+      // 3. The Injection: Feed the compressed data to Gemini
+      const systemInstruction = `You are SYS_ORACLE, a tactical AI on the LOCUS network at SRM KTR. 
+MY_STATUS: ${liveLocation ? 'ONLINE' : 'OFFLINE'}
+SQUAD_TELEMETRY: ${squadStr}
+NEAREST_BUILDINGS: ${mapStr}
+DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strictly under 3 sentences. Use a concise, military-comms tone. Provide spatial awareness when asked.`;
+
+      const res = await callGemini(aiQuery, systemInstruction);
       setAiResponse(res);
     } catch (err) {
       setAiResponse("[SYS_FAILURE] Neural link to Oracle severed. Retrying connection...");
     } finally {
-      setAiLoading(false);
-      setAiQuery('');
+      setAiLoading(false); setAiQuery('');
     }
   };
 
