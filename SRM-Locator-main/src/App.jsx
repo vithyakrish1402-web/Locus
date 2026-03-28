@@ -1,3 +1,4 @@
+import Peer from 'simple-peer';
 import { io } from "socket.io-client";
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
@@ -364,22 +365,12 @@ class PrecognitionFilter {
   }
 }
 const App = () => {
-  // --- COMMANDER TELEMETRY STATE ---
-  const [showTelemetryModal, setShowTelemetryModal] = useState(false);
-  const [rawTelemetryData, setRawTelemetryData] = useState(null);
-
-  // Calculates exactly how stale a node's GPS signal is
-  const getSignalFreshness = (isoString) => {
-    if (!isoString) return { text: "NO_SIGNAL", color: "text-red-500" };
-    const seconds = Math.floor((new Date() - new Date(isoString)) / 1000);
-    if (seconds < 10) return { text: "OPTIMAL (< 10s)", color: "text-emerald-500" };
-    if (seconds < 60) return { text: `GOOD (${seconds}s ago)`, color: "text-blue-400" };
-    if (seconds < 300) return { text: `WARN (${Math.floor(seconds/60)}m ago)`, color: "text-yellow-500" };
-    return { text: `STALE (> 5m)`, color: "text-red-500 animate-pulse" };
-  };
+  // --- 🕸️ P2P MESH VAULT ---
+  // Stores direct WebRTC connections to every squad member
+  const peersRef = useRef({});
   // --- PRECOGNITION TRACKERS ---
   const localPrecognition = useRef(new PrecognitionFilter());
-  const squadPrecognition = useRef({}); // Tracks separate Kalman math for every squad member
+  const squadPrecognition = useRef({}); // Tracks separate math for every squad member
 
   const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
@@ -435,6 +426,9 @@ const App = () => {
   const [squadRole, setSquadRole] = useState(null); 
   const [pendingRequests, setPendingRequests] = useState([]);
   const liveLocationRef = useRef(null);
+  // Tracks which peer IDs have gone GHOST via P2P. Lives in a ref so it
+  // survives the users-update server tick that rebuilds the users array.
+  const ghostStatusRef = useRef({});
   // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
   // always read the current value — they close over the ref, not the stale state.
   const telemetryModeRef = useRef('ACTIVE');
@@ -457,6 +451,61 @@ const App = () => {
   };
   
   
+  // --- 🕸️ P2P DATA DECODER ---
+  // --- 🕸️ P2P DATA DECODER ---
+  // --- 🕸️ P2P DATA DECODER ---
+  const handleP2PData = (rawPayload) => {
+    try {
+      const payloadString = typeof rawPayload === 'string' 
+        ? rawPayload 
+        : new TextDecoder().decode(rawPayload);
+        
+      const parsed = JSON.parse(payloadString);
+      
+      if (parsed.type === 'P2P_LOCATION') {
+        if (parsed.status === 'GHOST') {
+          // Hide them and mark as ghost
+          ghostStatusRef.current[parsed.id] = true;
+          setUsers(prev => prev.filter(u => u.id !== parsed.id));
+        } else {
+          // They are ACTIVE or FROZEN
+          delete ghostStatusRef.current[parsed.id];
+          
+          setUsers(prev => {
+            const existingUser = prev.find(u => u.id === parsed.id);
+            
+            if (existingUser) {
+              // UPDATE EXISTING NODE
+              return prev.map(u => u.id === parsed.id ? { 
+                  ...u, 
+                  lat: parsed.lat, 
+                  lng: parsed.lng, 
+                  speed: parsed.speed, 
+                  battery: parsed.battery, 
+                  status: parsed.status || 'ACTIVE'
+              } : u);
+            } else {
+              // RE-ADD NODE (They came back from Ghost mode)
+              return [...prev, {
+                id: parsed.id,
+                name: parsed.name || "Squad Node", // Fallback if missing
+                photo: parsed.photo,
+                lat: parsed.lat,
+                lng: parsed.lng,
+                speed: parsed.speed,
+                battery: parsed.battery,
+                status: parsed.status || 'ACTIVE',
+                permission: "accepted" 
+              }];
+            }
+          });
+        }
+      }
+    } catch (e) { 
+      console.error("[P2P] Payload decode failed:", e); 
+    }
+  };
+
   // --- 🌐 GEOFENCE PERIMETER LISTENER ---
   useEffect(() => {
     socket.on('geofence-alert', (alertData) => {
@@ -514,13 +563,16 @@ const App = () => {
     };
   }, []);
   // --- 📊 ADDITION 3: TELEMETRY DATA RECEIVER ---
-  // --- TACTICAL TELEMETRY DATA RECEIVER ---
   useEffect(() => {
     socket.on('telemetry-sync-complete', (data) => {
-      console.log("📊 [SYS_SYNC] Raw Telemetry Matrix Acquired:", data);
-      setRawTelemetryData(data);
-      setShowTelemetryModal(true); // Pop the Commander's Dashboard
+      console.log("📊 [TACTICAL TELEMETRY DUMP]:", data);
+      
+      // For now, we are just alerting it so you can confirm it works.
+      // Next, we will map this data directly into your UI.
+      const nodeCount = Object.keys(data).length;
+      alert(`[SYS_SYNC] Telemetry data acquired for ${nodeCount} active nodes. Check browser console for raw data.`);
     });
+
     return () => socket.off('telemetry-sync-complete');
   }, []);
   // --- 💀 ADDITION: MUTINY LISTENER ---
@@ -557,59 +609,136 @@ const App = () => {
 
   
  // 1. Listen for real-time network updates from the server
+  // 1. Listen for real-time network updates from the server
   useEffect(() => {
     if (!hasJoinedSquad) return;
 
-    socket.on('users-update', (activeUsers) => {
-      setUsers(() => {
-        const formattedUsers = [];
-        Object.entries(activeUsers).forEach(([id, data]) => {
-          // Skip self, wrong room, and GHOST nodes (server still sends them so others
-          // can see their last position, but we hide them from our own map/list)
-          if (id === socket.id) return;
-          if (data.roomCode !== squadCode) return;
-          if (data.status === 'GHOST') return;
-          if (!data.lat || !data.lng) return;
-
-          // Run Kalman smoothing on every incoming coordinate
-          if (!squadPrecognition.current[id]) {
-            squadPrecognition.current[id] = new PrecognitionFilter();
+   socket.on('users-update', (activeUsers) => {
+      // Initiate WebRTC connections OUTSIDE the state updater to avoid React StrictMode double-invoke bugs
+      Object.entries(activeUsers).forEach(([id, data]) => {
+        if (id !== socket.id && data.roomCode === squadCode && !ghostStatusRef.current[id]) {
+          if (!peersRef.current[id]) {
+            // Use localeCompare as a deterministic tiebreaker.
+            // One side gets +1 (initiates), the other gets -1 (waits for offer).
+            // This guarantees exactly ONE peer initiates — never both, never neither.
+            const iInitiate = socket.id.localeCompare(id) > 0;
+            if (iInitiate) {
+              console.log(`[P2P] Initiating secure laser-link to Node ${data.name}...`);
+              const peer = new Peer({ initiator: true, trickle: true });
+              peer.on('signal', (offer) => socket.emit('webrtc-offer', { targetId: id, offer: offer }));
+              peer.on('data', handleP2PData);
+              peersRef.current[id] = peer;
+            }
+            // The other side will create its peer when it receives 'webrtc-offer'
           }
-          const smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
+        }
+      });
 
-          formattedUsers.push({
-            id,
-            name: data.name || 'Squad Node',
-            photo: data.photo,
-            role: data.role || 'Campus Node',
-            lat: smoothed.lat,
-            lng: smoothed.lng,
-            speed: data.speed || 0,
-            battery: data.battery || 0,
-            status: data.status || 'ACTIVE',
-            permission: 'accepted',
-          });
+      // 🛑 UPGRADE: Use React state updater to preserve our P2P Mesh coordinates
+      setUsers(prevUsers => {
+        const formattedUsers = [];
+        
+        Object.entries(activeUsers).forEach(([id, data]) => {
+          // Skip self, wrong room, and any peer that sent us a GHOST payload via P2P
+          if (id !== socket.id && data.roomCode === squadCode && !ghostStatusRef.current[id]) { 
+            
+            // --- 🛡️ THE P2P PRESERVATION LAYER ---
+            // Find if we already have live data for this user from the WebRTC Mesh
+            const existingUser = prevUsers.find(u => u.id === id);
+
+            // If we have P2P data, KEEP IT. Never let the server overwrite it.
+            let finalLat = existingUser ? existingUser.lat : data.lat;
+            let finalLng = existingUser ? existingUser.lng : data.lng;
+
+            // Only run precognition if this is their very first coordinate
+            if (!existingUser && data.lat && data.lng) {
+               if (!squadPrecognition.current[id]) squadPrecognition.current[id] = new PrecognitionFilter();
+               const smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
+               finalLat = smoothed.lat;
+               finalLng = smoothed.lng;
+            }
+
+            formattedUsers.push({
+              id: id,
+              name: data.name || "Live User",
+              photo: data.photo,
+              role: data.role || existingUser?.role || "Campus Node",
+              lat: finalLat,
+              lng: finalLng,
+              speed: existingUser ? existingUser.speed : (data.speed || 0),
+              battery: existingUser ? existingUser.battery : (data.battery || 0),
+              status: existingUser ? existingUser.status : (data.status || "ACTIVE"),
+              permission: "accepted" 
+            });
+          }
         });
-        return formattedUsers;
+        return formattedUsers; // Returns the protected array to the React UI
       });
     });
+
+    // ... rest of the socket.on listeners remain the same ...
 
     socket.on('receive-ping', ({ senderName }) => {
       alert(`🚨 SOS BEACON DETECTED 🚨\n\n${senderName.toUpperCase()} requires immediate assistance at their coordinates!`);
     });
 
+    // Listen for newly published admin routes
     socket.on('new-custom-route', ({ key, data }) => {
-      setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
+       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
     });
 
     return () => {
       socket.off('users-update');
-      socket.off('receive-ping');
       socket.off('new-custom-route');
-      setUsers([]);
+      setUsers([]); 
     };
-  }, [hasJoinedSquad, squadCode]);
+  }, [hasJoinedSquad, squadCode]); 
 
+  // --- 🕸️ THE WEBRTC P2P HANDSHAKE ENGINE ---
+  useEffect(() => {
+    // 1. Someone wants to connect to us (Incoming Offer)
+    socket.on('webrtc-offer', (data) => {
+      console.log(`[P2P] Incoming connection request from ${data.senderId}`);
+      
+      const peer = new Peer({
+        initiator: false, // We are answering, not initiating
+        trickle: true,
+      });
+
+      // Handle connection establishment
+      peer.on('signal', (answer) => {
+        socket.emit('webrtc-answer', { targetId: data.senderId, answer: answer });
+      });
+
+      // Handle incoming P2P data (This is where the GPS will flow!)
+      peer.on('data', handleP2PData);
+
+      // Accept their security key
+      peer.signal(data.offer);
+      peersRef.current[data.senderId] = peer;
+    });
+
+    // 2. Someone accepted our connection (Incoming Answer)
+    socket.on('webrtc-answer', (data) => {
+      console.log(`[P2P] Connection accepted by ${data.senderId}`);
+      if (peersRef.current[data.senderId]) {
+        peersRef.current[data.senderId].signal(data.answer);
+      }
+    });
+
+    // 3. Bypassing Firewalls (ICE Candidates)
+    socket.on('webrtc-ice-candidate', (data) => {
+      if (peersRef.current[data.senderId]) {
+        peersRef.current[data.senderId].signal(data.candidate);
+      }
+    });
+
+    return () => {
+      socket.off('webrtc-offer');
+      socket.off('webrtc-answer');
+      socket.off('webrtc-ice-candidate');
+    };
+  }, []);
   // --- GATEKEEPER PROTOCOL LISTENERS ---
   // --- GATEKEEPER PROTOCOL LISTENERS (FIXED) ---
   useEffect(() => {
@@ -649,109 +778,175 @@ const App = () => {
   useEffect(() => {
     if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
 
+    
+    // --- 📡 THE HEARTBEAT MONITOR & MESH SYNCHRONIZER ---
     // --- 🚀 FORCE INITIAL GPS LOCK ---
+    // Grabs your location instantly so the P2P Mesh doesn't wait for you to move
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         const smoothed = localPrecognition.current.filter(latitude, longitude);
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
-        // Immediately register our position on the server
-        socket.emit('update-location', {
-          name: user.displayName, photo: user.photoURL,
-          lat: smoothed.lat, lng: smoothed.lng,
-          speed: 0, battery: 100,
-          status: telemetryModeRef.current,
-          roomCode: squadCode,
+
+        // FIX: Immediately push to the server so peers get a users-update
+        // with your coordinates right away, not after the 5s heartbeat fires.
+        socket.emit('safety-ping', {
+          latitude: smoothed.lat,
+          longitude: smoothed.lng,
+          timestamp: new Date().toISOString(),
+          batteryLevel: 'Unknown'
         });
       },
-      (err) => console.log('[SYS] Initial GPS lock delayed...'),
+      (err) => console.log("[SYS] Initial GPS lock delayed..."),
       { enableHighAccuracy: true }
     );
 
-    // --- 📡 HEARTBEAT: keeps server state fresh every 5 seconds ---
+    
+    
+      // ... your existing heartbeat code remains below ...
     const heartbeatInterval = setInterval(async () => {
-      const currentLoc = liveLocationRef.current;
-      if (!currentLoc) return;
+      const currentLoc = liveLocationRef.current; // <-- READS FROM THE REF
+      if (!currentLoc) return; 
 
-      let currentBattery = 100;
+      let currentBattery = 100; // 🚨 FIX: Pure number
       try {
         if ('getBattery' in navigator) {
           const battery = await navigator.getBattery();
           currentBattery = Math.round(battery.level * 100);
         }
-      } catch (e) {}
-
-      // Always keep the server location cache fresh for the geofence engine
+      } catch (e) { }
+      
+      // 1. Server Sync (For Geofence Engine)
       socket.emit('safety-ping', {
-        latitude: currentLoc.lat, longitude: currentLoc.lng,
-        timestamp: new Date().toISOString(), batteryLevel: `${currentBattery}%`,
+        latitude: currentLoc.lat,
+        longitude: currentLoc.lng,
+        timestamp: new Date().toISOString(),
+        batteryLevel: `${currentBattery}%` // Server keeps the string
       });
 
-      // Only broadcast position to squad if not GHOST
-      if (telemetryModeRef.current !== 'GHOST') {
-        socket.emit('update-location', {
-          name: user.displayName, photo: user.photoURL,
-          lat: currentLoc.lat, lng: currentLoc.lng,
-          speed: 0, battery: currentBattery,
-          status: telemetryModeRef.current,
-          roomCode: squadCode,
+      // 2. 🕸️ P2P MESH SYNCHRONIZER
+      if (telemetryModeRef.current === 'ACTIVE') {
+        const syncPayload = JSON.stringify({
+          type: 'P2P_LOCATION',
+          id: socket.id,
+          name: user.displayName,
+          photo: user.photoURL,
+          lat: currentLoc.lat,
+          lng: currentLoc.lng,
+          speed: 0, 
+          battery: currentBattery, // 🚨 Send pure number to the mesh
+          status: 'ACTIVE'
+        });
+
+        Object.values(peersRef.current).forEach(peer => {
+          try { if (peer.connected) peer.send(syncPayload); } catch (err) {}
+        });
+      } else if (telemetryModeRef.current === 'GHOST') {
+        const ghostPayload = JSON.stringify({ type: 'P2P_LOCATION', id: socket.id, status: 'GHOST' });
+        Object.values(peersRef.current).forEach(peer => {
+          try { if (peer.connected) peer.send(ghostPayload); } catch (err) {}
         });
       }
     }, 5000);
 
-    // --- 🟢 LIVE GPS TRACKING ---
+    // 🟢 ACTIVE MODE: Standard live hardware tracking
     const watchId = navigator.geolocation.watchPosition(
-      async (position) => {
+      async (position) => { 
         const { latitude, longitude, speed } = position.coords;
+        
+        // 🔮 RUN PRECOGNITION PATHING ON RAW GPS
         const smoothed = localPrecognition.current.filter(latitude, longitude);
 
+        // Update BOTH the React State AND the Ref!
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
 
-        let batteryLevel = 100;
+        let batteryLevel = null;
         try {
           if ('getBattery' in navigator) {
             const battery = await navigator.getBattery();
             batteryLevel = Math.round(battery.level * 100);
           }
-        } catch (e) {}
+        } catch (e) { console.log("Battery API blocked"); }
 
-        // FROZEN: update our own marker locally but don't tell the squad
-        if (telemetryModeRef.current === 'FROZEN') return;
+        // 🛑 TELEMETRY CONTROL OVERRIDE
+        if (telemetryModeRef.current === 'FROZEN') {
+          return; // Do absolutely nothing. Marker freezes.
+        }
 
-        socket.emit('update-location', {
-          name: user.displayName, photo: user.photoURL,
-          lat: smoothed.lat, lng: smoothed.lng,
-          speed: speed ? Math.round(speed * 3.6) : 0,
-          battery: batteryLevel,
-          status: telemetryModeRef.current, // ACTIVE or GHOST
-          roomCode: squadCode,
+        let p2pPayload;
+
+        if (telemetryModeRef.current === 'GHOST') {
+          // Tell the squad to wipe your marker from their maps
+          p2pPayload = JSON.stringify({
+            type: 'P2P_LOCATION',
+            id: socket.id,
+            status: 'GHOST' 
+          });
+        } else {
+          // 🚀 ACTIVE MODE: Transmit the precognition coordinates
+          p2pPayload = JSON.stringify({
+            type: 'P2P_LOCATION',
+            id: socket.id,
+            name: user.displayName,
+            photo: user.photoURL,
+            lat: smoothed.lat,
+            lng: smoothed.lng,
+            speed: speed ? Math.round(speed * 3.6) : 0,
+            battery: batteryLevel,
+            status: 'ACTIVE'
+          });
+        }
+
+        // Fire the payload directly at the other phones!
+        Object.values(peersRef.current).forEach(peer => {
+          try {
+            if (peer.connected) peer.send(p2pPayload);
+          } catch (err) { /* ignore disconnected peers */ }
         });
-      },
-      (error) => console.error('🚨 [SYS_ERROR] Geolocation lost:', error.message),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+    },
+    (error) => console.error("🚨 [SYS_ERROR] Geolocation lost:", error.message),
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
 
-    return () => {
+    return () =>{
       clearInterval(heartbeatInterval);
       navigator.geolocation.clearWatch(watchId);
     };
+     
+  // This is at the very end of the GPS useEffect block
   }, [user, hasJoinedSquad, squadCode, accessStatus]);
-// --- ⚡ INSTANT MODE OVERRIDE ---
-  // Fires the moment a telemetry button is clicked so the server gets the new
-  // status immediately, without waiting for the next watchPosition tick.
+// --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
   useEffect(() => {
-    const currentLoc = liveLocationRef.current;
-    if (!currentLoc || !user || !hasJoinedSquad) return;
+    const currentLoc = liveLocationRef.current; 
+    
+    if (!currentLoc || !socket) return; 
 
-    socket.emit('update-location', {
-      name: user.displayName, photo: user.photoURL,
-      lat: currentLoc.lat, lng: currentLoc.lng,
-      speed: 0, battery: 100,
-      status: telemetryMode, // use state here — this effect re-runs when it changes
-      roomCode: squadCode,
+    let overridePayload;
+
+    if (telemetryMode === 'GHOST') {
+      overridePayload = JSON.stringify({ type: 'P2P_LOCATION', id: socket.id, status: 'GHOST' });
+    } else if (telemetryMode === 'ACTIVE') {
+      overridePayload = JSON.stringify({
+        type: 'P2P_LOCATION', 
+        id: socket.id, 
+        name: user.displayName,
+        photo: user.photoURL,
+        lat: currentLoc.lat, 
+        lng: currentLoc.lng,
+        speed: 0, 
+        battery: 100, // 🚨 FIX: Pure number fallback
+        status: 'ACTIVE'
+      });
+    } else {
+      return; 
+    }
+
+    Object.values(peersRef.current).forEach(peer => {
+      try { if (peer.connected) peer.send(overridePayload); } catch (e) {}
     });
+    
   }, [telemetryMode]);
   
   // --- CYBERPUNK SONAR AUDIO ENGINE ---
@@ -935,49 +1130,33 @@ const App = () => {
   const handleGeneralAiQuery = async (e) => {
     e.preventDefault();
     if (!aiQuery.trim() || aiLoading) return;
-    setAiLoading(true); setAiResponse('');
+    setAiLoading(true);
+    setAiResponse('');
     
     try {
-      // --- 🧠 SYS_ORACLE TACTICAL COMPRESSOR ---
-      
-      // 1. Squad Context: Compress active nodes and ghosts into dense strings
-      const activeNodes = users.filter(u => u.permission === 'accepted' && u.status !== 'GHOST' && !blockedUserIds.includes(u.id));
-      const ghostNodes = Object.values(offlineNodes);
+      // 1. COMPRESSED TELEMETRY: Only send Name, Distance, Speed, Battery
+      const squadSnapshot = users.filter(u => !blockedUserIds.includes(u.id)).map(u => 
+        `[${u.name}] Dist:${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Spd:${u.speed}km/h, Bat:${u.battery}%`
+      ).join(' | ');
 
-      let squadStr = activeNodes.length > 0 
-        ? activeNodes.map(u => `[NODE:${u.name}|DIST:${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}|BAT:${u.battery}%|SPD:${u.speed}kmh]`).join('')
-        : "NO_ACTIVE_NODES";
+      // 2. COMPRESSED MAP DATA: Only send Name and Coordinates (Drop the info descriptions)
+      const campusSnapshot = BUILDINGS.map(b => 
+        `[${b.name}] Lat:${b.lat.toFixed(5)}, Lng:${b.lng.toFixed(5)}`
+      ).join(' | ');
 
-      if (ghostNodes.length > 0) {
-         squadStr += ` | GHOSTS: ${ghostNodes.map(g => `[${g.name}(Lost Signal)]`).join('')}`;
-      }
+      // 3. LEAN INSTRUCTION: Force the AI to be concise to save output tokens
+      const tacticalInstruction = `You are 'SYS_ORACLE', a tactical AI on the LOCUS network at SRM KTR.
+        SQUAD DATA: ${squadSnapshot || "Empty"}
+        MAP DATA: ${campusSnapshot}
+        DIRECTIVE: Answer the user's query utilizing the data above. Keep answers under 3 sentences. Use a concise, military-comms tone.`;
 
-      // 2. Map Context: Calculate distance and ONLY send the 3 closest buildings to save tokens
-      let mapStr = "UNKNOWN";
-      if (liveLocation) {
-         const nearbyBuildings = BUILDINGS.map(b => {
-           const distStr = calculateDistance(liveLocation.lat, liveLocation.lng, b.lat, b.lng);
-           const isKM = distStr.includes('KM');
-           const num = parseFloat(distStr.replace(/[^0-9.]/g, ''));
-           return { name: b.name, distStr, val: isKM ? num * 1000 : num };
-         }).sort((a, b) => a.val - b.val).slice(0, 3); // Extract top 3
-
-         mapStr = nearbyBuildings.map(b => `[${b.name}:${b.distStr}]`).join('');
-      }
-
-      // 3. The Injection: Feed the compressed data to Gemini
-      const systemInstruction = `You are SYS_ORACLE, a tactical AI on the LOCUS network at SRM KTR. 
-MY_STATUS: ${liveLocation ? 'ONLINE' : 'OFFLINE'}
-SQUAD_TELEMETRY: ${squadStr}
-NEAREST_BUILDINGS: ${mapStr}
-DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strictly under 3 sentences. Use a concise, military-comms tone. Provide spatial awareness when asked.`;
-
-      const res = await callGemini(aiQuery, systemInstruction);
+      const res = await callGemini(aiQuery, tacticalInstruction);
       setAiResponse(res);
     } catch (err) {
       setAiResponse("[SYS_FAILURE] Neural link to Oracle severed. Retrying connection...");
     } finally {
-      setAiLoading(false); setAiQuery('');
+      setAiLoading(false);
+      setAiQuery('');
     }
   };
 
@@ -1467,92 +1646,89 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     key={user.id} 
-                    className="p-4 border border-white/20 relative"
+                    className="p-4 border border-white/20 relative group hover:border-white/40 transition-colors bg-black"
                   >
                     <div className="absolute top-0 right-0 w-2 h-2 bg-white/20" />
                     
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className={`w-10 h-10 flex items-center justify-center font-dot text-sm border overflow-hidden ${user.permission === 'accepted' ? 'border-red-500 text-red-500' : 'border-white/20 text-zinc-500'}`}>
-                        {user.photo ? <img src={user.photo} className="w-full h-full object-cover" alt="" /> : user.name.charAt(0)}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-dot text-sm uppercase tracking-widest">{user.name}</h4>
-                        <div className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest flex items-center gap-2 mt-1">
-                          <span>[{user.role}]</span>
-                          {liveLocation && (
-                            <span className="text-red-500">
-                              {calculateDistance(liveLocation.lat, liveLocation.lng, user.lat, user.lng)}
-                            </span>
+                    {/* --- ROW 1: HEADER & ICONS --- */}
+                    <div className="flex items-start justify-between mb-4">
+                       <div className="flex items-center gap-3">
+                         <div className={`w-10 h-10 flex items-center justify-center font-dot text-sm border overflow-hidden shrink-0 ${user.permission === 'accepted' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10' : 'border-white/20 text-zinc-500'}`}>
+                           {user.photo ? <img src={user.photo} className="w-full h-full object-cover" alt="" /> : user.name.charAt(0)}
+                         </div>
+                         <div className="flex flex-col">
+                           <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none mb-1">{user.name}</h4>
+                           <div className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                             <span>[{user.role}]</span>
+                             {liveLocation && (
+                               <span className="text-emerald-400">
+                                 {calculateDistance(liveLocation.lat, liveLocation.lng, user.lat, user.lng)}
+                               </span>
+                             )}
+                           </div>
+                         </div>
+                       </div>
+                       {/* QUICK ACTIONS (Top Right) */}
+                       <div className="flex gap-2 items-center">
+                          <button onClick={() => sendPing(user.id)} className="text-emerald-400 hover:text-white transition-colors p-1" title="Ping User">
+                            <Radio size={16} className="animate-pulse" />
+                          </button>
+                          {user.permission === 'accepted' ? <UserCheck size={16} className="text-zinc-500" /> : <Lock size={16} className="text-zinc-700"/>}
+                          {squadRole === 'OWNER' && (
+                            <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors p-1" title="Instant Ban">
+                              <Ban size={16} /> 
+                            </button>
                           )}
-                        </div>
-                        <div className="flex gap-4 mt-2 border-t border-white/5 pt-2">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-1.5 h-3 border border-zinc-600 rounded-[1px] relative flex items-end overflow-hidden">
-                            <div
-                              className={`w-full ${user.battery < 25 ? 'bg-red-500' : 'bg-emerald-500'} transition-all duration-500`}
-                              style={{ height: `${user.battery}%` }}
-                            />
-                          </div>
-                          <span className="text-[9px] font-dot text-zinc-500 uppercase tracking-tighter">{user.battery || 0}% BAT</span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <Activity size={10} className="text-blue-500 animate-pulse" />
-                          <span className="text-[9px] font-dot text-zinc-500 uppercase tracking-tighter">{user.speed || 0} KM/H</span>
-                        </div>
-                      
-                        <button 
-                          onClick={() => fireSOSBeacon(user.id, user.name)}
-                          className="w-full mt-3 py-2 bg-red-900/30 border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
-                        >
-                          FIRE_SOS_BEACON
-                          </button>
-                        </div>
-                      </div>
-                     <div className="flex gap-3 items-center">
-                        <button 
-                          onClick={() => sendPing(user.id)} 
-                          className="text-emerald-400 hover:text-white transition-colors"
-                          title="Ping User"
-                        >
-                            <Radio size={18} className="animate-pulse" />
-                        </button>
-
-                        {user.permission === 'accepted' ? <UserCheck size={18} className="text-white" /> : <Lock size={18} className="text-zinc-600"/>}
-
-                        {/* COMMANDER ONLY: Instant Ban */}
-                        {squadRole === 'OWNER' && (
-                          <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors" title="Instant Ban">
-                            <Ban size={18} /> 
-                          </button>
-                        )}
-
-                        {/* EVERYONE: Democratic Mutiny Vote */}
-                        {user.id !== socket.id && (
-                          <button 
-                            onClick={() => socket.emit('vote-to-kick', { targetId: user.id, roomCode: squadCode })}
-                            className="px-2 py-1 border border-zinc-600 text-[9px] font-dot uppercase tracking-widest text-zinc-500 hover:border-red-500 hover:text-red-500 transition-colors"
-                            title="Vote to Exile"
-                          >
-                            [VOTE_KICK]
-                          </button>
-                        )}
-                      </div>
+                       </div>
                     </div>
 
-                    {user.permission === 'accepted' ? (
-                      <button onClick={() => handleFocus({ lat: user.lat, lng: user.lng }, null)} className="w-full py-3 border border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors">
-                        TRACK_TARGET
-                      </button>
-                    ) : user.permission === 'requested' ? (
-                      <div className="w-full py-3 border border-white/20 text-zinc-500 font-dot text-xs uppercase tracking-widest text-center">
-                        AWAITING_AUTH...
-                      </div>
-                    ) : (
-                      <button onClick={() => requestPermission(user.id)} className="w-full py-3 bg-white text-black hover:bg-zinc-200 font-dot text-xs uppercase tracking-widest transition-colors">
-                        REQUEST_LINK
-                      </button>
-                    )}
+                    {/* --- ROW 2: TELEMETRY GRID --- */}
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                       <div className="bg-white/5 border border-white/10 p-2 flex items-center gap-2">
+                         <div className="w-1.5 h-3 border border-zinc-500 rounded-[1px] relative flex items-end overflow-hidden">
+                           <div className={`w-full ${user.battery < 25 ? 'bg-red-500' : 'bg-emerald-500'} transition-all duration-500`} style={{ height: `${user.battery}%` }} />
+                         </div>
+                         <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">{user.battery || 0}% PWR</span>
+                       </div>
+                       <div className="bg-white/5 border border-white/10 p-2 flex items-center gap-2">
+                         <Activity size={12} className="text-blue-400" />
+                         <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">{user.speed || 0} KM/H</span>
+                       </div>
+                    </div>
+
+                    {/* --- ROW 3: ACTIONS --- */}
+                    <div className="flex flex-col gap-2">
+                       <div className="flex gap-2">
+                         <button 
+                           onClick={() => fireSOSBeacon(user.id, user.name)}
+                           className="flex-1 py-2 bg-red-950/30 border border-red-900 text-red-500 font-dot text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+                         >
+                           FIRE_SOS_BEACON
+                         </button>
+                         {user.id !== socket.id && (
+                           <button 
+                             onClick={() => socket.emit('vote-to-kick', { targetId: user.id, roomCode: squadCode })}
+                             className="px-3 py-2 border border-zinc-700 text-[10px] font-dot uppercase tracking-widest text-zinc-400 hover:border-red-500 hover:text-red-500 transition-colors"
+                             title="Vote to Exile"
+                           >
+                             VOTE_KICK
+                           </button>
+                         )}
+                       </div>
+                       {user.permission === 'accepted' ? (
+                         <button onClick={() => handleFocus({ lat: user.lat, lng: user.lng }, null)} className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white">
+                           TRACK_TARGET
+                         </button>
+                       ) : user.permission === 'requested' ? (
+                         <div className="w-full py-3 border border-white/10 text-zinc-600 font-dot text-xs uppercase tracking-widest text-center bg-white/5">
+                           AWAITING_AUTH...
+                         </div>
+                       ) : (
+                         <button onClick={() => requestPermission(user.id)} className="w-full py-3 bg-white text-black hover:bg-zinc-200 font-dot text-xs uppercase tracking-widest transition-colors">
+                           REQUEST_LINK
+                         </button>
+                       )}
+                    </div>
                   </motion.div>
                 ))
              )}
@@ -2054,107 +2230,6 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         )}
       </AnimatePresence>
       
-      {/* --- COMMANDER'S TELEMETRY MATRIX MODAL --- */}
-      <AnimatePresence>
-        {showTelemetryModal && rawTelemetryData && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[4000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
-          >
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} 
-              className="bg-black w-full max-w-4xl border border-yellow-500 flex flex-col h-[80vh] relative shadow-[0_0_30px_rgba(234,179,8,0.1)]"
-            >
-              {/* Corner Accents */}
-              <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-yellow-500 -translate-x-1 -translate-y-1" />
-              <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-yellow-500 translate-x-1 translate-y-1" />
-
-              {/* Header */}
-              <div className="p-6 border-b border-yellow-500/30 flex justify-between items-center bg-black">
-                <div className="flex items-center gap-4 text-yellow-500">
-                  <Activity className="w-8 h-8 animate-pulse" />
-                  <div>
-                    <h3 className="font-dot text-2xl tracking-widest uppercase text-white">SYS_TELEMETRY // MATRIX</h3>
-                    <p className="font-dot text-[10px] tracking-widest uppercase">COMMANDER CLASSIFIED CLEARANCE</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowTelemetryModal(false)} className="p-2 border border-transparent hover:border-yellow-500 transition-colors text-zinc-500 hover:text-yellow-500">
-                  <X size={24} />
-                </button>
-              </div>
-              
-              {/* Data Table */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-black">
-                <div className="w-full border border-white/20">
-                  
-                  {/* Table Header Row (Hidden on Mobile, Visible on Desktop) */}
-                  <div className="hidden md:grid md:grid-cols-4 bg-white/5 border-b border-white/20 p-3 font-dot text-[10px] uppercase tracking-widest text-zinc-500">
-                    <div>NODE_DESIGNATION</div>
-                    <div>LAST_KNOWN_COORDS</div>
-                    <div>POWER_CORE</div>
-                    <div>SIGNAL_INTEGRITY</div>
-                  </div>
-
-                  {/* Table Body */}
-                  {users.filter(u => u.permission === 'accepted').map(userNode => {
-                    const cacheData = rawTelemetryData?.[userNode.id];
-                    const freshness = getSignalFreshness(cacheData?.timestamp);
-                    const batteryColor = cacheData && parseInt(cacheData.batteryLevel) < 20 ? 'text-red-500' : 'text-emerald-500';
-
-                    return (
-                      <div key={userNode.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-0 border-b border-white/10 p-4 font-dot text-xs tracking-widest uppercase text-white hover:bg-white/5 transition-colors items-start md:items-center">
-                        
-                        {/* 1. NODE NAME */}
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" />
-                          <span className="text-sm md:text-xs">{userNode.name}</span>
-                        </div>
-
-                        {/* 2. COORDINATES */}
-                        <div className="text-zinc-400 font-mono text-[10px] flex md:block justify-between items-center border-t border-white/5 md:border-transparent pt-2 md:pt-0 mt-2 md:mt-0">
-                          <span className="md:hidden text-zinc-600 font-dot uppercase tracking-widest">COORDS:</span>
-                          <div className="text-right md:text-left">
-                            {cacheData ? (
-                              <>
-                                LAT: {cacheData.latitude.toFixed(5)}<br/>
-                                LNG: {cacheData.longitude.toFixed(5)}
-                              </>
-                            ) : "NO_CACHE_DATA"}
-                          </div>
-                        </div>
-
-                        {/* 3. BATTERY */}
-                        <div className={`font-bold flex md:block justify-between items-center ${batteryColor}`}>
-                           <span className="md:hidden text-zinc-600 font-normal text-[10px] font-dot uppercase tracking-widest">POWER:</span>
-                           {cacheData ? cacheData.batteryLevel : "UNKNOWN"}
-                        </div>
-
-                        {/* 4. SIGNAL FRESHNESS */}
-                        <div className={`font-bold flex md:block justify-between items-center ${freshness.color}`}>
-                           <span className="md:hidden text-zinc-600 font-normal text-[10px] font-dot uppercase tracking-widest">SIGNAL:</span>
-                           {freshness.text}
-                        </div>
-
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 border-t border-yellow-500/30 flex justify-between items-center bg-black">
-                 <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">AUTO-REFRESHING EVERY 5 SECONDS</span>
-                 <button 
-                   onClick={() => socket.emit('request-telemetry', squadCode)}
-                   className="px-6 py-2 border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2"
-                 >
-                   <Activity size={14} /> FORCE_SYNC
-                 </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
