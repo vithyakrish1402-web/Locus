@@ -2054,7 +2054,36 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         )}
       </AnimatePresence>
       
-      {/* Data Table */}
+      {/* --- COMMANDER'S TELEMETRY MATRIX MODAL --- */}
+      <AnimatePresence>
+        {showTelemetryModal && rawTelemetryData && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
+            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[4000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} 
+              className="bg-black w-full max-w-4xl border border-yellow-500 flex flex-col h-[80vh] relative shadow-[0_0_30px_rgba(234,179,8,0.1)]"
+            >
+              {/* Corner Accents */}
+              <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-yellow-500 -translate-x-1 -translate-y-1" />
+              <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-yellow-500 translate-x-1 translate-y-1" />
+
+              {/* Header */}
+              <div className="p-6 border-b border-yellow-500/30 flex justify-between items-center bg-black">
+                <div className="flex items-center gap-4 text-yellow-500">
+                  <Activity className="w-8 h-8 animate-pulse" />
+                  <div>
+                    <h3 className="font-dot text-2xl tracking-widest uppercase text-white">SYS_TELEMETRY // MATRIX</h3>
+                    <p className="font-dot text-[10px] tracking-widest uppercase">COMMANDER CLASSIFIED CLEARANCE</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowTelemetryModal(false)} className="p-2 border border-transparent hover:border-yellow-500 transition-colors text-zinc-500 hover:text-yellow-500">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              {/* Data Table */}
               <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-black">
                 <div className="w-full border border-white/20">
                   
@@ -2066,17 +2095,13 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                     <div>SIGNAL_INTEGRITY</div>
                   </div>
 
-                  {/* Table Body (Cross-referencing live users with raw cache) */}
+                  {/* Table Body */}
                   {users.filter(u => u.permission === 'accepted').map(userNode => {
-                    
-                    // 🛡️ FIX 1: Added '?.' to prevent the crash during exit animations
                     const cacheData = rawTelemetryData?.[userNode.id];
-                    
                     const freshness = getSignalFreshness(cacheData?.timestamp);
                     const batteryColor = cacheData && parseInt(cacheData.batteryLevel) < 20 ? 'text-red-500' : 'text-emerald-500';
 
                     return (
-                      // 📱 FIX 2: Responsive Grid (grid-cols-1 on mobile, md:grid-cols-4 on laptop)
                       <div key={userNode.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-0 border-b border-white/10 p-4 font-dot text-xs tracking-widest uppercase text-white hover:bg-white/5 transition-colors items-start md:items-center">
                         
                         {/* 1. NODE NAME */}
@@ -2115,6 +2140,21 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                   })}
                 </div>
               </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-yellow-500/30 flex justify-between items-center bg-black">
+                 <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">AUTO-REFRESHING EVERY 5 SECONDS</span>
+                 <button 
+                   onClick={() => socket.emit('request-telemetry', squadCode)}
+                   className="px-6 py-2 border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2"
+                 >
+                   <Activity size={14} /> FORCE_SYNC
+                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
