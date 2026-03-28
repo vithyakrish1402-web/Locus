@@ -1,11 +1,10 @@
-import Peer from 'simple-peer';
 import { io } from "socket.io-client";
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
-import { 
-  MapPin, Users, Search, Settings, Navigation, ShieldCheck, 
-  Building2, Sparkles, MessageSquare, Send, Loader2, 
+import {
+  MapPin, Users, Search, Settings, Navigation, ShieldCheck,
+  Building2, Sparkles, MessageSquare, Send, Loader2,
   BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, Bluetooth, Radio, LocateFixed, OctagonAlert, Waypoints, Activity
 } from 'lucide-react';
@@ -22,7 +21,7 @@ const socket = io(BACKEND_URL, {
   reconnectionAttempts: 5
 });
 
-const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 }; 
+const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
 
 const BUILDINGS = [
   { id: 1, name: "Tech Park", category: "Academic", lat: 12.825020924230433, lng: 80.0453233376537, info: "Home to CSE & IT departments. 15 floors of innovation.", tacticalIntel: "» FACT 01: Largest academic block on campus.\n» FACT 02: Houses the primary Apple Mac Lab and supercomputing facility.\n» FACT 03: Contains 15 floors of dedicated tech infrastructure." },
@@ -39,7 +38,7 @@ const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
   // --- NEW: THE GHOST MARKER (LAST KNOWN LOCATION) ---
   if (isOffline) {
     return (
-      <div 
+      <div
         onClick={onClick}
         className="w-10 h-10 -ml-5 -mt-5 bg-zinc-900/90 backdrop-blur-md rounded-full border-2 border-zinc-600 border-dashed shadow-[0_0_15px_rgba(113,113,122,0.4)] flex items-center justify-center text-zinc-400 font-bold tracking-tighter cursor-pointer overflow-hidden relative z-[45]"
         title={`SIGNAL LOST: ${name}`}
@@ -47,7 +46,7 @@ const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
         {/* Flashing red distress indicator */}
         <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-600 rounded-full animate-ping z-50" />
         <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full z-50" />
-        
+
         {photo ? (
           <img src={photo} alt={name} className="w-full h-full object-cover opacity-40 grayscale mix-blend-luminosity" />
         ) : (
@@ -60,7 +59,7 @@ const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
   // --- EXISTING LIVE MARKERS ---
   if (isUser) {
     return (
-      <div 
+      <div
         onClick={onClick}
         className="w-10 h-10 -ml-5 -mt-5 bg-gradient-to-br from-emerald-400/80 to-teal-500/80 backdrop-blur-md rounded-full border border-emerald-200/50 shadow-[0_0_15px_rgba(52,211,153,0.6)] flex items-center justify-center text-white font-bold tracking-tighter cursor-pointer overflow-hidden relative z-50"
       >
@@ -69,19 +68,19 @@ const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
     )
   }
   return (
-    <div 
+    <div
       onClick={onClick}
       className="w-10 h-10 -ml-5 -mt-5 bg-gradient-to-br from-indigo-500/80 to-purple-600/80 backdrop-blur-md rounded-full border border-white/20 shadow-[0_0_15px_rgba(99,102,241,0.6)] flex items-center justify-center text-white cursor-pointer z-40"
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
-        <circle cx="12" cy="10" r="3"/>
+        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+        <circle cx="12" cy="10" r="3" />
       </svg>
     </div>
   )
 }
-const CinematicLanding = ({ 
-  email, setEmail, password, setPassword, showPassword, setShowPassword, handleLogin, loginMethod 
+const CinematicLanding = ({
+  email, setEmail, password, setPassword, showPassword, setShowPassword, handleLogin, loginMethod
 }) => {
   const containerRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: containerRef });
@@ -89,7 +88,7 @@ const CinematicLanding = ({
 
   const heroOpacity = useTransform(smoothProgress, [0, 0.1, 0.15], [1, 1, 0]);
   const heroScale = useTransform(smoothProgress, [0, 0.15], [1, 1.2]);
-  
+
   const btOpacity = useTransform(smoothProgress, [0.1, 0.18, 0.25, 0.3], [0, 1, 1, 0]);
   const btY = useTransform(smoothProgress, [0.1, 0.3], [100, -100]);
 
@@ -103,13 +102,13 @@ const CinematicLanding = ({
   const radarRotate = useTransform(smoothProgress, [0.55, 0.75], [0, 360]);
 
   const sosOpacity = useTransform(smoothProgress, [0.7, 0.78, 0.85, 0.9], [0, 1, 1, 0]);
-  
+
   const finalOpacity = useTransform(smoothProgress, [0.85, 0.95, 1], [0, 1, 1]);
   const finalY = useTransform(smoothProgress, [0.85, 1], [100, 0]);
 
   return (
     <div ref={containerRef} className="relative w-full h-[800vh] bg-black text-white font-inter selection:bg-red-500/30">
-      <motion.nav 
+      <motion.nav
         className="fixed top-0 left-0 w-full px-6 py-4 flex justify-between items-center z-50 bg-black/80 backdrop-blur-md border-b border-white/20"
       >
         <div className="flex items-center gap-3">
@@ -126,30 +125,30 @@ const CinematicLanding = ({
       <div className="sticky top-0 w-full h-screen overflow-hidden flex items-center justify-center perspective-[1000px] bg-dots">
         {/* --- SCENE 1: HERO & 3D CAMPUS --- */}
         <motion.div style={{ opacity: heroOpacity, scale: heroScale, y: 0 }} className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 w-full max-w-7xl mx-auto pointer-events-none">
-           <div className="inline-block border border-white/20 px-3 py-1 font-dot text-xs text-zinc-400 uppercase tracking-widest mb-12">
-             <Activity size={12} className="inline mr-2 text-red-500 animate-pulse" />
-             V 4.0 / QUANTUM POSITIONING
-           </div>
-           <h1 className="text-6xl sm:text-7xl md:text-9xl font-dot uppercase leading-[0.9] tracking-tighter mix-blend-difference z-20">
-             MAPPING <br/> THE <br/> <span className="text-red-500">VOID.</span>
-           </h1>
-           <p className="mt-8 text-lg font-inter text-zinc-400 max-w-lg border-l-2 border-red-500 pl-4 text-left z-20">
-             The hyper-accurate, decentralized locator network. See through the noise. Track your crew. 
-           </p>
+          <div className="inline-block border border-white/20 px-3 py-1 font-dot text-xs text-zinc-400 uppercase tracking-widest mb-12">
+            <Activity size={12} className="inline mr-2 text-red-500 animate-pulse" />
+            V 4.0 / QUANTUM POSITIONING
+          </div>
+          <h1 className="text-6xl sm:text-7xl md:text-9xl font-dot uppercase leading-[0.9] tracking-tighter mix-blend-difference z-20">
+            MAPPING <br /> THE <br /> <span className="text-red-500">VOID.</span>
+          </h1>
+          <p className="mt-8 text-lg font-inter text-zinc-400 max-w-lg border-l-2 border-red-500 pl-4 text-left z-20">
+            The hyper-accurate, decentralized locator network. See through the noise. Track your crew.
+          </p>
 
-           <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none opacity-40">
-              <div className="w-[80vw] h-[80vw] max-w-3xl max-h-3xl border border-white/10 rounded-full flex flex-col items-center justify-center animate-[spin_60s_linear_infinite]">
-                 <div className="absolute w-2 h-2 bg-red-500 shadow-[0_0_20px_#f00] top-1/4 left-1/4 animate-pulse" />
-                 <div className="absolute w-1 h-1 bg-white shadow-[0_0_10px_#fff] top-1/2 right-1/4 animate-ping" />
-                 <div className="absolute w-1.5 h-1.5 bg-white shadow-[0_0_10px_#fff] bottom-1/3 left-1/2 animate-pulse" />
-                 <div className="w-1/2 h-1/2 border border-white/20 rounded-full animate-[spin_30s_linear_infinite_reverse] relative">
-                    <div className="absolute w-2 h-2 bg-red-500 shadow-[0_0_20px_#f00] top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                 </div>
+          <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none opacity-40">
+            <div className="w-[80vw] h-[80vw] max-w-3xl max-h-3xl border border-white/10 rounded-full flex flex-col items-center justify-center animate-[spin_60s_linear_infinite]">
+              <div className="absolute w-2 h-2 bg-red-500 shadow-[0_0_20px_#f00] top-1/4 left-1/4 animate-pulse" />
+              <div className="absolute w-1 h-1 bg-white shadow-[0_0_10px_#fff] top-1/2 right-1/4 animate-ping" />
+              <div className="absolute w-1.5 h-1.5 bg-white shadow-[0_0_10px_#fff] bottom-1/3 left-1/2 animate-pulse" />
+              <div className="w-1/2 h-1/2 border border-white/20 rounded-full animate-[spin_30s_linear_infinite_reverse] relative">
+                <div className="absolute w-2 h-2 bg-red-500 shadow-[0_0_20px_#f00] top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
               </div>
-           </div>
-           <div className="absolute bottom-12 font-dot text-xs text-zinc-500 tracking-[0.3em] uppercase animate-pulse">
-             SCROLL_TO_INITIALIZE_SYS
-           </div>
+            </div>
+          </div>
+          <div className="absolute bottom-12 font-dot text-xs text-zinc-500 tracking-[0.3em] uppercase animate-pulse">
+            SCROLL_TO_INITIALIZE_SYS
+          </div>
         </motion.div>
 
         {/* --- SCENE 2: BLUETOOTH PROXIMITY --- */}
@@ -165,7 +164,7 @@ const CinematicLanding = ({
           </div>
           <div className="md:w-1/2 space-y-6">
             <div className="font-dot text-red-500 text-sm tracking-widest">[ 01_PROXIMITY_MESH ]</div>
-            <h2 className="text-5xl font-dot uppercase leading-none">P2P <br/> ECHO_SCAN</h2>
+            <h2 className="text-5xl font-dot uppercase leading-none">P2P <br /> ECHO_SCAN</h2>
             <p className="font-inter text-zinc-400 text-lg">
               Smart devices interlock directly. Forming an invisible, decentralised Bluetooth mesh to trace high-accuracy micro-locations indoors.
             </p>
@@ -175,15 +174,15 @@ const CinematicLanding = ({
         {/* --- SCENE 3: WIFI FINGERPRINTING --- */}
         <motion.div style={{ opacity: wifiOpacity, scale: wifiScale }} className="absolute inset-0 flex flex-col md:flex-row-reverse items-center justify-center p-6 gap-12 max-w-6xl mx-auto z-20 pointer-events-none">
           <div className="w-full md:w-1/2 aspect-[4/3] bg-black border border-white/20 p-4 relative overflow-hidden flex items-center justify-center">
-             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]" />
-             <Wifi size={64} className="text-red-500 z-10 animate-pulse" />
-             <motion.div animate={{ height: ['0%', '100%'] }} transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse" }} className="absolute left-1/4 w-[1px] bg-red-500 blur-[1px] bottom-0" />
-             <motion.div animate={{ height: ['0%', '80%'] }} transition={{ duration: 1.8, repeat: Infinity, repeatType: "reverse", delay: 0.3 }} className="absolute right-1/4 w-[1px] bg-white blur-[1px] top-0" />
-             <motion.div animate={{ width: ['0%', '100%'] }} transition={{ duration: 1.2, repeat: Infinity, repeatType: "reverse", delay: 0.6 }} className="absolute top-1/3 h-[1px] bg-red-500 blur-[1px] left-0" />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]" />
+            <Wifi size={64} className="text-red-500 z-10 animate-pulse" />
+            <motion.div animate={{ height: ['0%', '100%'] }} transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse" }} className="absolute left-1/4 w-[1px] bg-red-500 blur-[1px] bottom-0" />
+            <motion.div animate={{ height: ['0%', '80%'] }} transition={{ duration: 1.8, repeat: Infinity, repeatType: "reverse", delay: 0.3 }} className="absolute right-1/4 w-[1px] bg-white blur-[1px] top-0" />
+            <motion.div animate={{ width: ['0%', '100%'] }} transition={{ duration: 1.2, repeat: Infinity, repeatType: "reverse", delay: 0.6 }} className="absolute top-1/3 h-[1px] bg-red-500 blur-[1px] left-0" />
           </div>
           <div className="md:w-1/2 space-y-6">
             <div className="font-dot text-red-500 text-sm tracking-widest">[ 02_MAPPING_VECTORS ]</div>
-            <h2 className="text-5xl font-dot uppercase leading-none">SIGNAL <br/> FINGERPRINTS</h2>
+            <h2 className="text-5xl font-dot uppercase leading-none">SIGNAL <br /> FINGERPRINTS</h2>
             <p className="font-inter text-zinc-400 text-lg">
               Triangulating against legacy AP nodes. Advanced Neural algorithms map signal decay across building geometry to locate targets without GPS.
             </p>
@@ -192,135 +191,135 @@ const CinematicLanding = ({
 
         {/* --- SCENE 4: CROWD DENSITY HEATMAP --- */}
         <motion.div style={{ opacity: crowdOpacity, filter: crowdBlur }} className="absolute inset-0 flex flex-col items-center justify-center p-6 max-w-5xl mx-auto text-center z-20 pointer-events-none">
-           <Users size={64} className="text-white mb-8" />
-           <h2 className="text-5xl md:text-7xl font-dot uppercase mb-6">THERMAL <br/> OVERLAY</h2>
-           <p className="font-inter text-zinc-400 max-w-xl mx-auto text-lg mb-12">
-             Real-time aggregation. Heatmaps track dense congregation areas dynamically. Avoid the rush or find the action.
-           </p>
-           <div className="w-full max-w-2xl h-32 border border-white/20 bg-black relative overflow-hidden flex blur-sm">
-             <motion.div animate={{ x: ['-100%', '200%'] }} transition={{ duration: 4, ease: "linear", repeat: Infinity }} className="h-full w-48 bg-red-500/50 blur-3xl rounded-full mix-blend-screen" />
-             <motion.div animate={{ x: ['200%', '-100%'] }} transition={{ duration: 5, ease: "linear", repeat: Infinity }} className="h-full w-64 bg-white/30 blur-3xl rounded-full mix-blend-screen absolute top-4" />
-           </div>
+          <Users size={64} className="text-white mb-8" />
+          <h2 className="text-5xl md:text-7xl font-dot uppercase mb-6">THERMAL <br /> OVERLAY</h2>
+          <p className="font-inter text-zinc-400 max-w-xl mx-auto text-lg mb-12">
+            Real-time aggregation. Heatmaps track dense congregation areas dynamically. Avoid the rush or find the action.
+          </p>
+          <div className="w-full max-w-2xl h-32 border border-white/20 bg-black relative overflow-hidden flex blur-sm">
+            <motion.div animate={{ x: ['-100%', '200%'] }} transition={{ duration: 4, ease: "linear", repeat: Infinity }} className="h-full w-48 bg-red-500/50 blur-3xl rounded-full mix-blend-screen" />
+            <motion.div animate={{ x: ['200%', '-100%'] }} transition={{ duration: 5, ease: "linear", repeat: Infinity }} className="h-full w-64 bg-white/30 blur-3xl rounded-full mix-blend-screen absolute top-4" />
+          </div>
         </motion.div>
 
         {/* --- SCENE 5: FRIEND RADAR --- */}
         <motion.div style={{ opacity: radarOpacity, rotate: radarRotate }} className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 opacity-30">
-           <div className="w-[100vw] h-[100vw] sm:w-[50vw] sm:h-[50vw] border border-red-500 rounded-full relative">
-              <div className="absolute top-0 bottom-1/2 left-1/2 w-0.5 bg-gradient-to-t from-red-500 to-transparent origin-bottom animate-pulse"></div>
-              <div className="absolute w-2 h-2 bg-white top-1/4 left-1/3 shadow-[0_0_10px_#fff]" />
-              <div className="absolute w-3 h-3 border border-red-500 top-2/3 right-1/4 flex items-center justify-center"><div className="w-1 h-1 bg-red-500" /></div>
-           </div>
+          <div className="w-[100vw] h-[100vw] sm:w-[50vw] sm:h-[50vw] border border-red-500 rounded-full relative">
+            <div className="absolute top-0 bottom-1/2 left-1/2 w-0.5 bg-gradient-to-t from-red-500 to-transparent origin-bottom animate-pulse"></div>
+            <div className="absolute w-2 h-2 bg-white top-1/4 left-1/3 shadow-[0_0_10px_#fff]" />
+            <div className="absolute w-3 h-3 border border-red-500 top-2/3 right-1/4 flex items-center justify-center"><div className="w-1 h-1 bg-red-500" /></div>
+          </div>
         </motion.div>
         <motion.div style={{ opacity: radarOpacity }} className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-20 pointer-events-none">
-           <LocateFixed size={48} className="text-red-500 mb-6" />
-           <h2 className="text-5xl md:text-7xl font-dot uppercase text-white drop-shadow-[0_0_20px_rgba(0,0,0,1)]">SQUAD <br/> RADAR</h2>
+          <LocateFixed size={48} className="text-red-500 mb-6" />
+          <h2 className="text-5xl md:text-7xl font-dot uppercase text-white drop-shadow-[0_0_20px_rgba(0,0,0,1)]">SQUAD <br /> RADAR</h2>
         </motion.div>
 
         {/* --- SCENE 6: EMERGENCY SOS --- */}
         <motion.div style={{ opacity: sosOpacity }} className="absolute inset-0 bg-red-950 flex flex-col items-center justify-center p-6 z-30 transition-colors duration-500 mix-blend-difference pointer-events-none">
-           <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 0.5, repeat: Infinity }} className="p-8 border-4 border-red-500 text-red-500 bg-black rotate-45 mb-12">
-             <OctagonAlert size={64} className="-rotate-45" />
-           </motion.div>
-           <h2 className="text-6xl md:text-8xl font-dot uppercase tracking-tighter text-red-500">
-             SOS_OVERRIDE
-           </h2>
-           <p className="font-mono text-white mt-6 bg-red-500 px-4 py-1 text-sm tracking-widest uppercase">
-             CRITICAL DISTRESS SIGNAL PROTOCOL
-           </p>
+          <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 0.5, repeat: Infinity }} className="p-8 border-4 border-red-500 text-red-500 bg-black rotate-45 mb-12">
+            <OctagonAlert size={64} className="-rotate-45" />
+          </motion.div>
+          <h2 className="text-6xl md:text-8xl font-dot uppercase tracking-tighter text-red-500">
+            SOS_OVERRIDE
+          </h2>
+          <p className="font-mono text-white mt-6 bg-red-500 px-4 py-1 text-sm tracking-widest uppercase">
+            CRITICAL DISTRESS SIGNAL PROTOCOL
+          </p>
         </motion.div>
 
         {/* --- SCENE 7 & FINAL: AUTH NODE --- */}
         <motion.div style={{ opacity: finalOpacity, y: finalY }} className="absolute inset-0 flex items-center justify-center p-6 bg-black z-40">
-           <div className="w-full max-w-md p-10 border border-white/20 bg-black relative pointer-events-auto">
-             <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
-             <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
-             <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
-             <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
-             
-             <div className="mb-10 text-left border-b border-white/20 pb-6 flex items-start justify-between">
-               <div>
-                 <h2 className="text-3xl font-dot uppercase tracking-widest mb-2">Auth_Node</h2>
-                 <p className="text-red-500 font-dot text-xs">AWAITING CREDENTIALS...</p>
-               </div>
-               <Waypoints size={32} className="text-zinc-600" />
-             </div>
+          <div className="w-full max-w-md p-10 border border-white/20 bg-black relative pointer-events-auto">
+            <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
+            <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
+            <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
+            <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
 
-             <form onSubmit={(e) => { e.preventDefault(); handleLogin('email'); }} className="space-y-6 relative z-50">
-               <div className="space-y-2">
-                 <label className="text-xs font-dot text-white tracking-widest uppercase">ID // Email</label>
-                 <input 
-                   type="email" 
-                   placeholder="you@srmist.edu.in"
-                   className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
-                   value={email}
-                   onChange={(e) => setEmail(e.target.value)}
-                 />
-               </div>
+            <div className="mb-10 text-left border-b border-white/20 pb-6 flex items-start justify-between">
+              <div>
+                <h2 className="text-3xl font-dot uppercase tracking-widest mb-2">Auth_Node</h2>
+                <p className="text-red-500 font-dot text-xs">AWAITING CREDENTIALS...</p>
+              </div>
+              <Waypoints size={32} className="text-zinc-600" />
+            </div>
 
-               <div className="space-y-2">
-                 <label className="text-xs font-dot text-white tracking-widest uppercase">KEY // Passkey</label>
-                 <div className="relative">
-                   <input 
-                     type={showPassword ? "text" : "password"} 
-                     placeholder="••••••••"
-                     className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
-                     value={password}
-                     onChange={(e) => setPassword(e.target.value)}
-                   />
-                   <button 
-                     type="button"
-                     onClick={() => setShowPassword(!showPassword)}
-                     className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
-                     >
-                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                   </button>
-                 </div>
-               </div>
+            <form onSubmit={(e) => { e.preventDefault(); handleLogin('email'); }} className="space-y-6 relative z-50">
+              <div className="space-y-2">
+                <label className="text-xs font-dot text-white tracking-widest uppercase">ID // Email</label>
+                <input
+                  type="email"
+                  placeholder="you@srmist.edu.in"
+                  className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
 
-               <button 
-                 type="submit"
-                 className="w-full py-4 mt-4 bg-white text-black font-dot uppercase tracking-widest hover:bg-red-500 hover:text-white border border-white hover:border-red-500 transition-all flex justify-center items-center gap-2"
-               >
-                 INITIALIZE_LINK <ArrowRight size={16} />
-               </button>
-             </form>
+              <div className="space-y-2">
+                <label className="text-xs font-dot text-white tracking-widest uppercase">KEY // Passkey</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
 
-             <div className="flex items-center gap-4 my-8 relative z-50">
-               <div className="h-[1px] bg-white/20 flex-1"></div>
-               <span className="text-[10px] font-dot text-zinc-500 uppercase">OR EXT_AUTH</span>
-               <div className="h-[1px] bg-white/20 flex-1"></div>
-             </div>
+              <button
+                type="submit"
+                className="w-full py-4 mt-4 bg-white text-black font-dot uppercase tracking-widest hover:bg-red-500 hover:text-white border border-white hover:border-red-500 transition-all flex justify-center items-center gap-2"
+              >
+                INITIALIZE_LINK <ArrowRight size={16} />
+              </button>
+            </form>
 
-             <button 
-               onClick={() => handleLogin('google')}
-               className="w-full py-4 border border-white/30 hover:border-white transition-all font-dot uppercase text-xs flex items-center justify-center gap-3 bg-black text-white relative z-50"
-             >
-               <div className="w-4 h-4 border border-white flex items-center justify-center">
-                  <span className="text-[10px] leading-none">G</span>
-               </div> 
-               CONTINUE VIA GOOGLE
-             </button>
-           </div>
+            <div className="flex items-center gap-4 my-8 relative z-50">
+              <div className="h-[1px] bg-white/20 flex-1"></div>
+              <span className="text-[10px] font-dot text-zinc-500 uppercase">OR EXT_AUTH</span>
+              <div className="h-[1px] bg-white/20 flex-1"></div>
+            </div>
+
+            <button
+              onClick={() => handleLogin('google')}
+              className="w-full py-4 border border-white/30 hover:border-white transition-all font-dot uppercase text-xs flex items-center justify-center gap-3 bg-black text-white relative z-50"
+            >
+              <div className="w-4 h-4 border border-white flex items-center justify-center">
+                <span className="text-[10px] leading-none">G</span>
+              </div>
+              CONTINUE VIA GOOGLE
+            </button>
+          </div>
         </motion.div>
 
         {/* Auth Overlay Modal */}
         <AnimatePresence>
           {loginMethod && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 z-[100] bg-black border-[8px] border-white flex flex-col items-center justify-center p-6 pointer-events-auto"
             >
-               <motion.div 
-                 animate={{ rotate: 360 }}
-                 transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                 className="w-24 h-24 border-2 border-white/20 border-t-red-500 rounded-full mb-8 relative"
-               >
-                 <div className="absolute inset-2 border border-white/10 rounded-full" />
-               </motion.div>
-               <h2 className="text-3xl font-dot uppercase tracking-widest text-white mb-2 blink">LINKING...</h2>
-               <p className="text-red-500 font-dot text-sm uppercase">ESTABLISHING SECURE CONNECTION</p>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                className="w-24 h-24 border-2 border-white/20 border-t-red-500 rounded-full mb-8 relative"
+              >
+                <div className="absolute inset-2 border border-white/10 rounded-full" />
+              </motion.div>
+              <h2 className="text-3xl font-dot uppercase tracking-widest text-white mb-2 blink">LINKING...</h2>
+              <p className="text-red-500 font-dot text-sm uppercase">ESTABLISHING SECURE CONNECTION</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -348,15 +347,15 @@ class PrecognitionFilter {
     // 1. Predict next state
     let pLat = this.latError + this.q;
     let pLng = this.lngError + this.q;
-    
+
     // 2. Calculate Precognition Gain (How much do we trust the new GPS point?)
     let kLat = pLat / (pLat + this.r);
     let kLng = pLng / (pLng + this.r);
-    
+
     // 3. Calculate final smoothed coordinates
     this.latEstimate = this.latEstimate + kLat * (lat - this.latEstimate);
     this.lngEstimate = this.lngEstimate + kLng * (lng - this.lngEstimate);
-    
+
     // 4. Update error margin for the next calculation
     this.latError = (1 - kLat) * pLat;
     this.lngError = (1 - kLng) * pLng;
@@ -365,25 +364,35 @@ class PrecognitionFilter {
   }
 }
 const App = () => {
-  // --- 🕸️ P2P MESH VAULT ---
-  // Stores direct WebRTC connections to every squad member
-  const peersRef = useRef({});
+  // --- COMMANDER TELEMETRY STATE ---
+  const [showTelemetryModal, setShowTelemetryModal] = useState(false);
+  const [rawTelemetryData, setRawTelemetryData] = useState(null);
+
+  // Calculates exactly how stale a node's GPS signal is
+  const getSignalFreshness = (isoString) => {
+    if (!isoString) return { text: "NO_SIGNAL", color: "text-red-500" };
+    const seconds = Math.floor((new Date() - new Date(isoString)) / 1000);
+    if (seconds < 10) return { text: "OPTIMAL (< 10s)", color: "text-emerald-500" };
+    if (seconds < 60) return { text: `GOOD (${seconds}s ago)`, color: "text-blue-400" };
+    if (seconds < 300) return { text: `WARN (${Math.floor(seconds / 60)}m ago)`, color: "text-yellow-500" };
+    return { text: `STALE (> 5m)`, color: "text-red-500 animate-pulse" };
+  };
   // --- PRECOGNITION TRACKERS ---
   const localPrecognition = useRef(new PrecognitionFilter());
-  const squadPrecognition = useRef({}); // Tracks separate math for every squad member
+  const squadPrecognition = useRef({}); // Tracks separate Kalman math for every squad member
 
   const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  
+
   const [buildingIntel, setBuildingIntel] = useState('');
-  
+
   // --- ADDED: ROUTING STATE ---
   const [routeStart, setRouteStart] = useState(null);
   const [routeEnd, setRouteEnd] = useState(null);
-  const [routeData, setRouteData] = useState(null); 
+  const [routeData, setRouteData] = useState(null);
   const directionsRendererRef = useRef(null);
-  const customPolylineRef = useRef(null); 
+  const customPolylineRef = useRef(null);
 
   // --- MODIFIED: FIREBASE AUTH STATE ---
   const [user, setUser] = useState(null);
@@ -392,17 +401,17 @@ const App = () => {
   // --- ADMIN PATH RECORDER STATE ---
   const ADMIN_EMAIL = "vithyakrish1402@gmail.com"; // 🚨 REPLACE WITH YOUR EXACT GOOGLE LOGIN EMAIL
   const isAdmin = user?.email === ADMIN_EMAIL;
-  
+
   const [isRecordingPath, setIsRecordingPath] = useState(false);
   const [recordedCoords, setRecordedCoords] = useState([]);
   const [liveSecretRoutes, setLiveSecretRoutes] = useState({
     "Tech Park_Java Green": {
       distance: "450 M", eta: "4 MINS",
-      path: [ { lat: 12.825020, lng: 80.045323 }, { lat: 12.824500, lng: 80.044900 }, { lat: 12.823900, lng: 80.044600 }, { lat: 12.823348, lng: 80.044489 } ]
+      path: [{ lat: 12.825020, lng: 80.045323 }, { lat: 12.824500, lng: 80.044900 }, { lat: 12.823900, lng: 80.044600 }, { lat: 12.823348, lng: 80.044489 }]
     }
   });
-  const recordingPolylineRef = useRef(null); 
-  
+  const recordingPolylineRef = useRef(null);
+
   const [loginMethod, setLoginMethod] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
@@ -411,7 +420,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('buildings');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
-  
+
   const [isEditMode, setIsEditMode] = useState(false);
   const [editableBuildings, setEditableBuildings] = useState(BUILDINGS);
 
@@ -422,89 +431,31 @@ const App = () => {
   const [squadCode, setSquadCode] = useState('');
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
   // --- SQUAD GATEKEEPER STATES ---
-  const [accessStatus, setAccessStatus] = useState(null); 
-  const [squadRole, setSquadRole] = useState(null); 
+  const [accessStatus, setAccessStatus] = useState(null);
+  const [squadRole, setSquadRole] = useState(null);
   const [pendingRequests, setPendingRequests] = useState([]);
   const liveLocationRef = useRef(null);
-  // Tracks which peer IDs have gone GHOST via P2P. Lives in a ref so it
-  // survives the users-update server tick that rebuilds the users array.
-  const ghostStatusRef = useRef({});
   // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
   // always read the current value — they close over the ref, not the stale state.
   const telemetryModeRef = useRef('ACTIVE');
 
   const handleJoinSquad = (e) => {
     // Prevent the page from refreshing if this is inside a form
-    if (e && e.preventDefault) e.preventDefault(); 
-    
+    if (e && e.preventDefault) e.preventDefault();
+
     // Don't do anything if the input is empty
     if (!squadCode || !squadCode.trim()) return;
 
     // 1. Send the knock to the server FIRST
-    socket.emit('request-join', { 
-      roomCode: squadCode, 
-      user: { name: user.displayName, photo: user.photoURL } 
+    socket.emit('request-join', {
+      roomCode: squadCode,
+      user: { name: user.displayName, photo: user.photoURL }
     });
-    
+
     // 2. Trigger the waiting room UI
-    setHasJoinedSquad(true); 
+    setHasJoinedSquad(true);
   };
-  
-  
-  // --- 🕸️ P2P DATA DECODER ---
-  // --- 🕸️ P2P DATA DECODER ---
-  // --- 🕸️ P2P DATA DECODER ---
-  const handleP2PData = (rawPayload) => {
-    try {
-      const payloadString = typeof rawPayload === 'string' 
-        ? rawPayload 
-        : new TextDecoder().decode(rawPayload);
-        
-      const parsed = JSON.parse(payloadString);
-      
-      if (parsed.type === 'P2P_LOCATION') {
-        if (parsed.status === 'GHOST') {
-          // Hide them and mark as ghost
-          ghostStatusRef.current[parsed.id] = true;
-          setUsers(prev => prev.filter(u => u.id !== parsed.id));
-        } else {
-          // They are ACTIVE or FROZEN
-          delete ghostStatusRef.current[parsed.id];
-          
-          setUsers(prev => {
-            const existingUser = prev.find(u => u.id === parsed.id);
-            
-            if (existingUser) {
-              // UPDATE EXISTING NODE
-              return prev.map(u => u.id === parsed.id ? { 
-                  ...u, 
-                  lat: parsed.lat, 
-                  lng: parsed.lng, 
-                  speed: parsed.speed, 
-                  battery: parsed.battery, 
-                  status: parsed.status || 'ACTIVE'
-              } : u);
-            } else {
-              // RE-ADD NODE (They came back from Ghost mode)
-              return [...prev, {
-                id: parsed.id,
-                name: parsed.name || "Squad Node", // Fallback if missing
-                photo: parsed.photo,
-                lat: parsed.lat,
-                lng: parsed.lng,
-                speed: parsed.speed,
-                battery: parsed.battery,
-                status: parsed.status || 'ACTIVE',
-                permission: "accepted" 
-              }];
-            }
-          });
-        }
-      }
-    } catch (e) { 
-      console.error("[P2P] Payload decode failed:", e); 
-    }
-  };
+
 
   // --- 🌐 GEOFENCE PERIMETER LISTENER ---
   useEffect(() => {
@@ -513,12 +464,12 @@ const App = () => {
         id: Date.now(),
         ...alertData
       };
-      
+
       // Add the alert to the HUD
       setZoneAlerts(prev => [...prev, newAlert]);
 
       // Optional: Play a subtle notification sound here if you have one
-      
+
       // Auto-remove the alert from the screen after 6 seconds
       setTimeout(() => {
         setZoneAlerts(prev => prev.filter(a => a.id !== newAlert.id));
@@ -528,11 +479,11 @@ const App = () => {
     return () => socket.off('geofence-alert');
   }, []);
   // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
- useEffect(() => {
+  useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
       const { targetId, name, photo, lastKnownLocation, disconnectTime } = emergencyData;
 
-      console.log("🔥 [FRONTEND] Received Ghost Data:", emergencyData); 
+      console.log("🔥 [FRONTEND] Received Ghost Data:", emergencyData);
 
       if (typeof playSonarPing === 'function') {
         playSonarPing();
@@ -548,7 +499,7 @@ const App = () => {
           name: name,
           photo: photo,
           // Offset by roughly ~20 meters so it pops out next to the live marker
-          lat: lastKnownLocation.latitude + 0.0002, 
+          lat: lastKnownLocation.latitude + 0.0002,
           lng: lastKnownLocation.longitude + 0.0002,
           battery: lastKnownLocation.batteryLevel,
           time: Date.now()
@@ -563,16 +514,13 @@ const App = () => {
     };
   }, []);
   // --- 📊 ADDITION 3: TELEMETRY DATA RECEIVER ---
+  // --- TACTICAL TELEMETRY DATA RECEIVER ---
   useEffect(() => {
     socket.on('telemetry-sync-complete', (data) => {
-      console.log("📊 [TACTICAL TELEMETRY DUMP]:", data);
-      
-      // For now, we are just alerting it so you can confirm it works.
-      // Next, we will map this data directly into your UI.
-      const nodeCount = Object.keys(data).length;
-      alert(`[SYS_SYNC] Telemetry data acquired for ${nodeCount} active nodes. Check browser console for raw data.`);
+      console.log("📊 [SYS_SYNC] Raw Telemetry Matrix Acquired:", data);
+      setRawTelemetryData(data);
+      setShowTelemetryModal(true); // Pop the Commander's Dashboard
     });
-
     return () => socket.off('telemetry-sync-complete');
   }, []);
   // --- 💀 ADDITION: MUTINY LISTENER ---
@@ -580,14 +528,14 @@ const App = () => {
     socket.on('exiled', () => {
       // 1. Sound the alarm
       alert("💀 [SYS_MUTINY] You have been democratically exiled from the squad by majority vote.");
-      
+
       // 2. Trigger your existing leave function to wipe local state and return to the join screen
       handleLeaveSquad();
     });
 
     // Optional: Listen for active mutiny votes against people to show a warning
     socket.on('mutiny-status', ({ targetId, votes, required }) => {
-       console.log(`[MUTINY DETECTED] Node ${targetId} has ${votes}/${required} votes for exile.`);
+      console.log(`[MUTINY DETECTED] Node ${targetId} has ${votes}/${required} votes for exile.`);
     });
 
     return () => {
@@ -601,144 +549,67 @@ const App = () => {
       setUser(currentUser);
       setAuthLoading(false);
       if (currentUser) {
-         setLoginMethod(null); 
+        setLoginMethod(null);
       }
     });
     return () => unsubscribe();
   }, []);
 
-  
- // 1. Listen for real-time network updates from the server
+
   // 1. Listen for real-time network updates from the server
   useEffect(() => {
     if (!hasJoinedSquad) return;
 
-   socket.on('users-update', (activeUsers) => {
-      // Initiate WebRTC connections OUTSIDE the state updater to avoid React StrictMode double-invoke bugs
-      Object.entries(activeUsers).forEach(([id, data]) => {
-        if (id !== socket.id && data.roomCode === squadCode && !ghostStatusRef.current[id]) {
-          if (!peersRef.current[id]) {
-            // Use localeCompare as a deterministic tiebreaker.
-            // One side gets +1 (initiates), the other gets -1 (waits for offer).
-            // This guarantees exactly ONE peer initiates — never both, never neither.
-            const iInitiate = socket.id.localeCompare(id) > 0;
-            if (iInitiate) {
-              console.log(`[P2P] Initiating secure laser-link to Node ${data.name}...`);
-              const peer = new Peer({ initiator: true, trickle: true });
-              peer.on('signal', (offer) => socket.emit('webrtc-offer', { targetId: id, offer: offer }));
-              peer.on('data', handleP2PData);
-              peersRef.current[id] = peer;
-            }
-            // The other side will create its peer when it receives 'webrtc-offer'
-          }
-        }
-      });
-
-      // 🛑 UPGRADE: Use React state updater to preserve our P2P Mesh coordinates
-      setUsers(prevUsers => {
+    socket.on('users-update', (activeUsers) => {
+      setUsers(() => {
         const formattedUsers = [];
-        
         Object.entries(activeUsers).forEach(([id, data]) => {
-          // Skip self, wrong room, and any peer that sent us a GHOST payload via P2P
-          if (id !== socket.id && data.roomCode === squadCode && !ghostStatusRef.current[id]) { 
-            
-            // --- 🛡️ THE P2P PRESERVATION LAYER ---
-            // Find if we already have live data for this user from the WebRTC Mesh
-            const existingUser = prevUsers.find(u => u.id === id);
+          // Skip self, wrong room, and GHOST nodes (server still sends them so others
+          // can see their last position, but we hide them from our own map/list)
+          if (id === socket.id) return;
+          if (data.roomCode !== squadCode) return;
+          if (data.status === 'GHOST') return;
+          if (!data.lat || !data.lng) return;
 
-            // If we have P2P data, KEEP IT. Never let the server overwrite it.
-            let finalLat = existingUser ? existingUser.lat : data.lat;
-            let finalLng = existingUser ? existingUser.lng : data.lng;
-
-            // Only run precognition if this is their very first coordinate
-            if (!existingUser && data.lat && data.lng) {
-               if (!squadPrecognition.current[id]) squadPrecognition.current[id] = new PrecognitionFilter();
-               const smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
-               finalLat = smoothed.lat;
-               finalLng = smoothed.lng;
-            }
-
-            formattedUsers.push({
-              id: id,
-              name: data.name || "Live User",
-              photo: data.photo,
-              role: data.role || existingUser?.role || "Campus Node",
-              lat: finalLat,
-              lng: finalLng,
-              speed: existingUser ? existingUser.speed : (data.speed || 0),
-              battery: existingUser ? existingUser.battery : (data.battery || 0),
-              status: existingUser ? existingUser.status : (data.status || "ACTIVE"),
-              permission: "accepted" 
-            });
+          // Run Kalman smoothing on every incoming coordinate
+          if (!squadPrecognition.current[id]) {
+            squadPrecognition.current[id] = new PrecognitionFilter();
           }
+          const smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
+
+          formattedUsers.push({
+            id,
+            name: data.name || 'Squad Node',
+            photo: data.photo,
+            role: data.role || 'Campus Node',
+            lat: smoothed.lat,
+            lng: smoothed.lng,
+            speed: data.speed || 0,
+            battery: data.battery || 0,
+            status: data.status || 'ACTIVE',
+            permission: 'accepted',
+          });
         });
-        return formattedUsers; // Returns the protected array to the React UI
+        return formattedUsers;
       });
     });
-
-    // ... rest of the socket.on listeners remain the same ...
 
     socket.on('receive-ping', ({ senderName }) => {
       alert(`🚨 SOS BEACON DETECTED 🚨\n\n${senderName.toUpperCase()} requires immediate assistance at their coordinates!`);
     });
 
-    // Listen for newly published admin routes
     socket.on('new-custom-route', ({ key, data }) => {
-       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
+      setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
     });
 
     return () => {
       socket.off('users-update');
+      socket.off('receive-ping');
       socket.off('new-custom-route');
-      setUsers([]); 
+      setUsers([]);
     };
-  }, [hasJoinedSquad, squadCode]); 
+  }, [hasJoinedSquad, squadCode]);
 
-  // --- 🕸️ THE WEBRTC P2P HANDSHAKE ENGINE ---
-  useEffect(() => {
-    // 1. Someone wants to connect to us (Incoming Offer)
-    socket.on('webrtc-offer', (data) => {
-      console.log(`[P2P] Incoming connection request from ${data.senderId}`);
-      
-      const peer = new Peer({
-        initiator: false, // We are answering, not initiating
-        trickle: true,
-      });
-
-      // Handle connection establishment
-      peer.on('signal', (answer) => {
-        socket.emit('webrtc-answer', { targetId: data.senderId, answer: answer });
-      });
-
-      // Handle incoming P2P data (This is where the GPS will flow!)
-      peer.on('data', handleP2PData);
-
-      // Accept their security key
-      peer.signal(data.offer);
-      peersRef.current[data.senderId] = peer;
-    });
-
-    // 2. Someone accepted our connection (Incoming Answer)
-    socket.on('webrtc-answer', (data) => {
-      console.log(`[P2P] Connection accepted by ${data.senderId}`);
-      if (peersRef.current[data.senderId]) {
-        peersRef.current[data.senderId].signal(data.answer);
-      }
-    });
-
-    // 3. Bypassing Firewalls (ICE Candidates)
-    socket.on('webrtc-ice-candidate', (data) => {
-      if (peersRef.current[data.senderId]) {
-        peersRef.current[data.senderId].signal(data.candidate);
-      }
-    });
-
-    return () => {
-      socket.off('webrtc-offer');
-      socket.off('webrtc-answer');
-      socket.off('webrtc-ice-candidate');
-    };
-  }, []);
   // --- GATEKEEPER PROTOCOL LISTENERS ---
   // --- GATEKEEPER PROTOCOL LISTENERS (FIXED) ---
   useEffect(() => {
@@ -746,19 +617,19 @@ const App = () => {
       setAccessStatus('granted'); // Correct: Use the set function
       setSquadRole(role);
     });
-    
+
     socket.on('access-pending', () => setAccessStatus('pending'));
-    
+
     socket.on('access-denied', () => {
       setAccessStatus('denied');
       setHasJoinedSquad(false);
       alert("[SYS_REJECTED] The Squad Commander denied your entry.");
     });
-    
+
     socket.on('access-request', (requestData) => {
       setPendingRequests(prev => [...prev, requestData]);
     });
-    
+
     socket.on('promoted-to-owner', () => setSquadRole('OWNER'));
 
     return () => {
@@ -774,201 +645,135 @@ const App = () => {
   // We calculate this derived data inside the component body, but we DON'T use '=' on the state itself.
   const activePendingRequests = pendingRequests;
   /// 2. Broadcast your live GPS data to the network
- /// 2. Broadcast your live GPS data to the network
+  /// 2. Broadcast your live GPS data to the network
   useEffect(() => {
     if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
 
-    
-    // --- 📡 THE HEARTBEAT MONITOR & MESH SYNCHRONIZER ---
     // --- 🚀 FORCE INITIAL GPS LOCK ---
-    // Grabs your location instantly so the P2P Mesh doesn't wait for you to move
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         const smoothed = localPrecognition.current.filter(latitude, longitude);
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
-
-        // FIX: Immediately push to the server so peers get a users-update
-        // with your coordinates right away, not after the 5s heartbeat fires.
-        socket.emit('safety-ping', {
-          latitude: smoothed.lat,
-          longitude: smoothed.lng,
-          timestamp: new Date().toISOString(),
-          batteryLevel: 'Unknown'
+        // Immediately register our position on the server
+        socket.emit('update-location', {
+          name: user.displayName, photo: user.photoURL,
+          lat: smoothed.lat, lng: smoothed.lng,
+          speed: 0, battery: 100,
+          status: telemetryModeRef.current,
+          roomCode: squadCode,
         });
       },
-      (err) => console.log("[SYS] Initial GPS lock delayed..."),
+      (err) => console.log('[SYS] Initial GPS lock delayed...'),
       { enableHighAccuracy: true }
     );
 
-    
-    
-      // ... your existing heartbeat code remains below ...
+    // --- 📡 HEARTBEAT: keeps server state fresh every 5 seconds ---
     const heartbeatInterval = setInterval(async () => {
-      const currentLoc = liveLocationRef.current; // <-- READS FROM THE REF
-      if (!currentLoc) return; 
+      const currentLoc = liveLocationRef.current;
+      if (!currentLoc) return;
 
-      let currentBattery = 100; // 🚨 FIX: Pure number
+      let currentBattery = 100;
       try {
         if ('getBattery' in navigator) {
           const battery = await navigator.getBattery();
           currentBattery = Math.round(battery.level * 100);
         }
       } catch (e) { }
-      
-      // 1. Server Sync (For Geofence Engine)
+
+      // Always keep the server location cache fresh for the geofence engine
       socket.emit('safety-ping', {
-        latitude: currentLoc.lat,
-        longitude: currentLoc.lng,
-        timestamp: new Date().toISOString(),
-        batteryLevel: `${currentBattery}%` // Server keeps the string
+        latitude: currentLoc.lat, longitude: currentLoc.lng,
+        timestamp: new Date().toISOString(), batteryLevel: `${currentBattery}%`,
       });
 
-      // 2. 🕸️ P2P MESH SYNCHRONIZER
-      if (telemetryModeRef.current === 'ACTIVE') {
-        const syncPayload = JSON.stringify({
-          type: 'P2P_LOCATION',
-          id: socket.id,
-          name: user.displayName,
-          photo: user.photoURL,
-          lat: currentLoc.lat,
-          lng: currentLoc.lng,
-          speed: 0, 
-          battery: currentBattery, // 🚨 Send pure number to the mesh
-          status: 'ACTIVE'
-        });
-
-        Object.values(peersRef.current).forEach(peer => {
-          try { if (peer.connected) peer.send(syncPayload); } catch (err) {}
-        });
-      } else if (telemetryModeRef.current === 'GHOST') {
-        const ghostPayload = JSON.stringify({ type: 'P2P_LOCATION', id: socket.id, status: 'GHOST' });
-        Object.values(peersRef.current).forEach(peer => {
-          try { if (peer.connected) peer.send(ghostPayload); } catch (err) {}
+      // Only broadcast position to squad if not GHOST
+      if (telemetryModeRef.current !== 'GHOST') {
+        socket.emit('update-location', {
+          name: user.displayName, photo: user.photoURL,
+          lat: currentLoc.lat, lng: currentLoc.lng,
+          speed: 0, battery: currentBattery,
+          status: telemetryModeRef.current,
+          roomCode: squadCode,
         });
       }
     }, 5000);
 
-    // 🟢 ACTIVE MODE: Standard live hardware tracking
+    // --- 🟢 LIVE GPS TRACKING ---
     const watchId = navigator.geolocation.watchPosition(
-      async (position) => { 
+      async (position) => {
         const { latitude, longitude, speed } = position.coords;
-        
-        // 🔮 RUN PRECOGNITION PATHING ON RAW GPS
         const smoothed = localPrecognition.current.filter(latitude, longitude);
 
-        // Update BOTH the React State AND the Ref!
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
 
-        let batteryLevel = null;
+        let batteryLevel = 100;
         try {
           if ('getBattery' in navigator) {
             const battery = await navigator.getBattery();
             batteryLevel = Math.round(battery.level * 100);
           }
-        } catch (e) { console.log("Battery API blocked"); }
+        } catch (e) { }
 
-        // 🛑 TELEMETRY CONTROL OVERRIDE
-        if (telemetryModeRef.current === 'FROZEN') {
-          return; // Do absolutely nothing. Marker freezes.
-        }
+        // FROZEN: update our own marker locally but don't tell the squad
+        if (telemetryModeRef.current === 'FROZEN') return;
 
-        let p2pPayload;
-
-        if (telemetryModeRef.current === 'GHOST') {
-          // Tell the squad to wipe your marker from their maps
-          p2pPayload = JSON.stringify({
-            type: 'P2P_LOCATION',
-            id: socket.id,
-            status: 'GHOST' 
-          });
-        } else {
-          // 🚀 ACTIVE MODE: Transmit the precognition coordinates
-          p2pPayload = JSON.stringify({
-            type: 'P2P_LOCATION',
-            id: socket.id,
-            name: user.displayName,
-            photo: user.photoURL,
-            lat: smoothed.lat,
-            lng: smoothed.lng,
-            speed: speed ? Math.round(speed * 3.6) : 0,
-            battery: batteryLevel,
-            status: 'ACTIVE'
-          });
-        }
-
-        // Fire the payload directly at the other phones!
-        Object.values(peersRef.current).forEach(peer => {
-          try {
-            if (peer.connected) peer.send(p2pPayload);
-          } catch (err) { /* ignore disconnected peers */ }
+        socket.emit('update-location', {
+          name: user.displayName, photo: user.photoURL,
+          lat: smoothed.lat, lng: smoothed.lng,
+          speed: speed ? Math.round(speed * 3.6) : 0,
+          battery: batteryLevel,
+          status: telemetryModeRef.current, // ACTIVE or GHOST
+          roomCode: squadCode,
         });
-    },
-    (error) => console.error("🚨 [SYS_ERROR] Geolocation lost:", error.message),
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-  );
+      },
+      (error) => console.error('🚨 [SYS_ERROR] Geolocation lost:', error.message),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
 
-    return () =>{
+    return () => {
       clearInterval(heartbeatInterval);
       navigator.geolocation.clearWatch(watchId);
     };
-     
-  // This is at the very end of the GPS useEffect block
   }, [user, hasJoinedSquad, squadCode, accessStatus]);
-// --- ⚡ INSTANT MODE OVERRIDE (Fixes the Control Panel Lag) ---
+  // --- ⚡ INSTANT MODE OVERRIDE ---
+  // Fires the moment a telemetry button is clicked so the server gets the new
+  // status immediately, without waiting for the next watchPosition tick.
   useEffect(() => {
-    const currentLoc = liveLocationRef.current; 
-    
-    if (!currentLoc || !socket) return; 
+    const currentLoc = liveLocationRef.current;
+    if (!currentLoc || !user || !hasJoinedSquad) return;
 
-    let overridePayload;
-
-    if (telemetryMode === 'GHOST') {
-      overridePayload = JSON.stringify({ type: 'P2P_LOCATION', id: socket.id, status: 'GHOST' });
-    } else if (telemetryMode === 'ACTIVE') {
-      overridePayload = JSON.stringify({
-        type: 'P2P_LOCATION', 
-        id: socket.id, 
-        name: user.displayName,
-        photo: user.photoURL,
-        lat: currentLoc.lat, 
-        lng: currentLoc.lng,
-        speed: 0, 
-        battery: 100, // 🚨 FIX: Pure number fallback
-        status: 'ACTIVE'
-      });
-    } else {
-      return; 
-    }
-
-    Object.values(peersRef.current).forEach(peer => {
-      try { if (peer.connected) peer.send(overridePayload); } catch (e) {}
+    socket.emit('update-location', {
+      name: user.displayName, photo: user.photoURL,
+      lat: currentLoc.lat, lng: currentLoc.lng,
+      speed: 0, battery: 100,
+      status: telemetryMode, // use state here — this effect re-runs when it changes
+      roomCode: squadCode,
     });
-    
   }, [telemetryMode]);
-  
+
   // --- CYBERPUNK SONAR AUDIO ENGINE ---
   const playSonarPing = () => {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
       const ctx = new AudioContext();
-      
+
       const osc = ctx.createOscillator();
       const gainNode = ctx.createGain();
-      
-      osc.type = 'sine'; 
-      osc.frequency.setValueAtTime(880, ctx.currentTime); 
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); 
-      
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+
       gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); 
-      
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+
       osc.connect(gainNode);
       gainNode.connect(ctx.destination);
-      
+
       osc.start();
       osc.stop(ctx.currentTime + 0.5);
     } catch (e) {
@@ -979,7 +784,7 @@ const App = () => {
   // 3. Listen for incoming P2P Pings
   useEffect(() => {
     socket.on('receive-ping', ({ senderName }) => {
-      playSonarPing(); 
+      playSonarPing();
       alert(`🚨 [INCOMING_SIGNAL] \n\nNode '${senderName}' is pinging your location!`);
     });
 
@@ -992,11 +797,11 @@ const App = () => {
 
   const [blockedUserIds, setBlockedUserIds] = useState([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
-  const [modalTab, setModalTab] = useState('requests'); 
-  
+  const [modalTab, setModalTab] = useState('requests');
+
   const [mapProps, setMapProps] = useState({ center: SRM_KTR_COORDS, zoom: 17 });
   const mapRef = useRef(null);
-  
+
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState('');
   const [showAiModal, setShowAiModal] = useState(false);
@@ -1006,7 +811,7 @@ const App = () => {
   const callGemini = async (prompt, systemInstruction = "You are a helpful campus assistant for SRM KTR.") => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
-    
+
     const combinedPrompt = `${systemInstruction}\n\nUSER_QUERY: ${prompt}`;
 
     const payload = {
@@ -1015,43 +820,43 @@ const App = () => {
 
     let delay = 1000;
     for (let i = 0; i < 5; i++) {
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error("🚨 [GEMINI ERROR]:", errorData);
-                throw new Error('API Error');
-            }
-            
-            const data = await response.json();
-            return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response found.";
-        } catch (err) {
-            if (i === 4) throw err;
-            await new Promise(resolve => setTimeout(resolve, delay));
-            delay *= 2;
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("🚨 [GEMINI ERROR]:", errorData);
+          throw new Error('API Error');
         }
+
+        const data = await response.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response found.";
+      } catch (err) {
+        if (i === 4) throw err;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2;
+      }
     }
   };
 
   const handleLogin = async (method) => {
     setLoginMethod(method);
     if (method === 'google') {
-       try {
-         await signInWithPopup(auth, googleProvider);
-       } catch (error) {
-         console.error("Google Auth Failed:", error);
-         setLoginMethod(null);
-       }
+      try {
+        await signInWithPopup(auth, googleProvider);
+      } catch (error) {
+        console.error("Google Auth Failed:", error);
+        setLoginMethod(null);
+      }
     } else {
-       setTimeout(() => {
-         setLoginMethod(null);
-         alert("Email auth requires backend. Please click CONTINUE VIA GOOGLE");
-       }, 1800);
+      setTimeout(() => {
+        setLoginMethod(null);
+        alert("Email auth requires backend. Please click CONTINUE VIA GOOGLE");
+      }, 1800);
     }
   };
 
@@ -1075,8 +880,8 @@ const App = () => {
   // --- TACTICAL DISTANCE ENGINE (HAVERSINE FORMULA) ---
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     if (!lat1 || !lon1 || !lat2 || !lon2) return '[ SIGNAL_LOST ]';
-    
-    const R = 6371e3; 
+
+    const R = 6371e3;
     const rad = Math.PI / 180;
     const phi1 = lat1 * rad;
     const phi2 = lat2 * rad;
@@ -1084,10 +889,10 @@ const App = () => {
     const deltaLambda = (lon2 - lon1) * rad;
 
     const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-              Math.cos(phi1) * Math.cos(phi2) *
-              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+      Math.cos(phi1) * Math.cos(phi2) *
+      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c; 
+    const distance = R * c;
 
     if (distance > 1000) {
       return `[ ${(distance / 1000).toFixed(2)} KM ]`;
@@ -1100,63 +905,79 @@ const App = () => {
       targetId: targetId,
       senderName: user ? user.displayName : "Ghost_Node"
     });
-    
-    playSonarPing(); 
+
+    playSonarPing();
     console.log(`>> Signal transmitted to Node: ${targetId}`);
   };
 
   const generateBuildingInsights = async (building) => {
     setAiLoading(true);
     setBuildingIntel(''); // Clear previous building info only
-    
+
     setTimeout(() => {
       setBuildingIntel(building.tacticalIntel || "[SYS_WARN] No tactical intel available.");
       setAiLoading(false);
-    }, 600); 
+    }, 600);
   };
 
   // --- SOS TRANSMITTER ---
   const fireSOSBeacon = (targetNodeId, targetNodeName) => {
     const myName = auth.currentUser?.displayName || "A Squad Member";
-    
-    socket.emit('ping-user', { 
-      targetId: targetNodeId, 
-      senderName: myName 
+
+    socket.emit('ping-user', {
+      targetId: targetNodeId,
+      senderName: myName
     });
-    
+
     alert(`[SYSTEM] SOS Signal transmitted directly to node: ${targetNodeName}.`);
   };
 
   const handleGeneralAiQuery = async (e) => {
     e.preventDefault();
     if (!aiQuery.trim() || aiLoading) return;
-    setAiLoading(true);
-    setAiResponse('');
-    
+    setAiLoading(true); setAiResponse('');
+
     try {
-      // 1. COMPRESSED TELEMETRY: Only send Name, Distance, Speed, Battery
-      const squadSnapshot = users.filter(u => !blockedUserIds.includes(u.id)).map(u => 
-        `[${u.name}] Dist:${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}, Spd:${u.speed}km/h, Bat:${u.battery}%`
-      ).join(' | ');
+      // --- 🧠 SYS_ORACLE TACTICAL COMPRESSOR ---
 
-      // 2. COMPRESSED MAP DATA: Only send Name and Coordinates (Drop the info descriptions)
-      const campusSnapshot = BUILDINGS.map(b => 
-        `[${b.name}] Lat:${b.lat.toFixed(5)}, Lng:${b.lng.toFixed(5)}`
-      ).join(' | ');
+      // 1. Squad Context: Compress active nodes and ghosts into dense strings
+      const activeNodes = users.filter(u => u.permission === 'accepted' && u.status !== 'GHOST' && !blockedUserIds.includes(u.id));
+      const ghostNodes = Object.values(offlineNodes);
 
-      // 3. LEAN INSTRUCTION: Force the AI to be concise to save output tokens
-      const tacticalInstruction = `You are 'SYS_ORACLE', a tactical AI on the LOCUS network at SRM KTR.
-        SQUAD DATA: ${squadSnapshot || "Empty"}
-        MAP DATA: ${campusSnapshot}
-        DIRECTIVE: Answer the user's query utilizing the data above. Keep answers under 3 sentences. Use a concise, military-comms tone.`;
+      let squadStr = activeNodes.length > 0
+        ? activeNodes.map(u => `[NODE:${u.name}|DIST:${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}|BAT:${u.battery}%|SPD:${u.speed}kmh]`).join('')
+        : "NO_ACTIVE_NODES";
 
-      const res = await callGemini(aiQuery, tacticalInstruction);
+      if (ghostNodes.length > 0) {
+        squadStr += ` | GHOSTS: ${ghostNodes.map(g => `[${g.name}(Lost Signal)]`).join('')}`;
+      }
+
+      // 2. Map Context: Calculate distance and ONLY send the 3 closest buildings to save tokens
+      let mapStr = "UNKNOWN";
+      if (liveLocation) {
+        const nearbyBuildings = BUILDINGS.map(b => {
+          const distStr = calculateDistance(liveLocation.lat, liveLocation.lng, b.lat, b.lng);
+          const isKM = distStr.includes('KM');
+          const num = parseFloat(distStr.replace(/[^0-9.]/g, ''));
+          return { name: b.name, distStr, val: isKM ? num * 1000 : num };
+        }).sort((a, b) => a.val - b.val).slice(0, 3); // Extract top 3
+
+        mapStr = nearbyBuildings.map(b => `[${b.name}:${b.distStr}]`).join('');
+      }
+
+      // 3. The Injection: Feed the compressed data to Gemini
+      const systemInstruction = `You are SYS_ORACLE, a tactical AI on the LOCUS network at SRM KTR. 
+MY_STATUS: ${liveLocation ? 'ONLINE' : 'OFFLINE'}
+SQUAD_TELEMETRY: ${squadStr}
+NEAREST_BUILDINGS: ${mapStr}
+DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strictly under 3 sentences. Use a concise, military-comms tone. Provide spatial awareness when asked.`;
+
+      const res = await callGemini(aiQuery, systemInstruction);
       setAiResponse(res);
     } catch (err) {
       setAiResponse("[SYS_FAILURE] Neural link to Oracle severed. Retrying connection...");
     } finally {
-      setAiLoading(false);
-      setAiQuery('');
+      setAiLoading(false); setAiQuery('');
     }
   };
 
@@ -1178,9 +999,9 @@ const App = () => {
   };
 
   const handleFocus = (coords, item) => {
-      setMapProps({ center: coords, zoom: 19 });
-      setBuildingIntel(''); // <--- THIS ENSURES OLD DATA VANISHES WHEN YOU CLICK A NEW PIN
-      if (item) setSelectedItem(item);
+    setMapProps({ center: coords, zoom: 19 });
+    setBuildingIntel(''); // <--- THIS ENSURES OLD DATA VANISHES WHEN YOU CLICK A NEW PIN
+    if (item) setSelectedItem(item);
   };
 
   // --- 🚨 MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
@@ -1189,7 +1010,7 @@ const App = () => {
     if (isAdmin && isRecordingPath) {
       const newCoords = [...recordedCoords, { lat, lng }];
       setRecordedCoords(newCoords);
-      
+
       if (!recordingPolylineRef.current) {
         recordingPolylineRef.current = new window.google.maps.Polyline({
           path: newCoords, strokeColor: '#eab308', // Yellow for recording
@@ -1203,7 +1024,7 @@ const App = () => {
 
     // 2. Standard Edit Mode Logic
     if (isEditMode && selectedItem && activeTab === 'buildings') {
-      setEditableBuildings(prev => prev.map(b => 
+      setEditableBuildings(prev => prev.map(b =>
         b.id === selectedItem.id ? { ...b, lat, lng } : b
       ));
       setSelectedItem(prev => ({ ...prev, lat, lng }));
@@ -1220,7 +1041,7 @@ const App = () => {
       } else {
         setRouteStart(targetCoords);
       }
-      setSelectedItem(null); 
+      setSelectedItem(null);
     } else if (!routeEnd && targetCoords.id !== routeStart.id) {
       setRouteEnd(targetCoords);
       setSelectedItem(null);
@@ -1245,7 +1066,7 @@ const App = () => {
     // Only trigger secret route if going Building-to-Building (not from live GPS)
     if (secretData && start.name !== "MY_LOCATION") {
       console.log("🕵️‍♂️ [OVERRIDE] Secret route detected. Bypassing Google.");
-      
+
       // Clear standard red line if it exists
       if (directionsRendererRef.current) directionsRendererRef.current.setDirections({ routes: [] });
       if (customPolylineRef.current) customPolylineRef.current.setMap(null);
@@ -1273,12 +1094,12 @@ const App = () => {
     directionsService.route({
       origin: { lat: start.lat, lng: start.lng },
       destination: { lat: end.lat, lng: end.lng },
-      travelMode: window.google.maps.TravelMode.WALKING 
+      travelMode: window.google.maps.TravelMode.WALKING
     }, (result, status) => {
       if (status === 'OK') {
         if (customPolylineRef.current) customPolylineRef.current.setMap(null); // Clear green line
         directionsRendererRef.current.setDirections(result);
-        setRouteData(result.routes[0].legs[0]); 
+        setRouteData(result.routes[0].legs[0]);
       } else {
         alert("[SYS_ERROR] UNAVAILABLE WALKING PATH.");
       }
@@ -1290,7 +1111,7 @@ const App = () => {
     setRouteEnd(null);
     setRouteData(null);
     if (directionsRendererRef.current) {
-      directionsRendererRef.current.setDirections({ routes: [] }); 
+      directionsRendererRef.current.setDirections({ routes: [] });
     }
     if (customPolylineRef.current) {
       customPolylineRef.current.setMap(null);
@@ -1298,7 +1119,7 @@ const App = () => {
     }
   };
 
- 
+
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
   const createMapOptions = (maps) => {
@@ -1369,7 +1190,7 @@ const App = () => {
 
   if (!user) {
     return (
-      <CinematicLanding 
+      <CinematicLanding
         email={email}
         setEmail={setEmail}
         password={password}
@@ -1389,20 +1210,20 @@ const App = () => {
           <ShieldCheck size={48} className="text-red-500 mx-auto mb-6" />
           <h2 className="text-3xl font-dot uppercase tracking-widest mb-2">SECURE_CHANNEL</h2>
           <p className="text-zinc-500 font-dot text-[10px] uppercase mb-10 tracking-widest">Enter Squad Designation</p>
-          
-          <input 
-            type="text" 
+
+          <input
+            type="text"
             placeholder="E.G. ALPHA_TEAM"
             className="w-full bg-black border border-white/30 py-4 text-center font-dot text-lg uppercase tracking-widest focus:outline-none focus:border-red-500 mb-8 text-white transition-colors"
             value={squadCode}
             onChange={(e) => setSquadCode(e.target.value.toUpperCase())}
             maxLength={12}
           />
-          <button 
-            onClick={handleJoinSquad} 
+          <button
+            onClick={handleJoinSquad}
             className="w-full py-5 bg-white text-black font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-500 hover:text-white transition-all"
-          > 
-            JOIN SQUAD 
+          >
+            JOIN SQUAD
           </button>
         </div>
       </div>
@@ -1411,9 +1232,9 @@ const App = () => {
 
   return (
     <div className="h-screen w-full bg-black flex overflow-hidden text-white font-inter selection:bg-red-500/30 bg-dots">
-      
+
       {/* Blocky Header Panel */}
-      <motion.nav 
+      <motion.nav
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.5 }}
@@ -1437,13 +1258,13 @@ const App = () => {
             )}
             {user.displayName || "GUEST_NODE"}
           </div>
-          <button 
+          <button
             onClick={handleLogout}
             className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors"
           >
-             <LogOut size={18} />
+            <LogOut size={18} />
           </button>
-          <button 
+          <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="md:hidden p-2 border border-white/20 ml-2 hover:bg-white hover:text-black transition-colors"
           >
@@ -1455,7 +1276,7 @@ const App = () => {
       {/* --- ACTIVE ROUTE HUD --- */}
       <AnimatePresence>
         {(routeStart || routeData) && (
-          <motion.div 
+          <motion.div
             initial={{ y: -50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -50, opacity: 0 }}
@@ -1465,19 +1286,19 @@ const App = () => {
               <button onClick={clearRoute} className="absolute top-2 right-2 text-zinc-500 hover:text-white">
                 <X size={16} />
               </button>
-              
+
               <div className="flex items-center gap-2 text-red-500 font-dot text-xs uppercase tracking-widest">
                 <Waypoints size={14} className="animate-pulse" />
                 ACTIVE_WAYPOINT_TRACKING
               </div>
-              
+
               <div className="flex justify-between items-end mt-2">
                 <div className="flex flex-col font-dot text-sm text-white uppercase tracking-widest">
                   <span>{routeStart?.name || "AWAITING_START"}</span>
                   <span className="text-zinc-600">↓</span>
                   <span>{routeEnd?.name || "AWAITING_TARGET"}</span>
                 </div>
-                
+
                 {routeData && (
                   <div className="text-right flex flex-col">
                     <span className="text-2xl font-dot text-red-500 leading-none">{routeData.distance.text}</span>
@@ -1489,11 +1310,11 @@ const App = () => {
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       {/* Sidebar Panel */}
-      <motion.div 
+      <motion.div
         initial={false}
-        animate={{ 
+        animate={{
           y: window.innerWidth < 768 ? (isMenuOpen ? 0 : '100%') : 0,
           x: window.innerWidth < 768 ? 0 : 0,
           opacity: 1
@@ -1506,732 +1327,809 @@ const App = () => {
         `}
       >
         <div className="md:hidden w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-4 mb-2 shrink-0" onClick={() => setIsMenuOpen(false)} />
-        
+
         {/* Tabs */}
         <div className="flex border-b border-white/20">
-           <button 
-             onClick={() => { setActiveTab('buildings'); setSelectedItem(null); setIsEditMode(false); }}
-             className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors ${
-               activeTab === 'buildings' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
-             }`}
-           >
-             <Building2 size={16} /> MATRIX
-           </button>
-           <button 
-             onClick={() => { setActiveTab('users'); setSelectedItem(null); setIsEditMode(false); }}
-             className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors border-l border-white/20 ${
-               activeTab === 'users' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
-             }`}
-           >
-             <Users size={16} /> SQUAD
-           </button>
+          <button
+            onClick={() => { setActiveTab('buildings'); setSelectedItem(null); setIsEditMode(false); }}
+            className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors ${activeTab === 'buildings' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
+              }`}
+          >
+            <Building2 size={16} /> MATRIX
+          </button>
+          <button
+            onClick={() => { setActiveTab('users'); setSelectedItem(null); setIsEditMode(false); }}
+            className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors border-l border-white/20 ${activeTab === 'users' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
+              }`}
+          >
+            <Users size={16} /> SQUAD
+          </button>
         </div>
 
         {/* Search */}
         <div className="p-4 border-b border-white/20 bg-black">
-        
+
           {/* --- ONLY THE COMMANDER SEES THESE BUTTONS --- */}
           {activeTab === 'users' && squadRole === 'OWNER' && (
             <div className="flex flex-col gap-2 mb-4">
-               <button onClick={() => setShowRequestsModal(true)} className="w-full px-4 py-3 border border-red-500 text-sm font-dot uppercase tracking-widest flex items-center justify-between hover:bg-red-500 hover:text-white transition-colors text-red-500">
-                 <div className="flex items-center gap-2"><ShieldCheck size={18}/> NODE_ACCESS</div>
-                 {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
-               </button>
-               
-               {/* --- NEW: TELEMETRY SYNC BUTTON --- */}
-               <button 
-                 onClick={() => socket.emit('request-telemetry', squadCode)} 
-                 className="w-full px-4 py-3 border border-yellow-500 text-sm font-dot uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-yellow-500 hover:text-black transition-colors text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]"
-               >
-                 <Activity size={18}/> SYNC_TELEMETRY
-               </button>
+              <button onClick={() => setShowRequestsModal(true)} className="w-full px-4 py-3 border border-red-500 text-sm font-dot uppercase tracking-widest flex items-center justify-between hover:bg-red-500 hover:text-white transition-colors text-red-500">
+                <div className="flex items-center gap-2"><ShieldCheck size={18} /> NODE_ACCESS</div>
+                {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
+              </button>
+
+              {/* --- NEW: TELEMETRY SYNC BUTTON --- */}
+              <button
+                onClick={() => socket.emit('request-telemetry', squadCode)}
+                className="w-full px-4 py-3 border border-yellow-500 text-sm font-dot uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-yellow-500 hover:text-black transition-colors text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]"
+              >
+                <Activity size={18} /> SYNC_TELEMETRY
+              </button>
             </div>
           )}
 
           {activeTab === 'users' && (
-             <div className="mb-4 flex items-center justify-between border border-red-500/30 bg-red-500/5 p-3">
-               <div className="flex flex-col">
-                 {/* --- UPGRADED: DISPLAYS YOUR EXACT ROLE IN THE HUD --- */}
-                 <span className="text-[10px] text-zinc-500 font-dot uppercase tracking-widest">
-                   ACTIVE_CHANNEL // <span className={squadRole === 'OWNER' ? 'text-yellow-500' : 'text-blue-400'}>{squadRole || 'MEMBER'}</span>
-                 </span>
-                 <span className="font-dot text-sm text-red-500 tracking-widest">{squadCode}</span>
-               </div>
-               <button 
-                 onClick={handleLeaveSquad} 
-                 className="text-[10px] border border-red-500 text-red-500 hover:bg-red-500 hover:text-white px-3 py-2 transition-colors font-dot uppercase tracking-widest"
-               >
-                 DISCONNECT
-               </button>
-             </div>
+            <div className="mb-4 flex items-center justify-between border border-red-500/30 bg-red-500/5 p-3">
+              <div className="flex flex-col">
+                {/* --- UPGRADED: DISPLAYS YOUR EXACT ROLE IN THE HUD --- */}
+                <span className="text-[10px] text-zinc-500 font-dot uppercase tracking-widest">
+                  ACTIVE_CHANNEL // <span className={squadRole === 'OWNER' ? 'text-yellow-500' : 'text-blue-400'}>{squadRole || 'MEMBER'}</span>
+                </span>
+                <span className="font-dot text-sm text-red-500 tracking-widest">{squadCode}</span>
+              </div>
+              <button
+                onClick={handleLeaveSquad}
+                className="text-[10px] border border-red-500 text-red-500 hover:bg-red-500 hover:text-white px-3 py-2 transition-colors font-dot uppercase tracking-widest"
+              >
+                DISCONNECT
+              </button>
+            </div>
           )}
-          
+
           {/* --- NEW: TELEMETRY CONTROL PANEL --- */}
           {activeTab === 'users' && (
-             <div className="mb-4 flex flex-col gap-2 border border-white/20 p-2 bg-black">
-               <span className="text-[10px] font-dot uppercase tracking-widest text-zinc-500 text-center">TELEMETRY_CONTROL</span>
-               <div className="flex gap-2">
-                 <button 
-                   onClick={() => { telemetryModeRef.current = 'ACTIVE'; setTelemetryMode('ACTIVE'); }} 
-                   className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'ACTIVE' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                 >
-                   <Activity size={14} /> ACTIVE
-                 </button>
-                 <button 
-                   onClick={() => { telemetryModeRef.current = 'FROZEN'; setTelemetryMode('FROZEN'); }} 
-                   className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'FROZEN' ? 'bg-blue-500/20 border-blue-500 text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                 >
-                   <LocateFixed size={14} /> FROZEN
-                 </button>
-                 <button 
-                   onClick={() => { telemetryModeRef.current = 'GHOST'; setTelemetryMode('GHOST'); }} 
-                   className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'GHOST' ? 'bg-zinc-800 border-zinc-500 text-zinc-300 shadow-[0_0_10px_rgba(113,113,122,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                 >
-                   <EyeOff size={14} /> GHOST
-                 </button>
-               </div>
-             </div>
+            <div className="mb-4 flex flex-col gap-2 border border-white/20 p-2 bg-black">
+              <span className="text-[10px] font-dot uppercase tracking-widest text-zinc-500 text-center">TELEMETRY_CONTROL</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { telemetryModeRef.current = 'ACTIVE'; setTelemetryMode('ACTIVE'); }}
+                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'ACTIVE' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
+                >
+                  <Activity size={14} /> ACTIVE
+                </button>
+                <button
+                  onClick={() => { telemetryModeRef.current = 'FROZEN'; setTelemetryMode('FROZEN'); }}
+                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'FROZEN' ? 'bg-blue-500/20 border-blue-500 text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
+                >
+                  <LocateFixed size={14} /> FROZEN
+                </button>
+                <button
+                  onClick={() => { telemetryModeRef.current = 'GHOST'; setTelemetryMode('GHOST'); }}
+                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'GHOST' ? 'bg-zinc-800 border-zinc-500 text-zinc-300 shadow-[0_0_10px_rgba(113,113,122,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
+                >
+                  <EyeOff size={14} /> GHOST
+                </button>
+              </div>
+            </div>
           )}
           <div className="relative">
-             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white" size={16} />
-             <input 
-               type="text" 
-               placeholder={activeTab === 'buildings' ? "SEARCH_MATRIX..." : "SEARCH_SQUAD..."}
-               className="w-full bg-transparent border border-white/30 py-3 pl-12 pr-4 text-xs font-dot uppercase focus:outline-none focus:border-white transition-colors placeholder:text-zinc-600"
-               value={searchQuery}
-               onChange={(e) => setSearchQuery(e.target.value)}
-             />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white" size={16} />
+            <input
+              type="text"
+              placeholder={activeTab === 'buildings' ? "SEARCH_MATRIX..." : "SEARCH_SQUAD..."}
+              className="w-full bg-transparent border border-white/30 py-3 pl-12 pr-4 text-xs font-dot uppercase focus:outline-none focus:border-white transition-colors placeholder:text-zinc-600"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
         </div>
-
         {/* List Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-black">
-           <AnimatePresence mode="popLayout">
-             {activeTab === 'buildings' ? (
-                editableBuildings.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).map(building => (
-                  <motion.div 
-                    layout
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    key={building.id}
-                    onClick={() => handleFocus({ lat: building.lat, lng: building.lng }, building)}
-                    className={`p-4 border cursor-pointer transition-colors ${
-                      selectedItem?.id === building.id 
-                      ? 'border-white bg-white/10' 
-                      : 'border-white/20 hover:border-white/50'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex flex-col">
-                        <h3 className="font-dot text-sm uppercase tracking-widest">{building.name}</h3>
-                        {liveLocation && (
-                          <span className="text-[10px] text-red-500 font-dot mt-1">
-                            {calculateDistance(liveLocation.lat, liveLocation.lng, building.lat, building.lng)} AWAY
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">
-                        [{building.category}]
+          <AnimatePresence mode="popLayout">
+            {activeTab === 'buildings' ? (
+              editableBuildings.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).map(building => (
+                <motion.div
+                  layout
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  key={building.id}
+                  className="p-4 border border-white/20 relative group hover:border-white/40 transition-colors bg-black cursor-pointer"
+                  onClick={() => handleFocus({ lat: building.lat, lng: building.lng }, building)}
+                >
+                  <div className="absolute top-0 left-0 w-2 h-2 bg-white/20" />
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <span className="inline-block border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest px-2 py-0.5 mb-2">
+                        {building.category}
                       </span>
+                      <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none">{building.name}</h4>
                     </div>
-                    <p className="text-xs text-zinc-500">{building.info}</p>
-                  </motion.div>
-                ))
-             ) : (
-                users.filter(u => !blockedUserIds.includes(u.id)).map(user => (
-                  <motion.div 
-                    layout
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    key={user.id} 
-                    className="p-4 border border-white/20 relative group hover:border-white/40 transition-colors bg-black"
-                  >
-                    <div className="absolute top-0 right-0 w-2 h-2 bg-white/20" />
-                    
-                    {/* --- ROW 1: HEADER & ICONS --- */}
-                    <div className="flex items-start justify-between mb-4">
-                       <div className="flex items-center gap-3">
-                         <div className={`w-10 h-10 flex items-center justify-center font-dot text-sm border overflow-hidden shrink-0 ${user.permission === 'accepted' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10' : 'border-white/20 text-zinc-500'}`}>
-                           {user.photo ? <img src={user.photo} className="w-full h-full object-cover" alt="" /> : user.name.charAt(0)}
-                         </div>
-                         <div className="flex flex-col">
-                           <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none mb-1">{user.name}</h4>
-                           <div className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                             <span>[{user.role}]</span>
-                             {liveLocation && (
-                               <span className="text-emerald-400">
-                                 {calculateDistance(liveLocation.lat, liveLocation.lng, user.lat, user.lng)}
-                               </span>
-                             )}
-                           </div>
-                         </div>
-                       </div>
-                       {/* QUICK ACTIONS (Top Right) */}
-                       <div className="flex gap-2 items-center">
-                          <button onClick={() => sendPing(user.id)} className="text-emerald-400 hover:text-white transition-colors p-1" title="Ping User">
-                            <Radio size={16} className="animate-pulse" />
-                          </button>
-                          {user.permission === 'accepted' ? <UserCheck size={16} className="text-zinc-500" /> : <Lock size={16} className="text-zinc-700"/>}
-                          {squadRole === 'OWNER' && (
-                            <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors p-1" title="Instant Ban">
-                              <Ban size={16} /> 
-                            </button>
-                          )}
-                       </div>
-                    </div>
-
-                    {/* --- ROW 2: TELEMETRY GRID --- */}
-                    <div className="grid grid-cols-2 gap-2 mb-4">
-                       <div className="bg-white/5 border border-white/10 p-2 flex items-center gap-2">
-                         <div className="w-1.5 h-3 border border-zinc-500 rounded-[1px] relative flex items-end overflow-hidden">
-                           <div className={`w-full ${user.battery < 25 ? 'bg-red-500' : 'bg-emerald-500'} transition-all duration-500`} style={{ height: `${user.battery}%` }} />
-                         </div>
-                         <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">{user.battery || 0}% PWR</span>
-                       </div>
-                       <div className="bg-white/5 border border-white/10 p-2 flex items-center gap-2">
-                         <Activity size={12} className="text-blue-400" />
-                         <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">{user.speed || 0} KM/H</span>
-                       </div>
-                    </div>
-
-                    {/* --- ROW 3: ACTIONS --- */}
-                    <div className="flex flex-col gap-2">
-                       <div className="flex gap-2">
-                         <button 
-                           onClick={() => fireSOSBeacon(user.id, user.name)}
-                           className="flex-1 py-2 bg-red-950/30 border border-red-900 text-red-500 font-dot text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
-                         >
-                           FIRE_SOS_BEACON
-                         </button>
-                         {user.id !== socket.id && (
-                           <button 
-                             onClick={() => socket.emit('vote-to-kick', { targetId: user.id, roomCode: squadCode })}
-                             className="px-3 py-2 border border-zinc-700 text-[10px] font-dot uppercase tracking-widest text-zinc-400 hover:border-red-500 hover:text-red-500 transition-colors"
-                             title="Vote to Exile"
-                           >
-                             VOTE_KICK
-                           </button>
-                         )}
-                       </div>
-                       {user.permission === 'accepted' ? (
-                         <button onClick={() => handleFocus({ lat: user.lat, lng: user.lng }, null)} className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white">
-                           TRACK_TARGET
-                         </button>
-                       ) : user.permission === 'requested' ? (
-                         <div className="w-full py-3 border border-white/10 text-zinc-600 font-dot text-xs uppercase tracking-widest text-center bg-white/5">
-                           AWAITING_AUTH...
-                         </div>
-                       ) : (
-                         <button onClick={() => requestPermission(user.id)} className="w-full py-3 bg-white text-black hover:bg-zinc-200 font-dot text-xs uppercase tracking-widest transition-colors">
-                           REQUEST_LINK
-                         </button>
-                       )}
-                    </div>
-                  </motion.div>
-                ))
-             )}
-           </AnimatePresence>
-
-           {activeTab === 'buildings' && (
-             <motion.div layout className="mt-8 p-6 border border-white/20 relative overflow-hidden group">
-                <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-white -translate-x-1 -translate-y-1" />
-                <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white translate-x-1 translate-y-1" />
-                
-                <div className="flex flex-col gap-4 relative z-10">
-                  <div className="flex items-center gap-2 text-white">
-                    <Sparkles size={16} />
-                    <h4 className="font-dot text-sm uppercase tracking-widest">SYS_ORACLE</h4>
+                    <span className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest">[{building.id}]</span>
                   </div>
-                  <button 
-                    onClick={() => { setShowAiModal(true); setAiResponse(''); }}
-                    className="w-full py-4 bg-white text-black hover:bg-zinc-300 font-dot text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                  <p className="font-inter text-xs text-zinc-400 mb-4 leading-relaxed">{building.info}</p>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleWaypointSelect(building); }}
+                    className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white"
                   >
-                    INITIATE_PROCEDURE <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    SELECT_WAYPOINT
                   </button>
+                </motion.div>
+              ))
+            ) : (
+              users.filter(u => !blockedUserIds.includes(u.id)).map(user => (
+                <motion.div
+                  layout
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  key={user.id}
+                  className="p-4 border border-white/20 relative group hover:border-white/40 transition-colors bg-black"
+                >
+                  <div className="absolute top-0 right-0 w-2 h-2 bg-white/20" />
+
+                  {/* ROW 1: HEADER & ICONS */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 flex items-center justify-center font-dot text-sm border overflow-hidden shrink-0 ${user.permission === 'accepted' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10' : 'border-white/20 text-zinc-500'}`}>
+                        {user.photo ? <img src={user.photo} className="w-full h-full object-cover" alt="" /> : user.name.charAt(0)}
+                      </div>
+                      <div className="flex flex-col">
+                        <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none mb-1">{user.name}</h4>
+                        <div className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                          <span>[{user.role}]</span>
+                          {liveLocation && (
+                            <span className="text-emerald-400">
+                              {calculateDistance(liveLocation.lat, liveLocation.lng, user.lat, user.lng)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <button onClick={() => sendPing(user.id)} className="text-emerald-400 hover:text-white transition-colors p-1" title="Ping User">
+                        <Radio size={16} className="animate-pulse" />
+                      </button>
+                      {user.permission === 'accepted' ? <UserCheck size={16} className="text-zinc-500" /> : <Lock size={16} className="text-zinc-700" />}
+                      {squadRole === 'OWNER' && (
+                        <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors p-1" title="Instant Ban">
+                          <Ban size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ROW 2: TELEMETRY GRID */}
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="bg-white/5 border border-white/10 p-2 flex items-center gap-2">
+                      <div className="w-1.5 h-3 border border-zinc-500 rounded-[1px] relative flex items-end overflow-hidden">
+                        <div className={`w-full ${user.battery < 25 ? 'bg-red-500' : 'bg-emerald-500'} transition-all duration-500`} style={{ height: `${user.battery}%` }} />
+                      </div>
+                      <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">{user.battery || 0}% PWR</span>
+                    </div>
+                    <div className="bg-white/5 border border-white/10 p-2 flex items-center gap-2">
+                      <Activity size={12} className="text-blue-400" />
+                      <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">{user.speed || 0} KM/H</span>
+                    </div>
+                  </div>
+
+                  {/* ROW 3: ACTIONS */}
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => fireSOSBeacon(user.id, user.name)}
+                      className="w-full py-2 bg-red-950/30 border border-red-900 text-red-500 font-dot text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+                    >
+                      FIRE_SOS_BEACON
+                    </button>
+                    {user.permission === 'accepted' ? (
+                      <button onClick={() => handleFocus({ lat: user.lat, lng: user.lng }, null)} className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white">
+                        TRACK_TARGET
+                      </button>
+                    ) : (
+                      <button onClick={() => requestPermission(user.id)} className="w-full py-3 bg-white text-black hover:bg-zinc-200 font-dot text-xs uppercase tracking-widest transition-colors">
+                        REQUEST_LINK
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </AnimatePresence>
+
+          {activeTab === 'buildings' && (
+            <motion.div layout className="mt-8 p-6 border border-white/20 relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-white -translate-x-1 -translate-y-1" />
+              <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white translate-x-1 translate-y-1" />
+              <div className="flex flex-col gap-4 relative z-10">
+                <div className="flex items-center gap-2 text-white">
+                  <Sparkles size={16} />
+                  <h4 className="font-dot text-sm uppercase tracking-widest">SYS_ORACLE</h4>
                 </div>
-             </motion.div>
-           )}
+                <button
+                  onClick={() => { setShowAiModal(true); setAiResponse(''); }}
+                  className="w-full py-4 bg-white text-black hover:bg-zinc-300 font-dot text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                >
+                  INITIATE_PROCEDURE <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            </motion.div>
+          )}
         </div>
       </motion.div>
-{/* --- 1. WAITING ROOM OVERLAY --- */}
-      {hasJoinedSquad && accessStatus !== 'granted' && (
-        <div className="absolute inset-0 z-[1000] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center pointer-events-auto">
-          <Loader2 className="animate-spin text-red-500 mb-6" size={40} />
-          <h2 className="font-dot text-white text-2xl tracking-[0.3em] uppercase mb-2 text-center">
-            {accessStatus === 'denied' ? 'ACCESS_DENIED' : 'AWAITING_CLEARANCE'}
-          </h2>
-          <p className="font-inter text-zinc-500 text-sm text-center max-w-xs px-6">
-            {accessStatus === 'denied' 
-              ? 'Handshake rejected by Commander.' 
-              : 'Transmitting handshake to Squad Commander. Stand by...'}
-          </p>
-        </div>
-      )}
-{/* --- 🌐 TACTICAL GEOFENCE HUD --- */}
-      <div className="absolute top-24 right-6 z-[1000] flex flex-col gap-2 w-72 pointer-events-none">
-        <AnimatePresence>
-          {zoneAlerts.map(alert => (
-            <motion.div
-              key={alert.id}
-              initial={{ opacity: 0, x: 50, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 50, scale: 0.9 }}
-              className={`p-3 border backdrop-blur-md flex flex-col gap-1 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
-                alert.type === 'ENTER' 
-                  ? 'bg-emerald-950/80 border-emerald-500' 
+
+        {/* --- 1. WAITING ROOM OVERLAY --- */}
+        {hasJoinedSquad && accessStatus !== 'granted' && (
+          <div className="absolute inset-0 z-[1000] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center pointer-events-auto">
+            <Loader2 className="animate-spin text-red-500 mb-6" size={40} />
+            <h2 className="font-dot text-white text-2xl tracking-[0.3em] uppercase mb-2 text-center">
+              {accessStatus === 'denied' ? 'ACCESS_DENIED' : 'AWAITING_CLEARANCE'}
+            </h2>
+            <p className="font-inter text-zinc-500 text-sm text-center max-w-xs px-6">
+              {accessStatus === 'denied'
+                ? 'Handshake rejected by Commander.'
+                : 'Transmitting handshake to Squad Commander. Stand by...'}
+            </p>
+          </div>
+        )}
+        {/* --- 🌐 TACTICAL GEOFENCE HUD --- */}
+        <div className="absolute top-24 right-6 z-[1000] flex flex-col gap-2 w-72 pointer-events-none">
+          <AnimatePresence>
+            {zoneAlerts.map(alert => (
+              <motion.div
+                key={alert.id}
+                initial={{ opacity: 0, x: 50, scale: 0.9 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 50, scale: 0.9 }}
+                className={`p-3 border backdrop-blur-md flex flex-col gap-1 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] ${alert.type === 'ENTER'
+                  ? 'bg-emerald-950/80 border-emerald-500'
                   : 'bg-zinc-900/80 border-zinc-500'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Waypoints size={14} className={alert.type === 'ENTER' ? 'text-emerald-400' : 'text-zinc-400'} />
-                <span className={`text-[10px] font-dot tracking-widest uppercase ${alert.type === 'ENTER' ? 'text-emerald-500' : 'text-zinc-500'}`}>
-                  PERIMETER {alert.type === 'ENTER' ? 'BREACH' : 'DEPARTURE'}
-                </span>
-              </div>
-              <p className="font-dot text-sm text-white uppercase tracking-widest leading-tight">
-                <span className="text-blue-400">{alert.userName}</span> has {alert.type === 'ENTER' ? 'entered' : 'left'} <span className="text-yellow-400">{alert.zoneName}</span>
-              </p>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-      {/* FULLSCREEN GOOGLE MAP */}
-      <div className="absolute inset-0 z-0 bg-black">
-        <GoogleMapReact
-          bootstrapURLKeys={{ key: 'AIzaSyD10sWfHpczEuvmvwBkqkPHOu-QXQr8uM0' }}
-          center={mapProps.center}
-          zoom={mapProps.zoom}
-          options={{ ...createMapOptions(), draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab') }}
-          onClick={handleMapClick}
-          yesIWantToUseGoogleMapApiInternals
-          onGoogleApiLoaded={({ map, maps }) => {
-            mapRef.current = map;
-            directionsRendererRef.current = new maps.DirectionsRenderer({
-              suppressMarkers: true, 
-              polylineOptions: { strokeColor: '#ef4444', strokeWeight: 4 } 
-            });
-            directionsRendererRef.current.setMap(map);
-          }}
-        >
-          {liveLocation && (
-             <CustomMarker 
-               key="live-user" 
-               lat={liveLocation.lat} 
-               lng={liveLocation.lng} 
-               isUser={true} 
-               name={user.displayName} 
-               photo={user.photoURL}
-               onClick={() => handleFocus(liveLocation, null)} 
-             />
-          )}
-          {activeTab === 'buildings' && editableBuildings.map(b => (
-             <CustomMarker 
-               key={b.id} 
-               lat={b.lat} 
-               lng={b.lng} 
-               isUser={false} 
-               onClick={() => handleFocus({ lat: b.lat, lng: b.lng }, b)} 
-             />
-          ))}
-          {/* ... other markers ... */}
-{/* Filter out: blocked, ghost, and users with no coordinates yet */}
-{activeTab === 'users' && users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng).map(u => (
-   <CustomMarker 
-     key={u.id} 
-     lat={u.lat} 
-     lng={u.lng} 
-     isUser={true} 
-     name={u.name}
-     photo={u.photo}
-     onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)} 
-   />
-))}
+                  }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Waypoints size={14} className={alert.type === 'ENTER' ? 'text-emerald-400' : 'text-zinc-400'} />
+                  <span className={`text-[10px] font-dot tracking-widest uppercase ${alert.type === 'ENTER' ? 'text-emerald-500' : 'text-zinc-500'}`}>
+                    PERIMETER {alert.type === 'ENTER' ? 'BREACH' : 'DEPARTURE'}
+                  </span>
+                </div>
+                <p className="font-dot text-sm text-white uppercase tracking-widest leading-tight">
+                  <span className="text-blue-400">{alert.userName}</span> has {alert.type === 'ENTER' ? 'entered' : 'left'} <span className="text-yellow-400">{alert.zoneName}</span>
+                </p>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+        {/* FULLSCREEN GOOGLE MAP */}
+        <div className="absolute inset-0 z-0 bg-black">
+          <GoogleMapReact
+            bootstrapURLKeys={{ key: 'AIzaSyD10sWfHpczEuvmvwBkqkPHOu-QXQr8uM0' }}
+            center={mapProps.center}
+            zoom={mapProps.zoom}
+            options={{ ...createMapOptions(), draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab') }}
+            onClick={handleMapClick}
+            yesIWantToUseGoogleMapApiInternals
+            onGoogleApiLoaded={({ map, maps }) => {
+              mapRef.current = map;
+              directionsRendererRef.current = new maps.DirectionsRenderer({
+                suppressMarkers: true,
+                polylineOptions: { strokeColor: '#ef4444', strokeWeight: 4 }
+              });
+              directionsRendererRef.current.setMap(map);
+            }}
+          >
+            {liveLocation && (
+              <CustomMarker
+                key="live-user"
+                lat={liveLocation.lat}
+                lng={liveLocation.lng}
+                isUser={true}
+                name={user.displayName}
+                photo={user.photoURL}
+                onClick={() => handleFocus(liveLocation, null)}
+              />
+            )}
+            {activeTab === 'buildings' && editableBuildings.map(b => (
+              <CustomMarker
+                key={b.id}
+                lat={b.lat}
+                lng={b.lng}
+                isUser={false}
+                onClick={() => handleFocus({ lat: b.lat, lng: b.lng }, b)}
+              />
+            ))}
+            {/* ... other markers ... */}
+            {/* Filter out: blocked, ghost, and users with no coordinates yet */}
+            {activeTab === 'users' && users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng).map(u => (
+              <CustomMarker
+                key={u.id}
+                lat={u.lat}
+                lng={u.lng}
+                isUser={true}
+                name={u.name}
+                photo={u.photo}
+                onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)}
+              />
+            ))}
 
-{/* ADD THIS SECTION BELOW TO RENDER GHOSTS */}
-{activeTab === 'users' && Object.values(offlineNodes).map(ghost => (
-  <CustomMarker 
-    key={`ghost-${ghost.id}`} 
-    lat={ghost.lat} 
-    lng={ghost.lng} 
-    isUser={false} 
-    isOffline={true} // This triggers the grey dashed UI you already wrote
-    name={ghost.name}
-    photo={ghost.photo}
-    onClick={() => handleFocus({ lat: ghost.lat, lng: ghost.lng }, { name: `LOST: ${ghost.name}`, info: `Last seen with ${ghost.battery} battery.` })} 
-  />
-))}
-          
+            {/* ADD THIS SECTION BELOW TO RENDER GHOSTS */}
+            {activeTab === 'users' && Object.values(offlineNodes).map(ghost => (
+              <CustomMarker
+                key={`ghost-${ghost.id}`}
+                lat={ghost.lat}
+                lng={ghost.lng}
+                isUser={false}
+                isOffline={true} // This triggers the grey dashed UI you already wrote
+                name={ghost.name}
+                photo={ghost.photo}
+                onClick={() => handleFocus({ lat: ghost.lat, lng: ghost.lng }, { name: `LOST: ${ghost.name}`, info: `Last seen with ${ghost.battery} battery.` })}
+              />
+            ))}
 
-          {/* ... Your existing users.filter map loop stays exactly the same below this ... */}
-        </GoogleMapReact>
-      </div>
 
-      {/* --- ADMIN OVERRIDE PANEL --- */}
-      {isAdmin && (
-        <div className="absolute top-24 right-6 z-[600] flex flex-col gap-2 pointer-events-auto">
-          {!isRecordingPath ? (
-            <button 
-              onClick={() => setIsRecordingPath(true)}
-              className="p-3 bg-black border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors font-dot text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(234,179,8,0.3)]"
-            >
-              [ADMIN] RECORD_PATH
-            </button>
-          ) : (
-            <div className="bg-black border border-yellow-500 p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
-              <div className="text-yellow-500 font-dot text-xs tracking-widest animate-pulse">RECORDING_NODES: {recordedCoords.length}</div>
-              
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => {
-                    const startName = prompt("Enter START Building Name (e.g., Tech Park):");
-                    const endName = prompt("Enter END Building Name (e.g., Java Green):");
-                    
-                    if (startName && endName && recordedCoords.length > 1) {
-                      const newRouteData = {
-                        distance: "CUSTOM", eta: "TACTICAL",
-                        path: recordedCoords
-                      };
-                      
-                      // Save to local state
-                      setLiveSecretRoutes(prev => ({
-                        ...prev,
-                        [`${startName}_${endName}`]: newRouteData
-                      }));
+            {/* ... Your existing users.filter map loop stays exactly the same below this ... */}
+          </GoogleMapReact>
+        </div>
 
-                      // Broadcast to backend
-                      socket.emit('publish-custom-route', {
-                        key: `${startName}_${endName}`,
-                        data: newRouteData
-                      });
+        {/* --- ADMIN OVERRIDE PANEL --- */}
+        {isAdmin && (
+          <div className="absolute top-24 right-6 z-[600] flex flex-col gap-2 pointer-events-auto">
+            {!isRecordingPath ? (
+              <button
+                onClick={() => setIsRecordingPath(true)}
+                className="p-3 bg-black border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors font-dot text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(234,179,8,0.3)]"
+              >
+                [ADMIN] RECORD_PATH
+              </button>
+            ) : (
+              <div className="bg-black border border-yellow-500 p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
+                <div className="text-yellow-500 font-dot text-xs tracking-widest animate-pulse">RECORDING_NODES: {recordedCoords.length}</div>
 
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const startName = prompt("Enter START Building Name (e.g., Tech Park):");
+                      const endName = prompt("Enter END Building Name (e.g., Java Green):");
+
+                      if (startName && endName && recordedCoords.length > 1) {
+                        const newRouteData = {
+                          distance: "CUSTOM", eta: "TACTICAL",
+                          path: recordedCoords
+                        };
+
+                        // Save to local state
+                        setLiveSecretRoutes(prev => ({
+                          ...prev,
+                          [`${startName}_${endName}`]: newRouteData
+                        }));
+
+                        // Broadcast to backend
+                        socket.emit('publish-custom-route', {
+                          key: `${startName}_${endName}`,
+                          data: newRouteData
+                        });
+
+                        setIsRecordingPath(false);
+                        setRecordedCoords([]);
+                        if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
+                        recordingPolylineRef.current = null;
+                        alert(`[SYS] Route ${startName} -> ${endName} published successfully.`);
+                      }
+                    }}
+                    className="flex-1 p-2 bg-yellow-500 text-black font-dot text-[10px] hover:bg-yellow-400 transition-colors"
+                  >
+                    PUBLISH
+                  </button>
+                  <button
+                    onClick={() => {
                       setIsRecordingPath(false);
                       setRecordedCoords([]);
                       if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
                       recordingPolylineRef.current = null;
-                      alert(`[SYS] Route ${startName} -> ${endName} published successfully.`);
-                    }
-                  }}
-                  className="flex-1 p-2 bg-yellow-500 text-black font-dot text-[10px] hover:bg-yellow-400 transition-colors"
-                >
-                  PUBLISH
-                </button>
-                <button 
-                  onClick={() => {
-                    setIsRecordingPath(false);
-                    setRecordedCoords([]);
-                    if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
-                    recordingPolylineRef.current = null;
-                  }}
-                  className="flex-1 p-2 border border-red-500 text-red-500 font-dot text-[10px] hover:bg-red-500 hover:text-white transition-colors"
-                >
-                  ABORT
-                </button>
+                    }}
+                    className="flex-1 p-2 border border-red-500 text-red-500 font-dot text-[10px] hover:bg-red-500 hover:text-white transition-colors"
+                  >
+                    ABORT
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
-      {/* Map Interactive Layers */}
-      <div className="absolute right-6 top-1/2 -translate-y-1/2 z-[500] flex flex-col gap-4 pointer-events-auto">
-         
-         <button onClick={() => handleFocus(SRM_KTR_COORDS, null)} className="p-4 bg-black border border-white/20 text-white hover:bg-white hover:text-black transition-colors group" title="Recenter Campus">
+        {/* Map Interactive Layers */}
+        <div className="absolute right-6 top-1/2 -translate-y-1/2 z-[500] flex flex-col gap-4 pointer-events-auto">
+
+          <button onClick={() => handleFocus(SRM_KTR_COORDS, null)} className="p-4 bg-black border border-white/20 text-white hover:bg-white hover:text-black transition-colors group" title="Recenter Campus">
             <MapPin size={24} />
-         </button>
-         
-         {liveLocation && (
-           <button 
-             onClick={() => handleFocus(liveLocation, null)} 
-             className="p-4 bg-black border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors group" 
-             title="Locate Signal"
-           >
-              <LocateFixed size={24} className="animate-pulse" />
-           </button>
-         )}
-         
-         {activeTab === 'buildings' && (
-           <button 
-             onClick={() => setIsEditMode(!isEditMode)} 
-             className={`p-4 transition-colors border ${isEditMode ? 'bg-white text-black border-white' : 'bg-black text-white border-white/20 hover:bg-white hover:text-black'}`}
-             title="Edit Pins Mode"
-           >
-              <Settings size={24} className={`${isEditMode ? 'animate-spin-slow' : ''}`} />
-           </button>
-         )}
+          </button>
 
-         {isEditMode && selectedItem && (
+          {liveLocation && (
+            <button
+              onClick={() => handleFocus(liveLocation, null)}
+              className="p-4 bg-black border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors group"
+              title="Locate Signal"
+            >
+              <LocateFixed size={24} className="animate-pulse" />
+            </button>
+          )}
+
+          {activeTab === 'buildings' && (
+            <button
+              onClick={() => setIsEditMode(!isEditMode)}
+              className={`p-4 transition-colors border ${isEditMode ? 'bg-white text-black border-white' : 'bg-black text-white border-white/20 hover:bg-white hover:text-black'}`}
+              title="Edit Pins Mode"
+            >
+              <Settings size={24} className={`${isEditMode ? 'animate-spin-slow' : ''}`} />
+            </button>
+          )}
+
+          {isEditMode && selectedItem && (
             <div className="absolute top-1/2 -translate-y-1/2 right-[120%] whitespace-nowrap px-4 py-3 bg-red-500 text-white font-dot text-xs tracking-widest uppercase flex items-center gap-3">
               <span className="w-2 h-2 bg-white animate-pulse"></span>
               AWAITING_COORDS // {selectedItem.name}
             </div>
-         )}
-      </div>
+          )}
+        </div>
 
-      {/* Selected Location Card */}
-      <AnimatePresence>
-        {selectedItem && activeTab === 'buildings' && (
-          <motion.div 
-            initial={{ opacity: 0, x: 60 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 60 }}
-            transition={{ duration: 0.4 }}
-            className="absolute bottom-6 right-6 z-[600] w-80 bg-black border border-white/20 pointer-events-auto flex flex-col pt-6 pb-2"
-          >
-             <div className="px-6 pb-4 border-b border-white/20 flex justify-between items-start">
-               <div className="flex-1 pr-4">
-                 <span className="inline-block border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest px-2 py-0.5 mb-2">
-                   SYS_NODE // {selectedItem.category}
-                 </span>
-                 <h2 className="text-xl font-dot uppercase tracking-widest text-white leading-tight">{selectedItem.name}</h2>
-               </div>
-               <button onClick={() => setSelectedItem(null)} className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors shrink-0">
+        {/* Selected Location Card */}
+        <AnimatePresence>
+          {selectedItem && activeTab === 'buildings' && (
+            <motion.div
+              initial={{ opacity: 0, x: 60 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 60 }}
+              transition={{ duration: 0.4 }}
+              className="absolute bottom-6 right-6 z-[600] w-80 bg-black border border-white/20 pointer-events-auto flex flex-col pt-6 pb-2"
+            >
+              <div className="px-6 pb-4 border-b border-white/20 flex justify-between items-start">
+                <div className="flex-1 pr-4">
+                  <span className="inline-block border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest px-2 py-0.5 mb-2">
+                    SYS_NODE // {selectedItem.category}
+                  </span>
+                  <h2 className="text-xl font-dot uppercase tracking-widest text-white leading-tight">{selectedItem.name}</h2>
+                </div>
+                <button onClick={() => setSelectedItem(null)} className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors shrink-0">
                   <X size={16} />
-               </button>
-             </div>
-             
-             <div className="p-6 pb-4">
-               <p className="font-inter text-zinc-400 text-sm leading-relaxed">{selectedItem.info}</p>
-             </div>
-
-             
-               <div className="px-6 pb-4 flex gap-3">
-  {/* If no intel is loaded and we aren't fetching, show the button */}
-  {!buildingIntel && !aiLoading && (
-    <button 
-      onClick={() => generateBuildingInsights(selectedItem)} 
-      className="flex-1 py-3 border border-white/20 hover:bg-white/10 font-dot text-[10px] text-white flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
-    >
-      <Sparkles size={14} className="text-red-500" /> QUERY_DATA
-    </button>
-  )}
-
-  {/* If we ARE fetching, show the loader */}
-  {aiLoading && (
-    <div className="flex-1 py-3 border border-white/20 font-dot text-[10px] text-zinc-500 flex items-center justify-center gap-2 uppercase tracking-widest">
-      <Loader2 className="animate-spin text-red-500" size={14} /> FETCHING...
-    </div>
-  )}
-
-  {/* Always show the Waypoint/Destination button */}
-  <button 
-    onClick={() => handleWaypointSelect(selectedItem)}
-    className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
-  >
-    <Navigation size={14} /> {routeStart && !routeEnd ? "SET_DESTINATION" : "WAYPOINT"}
-  </button>
-</div>
-
-             {buildingIntel&& (
-               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 pb-6 max-h-40 overflow-y-auto custom-scrollbar">
-                 <div className="font-inter text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap border-l-2 border-red-500 pl-4 py-1">
-                   {buildingIntel}
-                 </div>
-               </motion.div>
-             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* --- PRIVACY MODAL --- */}
-      <AnimatePresence>
-        {showRequestsModal && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/90 backdrop-blur-md z-[2000] flex items-center justify-center p-4 pointer-events-auto"
-          >
-            <motion.div 
-              initial={{ scale: 0.95, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 20 }}
-              className="bg-black w-full max-w-lg border border-white flex flex-col max-h-[85vh] overflow-hidden"
-            >
-              <div className="p-6 border-b border-white/20 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="border border-red-500 p-2 text-red-500">
-                     <ShieldCheck size={24} />
-                  </div>
-                  <h3 className="font-dot text-xl tracking-widest text-white uppercase">SYS_ACCESS_CONTROL</h3>
-                </div>
-                <button onClick={() => setShowRequestsModal(false)} className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors">
-                  <X size={20} />
                 </button>
               </div>
 
-              <div className="flex border-b border-white/20 bg-black">
-                 <button 
-                  onClick={() => setModalTab('requests')}
-                  className={`flex-1 py-4 font-dot text-sm uppercase tracking-widest transition-colors ${
-                    modalTab === 'requests' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/10'
-                  }`}
-                 >
-                   INBOUND {pendingRequests.length > 0 && `[${pendingRequests.length}]`}
-                 </button>
-                 <button 
-                  onClick={() => setModalTab('blocked')}
-                  className={`flex-1 py-4 border-l border-white/20 font-dot text-sm uppercase tracking-widest transition-colors ${
-                    modalTab === 'blocked' ? 'bg-red-500 text-white' : 'text-zinc-500 hover:text-white hover:bg-white/10'
-                  }`}
-                 >
-                   BLACKLIST
-                 </button>
+              <div className="p-6 pb-4">
+                <p className="font-inter text-zinc-400 text-sm leading-relaxed">{selectedItem.info}</p>
               </div>
-              
-              <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
-                {modalTab === 'requests' ? (
-                  pendingRequests.length === 0 ? (
-                    <div className="py-16 flex flex-col items-center justify-center text-zinc-600 gap-4 cursor-default">
-                      <ShieldCheck size={48} className="opacity-20" />
-                      <p className="font-dot tracking-widest text-sm uppercase">NO_PENDING_REQUESTS</p>
-                    </div>
-                  ) : (
-                    pendingRequests.map(node => (
-  <div key={node.targetId} className="p-4 bg-black border border-white/20 flex flex-col gap-4 relative">
-    <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 animate-pulse" />
-    
-    <div className="flex items-center gap-4">
-      <div className="w-12 h-12 border border-white/30 flex items-center justify-center font-dot text-xl text-zinc-400 overflow-hidden">
-         {node.photo ? <img src={node.photo} className="w-full h-full object-cover" alt="" /> : node.name.charAt(0)}
-      </div>
-      <div>
-        <p className="font-dot uppercase tracking-widest text-white text-lg">{node.name}</p>
-        <p className="text-[10px] font-dot text-red-500 uppercase tracking-widest">REQUESTING_ACCESS // NODE_LINK</p>
-      </div>
-    </div>
 
-    <div className="flex gap-3 mt-2">
-       <button 
-         onClick={() => {
-           socket.emit('resolve-access', { targetId: node.targetId, roomCode: squadCode, approved: true });
-           setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
-         }} 
-         className="flex-1 bg-white text-black border border-white hover:bg-black hover:text-white py-3 font-dot text-xs uppercase tracking-widest transition-colors"
-       >
-         GRANT_ACCESS
-       </button>
-       <button 
-         onClick={() => {
-           socket.emit('resolve-access', { targetId: node.targetId, roomCode: squadCode, approved: false });
-           setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
-         }}
-         className="flex-1 bg-black text-white py-3 border border-white/20 hover:border-red-500 hover:text-red-500 font-dot text-xs uppercase tracking-widest transition-colors"
-       >
-         DENY
-       </button>
-    </div>
-  </div>
-))
-                  )
-                ) : (
-                  blockedUsers.length === 0 ? (
-                    <div className="py-16 flex flex-col items-center justify-center text-zinc-600 gap-4 cursor-default">
-                      <Ban size={48} className="opacity-20" />
-                      <p className="font-dot tracking-widest text-sm uppercase">BLACKLIST_EMPTY</p>
-                    </div>
-                  ) : (
-                    blockedUsers.map(user => (
-                      <div key={user.id} className="p-4 bg-black border border-red-500 flex items-center justify-between">
-                         <span className="font-dot uppercase tracking-widest text-white">{user.name}</span>
-                         <button onClick={() => toggleBlock(user.id)} className="border border-white/20 hover:border-white text-white px-4 py-2 font-dot text-xs uppercase tracking-widest transition-colors">
-                           REVOKE
-                         </button>
-                      </div>
-                    ))
-                  )
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {/* --- AI ORACLE MODAL --- */}
-      <AnimatePresence>
-        {showAiModal && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[3000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
-          >
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-black w-full max-w-3xl border-2 border-white flex flex-col h-[85vh] relative shadow-[0_0_50px_rgba(255,255,255,0.05)]"
-            >
-              <div className="absolute top-0 left-0 w-4 h-4 bg-white" />
-              <div className="absolute top-0 right-0 w-4 h-4 bg-white" />
-              <div className="absolute bottom-0 left-0 w-4 h-4 bg-white" />
-              <div className="absolute bottom-0 right-0 w-4 h-4 bg-white" />
-
-              <div className="p-6 border-b-2 border-white flex justify-between items-center bg-black z-10">
-                <div className="flex items-center gap-4 text-white">
-                  <BrainCircuit className="w-8 h-8" />
-                  <h3 className="font-dot text-2xl tracking-widest uppercase">SYS_ORACLE // NEURAL_LINK</h3>
-                </div>
-                <button onClick={() => setShowAiModal(false)} className="p-2 border-2 border-transparent hover:border-white transition-colors text-white">
-                  <X size={24} />
-                </button>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar bg-black z-10 flex flex-col">
-                {aiResponse ? (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4 }}
-                    className="p-8 border border-white/20 bg-black font-inter text-zinc-300 leading-relaxed text-lg"
+              <div className="px-6 pb-4 flex gap-3">
+                {/* If no intel is loaded and we aren't fetching, show the button */}
+                {!buildingIntel && !aiLoading && (
+                  <button
+                    onClick={() => generateBuildingInsights(selectedItem)}
+                    className="flex-1 py-3 border border-white/20 hover:bg-white/10 font-dot text-[10px] text-white flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
                   >
-                    {aiResponse}
-                  </motion.div>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 gap-6 py-10">
-                    <MessageSquare size={80} className="text-white/10" />
-                    <p className="font-dot text-lg tracking-widest uppercase animate-pulse">AWAITING_QUERY_INPUT...</p>
-                  </div>
-                )}
-                
-                {aiLoading && (
-                  <motion.div 
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="flex items-center gap-4 text-red-500 p-6 border border-red-500 bg-black mt-auto"
-                  >
-                    <Loader2 className="animate-spin" size={24} />
-                    <span className="font-dot text-sm uppercase tracking-widest">PROCESSING_NEURAL_REQUEST...</span>
-                  </motion.div>
-                )}
-              </div>
-
-              <form onSubmit={handleGeneralAiQuery} className="p-6 border-t-2 border-white bg-black z-10">
-                <div className="flex gap-4 relative">
-                  <div className="absolute left-6 top-1/2 -translate-y-1/2 font-dot text-zinc-500">{">"}</div>
-                  <input 
-                    type="text"
-                    placeholder="ENTER_QUERY..."
-                    className="flex-1 bg-black border border-white/30 focus:border-white pl-12 pr-6 py-5 text-sm font-dot uppercase tracking-widest focus:outline-none transition-colors text-white placeholder:text-zinc-600"
-                    value={aiQuery}
-                    onChange={(e) => setAiQuery(e.target.value)}
-                  />
-                  <button 
-                    type="submit"
-                    disabled={aiLoading}
-                    className="bg-white text-black hover:bg-zinc-200 px-8 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-dot uppercase tracking-widest"
-                  >
-                    <Send size={20} className="mr-2" /> TRANSMIT
+                    <Sparkles size={14} className="text-red-500" /> QUERY_DATA
                   </button>
-                </div>
-              </form>
+                )}
+
+                {/* If we ARE fetching, show the loader */}
+                {aiLoading && (
+                  <div className="flex-1 py-3 border border-white/20 font-dot text-[10px] text-zinc-500 flex items-center justify-center gap-2 uppercase tracking-widest">
+                    <Loader2 className="animate-spin text-red-500" size={14} /> FETCHING...
+                  </div>
+                )}
+
+                {/* Always show the Waypoint/Destination button */}
+                <button
+                  onClick={() => handleWaypointSelect(selectedItem)}
+                  className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
+                >
+                  <Navigation size={14} /> {routeStart && !routeEnd ? "SET_DESTINATION" : "WAYPOINT"}
+                </button>
+              </div>
+
+              {buildingIntel && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 pb-6 max-h-40 overflow-y-auto custom-scrollbar">
+                  <div className="font-inter text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap border-l-2 border-red-500 pl-4 py-1">
+                    {buildingIntel}
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      
-    </div>
-  );
+          )}
+        </AnimatePresence>
+
+        {/* --- PRIVACY MODAL --- */}
+        <AnimatePresence>
+            {showRequestsModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/90 backdrop-blur-md z-[2000] flex items-center justify-center p-4 pointer-events-auto"
+              >
+                <motion.div
+                  initial={{ scale: 0.95, y: 20 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.95, y: 20 }}
+                  className="bg-black w-full max-w-lg border border-white flex flex-col max-h-[85vh] overflow-hidden"
+                >
+                  <div className="p-6 border-b border-white/20 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="border border-red-500 p-2 text-red-500">
+                        <ShieldCheck size={24} />
+                      </div>
+                      <h3 className="font-dot text-xl tracking-widest text-white uppercase">SYS_ACCESS_CONTROL</h3>
+                    </div>
+                    <button onClick={() => setShowRequestsModal(false)} className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors">
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="flex border-b border-white/20 bg-black">
+                    <button
+                      onClick={() => setModalTab('requests')}
+                      className={`flex-1 py-4 font-dot text-sm uppercase tracking-widest transition-colors ${modalTab === 'requests' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/10'
+                        }`}
+                    >
+                      INBOUND {pendingRequests.length > 0 && `[${pendingRequests.length}]`}
+                    </button>
+                    <button
+                      onClick={() => setModalTab('blocked')}
+                      className={`flex-1 py-4 border-l border-white/20 font-dot text-sm uppercase tracking-widest transition-colors ${modalTab === 'blocked' ? 'bg-red-500 text-white' : 'text-zinc-500 hover:text-white hover:bg-white/10'
+                        }`}
+                    >
+                      BLACKLIST
+                    </button>
+                  </div>
+
+                  <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+                    {modalTab === 'requests' ? (
+                      pendingRequests.length === 0 ? (
+                        <div className="py-16 flex flex-col items-center justify-center text-zinc-600 gap-4 cursor-default">
+                          <ShieldCheck size={48} className="opacity-20" />
+                          <p className="font-dot tracking-widest text-sm uppercase">NO_PENDING_REQUESTS</p>
+                        </div>
+                      ) : (
+                        pendingRequests.map(node => (
+                          <div key={node.targetId} className="p-4 bg-black border border-white/20 flex flex-col gap-4 relative">
+                            <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 animate-pulse" />
+
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 border border-white/30 flex items-center justify-center font-dot text-xl text-zinc-400 overflow-hidden">
+                                {node.photo ? <img src={node.photo} className="w-full h-full object-cover" alt="" /> : node.name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-dot uppercase tracking-widest text-white text-lg">{node.name}</p>
+                                <p className="text-[10px] font-dot text-red-500 uppercase tracking-widest">REQUESTING_ACCESS // NODE_LINK</p>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-3 mt-2">
+                              <button
+                                onClick={() => {
+                                  socket.emit('resolve-access', { targetId: node.targetId, roomCode: squadCode, approved: true });
+                                  setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
+                                }}
+                                className="flex-1 bg-white text-black border border-white hover:bg-black hover:text-white py-3 font-dot text-xs uppercase tracking-widest transition-colors"
+                              >
+                                GRANT_ACCESS
+                              </button>
+                              <button
+                                onClick={() => {
+                                  socket.emit('resolve-access', { targetId: node.targetId, roomCode: squadCode, approved: false });
+                                  setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
+                                }}
+                                className="flex-1 bg-black text-white py-3 border border-white/20 hover:border-red-500 hover:text-red-500 font-dot text-xs uppercase tracking-widest transition-colors"
+                              >
+                                DENY
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )
+                    ) : (
+                      blockedUsers.length === 0 ? (
+                        <div className="py-16 flex flex-col items-center justify-center text-zinc-600 gap-4 cursor-default">
+                          <Ban size={48} className="opacity-20" />
+                          <p className="font-dot tracking-widest text-sm uppercase">BLACKLIST_EMPTY</p>
+                        </div>
+                      ) : (
+                        blockedUsers.map(user => (
+                          <div key={user.id} className="p-4 bg-black border border-red-500 flex items-center justify-between">
+                            <span className="font-dot uppercase tracking-widest text-white">{user.name}</span>
+                            <button onClick={() => toggleBlock(user.id)} className="border border-white/20 hover:border-white text-white px-4 py-2 font-dot text-xs uppercase tracking-widest transition-colors">
+                              REVOKE
+                            </button>
+                          </div>
+                        ))
+                      )
+                    )}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* --- AI ORACLE MODAL --- */}
+          <AnimatePresence>
+            {showAiModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/95 backdrop-blur-md z-[3000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  className="bg-black w-full max-w-3xl border-2 border-white flex flex-col h-[85vh] relative shadow-[0_0_50px_rgba(255,255,255,0.05)]"
+                >
+                  <div className="absolute top-0 left-0 w-4 h-4 bg-white" />
+                  <div className="absolute top-0 right-0 w-4 h-4 bg-white" />
+                  <div className="absolute bottom-0 left-0 w-4 h-4 bg-white" />
+                  <div className="absolute bottom-0 right-0 w-4 h-4 bg-white" />
+
+                  <div className="p-6 border-b-2 border-white flex justify-between items-center bg-black z-10">
+                    <div className="flex items-center gap-4 text-white">
+                      <BrainCircuit className="w-8 h-8" />
+                      <h3 className="font-dot text-2xl tracking-widest uppercase">SYS_ORACLE // NEURAL_LINK</h3>
+                    </div>
+                    <button onClick={() => setShowAiModal(false)} className="p-2 border-2 border-transparent hover:border-white transition-colors text-white">
+                      <X size={24} />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar bg-black z-10 flex flex-col">
+                    {aiResponse ? (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4 }}
+                        className="p-8 border border-white/20 bg-black font-inter text-zinc-300 leading-relaxed text-lg"
+                      >
+                        {aiResponse}
+                      </motion.div>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 gap-6 py-10">
+                        <MessageSquare size={80} className="text-white/10" />
+                        <p className="font-dot text-lg tracking-widest uppercase animate-pulse">AWAITING_QUERY_INPUT...</p>
+                      </div>
+                    )}
+
+                    {aiLoading && (
+                      <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                        className="flex items-center gap-4 text-red-500 p-6 border border-red-500 bg-black mt-auto"
+                      >
+                        <Loader2 className="animate-spin" size={24} />
+                        <span className="font-dot text-sm uppercase tracking-widest">PROCESSING_NEURAL_REQUEST...</span>
+                      </motion.div>
+                    )}
+                  </div>
+
+                  <form onSubmit={handleGeneralAiQuery} className="p-6 border-t-2 border-white bg-black z-10">
+                    <div className="flex gap-4 relative">
+                      <div className="absolute left-6 top-1/2 -translate-y-1/2 font-dot text-zinc-500">{">"}</div>
+                      <input
+                        type="text"
+                        placeholder="ENTER_QUERY..."
+                        className="flex-1 bg-black border border-white/30 focus:border-white pl-12 pr-6 py-5 text-sm font-dot uppercase tracking-widest focus:outline-none transition-colors text-white placeholder:text-zinc-600"
+                        value={aiQuery}
+                        onChange={(e) => setAiQuery(e.target.value)}
+                      />
+                      <button
+                        type="submit"
+                        disabled={aiLoading}
+                        className="bg-white text-black hover:bg-zinc-200 px-8 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-dot uppercase tracking-widest"
+                      >
+                        <Send size={20} className="mr-2" /> TRANSMIT
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* --- COMMANDER'S TELEMETRY MATRIX MODAL --- */}
+          <AnimatePresence>
+            {showTelemetryModal && rawTelemetryData && (
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/95 backdrop-blur-md z-[4000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                  className="bg-black w-full max-w-4xl border border-yellow-500 flex flex-col h-[80vh] relative shadow-[0_0_30px_rgba(234,179,8,0.1)]"
+                >
+                  {/* Corner Accents */}
+                  <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-yellow-500 -translate-x-1 -translate-y-1" />
+                  <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-yellow-500 translate-x-1 translate-y-1" />
+
+                  {/* Header */}
+                  <div className="p-6 border-b border-yellow-500/30 flex justify-between items-center bg-black">
+                    <div className="flex items-center gap-4 text-yellow-500">
+                      <Activity className="w-8 h-8 animate-pulse" />
+                      <div>
+                        <h3 className="font-dot text-2xl tracking-widest uppercase text-white">SYS_TELEMETRY // MATRIX</h3>
+                        <p className="font-dot text-[10px] tracking-widest uppercase">COMMANDER CLASSIFIED CLEARANCE</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setShowTelemetryModal(false)} className="p-2 border border-transparent hover:border-yellow-500 transition-colors text-zinc-500 hover:text-yellow-500">
+                      <X size={24} />
+                    </button>
+                  </div>
+
+                  {/* Data Table */}
+                  <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-black">
+                    <div className="w-full border border-white/20">
+
+                      {/* Table Header Row (Hidden on Mobile, Visible on Desktop) */}
+                      <div className="hidden md:grid md:grid-cols-4 bg-white/5 border-b border-white/20 p-3 font-dot text-[10px] uppercase tracking-widest text-zinc-500">
+                        <div>NODE_DESIGNATION</div>
+                        <div>LAST_KNOWN_COORDS</div>
+                        <div>POWER_CORE</div>
+                        <div>SIGNAL_INTEGRITY</div>
+                      </div>
+
+                      {/* Table Body */}
+                      {users.filter(u => u.permission === 'accepted').map(userNode => {
+                        const cacheData = rawTelemetryData?.[userNode.id];
+                        const freshness = getSignalFreshness(cacheData?.timestamp);
+                        const batteryColor = cacheData && parseInt(cacheData.batteryLevel) < 20 ? 'text-red-500' : 'text-emerald-500';
+
+                        return (
+                          <div key={userNode.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-0 border-b border-white/10 p-4 font-dot text-xs tracking-widest uppercase text-white hover:bg-white/5 transition-colors items-start md:items-center">
+
+                            {/* 1. NODE NAME */}
+                            <div className="flex items-center gap-3">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" />
+                              <span className="text-sm md:text-xs">{userNode.name}</span>
+                            </div>
+
+                            {/* 2. COORDINATES */}
+                            <div className="text-zinc-400 font-mono text-[10px] flex md:block justify-between items-center border-t border-white/5 md:border-transparent pt-2 md:pt-0 mt-2 md:mt-0">
+                              <span className="md:hidden text-zinc-600 font-dot uppercase tracking-widest">COORDS:</span>
+                              <div className="text-right md:text-left">
+                                {cacheData ? (
+                                  <>
+                                    LAT: {cacheData.latitude.toFixed(5)}<br />
+                                    LNG: {cacheData.longitude.toFixed(5)}
+                                  </>
+                                ) : "NO_CACHE_DATA"}
+                              </div>
+                            </div>
+
+                            {/* 3. BATTERY */}
+                            <div className={`font-bold flex md:block justify-between items-center ${batteryColor}`}>
+                              <span className="md:hidden text-zinc-600 font-normal text-[10px] font-dot uppercase tracking-widest">POWER:</span>
+                              {cacheData ? cacheData.batteryLevel : "UNKNOWN"}
+                            </div>
+
+                            {/* 4. SIGNAL FRESHNESS */}
+                            <div className={`font-bold flex md:block justify-between items-center ${freshness.color}`}>
+                              <span className="md:hidden text-zinc-600 font-normal text-[10px] font-dot uppercase tracking-widest">SIGNAL:</span>
+                              {freshness.text}
+                            </div>
+
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="p-4 border-t border-yellow-500/30 flex justify-between items-center bg-black">
+                    <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">AUTO-REFRESHING EVERY 5 SECONDS</span>
+                    <button
+                      onClick={() => socket.emit('request-telemetry', squadCode)}
+                      className="px-6 py-2 border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2"
+                    >
+                      <Activity size={14} /> FORCE_SYNC
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+      </div>
+    );
 };
 
 export default App;
