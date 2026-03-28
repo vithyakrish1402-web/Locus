@@ -453,9 +453,9 @@ const App = () => {
   
   // --- 🕸️ P2P DATA DECODER ---
   // --- 🕸️ P2P DATA DECODER ---
+  // --- 🕸️ P2P DATA DECODER ---
   const handleP2PData = (rawPayload) => {
     try {
-      // 🚨 WEBRTC BINARY DECODER: Translates WebRTC binary back to text
       const payloadString = typeof rawPayload === 'string' 
         ? rawPayload 
         : new TextDecoder().decode(rawPayload);
@@ -464,23 +464,41 @@ const App = () => {
       
       if (parsed.type === 'P2P_LOCATION') {
         if (parsed.status === 'GHOST') {
+          // Hide them and mark as ghost
           ghostStatusRef.current[parsed.id] = true;
           setUsers(prev => prev.filter(u => u.id !== parsed.id));
         } else {
+          // They are ACTIVE or FROZEN
           delete ghostStatusRef.current[parsed.id];
-          setUsers(prev => prev.map(u => {
-            if (u.id === parsed.id) {
-              return { 
-                ...u, 
-                lat: parsed.lat, 
-                lng: parsed.lng, 
-                speed: parsed.speed, 
-                battery: parsed.battery, // <--- Now safely receives a number
-                status: parsed.status || 'ACTIVE'
-              };
+          
+          setUsers(prev => {
+            const existingUser = prev.find(u => u.id === parsed.id);
+            
+            if (existingUser) {
+              // UPDATE EXISTING NODE
+              return prev.map(u => u.id === parsed.id ? { 
+                  ...u, 
+                  lat: parsed.lat, 
+                  lng: parsed.lng, 
+                  speed: parsed.speed, 
+                  battery: parsed.battery, 
+                  status: parsed.status || 'ACTIVE'
+              } : u);
+            } else {
+              // RE-ADD NODE (They came back from Ghost mode)
+              return [...prev, {
+                id: parsed.id,
+                name: parsed.name || "Squad Node", // Fallback if missing
+                photo: parsed.photo,
+                lat: parsed.lat,
+                lng: parsed.lng,
+                speed: parsed.speed,
+                battery: parsed.battery,
+                status: parsed.status || 'ACTIVE',
+                permission: "accepted" 
+              }];
             }
-            return u;
-          }));
+          });
         }
       }
     } catch (e) { 
@@ -812,6 +830,8 @@ const App = () => {
         const syncPayload = JSON.stringify({
           type: 'P2P_LOCATION',
           id: socket.id,
+          name: user.displayName,
+          photo: user.photoURL,
           lat: currentLoc.lat,
           lng: currentLoc.lng,
           speed: 0, 
@@ -869,6 +889,8 @@ const App = () => {
           p2pPayload = JSON.stringify({
             type: 'P2P_LOCATION',
             id: socket.id,
+            name: user.displayName,
+            photo: user.photoURL,
             lat: smoothed.lat,
             lng: smoothed.lng,
             speed: speed ? Math.round(speed * 3.6) : 0,
@@ -909,6 +931,8 @@ const App = () => {
       overridePayload = JSON.stringify({
         type: 'P2P_LOCATION', 
         id: socket.id, 
+        name: user.displayName,
+        photo: user.photoURL,
         lat: currentLoc.lat, 
         lng: currentLoc.lng,
         speed: 0, 
