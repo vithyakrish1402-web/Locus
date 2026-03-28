@@ -364,6 +364,19 @@ class PrecognitionFilter {
   }
 }
 const App = () => {
+  // --- COMMANDER TELEMETRY STATE ---
+  const [showTelemetryModal, setShowTelemetryModal] = useState(false);
+  const [rawTelemetryData, setRawTelemetryData] = useState(null);
+
+  // Calculates exactly how stale a node's GPS signal is
+  const getSignalFreshness = (isoString) => {
+    if (!isoString) return { text: "NO_SIGNAL", color: "text-red-500" };
+    const seconds = Math.floor((new Date() - new Date(isoString)) / 1000);
+    if (seconds < 10) return { text: "OPTIMAL (< 10s)", color: "text-emerald-500" };
+    if (seconds < 60) return { text: `GOOD (${seconds}s ago)`, color: "text-blue-400" };
+    if (seconds < 300) return { text: `WARN (${Math.floor(seconds/60)}m ago)`, color: "text-yellow-500" };
+    return { text: `STALE (> 5m)`, color: "text-red-500 animate-pulse" };
+  };
   // --- PRECOGNITION TRACKERS ---
   const localPrecognition = useRef(new PrecognitionFilter());
   const squadPrecognition = useRef({}); // Tracks separate Kalman math for every squad member
@@ -501,16 +514,13 @@ const App = () => {
     };
   }, []);
   // --- 📊 ADDITION 3: TELEMETRY DATA RECEIVER ---
+  // --- TACTICAL TELEMETRY DATA RECEIVER ---
   useEffect(() => {
     socket.on('telemetry-sync-complete', (data) => {
-      console.log("📊 [TACTICAL TELEMETRY DUMP]:", data);
-      
-      // For now, we are just alerting it so you can confirm it works.
-      // Next, we will map this data directly into your UI.
-      const nodeCount = Object.keys(data).length;
-      alert(`[SYS_SYNC] Telemetry data acquired for ${nodeCount} active nodes. Check browser console for raw data.`);
+      console.log("📊 [SYS_SYNC] Raw Telemetry Matrix Acquired:", data);
+      setRawTelemetryData(data);
+      setShowTelemetryModal(true); // Pop the Commander's Dashboard
     });
-
     return () => socket.off('telemetry-sync-complete');
   }, []);
   // --- 💀 ADDITION: MUTINY LISTENER ---
@@ -2044,6 +2054,102 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         )}
       </AnimatePresence>
       
+      {/* --- COMMANDER'S TELEMETRY MATRIX MODAL --- */}
+      <AnimatePresence>
+        {showTelemetryModal && rawTelemetryData && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
+            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[4000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} 
+              className="bg-black w-full max-w-4xl border border-yellow-500 flex flex-col h-[80vh] relative shadow-[0_0_30px_rgba(234,179,8,0.1)]"
+            >
+              {/* Corner Accents */}
+              <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-yellow-500 -translate-x-1 -translate-y-1" />
+              <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-yellow-500 translate-x-1 translate-y-1" />
+
+              {/* Header */}
+              <div className="p-6 border-b border-yellow-500/30 flex justify-between items-center bg-black">
+                <div className="flex items-center gap-4 text-yellow-500">
+                  <Activity className="w-8 h-8 animate-pulse" />
+                  <div>
+                    <h3 className="font-dot text-2xl tracking-widest uppercase text-white">SYS_TELEMETRY // MATRIX</h3>
+                    <p className="font-dot text-[10px] tracking-widest uppercase">COMMANDER CLASSIFIED CLEARANCE</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowTelemetryModal(false)} className="p-2 border border-transparent hover:border-yellow-500 transition-colors text-zinc-500 hover:text-yellow-500">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              {/* Data Table */}
+              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-black">
+                <div className="w-full border border-white/20">
+                  {/* Table Header Row */}
+                  <div className="grid grid-cols-4 bg-white/5 border-b border-white/20 p-3 font-dot text-[10px] uppercase tracking-widest text-zinc-500">
+                    <div>NODE_DESIGNATION</div>
+                    <div>LAST_KNOWN_COORDS</div>
+                    <div>POWER_CORE</div>
+                    <div>SIGNAL_INTEGRITY</div>
+                  </div>
+
+                  {/* Table Body (Cross-referencing live users with raw cache) */}
+                  {users.filter(u => u.permission === 'accepted').map(userNode => {
+                    const cacheData = rawTelemetryData[userNode.id];
+                    const freshness = getSignalFreshness(cacheData?.timestamp);
+                    const batteryColor = cacheData && parseInt(cacheData.batteryLevel) < 20 ? 'text-red-500' : 'text-emerald-500';
+
+                    return (
+                      <div key={userNode.id} className="grid grid-cols-4 border-b border-white/10 p-4 font-dot text-xs tracking-widest uppercase text-white hover:bg-white/5 transition-colors items-center">
+                        
+                        {/* 1. NODE NAME */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" />
+                          {userNode.name}
+                        </div>
+
+                        {/* 2. COORDINATES */}
+                        <div className="text-zinc-400 font-mono text-[10px]">
+                          {cacheData ? (
+                            <>
+                              LAT: {cacheData.latitude.toFixed(5)}<br/>
+                              LNG: {cacheData.longitude.toFixed(5)}
+                            </>
+                          ) : "NO_CACHE_DATA"}
+                        </div>
+
+                        {/* 3. BATTERY */}
+                        <div className={`font-bold ${batteryColor}`}>
+                          {cacheData ? cacheData.batteryLevel : "UNKNOWN"}
+                        </div>
+
+                        {/* 4. SIGNAL FRESHNESS */}
+                        <div className={`font-bold ${freshness.color}`}>
+                          {freshness.text}
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-yellow-500/30 flex justify-between items-center bg-black">
+                 <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">AUTO-REFRESHING EVERY 5 SECONDS</span>
+                 <button 
+                   onClick={() => socket.emit('request-telemetry', squadCode)}
+                   className="px-6 py-2 border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2"
+                 >
+                   <Activity size={14} /> FORCE_SYNC
+                 </button>
+              </div>
+
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
