@@ -556,6 +556,32 @@ const App = () => {
   }, []);
 
 
+  // --- 🔔 SYS_NOTIFY: REQUEST OS PERMISSIONS ---
+  useEffect(() => {
+    if (user && 'Notification' in window) {
+      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            console.log("✅ [SYS_NOTIFY] OS Notification link established.");
+          }
+        });
+      }
+    }
+  }, [user]);
+
+  // Helper function to fire OS-level alerts
+  const triggerSystemNotification = (title, body) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      // Fires a native notification to the phone/desktop OS
+      new Notification(title, {
+        body: body,
+        icon: '/vite.svg', // You can replace this with your own LOCUS logo later
+        vibrate: [200, 100, 200, 100, 200], // SOS vibration pattern for Android
+        tag: 'locus-alert',
+        requireInteraction: true // Forces the user to click it to dismiss
+      });
+    }
+  };
   // 1. Listen for real-time network updates from the server
   useEffect(() => {
     if (!hasJoinedSquad) return;
@@ -595,9 +621,18 @@ const App = () => {
     });
 
     socket.on('receive-ping', ({ senderName }) => {
-      alert(`🚨 SOS BEACON DETECTED 🚨\n\n${senderName.toUpperCase()} requires immediate assistance at their coordinates!`);
+      // 1. Play the sonar audio
+      playSonarPing(); 
+      
+      // 2. Fire the native OS push notification
+      triggerSystemNotification(
+        "🚨 CRITICAL SOS BEACON", 
+        `Node '${senderName.toUpperCase()}' requires immediate assistance at their coordinates!`
+      );
+      
+      // 3. Keep the in-app alert as a fallback
+      alert(`🚨 SOS BEACON DETECTED 🚨\n\n${senderName.toUpperCase()} requires immediate assistance!`);
     });
-
     socket.on('new-custom-route', ({ key, data }) => {
       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
     });
