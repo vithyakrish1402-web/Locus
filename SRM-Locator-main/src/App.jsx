@@ -2195,9 +2195,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
               </motion.div>
             )}
           </AnimatePresence>
-      </div>
-    );
-};
+     
 {/* --- SYS_CONFIG MODAL --- */}
       <AnimatePresence>
         {showSettingsModal && (
@@ -2275,5 +2273,8 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
+    );
+};
 
 export default App;
