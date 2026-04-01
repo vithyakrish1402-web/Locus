@@ -692,9 +692,22 @@ const App = () => {
   // We calculate this derived data inside the component body, but we DON'T use '=' on the state itself.
   const activePendingRequests = pendingRequests;
   /// 2. Broadcast your live GPS data to the network
-  /// 2. Broadcast your live GPS data to the network
+  // 2. Broadcast your live GPS data to the network
   useEffect(() => {
     if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
+
+    // --- ⏱️ DYNAMIC POLLING TRANSLATOR ---
+    const getPollingMs = () => {
+      switch (sysConfig.polling) {
+        case 'eco': return 15000;     // 15 seconds
+        case 'max': return 1000;      // 1 second
+        case 'standard': 
+        default: return 5000;         // 5 seconds
+      }
+    };
+    
+    const currentPollingRate = getPollingMs();
+    console.log(`[SYS_CONFIG] Telemetry polling initialized at ${currentPollingRate}ms`);
 
     // --- 🚀 FORCE INITIAL GPS LOCK ---
     navigator.geolocation.getCurrentPosition(
@@ -703,7 +716,7 @@ const App = () => {
         const smoothed = localPrecognition.current.filter(latitude, longitude);
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
-        // Immediately register our position on the server
+        
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
           lat: smoothed.lat, lng: smoothed.lng,
@@ -716,7 +729,7 @@ const App = () => {
       { enableHighAccuracy: true }
     );
 
-    // --- 📡 HEARTBEAT: keeps server state fresh every 5 seconds ---
+    // --- 📡 DYNAMIC HEARTBEAT ---
     const heartbeatInterval = setInterval(async () => {
       const currentLoc = liveLocationRef.current;
       if (!currentLoc) return;
@@ -729,13 +742,11 @@ const App = () => {
         }
       } catch (e) { }
 
-      // Always keep the server location cache fresh for the geofence engine
       socket.emit('safety-ping', {
         latitude: currentLoc.lat, longitude: currentLoc.lng,
         timestamp: new Date().toISOString(), batteryLevel: `${currentBattery}%`,
       });
 
-      // Only broadcast position to squad if not GHOST
       if (telemetryModeRef.current !== 'GHOST') {
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
@@ -745,7 +756,7 @@ const App = () => {
           roomCode: squadCode,
         });
       }
-    }, 5000);
+    }, currentPollingRate); // <-- WIRED HERE
 
     // --- 🟢 LIVE GPS TRACKING ---
     const watchId = navigator.geolocation.watchPosition(
@@ -764,27 +775,28 @@ const App = () => {
           }
         } catch (e) { }
 
-        // FROZEN: update our own marker locally but don't tell the squad
         if (telemetryModeRef.current === 'FROZEN') return;
 
+        // NOTE: watchPosition still fires on physical movement. If you want strict ECO mode 
+        // to override movement-based updates, you'd need to clear this watch and rely purely on the interval.
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
           lat: smoothed.lat, lng: smoothed.lng,
           speed: speed ? Math.round(speed * 3.6) : 0,
           battery: batteryLevel,
-          status: telemetryModeRef.current, // ACTIVE or GHOST
+          status: telemetryModeRef.current,
           roomCode: squadCode,
         });
       },
       (error) => console.error('🚨 [SYS_ERROR] Geolocation lost:', error.message),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: currentPollingRate } // <-- AND WIRED HERE
     );
 
     return () => {
       clearInterval(heartbeatInterval);
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [user, hasJoinedSquad, squadCode, accessStatus]);
+  }, [user, hasJoinedSquad, squadCode, accessStatus, sysConfig.polling]); // <-- CRITICAL: ADDED TO DEPENDENCIES
   // --- ⚡ INSTANT MODE OVERRIDE ---
   // Fires the moment a telemetry button is clicked so the server gets the new
   // status immediately, without waiting for the next watchPosition tick.
@@ -1170,67 +1182,35 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
-  const createMapOptions = (maps) => {
+  // --- TACTICAL MAP RENDERING ENGINE ---
+  const createMapOptions = (theme) => {
+    // Standard Cyberpunk Dark Theme
+    const tacticalStyles = [
+      { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+      { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+      { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+      { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+      { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
+      { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+      { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+      { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+    ];
+
+    // Ultra-Minimal Stealth Theme (Pitch black, no POI icons, dark grey roads)
+    const stealthStyles = [
+      { elementType: "geometry", stylers: [{ color: "#000000" }] },
+      { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+      { elementType: "labels.text.fill", stylers: [{ color: "#333333" }] },
+      { elementType: "labels.text.stroke", stylers: [{ color: "#000000" }] },
+      { featureType: "poi", stylers: [{ visibility: "off" }] },
+      { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#0a0a0a" }] },
+      { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#111111" }] },
+      { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] }
+    ];
+
     return {
-      zoomControl: false,
-      mapTypeControl: false,
-      fullscreenControl: false,
-      streetViewControl: false,
-      styles: [
-        { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-        { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-        { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-        {
-          featureType: "administrative.locality",
-          elementType: "labels.text.fill",
-          stylers: [{ color: "#d59563" }],
-        },
-        {
-          featureType: "poi",
-          elementType: "labels.text.fill",
-          stylers: [{ color: "#d59563" }],
-        },
-        {
-          featureType: "poi.park",
-          elementType: "geometry",
-          stylers: [{ color: "#263c3f" }],
-        },
-        {
-          featureType: "poi.park",
-          elementType: "labels.text.fill",
-          stylers: [{ color: "#6b9a76" }],
-        },
-        {
-          featureType: "road",
-          elementType: "geometry",
-          stylers: [{ color: "#38414e" }],
-        },
-        {
-          featureType: "road",
-          elementType: "geometry.stroke",
-          stylers: [{ color: "#212a37" }],
-        },
-        {
-          featureType: "road",
-          elementType: "labels.text.fill",
-          stylers: [{ color: "#9ca5b3" }],
-        },
-        {
-          featureType: "water",
-          elementType: "geometry",
-          stylers: [{ color: "#17263c" }],
-        },
-        {
-          featureType: "water",
-          elementType: "labels.text.fill",
-          stylers: [{ color: "#515c6d" }],
-        },
-        {
-          featureType: "water",
-          elementType: "labels.text.stroke",
-          stylers: [{ color: "#17263c" }],
-        },
-      ],
+      zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
+      styles: theme === 'stealth' ? stealthStyles : tacticalStyles
     };
   }
 
@@ -1668,9 +1648,12 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
           <GoogleMapReact
             bootstrapURLKeys={{ key: 'AIzaSyD10sWfHpczEuvmvwBkqkPHOu-QXQr8uM0' }}
             center={mapProps.center}
-            zoom={mapProps.zoom}
-            options={{ ...createMapOptions(), draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab') }}
+            options={{ ...createMapOptions(sysConfig.theme), draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab') }}
+          
             onClick={handleMapClick}
+            
+            zoom={mapProps.zoom}
+            
             yesIWantToUseGoogleMapApiInternals
             onGoogleApiLoaded={({ map, maps }) => {
               mapRef.current = map;
