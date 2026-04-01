@@ -1893,58 +1893,83 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                 className="fixed inset-0 bg-black/90 backdrop-blur-md z-[2000] flex items-center justify-center p-4 pointer-events-auto"
               >
                 <motion.div
-                  initial={{ scale: 0.95, y: 20 }}
-                  animate={{ scale: 1, y: 0 }}
-                  exit={{ scale: 0.95, y: 20 }}
-                  className="bg-black w-full max-w-lg border border-white flex flex-col max-h-[85vh] overflow-hidden"
+                  initial={{ scale: 0.95, y: 20, opacity: 0 }}
+                  animate={{ scale: 1, y: 0, opacity: 1 }}
+                  exit={{ scale: 0.95, y: 20, opacity: 0 }}
+                  className="bg-zinc-950 w-full max-w-lg border border-red-500/30 flex flex-col max-h-[85vh] overflow-hidden relative shadow-[0_0_50px_rgba(239,68,68,0.1)]"
                 >
-                  <div className="p-6 border-b border-white/20 flex items-center justify-between">
+                  {/* Tactical HUD Corners */}
+                  <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-red-500 z-10" />
+                  <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-red-500 z-10" />
+                  <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-red-500 z-10" />
+                  <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-red-500 z-10" />
+
+                  {/* Subtle Grid Background */}
+                  <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
+
+                  {/* Header */}
+                  <div className="p-6 border-b border-red-500/30 flex items-center justify-between bg-black/50 relative z-10">
                     <div className="flex items-center gap-4">
-                      <div className="border border-red-500 p-2 text-red-500">
-                        <ShieldCheck size={24} />
+                      <div className="border border-red-500/50 bg-red-500/10 p-2 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                        <ShieldCheck size={24} className="animate-pulse" />
                       </div>
-                      <h3 className="font-dot text-xl tracking-widest text-white uppercase">SYS_ACCESS_CONTROL</h3>
+                      <div>
+                        <h3 className="font-dot text-xl tracking-widest text-white uppercase leading-none mb-1">SYS_ACCESS_CONTROL</h3>
+                        <p className="font-dot text-[10px] text-red-500 tracking-widest uppercase">SECURE_OVERRIDE_TERMINAL</p>
+                      </div>
                     </div>
-                    <button onClick={() => setShowRequestsModal(false)} className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors">
+                    <button onClick={() => setShowRequestsModal(false)} className="p-2 border border-transparent hover:border-red-500 transition-colors text-zinc-500 hover:text-red-500">
                       <X size={20} />
                     </button>
                   </div>
 
-                  <div className="flex border-b border-white/20 bg-black">
+                  {/* Tabs */}
+                  <div className="flex border-b border-red-500/20 bg-black/40 relative z-10">
                     <button
                       onClick={() => setModalTab('requests')}
-                      className={`flex-1 py-4 font-dot text-sm uppercase tracking-widest transition-colors ${modalTab === 'requests' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/10'
-                        }`}
+                      className={`flex-1 py-4 font-dot text-sm uppercase tracking-widest transition-all relative ${
+                        modalTab === 'requests' ? 'text-red-500 bg-red-500/5' : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                      }`}
                     >
                       INBOUND {pendingRequests.length > 0 && `[${pendingRequests.length}]`}
+                      {modalTab === 'requests' && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]" />}
                     </button>
                     <button
                       onClick={() => setModalTab('blocked')}
-                      className={`flex-1 py-4 border-l border-white/20 font-dot text-sm uppercase tracking-widest transition-colors ${modalTab === 'blocked' ? 'bg-red-500 text-white' : 'text-zinc-500 hover:text-white hover:bg-white/10'
-                        }`}
+                      className={`flex-1 py-4 border-l border-red-500/20 font-dot text-sm uppercase tracking-widest transition-all relative ${
+                        modalTab === 'blocked' ? 'text-red-500 bg-red-500/5' : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                      }`}
                     >
                       BLACKLIST
+                      {modalTab === 'blocked' && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]" />}
                     </button>
                   </div>
 
-                  <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+                  {/* Content Area */}
+                  <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 relative z-10 min-h-[300px]">
                     {modalTab === 'requests' ? (
                       pendingRequests.length === 0 ? (
-                        <div className="py-16 flex flex-col items-center justify-center text-zinc-600 gap-4 cursor-default">
-                          <ShieldCheck size={48} className="opacity-20" />
-                          <p className="font-dot tracking-widest text-sm uppercase">NO_PENDING_REQUESTS</p>
+                        <div className="h-full py-16 flex flex-col items-center justify-center text-red-500/40 gap-6 cursor-default">
+                          <div className="relative">
+                            <motion.div animate={{ rotate: 360 }} transition={{ duration: 8, ease: "linear", repeat: Infinity }} className="absolute -inset-4 border border-dashed border-red-500/30 rounded-full" />
+                            <ShieldCheck size={56} className="relative z-10 drop-shadow-[0_0_15px_rgba(239,68,68,0.3)]" />
+                          </div>
+                          <div className="text-center">
+                            <p className="font-dot tracking-widest text-sm uppercase text-zinc-300">NO_PENDING_REQUESTS</p>
+                            <p className="font-dot tracking-[0.2em] text-[10px] uppercase text-zinc-600 mt-2 animate-pulse">MONITORING_NETWORK_TRAFFIC...</p>
+                          </div>
                         </div>
                       ) : (
                         pendingRequests.map(node => (
-                          <div key={node.targetId} className="p-4 bg-black border border-white/20 flex flex-col gap-4 relative">
+                          <div key={node.targetId} className="p-4 bg-black/60 border border-white/10 hover:border-red-500/50 flex flex-col gap-4 relative transition-colors shadow-lg">
                             <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 animate-pulse" />
 
                             <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 border border-white/30 flex items-center justify-center font-dot text-xl text-zinc-400 overflow-hidden">
-                                {node.photo ? <img src={node.photo} className="w-full h-full object-cover" alt="" /> : node.name.charAt(0)}
+                              <div className="w-12 h-12 border border-white/30 flex items-center justify-center font-dot text-xl text-zinc-400 overflow-hidden bg-black">
+                                {node.photo ? <img src={node.photo} className="w-full h-full object-cover opacity-80" alt="" /> : node.name.charAt(0)}
                               </div>
                               <div>
-                                <p className="font-dot uppercase tracking-widest text-white text-lg">{node.name}</p>
+                                <p className="font-dot uppercase tracking-widest text-white text-lg drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">{node.name}</p>
                                 <p className="text-[10px] font-dot text-red-500 uppercase tracking-widest">REQUESTING_ACCESS // NODE_LINK</p>
                               </div>
                             </div>
@@ -1955,7 +1980,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                                   socket.emit('resolve-access', { targetId: node.targetId, roomCode: squadCode, approved: true });
                                   setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
                                 }}
-                                className="flex-1 bg-white text-black border border-white hover:bg-black hover:text-white py-3 font-dot text-xs uppercase tracking-widest transition-colors"
+                                className="flex-1 bg-white/10 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/20 hover:border-emerald-400 py-3 font-dot text-xs uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]"
                               >
                                 GRANT_ACCESS
                               </button>
@@ -1964,7 +1989,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                                   socket.emit('resolve-access', { targetId: node.targetId, roomCode: squadCode, approved: false });
                                   setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
                                 }}
-                                className="flex-1 bg-black text-white py-3 border border-white/20 hover:border-red-500 hover:text-red-500 font-dot text-xs uppercase tracking-widest transition-colors"
+                                className="flex-1 bg-black text-red-500 py-3 border border-red-500/30 hover:bg-red-500/10 hover:border-red-500 font-dot text-xs uppercase tracking-widest transition-all"
                               >
                                 DENY
                               </button>
@@ -1974,15 +1999,18 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                       )
                     ) : (
                       blockedUsers.length === 0 ? (
-                        <div className="py-16 flex flex-col items-center justify-center text-zinc-600 gap-4 cursor-default">
-                          <Ban size={48} className="opacity-20" />
-                          <p className="font-dot tracking-widest text-sm uppercase">BLACKLIST_EMPTY</p>
+                        <div className="h-full py-16 flex flex-col items-center justify-center text-red-500/40 gap-6 cursor-default">
+                          <div className="relative">
+                            <motion.div animate={{ rotate: -360 }} transition={{ duration: 10, ease: "linear", repeat: Infinity }} className="absolute -inset-4 border border-dashed border-zinc-600/30 rounded-full" />
+                            <Ban size={56} className="relative z-10 text-zinc-600 drop-shadow-[0_0_15px_rgba(82,82,91,0.3)]" />
+                          </div>
+                          <p className="font-dot tracking-widest text-sm uppercase text-zinc-400">BLACKLIST_EMPTY</p>
                         </div>
                       ) : (
                         blockedUsers.map(user => (
-                          <div key={user.id} className="p-4 bg-black border border-red-500 flex items-center justify-between">
-                            <span className="font-dot uppercase tracking-widest text-white">{user.name}</span>
-                            <button onClick={() => toggleBlock(user.id)} className="border border-white/20 hover:border-white text-white px-4 py-2 font-dot text-xs uppercase tracking-widest transition-colors">
+                          <div key={user.id} className="p-4 bg-black/60 border-l-4 border-l-red-500 border-y border-r border-white/10 flex items-center justify-between">
+                            <span className="font-dot uppercase tracking-widest text-zinc-300">{user.name}</span>
+                            <button onClick={() => toggleBlock(user.id)} className="border border-white/20 hover:border-white text-white hover:bg-white hover:text-black px-4 py-2 font-dot text-xs uppercase tracking-widest transition-all">
                               REVOKE
                             </button>
                           </div>
