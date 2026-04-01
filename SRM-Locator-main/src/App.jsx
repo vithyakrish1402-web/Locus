@@ -6,7 +6,9 @@ import {
   MapPin, Users, Search, Settings, Navigation, ShieldCheck,
   Building2, Sparkles, MessageSquare, Send, Loader2,
   BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
-  Wifi, Bluetooth, Radio, LocateFixed, OctagonAlert, Waypoints, Activity
+  Wifi, Bluetooth, Radio, LocateFixed, OctagonAlert, Waypoints, Activity,
+  Target,Sliders,Volume2,VolumeX,Map,Zap,Bell
+
 } from 'lucide-react';
 
 // --- ADDED: FIREBASE AUTH ---
@@ -842,6 +844,17 @@ const App = () => {
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
 
+  // --- SYS_CONFIG STATE ---
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [sysConfig, setSysConfig] = useState({
+    audio: true,
+    theme: 'tactical', // 'tactical' | 'stealth'
+    polling: 'standard' // 'eco' | 'standard' | 'max'
+  });
+
+  const toggleConfig = (key, value) => {
+    setSysConfig(prev => ({ ...prev, [key]: value }));
+  };
   // Gemini API Utility
   const callGemini = async (prompt, systemInstruction = "You are a helpful campus assistant for SRM KTR.") => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -1293,6 +1306,14 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
             )}
             {user.displayName || "GUEST_NODE"}
           </div>
+          {/* --- NEW: SYS_CONFIG BUTTON --- */}
+          <button 
+            onClick={() => setShowSettingsModal(true)}
+            className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors"
+            title="System Configuration"
+          >
+             <Sliders size={18} />
+          </button>
           <button
             onClick={handleLogout}
             className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors"
@@ -2176,5 +2197,82 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
       </div>
     );
 };
+{/* --- SYS_CONFIG MODAL --- */}
+      <AnimatePresence>
+        {showSettingsModal && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
+            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[5000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} 
+              className="bg-black w-full max-w-2xl border border-white/30 flex flex-col max-h-[85vh] relative shadow-[0_0_30px_rgba(255,255,255,0.05)]"
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-white/20 flex justify-between items-center bg-black">
+                <div className="flex items-center gap-4 text-white">
+                  <Sliders className="w-6 h-6 text-zinc-400" />
+                  <div>
+                    <h3 className="font-dot text-xl tracking-widest uppercase">SYS_CONFIG</h3>
+                    <p className="font-dot text-[10px] tracking-widest uppercase text-zinc-500">LOCAL CLIENT PREFERENCES</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowSettingsModal(false)} className="p-2 border border-transparent hover:border-white transition-colors text-zinc-500 hover:text-white">
+                  <X size={20} />
+                </button>
+              </div>
+              
+              {/* Settings List */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-black text-white">
+                
+                {/* Setting 1: Audio */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+                    {sysConfig.audio ? <Volume2 size={16} className="text-emerald-500" /> : <VolumeX size={16} className="text-red-500" />}
+                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">SONAR_AUDIO_SIGNALS</span>
+                  </div>
+                  <div className="flex gap-4">
+                    <button onClick={() => toggleConfig('audio', true)} className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${sysConfig.audio ? 'bg-white text-black border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>ENABLED</button>
+                    <button onClick={() => toggleConfig('audio', false)} className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${!sysConfig.audio ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>MUTED</button>
+                  </div>
+                </div>
+
+                {/* Setting 2: Map Theme */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+                    <Map size={16} className="text-blue-400" />
+                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">GRID_OVERLAY_THEME</span>
+                  </div>
+                  <div className="flex gap-4">
+                    <button onClick={() => toggleConfig('theme', 'tactical')} className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${sysConfig.theme === 'tactical' ? 'bg-blue-500/20 text-blue-400 border-blue-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>TACTICAL (DARK)</button>
+                    <button onClick={() => toggleConfig('theme', 'stealth')} className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${sysConfig.theme === 'stealth' ? 'bg-white/10 text-white border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>STEALTH (MINIMAL)</button>
+                  </div>
+                </div>
+
+                {/* Setting 3: Polling Rate */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+                    <Zap size={16} className="text-yellow-500" />
+                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">TELEMETRY_POLLING_RATE</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button onClick={() => toggleConfig('polling', 'eco')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.polling === 'eco' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
+                      <Battery size={14} /> ECO (15s)
+                    </button>
+                    <button onClick={() => toggleConfig('polling', 'standard')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.polling === 'standard' ? 'bg-white/10 text-white border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
+                      <Activity size={14} /> STANDARD (5s)
+                    </button>
+                    <button onClick={() => toggleConfig('polling', 'max')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.polling === 'max' ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
+                      <Zap size={14} /> MAX (1s)
+                    </button>
+                  </div>
+                  <p className="font-inter text-[10px] text-zinc-500 leading-tight">Warning: MAX polling drains battery significantly faster. Use only during active pursuits.</p>
+                </div>
+
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
 export default App;
