@@ -523,7 +523,8 @@ const App = () => {
   // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
-      const { targetId, name, photo, lastKnownLocation, disconnectTime } = emergencyData;
+      // FIX 1: destructure timeDelta so projectGhostLocation receives the real lag time
+      const { targetId, name, photo, lastKnownLocation, timeDelta, disconnectTime } = emergencyData;
 
       console.log("🔥 [FRONTEND] Received Ghost Data:", emergencyData);
 
@@ -534,22 +535,22 @@ const App = () => {
       setUsers(prev => prev.filter(u => u.id !== targetId));
 
       const projectedCoords = projectGhostLocation(
-    lastKnownLocation.latitude,
-    lastKnownLocation.longitude,
-    lastKnownLocation.speed || 0,
-    lastKnownLocation.heading || 0,
-    timeDelta || 5 
-  );
-      // ✅ ADD A TINY OFFSET SO IT DOESN'T HIDE BEHIND YOU
+        lastKnownLocation.latitude,
+        lastKnownLocation.longitude,
+        lastKnownLocation.speed || 0,
+        lastKnownLocation.heading || 0,
+        timeDelta || 5
+      );
+
+      // FIX 2: use projectedCoords (pre-cog position) instead of raw lastKnownLocation
       setOfflineNodes(prev => ({
         ...prev,
         [targetId]: {
           id: targetId,
           name: name,
           photo: photo,
-          // Offset by roughly ~20 meters so it pops out next to the live marker
-          lat: lastKnownLocation.latitude,
-          lng: lastKnownLocation.longitude,
+          lat: projectedCoords.lat,
+          lng: projectedCoords.lng,
           battery: lastKnownLocation.batteryLevel,
           time: Date.now()
         }
@@ -1739,8 +1740,8 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
               />
             ))}
 
-            {/* ADD THIS SECTION BELOW TO RENDER GHOSTS */}
-            {activeTab === 'users' && Object.values(offlineNodes).map(ghost => (
+            {/* FIX 3: ghost markers always render — removed activeTab gate so they show on any tab */}
+            {Object.values(offlineNodes).map(ghost => (
               <CustomMarker
                 key={`ghost-${ghost.id}`}
                 lat={ghost.lat}
