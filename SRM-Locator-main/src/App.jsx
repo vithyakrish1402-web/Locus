@@ -760,6 +760,7 @@ const App = () => {
           speed: 0, battery: 100,
           status: telemetryModeRef.current,
           roomCode: squadCode,
+          heading: heading || 0,
         });
       },
       (err) => console.log('[SYS] Initial GPS lock delayed...'),
@@ -791,7 +792,7 @@ const App = () => {
           speed: 0, battery: currentBattery,
           status: telemetryModeRef.current,
           roomCode: squadCode,
-          heading: 0, // You can enhance this by calculating heading from previous coordinates if needed
+          heading: 0 // You can enhance this by calculating heading from previous coordinates if needed
         });
       }
     }, currentPollingRate); // <-- WIRED HERE
@@ -821,10 +822,10 @@ const App = () => {
           name: user.displayName, photo: user.photoURL,
           lat: smoothed.lat, lng: smoothed.lng,
           speed: speed ? Math.round(speed * 3.6) : 0,
-          heading: heading || 0,
           battery: batteryLevel,
           status: telemetryModeRef.current,
           roomCode: squadCode,
+          heading: 0 // You can enhance this by calculating heading from previous coordinates if needed
         });
       },
       (error) => console.error('🚨 [SYS_ERROR] Geolocation lost:', error.message),
