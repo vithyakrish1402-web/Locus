@@ -115,7 +115,7 @@ const CinematicLanding = ({
           <div className="p-2 border border-white text-white">
             <Radio className="w-5 h-5" />
           </div>
-          <span className="text-xl font-bold font-dot tracking-widest uppercase hidden sm:block">LOCATOR.SRM</span>
+          <span className="text-xl font-bold font-dot tracking-widest uppercase hidden sm:block">LOCUS</span>
         </div>
         <div className="text-xs font-dot tracking-widest uppercase text-white hover:text-red-500 cursor-pointer transition-colors border border-white/20 px-3 py-1">
           SYS_STATUS: ONLINE
@@ -1280,7 +1280,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
             <Navigation className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-dot tracking-widest uppercase text-xl">LOCATOR.SRM</h1>
+            <h1 className="font-dot tracking-widest uppercase text-xl">LOCUS</h1>
           </div>
         </div>
 
