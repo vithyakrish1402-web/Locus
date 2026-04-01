@@ -2,13 +2,12 @@ import { io } from "socket.io-client";
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
-import {
-  MapPin, Users, Search, Settings, Navigation, ShieldCheck,
-  Building2, Sparkles, MessageSquare, Send, Loader2,
+import { 
+  MapPin, Users, Search, Settings, Navigation, ShieldCheck, 
+  Building2, Sparkles, MessageSquare, Send, Loader2, 
   BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, Bluetooth, Radio, LocateFixed, OctagonAlert, Waypoints, Activity,
-  Target,Sliders,Volume2,VolumeX,Map,Zap,Bell
-
+  Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell
 } from 'lucide-react';
 
 // --- ADDED: FIREBASE AUTH ---
@@ -2273,6 +2272,8 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
           </motion.div>
         )}
       </AnimatePresence>
+      {/* --- END OF MODALS --- */}
+
       </div>
     );
 };
