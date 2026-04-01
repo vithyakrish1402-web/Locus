@@ -366,6 +366,17 @@ class PrecognitionFilter {
   }
 }
 const App = () => {
+  // --- SYS_CONFIG STATE ---
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [sysConfig, setSysConfig] = useState({
+    audio: true,
+    theme: 'tactical', // 'tactical' | 'stealth'
+    polling: 'standard' // 'eco' | 'standard' | 'max'
+  });
+
+  const toggleConfig = (key, value) => {
+    setSysConfig(prev => ({ ...prev, [key]: value }));
+  };
   // --- COMMANDER TELEMETRY STATE ---
   const [showTelemetryModal, setShowTelemetryModal] = useState(false);
   const [rawTelemetryData, setRawTelemetryData] = useState(null);
@@ -844,17 +855,7 @@ const App = () => {
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
 
-  // --- SYS_CONFIG STATE ---
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [sysConfig, setSysConfig] = useState({
-    audio: true,
-    theme: 'tactical', // 'tactical' | 'stealth'
-    polling: 'standard' // 'eco' | 'standard' | 'max'
-  });
-
-  const toggleConfig = (key, value) => {
-    setSysConfig(prev => ({ ...prev, [key]: value }));
-  };
+  
   // Gemini API Utility
   const callGemini = async (prompt, systemInstruction = "You are a helpful campus assistant for SRM KTR.") => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
