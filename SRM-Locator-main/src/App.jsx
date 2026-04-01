@@ -538,7 +538,7 @@ const App = () => {
     lastKnownLocation.longitude,
     lastKnownLocation.speed || 0,
     lastKnownLocation.heading || 0,
-    timedelta || 5 
+    timeDelta || 5 
   );
       // ✅ ADD A TINY OFFSET SO IT DOESN'T HIDE BEHIND YOU
       setOfflineNodes(prev => ({
@@ -791,6 +791,7 @@ const App = () => {
           speed: 0, battery: currentBattery,
           status: telemetryModeRef.current,
           roomCode: squadCode,
+          heading: 0, // You can enhance this by calculating heading from previous coordinates if needed
         });
       }
     }, currentPollingRate); // <-- WIRED HERE
@@ -848,6 +849,7 @@ const App = () => {
       speed: 0, battery: 100,
       status: telemetryMode, // use state here — this effect re-runs when it changes
       roomCode: squadCode,
+      heading: 0, 
     });
   }, [telemetryMode]);
 
