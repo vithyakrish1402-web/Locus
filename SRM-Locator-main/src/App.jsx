@@ -364,6 +364,34 @@ class PrecognitionFilter {
     return { lat: this.latEstimate, lng: this.lngEstimate };
   }
 }
+// --- 🧭 DEAD RECKONING ENGINE ---
+const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSeconds) => {
+  // If they were standing still, just return exact coordinates
+  if (!speedKmh || speedKmh < 1) return { lat, lng };
+
+  const R = 6371e3; // Earth's radius in meters
+  // Convert km/h to m/s, then multiply by seconds offline (e.g., 5 seconds)
+  const distanceMeters = (speedKmh * (5 / 18)) * timeDeltaSeconds; 
+  
+  const radLat = lat * (Math.PI / 180);
+  const radLng = lng * (Math.PI / 180);
+  const radHeading = headingDegrees * (Math.PI / 180);
+
+  const projectedLat = Math.asin(
+    Math.sin(radLat) * Math.cos(distanceMeters / R) +
+    Math.cos(radLat) * Math.sin(distanceMeters / R) * Math.cos(radHeading)
+  );
+
+  const projectedLng = radLng + Math.atan2(
+    Math.sin(radHeading) * Math.sin(distanceMeters / R) * Math.cos(radLat),
+    Math.cos(distanceMeters / R) - Math.sin(radLat) * Math.sin(projectedLat)
+  );
+
+  return {
+    lat: projectedLat * (180 / Math.PI),
+    lng: projectedLng * (180 / Math.PI)
+  };
+};
 const App = () => {
   // --- SYS_CONFIG STATE ---
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -503,6 +531,13 @@ const App = () => {
 
       setUsers(prev => prev.filter(u => u.id !== targetId));
 
+      const projectedCoords = projectGhostLocation(
+    lastKnownLocation.latitude,
+    lastKnownLocation.longitude,
+    lastKnownLocation.speed || 0,
+    lastKnownLocation.heading || 0,
+    5 // Seconds to project forward
+  );
       // ✅ ADD A TINY OFFSET SO IT DOESN'T HIDE BEHIND YOU
       setOfflineNodes(prev => ({
         ...prev,
@@ -511,8 +546,8 @@ const App = () => {
           name: name,
           photo: photo,
           // Offset by roughly ~20 meters so it pops out next to the live marker
-          lat: lastKnownLocation.latitude + 0.0002,
-          lng: lastKnownLocation.longitude + 0.0002,
+          lat: lastKnownLocation.latitude,
+          lng: lastKnownLocation.longitude,
           battery: lastKnownLocation.batteryLevel,
           time: Date.now()
         }
@@ -783,6 +818,7 @@ const App = () => {
           name: user.displayName, photo: user.photoURL,
           lat: smoothed.lat, lng: smoothed.lng,
           speed: speed ? Math.round(speed * 3.6) : 0,
+          heading: heading || 0,
           battery: batteryLevel,
           status: telemetryModeRef.current,
           roomCode: squadCode,
