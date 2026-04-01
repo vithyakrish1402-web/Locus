@@ -41,6 +41,8 @@ const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
     return (
       <div
         onClick={onClick}
+        // 👇 TACTICAL VISUAL OFFSET: Slides the UI 8px down and right, leaving the GPS data mathematically pure.
+        style={{ transform: 'translate(8px, 8px)' }} 
         className="w-10 h-10 -ml-5 -mt-5 bg-zinc-900/90 backdrop-blur-md rounded-full border-2 border-zinc-600 border-dashed shadow-[0_0_15px_rgba(113,113,122,0.4)] flex items-center justify-center text-zinc-400 font-bold tracking-tighter cursor-pointer overflow-hidden relative z-[45]"
         title={`SIGNAL LOST: ${name}`}
       >
@@ -536,7 +538,7 @@ const App = () => {
     lastKnownLocation.longitude,
     lastKnownLocation.speed || 0,
     lastKnownLocation.heading || 0,
-    5 // Seconds to project forward
+    timedelta || 5 
   );
       // ✅ ADD A TINY OFFSET SO IT DOESN'T HIDE BEHIND YOU
       setOfflineNodes(prev => ({

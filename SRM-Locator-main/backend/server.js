@@ -100,13 +100,21 @@ io.on('connection', (socket) => {
 
   // --- 🌐 LOCATION & ROOM ENGINE (CENTRALIZED) ---
   socket.on('update-location', (data) => {
+    const { roomCode, lat, lng, speed, battery, status, name, photo, heading } = data;
     const newRoom = data.roomCode || 'GLOBAL';
     const oldRoom = users[socket.id]?.roomCode;
 
     if (oldRoom && oldRoom !== newRoom) socket.leave(oldRoom);
     socket.join(newRoom);
     
-    users[socket.id] = { ...data, roomCode: newRoom };
+    // 👇 Armored Cache Assignment
+    users[socket.id] = { 
+      ...data, 
+      roomCode: newRoom,
+      heading: heading || 0,       // Failsafe: Prevents NaN crashes on the frontend
+      lastSeen: Date.now()         // Anchor: Records the exact millisecond of the last known ping
+    };
+    
     broadcastSquadUpdate(newRoom);
   });
 
@@ -123,23 +131,36 @@ io.on('connection', (socket) => {
     }
   });
 
-  // --- UNIFIED DISCONNECT HANDLER & DEAD MAN'S SWITCH ---
   socket.on('disconnect', () => {
     console.log(`🔴 Node Disconnected: ${socket.id}`);
     
     if (users[socket.id]) {
       const room = users[socket.id].roomCode;
       const userData = users[socket.id];
-      const lastLocation = locationCache[socket.id];
+      const lastLocation = locationCache[socket.id]; // ⚠️ Ensure 'heading' and 'lastSeen' are saved here!
       const squad = activeSquads[room];
 
       // TRIGGER DEAD MAN'S SWITCH 
-      if (lastLocation && squad && squad.ownerId !== socket.id) {
-        io.to(squad.ownerId).emit('member-signal-lost', {
+      if (lastLocation && squad) {
+        
+        // 1. Calculate the exact time in the dark (in seconds)
+        const lastSeenTime = lastLocation.lastSeen || Date.now(); 
+        const timeDeltaSeconds = (Date.now() - lastSeenTime) / 1000;
+
+        // 2. Broadcast to the ENTIRE squad (or keep it ownerId if strictly classified)
+        io.to(room).emit('member-signal-lost', {
           targetId: socket.id,
           name: userData.name,
           photo: userData.photo,
-          lastKnownLocation: lastLocation,
+          // 3. Package the trajectory data for the frontend's Pre-Cog engine
+          lastKnownLocation: {
+            latitude: lastLocation.lat || lastLocation.latitude, 
+            longitude: lastLocation.lng || lastLocation.longitude,
+            speed: lastLocation.speed || 0,
+            heading: lastLocation.heading || 0,          // <-- The trajectory
+            batteryLevel: lastLocation.battery || 0
+          },
+          timeDelta: timeDeltaSeconds,                   // <-- The exact lag time
           disconnectTime: new Date().toISOString()
         });
       }
@@ -148,6 +169,7 @@ io.on('connection', (socket) => {
       delete locationCache[socket.id]; 
       if (room) broadcastSquadUpdate(room);
     }
+    
     handleSquadSuccession(socket.id);
   });
 
