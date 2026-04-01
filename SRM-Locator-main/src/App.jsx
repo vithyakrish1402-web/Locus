@@ -1438,11 +1438,21 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                 >
                   <div className="absolute top-0 left-0 w-2 h-2 bg-white/20" />
                   <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <span className="inline-block border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest px-2 py-0.5 mb-2">
+                    <div className="flex flex-col">
+                      <span className="inline-block border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest px-2 py-0.5 mb-2 w-max">
                         {building.category}
                       </span>
-                      <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none">{building.name}</h4>
+                      <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none mb-1">
+                        {building.name}
+                      </h4>
+                      
+                      {/* --- 📡 LIVE DISTANCE TRACKER RESTORED --- */}
+                      {liveLocation && (
+                        <span className="text-[10px] text-emerald-400 font-dot uppercase tracking-widest mt-1 flex items-center gap-1">
+                          <Activity size={10} className="animate-pulse" /> 
+                          {calculateDistance(liveLocation.lat, liveLocation.lng, building.lat, building.lng)} AWAY
+                        </span>
+                      )}
                     </div>
                     <span className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest">[{building.id}]</span>
                   </div>
