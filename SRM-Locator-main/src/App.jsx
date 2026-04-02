@@ -90,7 +90,7 @@ const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
   )
 }
 const CinematicLanding = ({
-  email, setEmail, password, setPassword, showPassword, setShowPassword, executeAuthDirective, loginMethod
+  email, setEmail, password, setPassword, showPassword, setShowPassword, executeAuthDirective, loginMethod, username, setUsername
 }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const containerRef = useRef(null);
