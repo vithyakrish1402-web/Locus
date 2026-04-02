@@ -89,7 +89,7 @@ const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
   )
 }
 const CinematicLanding = ({
-  email, setEmail, password, setPassword, showPassword, setShowPassword, handleLogin, loginMethod
+  email, setEmail, password, setPassword, showPassword, setShowPassword, executeAuthDirective, loginMethod
 }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const containerRef = useRef(null);
@@ -1329,7 +1329,6 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         setPassword={setPassword}
         showPassword={showPassword}
         setShowPassword={setShowPassword}
-        handleLogin={handleLogin}
         executeAuthDirective={executeAuthDirective}
         loginMethod={loginMethod}
       />
