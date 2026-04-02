@@ -90,7 +90,7 @@ const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
   )
 }
 const CinematicLanding = ({
-  email, setEmail, password, setPassword, showPassword, setShowPassword, executeAuthDirective, loginMethod, username, setUsername
+  email, setEmail, password, setPassword, showPassword, setShowPassword, executeAuthDirective, loginMethod, username, setUsername, latency
 }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const containerRef = useRef(null);
@@ -538,6 +538,7 @@ const App = () => {
   const [squadRole, setSquadRole] = useState(null);
   const [pendingRequests, setPendingRequests] = useState([]);
   const liveLocationRef = useRef(null);
+  const [heading, setHeading] = useState(0); // compass heading in degrees
   // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
   // always read the current value — they close over the ref, not the stale state.
   const telemetryModeRef = useRef('ACTIVE');
@@ -1397,6 +1398,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         setShowPassword={setShowPassword}
         executeAuthDirective={executeAuthDirective}
         loginMethod={loginMethod}
+        latency={latency}
       />
     );
   }
