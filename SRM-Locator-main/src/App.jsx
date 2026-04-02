@@ -12,7 +12,13 @@ import {
 
 // --- ADDED: FIREBASE AUTH ---
 import { auth, googleProvider } from './firebase';
-import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
+import { 
+  signInWithPopup, 
+  onAuthStateChanged, 
+  signOut,
+  signInWithEmailAndPassword,       // <-- Required for standard Login
+  createUserWithEmailAndPassword    // <-- Required for new Registration
+} from 'firebase/auth';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -85,6 +91,7 @@ const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
 const CinematicLanding = ({
   email, setEmail, password, setPassword, showPassword, setShowPassword, handleLogin, loginMethod
 }) => {
+  const [isRegistering, setIsRegistering] = useState(false);
   const containerRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: containerRef });
   const smoothProgress = useSpring(scrollYProgress, { stiffness: 50, damping: 15 });
@@ -231,7 +238,7 @@ const CinematicLanding = ({
           </p>
         </motion.div>
 
-        {/* --- SCENE 7 & FINAL: AUTH NODE --- */}
+       {/* --- SCENE 7 & FINAL: AUTH NODE --- */}
         <motion.div style={{ opacity: finalOpacity, y: finalY }} className="absolute inset-0 flex items-center justify-center p-6 bg-black z-40">
           <div className="w-full max-w-md p-10 border border-white/20 bg-black relative pointer-events-auto">
             <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
@@ -242,12 +249,16 @@ const CinematicLanding = ({
             <div className="mb-10 text-left border-b border-white/20 pb-6 flex items-start justify-between">
               <div>
                 <h2 className="text-3xl font-dot uppercase tracking-widest mb-2">Auth_Node</h2>
-                <p className="text-red-500 font-dot text-xs">AWAITING CREDENTIALS...</p>
+                {/* Dynamically changes based on mode */}
+                <p className="text-red-500 font-dot text-xs">
+                  {isRegistering ? 'CREATING CREDENTIALS...' : 'AWAITING CREDENTIALS...'}
+                </p>
               </div>
               <Waypoints size={32} className="text-zinc-600" />
             </div>
 
-            <form onSubmit={(e) => { e.preventDefault(); handleLogin('email'); }} className="space-y-6 relative z-50">
+            {/* Now calls our new executeAuthDirective */}
+            <form onSubmit={(e) => { e.preventDefault(); executeAuthDirective('email', isRegistering); }} className="space-y-6 relative z-50">
               <div className="space-y-2">
                 <label className="text-xs font-dot text-white tracking-widest uppercase">ID // Email</label>
                 <input
@@ -279,13 +290,29 @@ const CinematicLanding = ({
                 </div>
               </div>
 
+              {/* Dynamic Submit Button */}
               <button
                 type="submit"
-                className="w-full py-4 mt-4 bg-white text-black font-dot uppercase tracking-widest hover:bg-red-500 hover:text-white border border-white hover:border-red-500 transition-all flex justify-center items-center gap-2"
+                className={`w-full py-4 mt-4 font-dot uppercase tracking-widest border transition-all flex justify-center items-center gap-2 ${
+                  isRegistering 
+                  ? 'bg-red-500 text-white border-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)]' 
+                  : 'bg-white text-black border-white hover:bg-red-500 hover:text-white hover:border-red-500'
+                }`}
               >
-                INITIALIZE_LINK <ArrowRight size={16} />
+                {isRegistering ? 'REQUEST_ACCESS' : 'INITIALIZE_LINK'} <ArrowRight size={16} />
               </button>
             </form>
+
+            {/* Tactical Toggle Switch */}
+            <div className="mt-6 flex justify-center relative z-50">
+              <button 
+                type="button"
+                onClick={() => setIsRegistering(!isRegistering)}
+                className="text-[10px] font-dot text-zinc-500 hover:text-white uppercase tracking-widest transition-colors border-b border-transparent hover:border-white pb-1"
+              >
+                {isRegistering ? '[ ABORT // RETRIEVE EXISTING ID ]' : '[ NO CLEARANCE? REGISTER NEW ID ]'}
+              </button>
+            </div>
 
             <div className="flex items-center gap-4 my-8 relative z-50">
               <div className="h-[1px] bg-white/20 flex-1"></div>
@@ -294,7 +321,7 @@ const CinematicLanding = ({
             </div>
 
             <button
-              onClick={() => handleLogin('google')}
+              onClick={() => executeAuthDirective('google')}
               className="w-full py-4 border border-white/30 hover:border-white transition-all font-dot uppercase text-xs flex items-center justify-center gap-3 bg-black text-white relative z-50"
             >
               <div className="w-4 h-4 border border-white flex items-center justify-center">
@@ -945,20 +972,55 @@ const App = () => {
     }
   };
 
-  const handleLogin = async (method) => {
+  // --- 🔐 THE MASTER AUTH ENGINE ---
+  const executeAuthDirective = async (method, isRegistering = false) => {
     setLoginMethod(method);
-    if (method === 'google') {
-      try {
+
+    try {
+      if (method === 'google') {
+        // 🌐 OAUTH OVERRIDE
         await signInWithPopup(auth, googleProvider);
-      } catch (error) {
-        console.error("Google Auth Failed:", error);
-        setLoginMethod(null);
+      } 
+      else if (method === 'email') {
+        // ✉️ SECURE ENCRYPTED CHANNEL
+        if (!email || !password) {
+          alert("[SYS_ERROR] ID AND KEY ARE REQUIRED FOR LINK.");
+          setLoginMethod(null);
+          return;
+        }
+
+        if (isRegistering) {
+          // CREATE NEW NODE IN THE MAINFRAME
+          await createUserWithEmailAndPassword(auth, email, password);
+          // Note: Firebase automatically logs the user in immediately after successful creation!
+        } else {
+          // VERIFY EXISTING CREDENTIALS
+          await signInWithEmailAndPassword(auth, email, password);
+        }
       }
-    } else {
-      setTimeout(() => {
-        setLoginMethod(null);
-        alert("Email auth requires backend. Please click CONTINUE VIA GOOGLE");
-      }, 1800);
+    } catch (error) {
+      console.error("Auth Terminal Error:", error.code);
+      
+      // Tactical Error Translation Matrix
+      let errorMessage = `[SYS_FAILURE] ${error.message}`;
+      
+      switch (error.code) {
+        case 'auth/invalid-credential':
+          errorMessage = "[ACCESS_DENIED] CREDENTIALS REJECTED. CHECK ID AND KEY.";
+          break;
+        case 'auth/email-already-in-use':
+          errorMessage = "[SYS_WARN] THIS ID ALREADY EXISTS IN THE MATRIX. INITIATE LOGIN INSTEAD.";
+          break;
+        case 'auth/weak-password':
+          errorMessage = "[SEC_VIOLATION] KEY ENCRYPTION TOO WEAK. MINIMUM 6 CHARACTERS REQUIRED.";
+          break;
+        case 'auth/invalid-email':
+          errorMessage = "[SYS_ERROR] MALFORMED ID SYNTAX.";
+          break;
+      }
+
+      alert(errorMessage);
+      setLoginMethod(null);
     }
   };
 
@@ -1268,6 +1330,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         showPassword={showPassword}
         setShowPassword={setShowPassword}
         handleLogin={handleLogin}
+        executeAuthDirective={executeAuthDirective}
         loginMethod={loginMethod}
       />
     );
