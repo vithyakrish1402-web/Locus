@@ -17,7 +17,8 @@ import {
   onAuthStateChanged, 
   signOut,
   signInWithEmailAndPassword,       // <-- Required for standard Login
-  createUserWithEmailAndPassword    // <-- Required for new Registration
+  createUserWithEmailAndPassword,
+  updateProfile    // <-- Required for new Registration
 } from 'firebase/auth';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
@@ -259,6 +260,27 @@ const CinematicLanding = ({
 
             {/* Now calls our new executeAuthDirective */}
             <form onSubmit={(e) => { e.preventDefault(); executeAuthDirective('email', isRegistering); }} className="space-y-6 relative z-50">
+              {/* --- DYNAMIC CODENAME FIELD (ONLY SHOWS DURING REGISTRATION) --- */}
+              <AnimatePresence>
+                {isRegistering && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-2 overflow-hidden"
+                  >
+                    <label className="text-xs font-dot text-white tracking-widest uppercase">CODENAME // Username</label>
+                    <input
+                      type="text"
+                      placeholder="E.G. GHOST_01"
+                      className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm text-white uppercase"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value.toUpperCase())}
+                      maxLength={15}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <div className="space-y-2">
                 <label className="text-xs font-dot text-white tracking-widest uppercase">ID // Email</label>
                 <input
@@ -422,6 +444,7 @@ const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSecon
   };
 };
 const App = () => {
+  const [username, setUsername] = useState('');
   // --- SYS_CONFIG STATE ---
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [sysConfig, setSysConfig] = useState({
@@ -990,9 +1013,28 @@ const App = () => {
         }
 
         if (isRegistering) {
-          // CREATE NEW NODE IN THE MAINFRAME
-          await createUserWithEmailAndPassword(auth, email, password);
-          // Note: Firebase automatically logs the user in immediately after successful creation!
+          // 1. Enforce Username Requirement
+          if (!username.trim()) {
+            alert("[SYS_ERROR] CODENAME REQUIRED FOR NEW RECRUITS.");
+            setLoginMethod(null);
+            return;
+          }
+
+          // 2. Create the Node in the Mainframe
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          
+          // 3. Generate a unique Tactical Bot Avatar based on their username
+          const generatedAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}&backgroundColor=000000`;
+
+          // 4. Attach the data to their Firebase Profile
+          await updateProfile(userCredential.user, {
+            displayName: username.toUpperCase(),
+            photoURL: generatedAvatar
+          });
+
+          // 5. Force React to recognize the newly attached data immediately
+          setUser({ ...userCredential.user, displayName: username.toUpperCase(), photoURL: generatedAvatar });
+
         } else {
           // VERIFY EXISTING CREDENTIALS
           await signInWithEmailAndPassword(auth, email, password);
@@ -1001,24 +1043,13 @@ const App = () => {
     } catch (error) {
       console.error("Auth Terminal Error:", error.code);
       
-      // Tactical Error Translation Matrix
       let errorMessage = `[SYS_FAILURE] ${error.message}`;
-      
       switch (error.code) {
-        case 'auth/invalid-credential':
-          errorMessage = "[ACCESS_DENIED] CREDENTIALS REJECTED. CHECK ID AND KEY.";
-          break;
-        case 'auth/email-already-in-use':
-          errorMessage = "[SYS_WARN] THIS ID ALREADY EXISTS IN THE MATRIX. INITIATE LOGIN INSTEAD.";
-          break;
-        case 'auth/weak-password':
-          errorMessage = "[SEC_VIOLATION] KEY ENCRYPTION TOO WEAK. MINIMUM 6 CHARACTERS REQUIRED.";
-          break;
-        case 'auth/invalid-email':
-          errorMessage = "[SYS_ERROR] MALFORMED ID SYNTAX.";
-          break;
+        case 'auth/invalid-credential': errorMessage = "[ACCESS_DENIED] CREDENTIALS REJECTED. CHECK ID AND KEY."; break;
+        case 'auth/email-already-in-use': errorMessage = "[SYS_WARN] THIS ID ALREADY EXISTS IN THE MATRIX. INITIATE LOGIN INSTEAD."; break;
+        case 'auth/weak-password': errorMessage = "[SEC_VIOLATION] KEY ENCRYPTION TOO WEAK. MINIMUM 6 CHARACTERS REQUIRED."; break;
+        case 'auth/invalid-email': errorMessage = "[SYS_ERROR] MALFORMED ID SYNTAX."; break;
       }
-
       alert(errorMessage);
       setLoginMethod(null);
     }
@@ -1329,6 +1360,8 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         setEmail={setEmail}
         password={password}
         setPassword={setPassword}
+        username={username}
+        setUsername={setUsername}
         showPassword={showPassword}
         setShowPassword={setShowPassword}
         executeAuthDirective={executeAuthDirective}
