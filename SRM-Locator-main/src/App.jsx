@@ -117,7 +117,7 @@ const CinematicLanding = ({
   const finalOpacity = useTransform(smoothProgress, [0.85, 0.95, 1], [0, 1, 1]);
   const finalY = useTransform(smoothProgress, [0.85, 1], [100, 0]);
 
-  return (
+return (
     <div ref={containerRef} className="relative w-full h-[800vh] bg-black text-white font-inter selection:bg-red-500/30">
       <motion.nav
         className="fixed top-0 left-0 w-full px-6 py-4 flex justify-between items-center z-50 bg-black/80 backdrop-blur-md border-b border-white/20"
@@ -128,9 +128,19 @@ const CinematicLanding = ({
           </div>
           <span className="text-xl font-bold font-dot tracking-widest uppercase hidden sm:block">LOCUS</span>
         </div>
-        <div className="text-xs font-dot tracking-widest uppercase text-white hover:text-red-500 cursor-pointer transition-colors border border-white/20 px-3 py-1">
-          SYS_STATUS: ONLINE
+        
+        {/* --- DYNAMIC LATENCY HUD INSIDE NAV --- */}
+        <div 
+          className={`text-[10px] sm:text-xs font-dot tracking-widest uppercase cursor-pointer transition-colors border px-3 py-1 flex items-center gap-2 
+            ${latency === 0 ? 'text-zinc-500 border-white/20' : 
+              latency < 80 ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5' : 
+              latency < 150 ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/5' : 
+              'text-red-500 border-red-500/50 bg-red-500/10'}`}
+        >
+          <Activity size={12} className={latency > 0 ? "animate-pulse" : ""} />
+          {latency > 0 ? `PING: ${latency}MS` : 'AWAITING_PING...'}
         </div>
+
       </motion.nav>
 
       <div className="sticky top-0 w-full h-screen overflow-hidden flex items-center justify-center perspective-[1000px] bg-dots">
@@ -444,6 +454,7 @@ const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSecon
   };
 };
 const App = () => {
+  const [latency, setLatency] = useState(0);
   const [username, setUsername] = useState('');
   // --- SYS_CONFIG STATE ---
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -549,6 +560,26 @@ const App = () => {
   };
 
 
+  // --- 📡 NETWORK LATENCY TRACKER ---
+  useEffect(() => {
+    if (!hasJoinedSquad) return;
+
+    // Send a ping every 2 seconds
+    const pingInterval = setInterval(() => {
+      socket.emit('check-ping', Date.now());
+    }, 2000);
+
+    // Listen for the bounce and calculate the round trip time
+    socket.on('pong-bounce', (serverTimestamp) => {
+      const rtt = Date.now() - serverTimestamp;
+      setLatency(rtt);
+    });
+
+    return () => {
+      clearInterval(pingInterval);
+      socket.off('pong-bounce');
+    };
+  }, [hasJoinedSquad]);
   // --- 🌐 GEOFENCE PERIMETER LISTENER ---
   useEffect(() => {
     socket.on('geofence-alert', (alertData) => {

@@ -19,6 +19,11 @@ const locationCache = {};
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
 
+  // --- BACKEND ---
+socket.on('check-ping', (clientTimestamp) => {
+  // Immediately bounce the exact same timestamp back to the client
+  socket.emit('pong-bounce', clientTimestamp);
+});
   // --- ⚖️ THE MUTINY PROTOCOL ---
   socket.on('vote-to-kick', ({ targetId, roomCode }) => {
     const squad = activeSquads[roomCode];
