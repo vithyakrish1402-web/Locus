@@ -1032,6 +1032,7 @@ const App = () => {
     setUsers([]);
     setLiveLocation(null);
     signOut(auth);
+    setOfflineNodes({});
   };
 
   const handleLeaveSquad = () => {
@@ -1039,6 +1040,7 @@ const App = () => {
     setHasJoinedSquad(false);
     setSquadCode('');
     setUsers([]);
+    setOfflineNodes({});
   };
 
   // --- TACTICAL DISTANCE ENGINE (HAVERSINE FORMULA) ---
