@@ -96,12 +96,17 @@ const LocusGuide = ({ onInitialize }) => {
   }, [chatMsgs, isProcessing]);
 
   // --- RENDER ---
+  // --- RENDER ---
   if (booting) {
     return (
       <div className="terminal-overlay">
         <div className="t-box">
           <div className="t-out">
-            {bootLines.map((line, i) => <div key={i} style={{ color: line.includes('100%') || line.includes('WELCOME') ? '#00ff9d' : '#00c97a' }}>{line}</div>)}
+            {bootLines.map((line, i) => (
+              <div key={i} style={{ color: line?.includes('100%') || line?.includes('WELCOME') ? '#00ff9d' : '#00c97a' }}>
+                {line}
+              </div>
+            ))}
             <span className="t-cursor"></span>
           </div>
         </div>
