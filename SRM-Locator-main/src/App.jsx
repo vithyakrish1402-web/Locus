@@ -94,306 +94,179 @@ const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
     </div>
   )
 }
-const CinematicLanding = ({
+// --- THE NEW AUTH TERMINAL (Replaces CinematicLanding) ---
+const AuthTerminal = ({
   email, setEmail, password, setPassword, showPassword, setShowPassword, executeAuthDirective, loginMethod, username, setUsername, latency
 }) => {
   const [isRegistering, setIsRegistering] = useState(false);
-  const containerRef = useRef(null);
-  const { scrollYProgress } = useScroll({ target: containerRef });
-  const smoothProgress = useSpring(scrollYProgress, { stiffness: 50, damping: 15 });
 
-  const heroOpacity = useTransform(smoothProgress, [0, 0.1, 0.15], [1, 1, 0]);
-  const heroScale = useTransform(smoothProgress, [0, 0.15], [1, 1.2]);
+  // Dynamic Ping Color Logic
+  const getPingColor = (ping) => {
+    if (!ping) return 'bg-zinc-500';
+    if (ping < 80) return 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]';
+    if (ping < 150) return 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]';
+    return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse';
+  };
 
-  const btOpacity = useTransform(smoothProgress, [0.1, 0.18, 0.25, 0.3], [0, 1, 1, 0]);
-  const btY = useTransform(smoothProgress, [0.1, 0.3], [100, -100]);
-
-  const wifiOpacity = useTransform(smoothProgress, [0.25, 0.33, 0.4, 0.45], [0, 1, 1, 0]);
-  const wifiScale = useTransform(smoothProgress, [0.25, 0.45], [0.8, 1.1]);
-
-  const crowdOpacity = useTransform(smoothProgress, [0.4, 0.48, 0.55, 0.6], [0, 1, 1, 0]);
-  const crowdBlur = useTransform(smoothProgress, [0.4, 0.5], ['blur(20px)', 'blur(0px)']);
-
-  const radarOpacity = useTransform(smoothProgress, [0.55, 0.63, 0.7, 0.75], [0, 1, 1, 0]);
-  const radarRotate = useTransform(smoothProgress, [0.55, 0.75], [0, 360]);
-
-  const sosOpacity = useTransform(smoothProgress, [0.7, 0.78, 0.85, 0.9], [0, 1, 1, 0]);
-
-  const finalOpacity = useTransform(smoothProgress, [0.85, 0.95, 1], [0, 1, 1]);
-  const finalY = useTransform(smoothProgress, [0.85, 1], [100, 0]);
-
-return (
-    <div ref={containerRef} className="relative w-full h-[800vh] bg-black text-white font-inter selection:bg-red-500/30">
-      <motion.nav
-        className="fixed top-0 left-0 w-full px-6 py-4 flex justify-between items-center z-50 bg-black/80 backdrop-blur-md border-b border-white/20"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 border border-white text-white">
-            <Radio className="w-5 h-5" />
-          </div>
-          <span className="text-xl font-bold font-dot tracking-widest uppercase hidden sm:block">LOCUS</span>
+  return (
+    <div className="relative w-full h-screen bg-black text-white font-inter selection:bg-red-500/30 flex items-center justify-center overflow-hidden bg-dots">
+      
+      {/* 📡 RESTORED PING HUD 📡 */}
+      <div className="absolute top-6 right-8 z-50 flex items-center gap-3 font-dot text-xs tracking-widest text-zinc-400">
+        <span className="uppercase">SYS_PING</span>
+        <div className="flex items-center gap-2 bg-zinc-900/50 border border-white/10 px-3 py-1">
+          <div className={`w-2 h-2 rounded-full ${getPingColor(latency)}`} />
+          <span className={latency > 150 ? 'text-red-500' : 'text-white'}>
+            {latency ? `${latency}MS` : 'CALCULATING...'}
+          </span>
         </div>
-        
-        {/* --- DYNAMIC LATENCY HUD INSIDE NAV --- */}
-        <div 
-          className={`text-[10px] sm:text-xs font-dot tracking-widest uppercase cursor-pointer transition-colors border px-3 py-1 flex items-center gap-2 
-            ${latency === 0 ? 'text-zinc-500 border-white/20' : 
-              latency < 80 ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5' : 
-              latency < 150 ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/5' : 
-              'text-red-500 border-red-500/50 bg-red-500/10'}`}
-        >
-          <Activity size={12} className={latency > 0 ? "animate-pulse" : ""} />
-          {latency > 0 ? `PING: ${latency}MS` : 'AWAITING_PING...'}
-        </div>
-
-      </motion.nav>
-
-      <div className="sticky top-0 w-full h-screen overflow-hidden flex items-center justify-center perspective-[1000px] bg-dots">
-        {/* --- SCENE 1: HERO & 3D CAMPUS --- */}
-        <motion.div style={{ opacity: heroOpacity, scale: heroScale, y: 0 }} className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 w-full max-w-7xl mx-auto pointer-events-none">
-          <div className="inline-block border border-white/20 px-3 py-1 font-dot text-xs text-zinc-400 uppercase tracking-widest mb-12">
-            <Activity size={12} className="inline mr-2 text-red-500 animate-pulse" />
-            V 4.0 / QUANTUM POSITIONING
-          </div>
-          <h1 className="text-6xl sm:text-7xl md:text-9xl font-dot uppercase leading-[0.9] tracking-tighter mix-blend-difference z-20">
-            MAPPING <br /> THE <br /> <span className="text-red-500">VOID.</span>
-          </h1>
-          <p className="mt-8 text-lg font-inter text-zinc-400 max-w-lg border-l-2 border-red-500 pl-4 text-left z-20">
-            The hyper-accurate, decentralized locator network. See through the noise. Track your crew.
-          </p>
-
-          <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none opacity-40">
-            <div className="w-[80vw] h-[80vw] max-w-3xl max-h-3xl border border-white/10 rounded-full flex flex-col items-center justify-center animate-[spin_60s_linear_infinite]">
-              <div className="absolute w-2 h-2 bg-red-500 shadow-[0_0_20px_#f00] top-1/4 left-1/4 animate-pulse" />
-              <div className="absolute w-1 h-1 bg-white shadow-[0_0_10px_#fff] top-1/2 right-1/4 animate-ping" />
-              <div className="absolute w-1.5 h-1.5 bg-white shadow-[0_0_10px_#fff] bottom-1/3 left-1/2 animate-pulse" />
-              <div className="w-1/2 h-1/2 border border-white/20 rounded-full animate-[spin_30s_linear_infinite_reverse] relative">
-                <div className="absolute w-2 h-2 bg-red-500 shadow-[0_0_20px_#f00] top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-              </div>
-            </div>
-          </div>
-          <div className="absolute bottom-12 font-dot text-xs text-zinc-500 tracking-[0.3em] uppercase animate-pulse">
-            SCROLL_TO_INITIALIZE_SYS
-          </div>
-        </motion.div>
-
-        {/* --- SCENE 2: BLUETOOTH PROXIMITY --- */}
-        <motion.div style={{ opacity: btOpacity, y: btY }} className="absolute inset-0 flex flex-col md:flex-row items-center justify-center p-6 gap-12 max-w-6xl mx-auto z-20 pointer-events-none">
-          <div className="w-full md:w-1/2 aspect-square relative flex items-center justify-center">
-            <Bluetooth size={48} className="text-white z-10" />
-            <motion.div className="absolute inset-0 border border-white/20 rounded-full" animate={{ scale: [1, 2], opacity: [1, 0] }} transition={{ duration: 2, repeat: Infinity }} />
-            <motion.div className="absolute inset-0 border border-red-500/50 rounded-full" animate={{ scale: [1, 2], opacity: [1, 0] }} transition={{ duration: 2, repeat: Infinity, delay: 0.5 }} />
-            <motion.div className="absolute inset-0 border border-white/10 rounded-full" animate={{ scale: [1, 2], opacity: [1, 0] }} transition={{ duration: 2, repeat: Infinity, delay: 1 }} />
-            <div className="absolute top-[20%] right-[20%] w-2 h-2 bg-red-500 rounded-full"></div>
-            <div className="absolute bottom-[30%] left-[15%] w-1.5 h-1.5 bg-white rounded-full"></div>
-            <div className="absolute bottom-[20%] right-[30%] w-3 h-3 border border-white rounded-full flex items-center justify-center"><div className="w-1 h-1 bg-white rounded-full"></div></div>
-          </div>
-          <div className="md:w-1/2 space-y-6">
-            <div className="font-dot text-red-500 text-sm tracking-widest">[ 01_PROXIMITY_MESH ]</div>
-            <h2 className="text-5xl font-dot uppercase leading-none">P2P <br /> ECHO_SCAN</h2>
-            <p className="font-inter text-zinc-400 text-lg">
-              Smart devices interlock directly. Forming an invisible, decentralised Bluetooth mesh to trace high-accuracy micro-locations indoors.
-            </p>
-          </div>
-        </motion.div>
-
-        {/* --- SCENE 3: WIFI FINGERPRINTING --- */}
-        <motion.div style={{ opacity: wifiOpacity, scale: wifiScale }} className="absolute inset-0 flex flex-col md:flex-row-reverse items-center justify-center p-6 gap-12 max-w-6xl mx-auto z-20 pointer-events-none">
-          <div className="w-full md:w-1/2 aspect-[4/3] bg-black border border-white/20 p-4 relative overflow-hidden flex items-center justify-center">
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]" />
-            <Wifi size={64} className="text-red-500 z-10 animate-pulse" />
-            <motion.div animate={{ height: ['0%', '100%'] }} transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse" }} className="absolute left-1/4 w-[1px] bg-red-500 blur-[1px] bottom-0" />
-            <motion.div animate={{ height: ['0%', '80%'] }} transition={{ duration: 1.8, repeat: Infinity, repeatType: "reverse", delay: 0.3 }} className="absolute right-1/4 w-[1px] bg-white blur-[1px] top-0" />
-            <motion.div animate={{ width: ['0%', '100%'] }} transition={{ duration: 1.2, repeat: Infinity, repeatType: "reverse", delay: 0.6 }} className="absolute top-1/3 h-[1px] bg-red-500 blur-[1px] left-0" />
-          </div>
-          <div className="md:w-1/2 space-y-6">
-            <div className="font-dot text-red-500 text-sm tracking-widest">[ 02_MAPPING_VECTORS ]</div>
-            <h2 className="text-5xl font-dot uppercase leading-none">SIGNAL <br /> FINGERPRINTS</h2>
-            <p className="font-inter text-zinc-400 text-lg">
-              Triangulating against legacy AP nodes. Advanced Neural algorithms map signal decay across building geometry to locate targets without GPS.
-            </p>
-          </div>
-        </motion.div>
-
-        {/* --- SCENE 4: CROWD DENSITY HEATMAP --- */}
-        <motion.div style={{ opacity: crowdOpacity, filter: crowdBlur }} className="absolute inset-0 flex flex-col items-center justify-center p-6 max-w-5xl mx-auto text-center z-20 pointer-events-none">
-          <Users size={64} className="text-white mb-8" />
-          <h2 className="text-5xl md:text-7xl font-dot uppercase mb-6">THERMAL <br /> OVERLAY</h2>
-          <p className="font-inter text-zinc-400 max-w-xl mx-auto text-lg mb-12">
-            Real-time aggregation. Heatmaps track dense congregation areas dynamically. Avoid the rush or find the action.
-          </p>
-          <div className="w-full max-w-2xl h-32 border border-white/20 bg-black relative overflow-hidden flex blur-sm">
-            <motion.div animate={{ x: ['-100%', '200%'] }} transition={{ duration: 4, ease: "linear", repeat: Infinity }} className="h-full w-48 bg-red-500/50 blur-3xl rounded-full mix-blend-screen" />
-            <motion.div animate={{ x: ['200%', '-100%'] }} transition={{ duration: 5, ease: "linear", repeat: Infinity }} className="h-full w-64 bg-white/30 blur-3xl rounded-full mix-blend-screen absolute top-4" />
-          </div>
-        </motion.div>
-
-        {/* --- SCENE 5: FRIEND RADAR --- */}
-        <motion.div style={{ opacity: radarOpacity, rotate: radarRotate }} className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 opacity-30">
-          <div className="w-[100vw] h-[100vw] sm:w-[50vw] sm:h-[50vw] border border-red-500 rounded-full relative">
-            <div className="absolute top-0 bottom-1/2 left-1/2 w-0.5 bg-gradient-to-t from-red-500 to-transparent origin-bottom animate-pulse"></div>
-            <div className="absolute w-2 h-2 bg-white top-1/4 left-1/3 shadow-[0_0_10px_#fff]" />
-            <div className="absolute w-3 h-3 border border-red-500 top-2/3 right-1/4 flex items-center justify-center"><div className="w-1 h-1 bg-red-500" /></div>
-          </div>
-        </motion.div>
-        <motion.div style={{ opacity: radarOpacity }} className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-20 pointer-events-none">
-          <LocateFixed size={48} className="text-red-500 mb-6" />
-          <h2 className="text-5xl md:text-7xl font-dot uppercase text-white drop-shadow-[0_0_20px_rgba(0,0,0,1)]">SQUAD <br /> RADAR</h2>
-        </motion.div>
-
-        {/* --- SCENE 6: EMERGENCY SOS --- */}
-        <motion.div style={{ opacity: sosOpacity }} className="absolute inset-0 bg-red-950 flex flex-col items-center justify-center p-6 z-30 transition-colors duration-500 mix-blend-difference pointer-events-none">
-          <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 0.5, repeat: Infinity }} className="p-8 border-4 border-red-500 text-red-500 bg-black rotate-45 mb-12">
-            <OctagonAlert size={64} className="-rotate-45" />
-          </motion.div>
-          <h2 className="text-6xl md:text-8xl font-dot uppercase tracking-tighter text-red-500">
-            SOS_OVERRIDE
-          </h2>
-          <p className="font-mono text-white mt-6 bg-red-500 px-4 py-1 text-sm tracking-widest uppercase">
-            CRITICAL DISTRESS SIGNAL PROTOCOL
-          </p>
-        </motion.div>
-
-       {/* --- SCENE 7 & FINAL: AUTH NODE --- */}
-        <motion.div style={{ opacity: finalOpacity, y: finalY }} className="absolute inset-0 flex items-center justify-center p-6 bg-black z-40">
-          <div className="w-full max-w-md p-10 border border-white/20 bg-black relative pointer-events-auto">
-            <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
-            <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
-            <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
-            <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
-
-            <div className="mb-10 text-left border-b border-white/20 pb-6 flex items-start justify-between">
-              <div>
-                <h2 className="text-3xl font-dot uppercase tracking-widest mb-2">Auth_Node</h2>
-                {/* Dynamically changes based on mode */}
-                <p className="text-red-500 font-dot text-xs">
-                  {isRegistering ? 'CREATING CREDENTIALS...' : 'AWAITING CREDENTIALS...'}
-                </p>
-              </div>
-              <Waypoints size={32} className="text-zinc-600" />
-            </div>
-
-            {/* Now calls our new executeAuthDirective */}
-            <form onSubmit={(e) => { e.preventDefault(); executeAuthDirective('email', isRegistering); }} className="space-y-6 relative z-50">
-              {/* --- DYNAMIC CODENAME FIELD (ONLY SHOWS DURING REGISTRATION) --- */}
-              <AnimatePresence>
-                {isRegistering && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="space-y-2 overflow-hidden"
-                  >
-                    <label className="text-xs font-dot text-white tracking-widest uppercase">CODENAME // Username</label>
-                    <input
-                      type="text"
-                      placeholder="E.G. GHOST_01"
-                      className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm text-white uppercase"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value.toUpperCase())}
-                      maxLength={15}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              <div className="space-y-2">
-                <label className="text-xs font-dot text-white tracking-widest uppercase">ID // Email</label>
-                <input
-                  type="email"
-                  placeholder="you@srmist.edu.in"
-                  className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-dot text-white tracking-widest uppercase">KEY // Passkey</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Dynamic Submit Button */}
-              <button
-                type="submit"
-                className={`w-full py-4 mt-4 font-dot uppercase tracking-widest border transition-all flex justify-center items-center gap-2 ${
-                  isRegistering 
-                  ? 'bg-red-500 text-white border-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)]' 
-                  : 'bg-white text-black border-white hover:bg-red-500 hover:text-white hover:border-red-500'
-                }`}
-              >
-                {isRegistering ? 'REQUEST_ACCESS' : 'INITIALIZE_LINK'} <ArrowRight size={16} />
-              </button>
-            </form>
-
-            {/* Tactical Toggle Switch */}
-            <div className="mt-6 flex justify-center relative z-50">
-              <button 
-                type="button"
-                onClick={() => setIsRegistering(!isRegistering)}
-                className="text-[10px] font-dot text-zinc-500 hover:text-white uppercase tracking-widest transition-colors border-b border-transparent hover:border-white pb-1"
-              >
-                {isRegistering ? '[ ABORT // RETRIEVE EXISTING ID ]' : '[ NO CLEARANCE? REGISTER NEW ID ]'}
-              </button>
-            </div>
-
-            <div className="flex items-center gap-4 my-8 relative z-50">
-              <div className="h-[1px] bg-white/20 flex-1"></div>
-              <span className="text-[10px] font-dot text-zinc-500 uppercase">OR EXT_AUTH</span>
-              <div className="h-[1px] bg-white/20 flex-1"></div>
-            </div>
-
-            <button
-              onClick={() => executeAuthDirective('google')}
-              className="w-full py-4 border border-white/30 hover:border-white transition-all font-dot uppercase text-xs flex items-center justify-center gap-3 bg-black text-white relative z-50"
-            >
-              <div className="w-4 h-4 border border-white flex items-center justify-center">
-                <span className="text-[10px] leading-none">G</span>
-              </div>
-              CONTINUE VIA GOOGLE
-            </button>
-          </div>
-        </motion.div>
-
-        {/* Auth Overlay Modal */}
-        <AnimatePresence>
-          {loginMethod && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-[100] bg-black border-[8px] border-white flex flex-col items-center justify-center p-6 pointer-events-auto"
-            >
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                className="w-24 h-24 border-2 border-white/20 border-t-red-500 rounded-full mb-8 relative"
-              >
-                <div className="absolute inset-2 border border-white/10 rounded-full" />
-              </motion.div>
-              <h2 className="text-3xl font-dot uppercase tracking-widest text-white mb-2 blink">LINKING...</h2>
-              <p className="text-red-500 font-dot text-sm uppercase">ESTABLISHING SECURE CONNECTION</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
+
+      {/* Subtle background radar */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+        <div className="w-[80vw] h-[80vw] max-w-3xl max-h-3xl border border-white/10 rounded-full flex flex-col items-center justify-center animate-[spin_60s_linear_infinite]">
+          <div className="w-1/2 h-1/2 border border-red-500/20 rounded-full animate-[spin_30s_linear_infinite_reverse]" />
+        </div>
+      </div>
+
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
+        animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="w-full max-w-md p-10 border border-white/20 bg-black relative pointer-events-auto z-10 shadow-[0_0_50px_rgba(255,255,255,0.05)]"
+      >
+        <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
+        <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
+        <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
+        <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
+
+        <div className="mb-10 text-left border-b border-white/20 pb-6 flex items-start justify-between">
+          <div>
+            <h2 className="text-3xl font-dot uppercase tracking-widest mb-2">Auth_Node</h2>
+            <p className="text-red-500 font-dot text-xs">
+              {isRegistering ? 'CREATING CREDENTIALS...' : 'AWAITING CREDENTIALS...'}
+            </p>
+          </div>
+          <Waypoints size={32} className="text-zinc-600" />
+        </div>
+
+        <form onSubmit={(e) => { e.preventDefault(); executeAuthDirective('email', isRegistering); }} className="space-y-6 relative z-50">
+          
+          <AnimatePresence>
+            {isRegistering && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-2 overflow-hidden"
+              >
+                <label className="text-xs font-dot text-white tracking-widest uppercase">CODENAME // Username</label>
+                <input
+                  type="text"
+                  placeholder="E.G. GHOST_01"
+                  className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm text-white uppercase"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toUpperCase())}
+                  maxLength={15}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="space-y-2">
+            <label className="text-xs font-dot text-white tracking-widest uppercase">ID // Email</label>
+            <input
+              type="email"
+              placeholder="you@srmist.edu.in"
+              className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-dot text-white tracking-widest uppercase">KEY // Passkey</label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className={`w-full py-4 mt-4 font-dot uppercase tracking-widest border transition-all flex justify-center items-center gap-2 ${
+              isRegistering 
+              ? 'bg-red-500 text-white border-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)]' 
+              : 'bg-white text-black border-white hover:bg-red-500 hover:text-white hover:border-red-500'
+            }`}
+          >
+            {isRegistering ? 'REQUEST_ACCESS' : 'INITIALIZE_LINK'} <ArrowRight size={16} />
+          </button>
+        </form>
+
+        <div className="mt-6 flex justify-center relative z-50">
+          <button 
+            type="button"
+            onClick={() => setIsRegistering(!isRegistering)}
+            className="text-[10px] font-dot text-zinc-500 hover:text-white uppercase tracking-widest transition-colors border-b border-transparent hover:border-white pb-1"
+          >
+            {isRegistering ? '[ ABORT // RETRIEVE EXISTING ID ]' : '[ NO CLEARANCE? REGISTER NEW ID ]'}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-4 my-8 relative z-50">
+          <div className="h-[1px] bg-white/20 flex-1"></div>
+          <span className="text-[10px] font-dot text-zinc-500 uppercase">OR EXT_AUTH</span>
+          <div className="h-[1px] bg-white/20 flex-1"></div>
+        </div>
+
+        <button
+          onClick={() => executeAuthDirective('google')}
+          className="w-full py-4 border border-white/30 hover:border-white transition-all font-dot uppercase text-xs flex items-center justify-center gap-3 bg-black text-white relative z-50"
+        >
+          <div className="w-4 h-4 border border-white flex items-center justify-center">
+            <span className="text-[10px] leading-none">G</span>
+          </div>
+          CONTINUE VIA GOOGLE
+        </button>
+      </motion.div>
+
+      {/* Auth Overlay Modal */}
+      <AnimatePresence>
+        {loginMethod && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[100] bg-black/90 backdrop-blur-md border-[8px] border-white flex flex-col items-center justify-center p-6 pointer-events-auto"
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+              className="w-24 h-24 border-2 border-white/20 border-t-red-500 rounded-full mb-8 relative"
+            >
+              <div className="absolute inset-2 border border-white/10 rounded-full" />
+            </motion.div>
+            <h2 className="text-3xl font-dot uppercase tracking-widest text-white mb-2 blink">LINKING...</h2>
+            <p className="text-red-500 font-dot text-sm uppercase">ESTABLISHING SECURE CONNECTION</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
-}
+};
 // --- 🔮 THE PRECOGNITION ENGINE (KALMAN FILTER) ---
 class PrecognitionFilter {
   constructor(q = 0.0001, r = 0.001) {
@@ -1396,7 +1269,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
       return <LocusGuide onInitialize={() => setHasSeenGuide(true)} />;
     }
     return (
-      <CinematicLanding
+      <AuthTerminal
         email={email}
         setEmail={setEmail}
         password={password}
