@@ -9,6 +9,18 @@ import {
   Wifi, Bluetooth, Radio, LocateFixed, OctagonAlert, Waypoints, Activity,
   Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell
 } from 'lucide-react';
+// ... your other imports (React, framer-motion, lucide-react, etc.)
+import { auth, googleProvider } from './firebase';
+import { 
+  signInWithPopup, 
+  onAuthStateChanged, 
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword
+} from 'firebase/auth';
+
+// 👇 ADD THIS LINE RIGHT HERE
+import LocusGuide from './LocusGuide';
 
 // --- ADDED: FIREBASE AUTH ---
 import { auth, googleProvider } from './firebase';
@@ -458,6 +470,7 @@ const App = () => {
   const [username, setUsername] = useState('');
   // --- SYS_CONFIG STATE ---
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [hasSeenGuide, setHasSeenGuide] = useState(false);
   const [sysConfig, setSysConfig] = useState({
     audio: true,
     theme: 'tactical', // 'tactical' | 'stealth'
@@ -1386,6 +1399,9 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
   if (authLoading) return <div className="h-screen bg-black text-white flex justify-center items-center font-dot">INITIALIZING_SECURE_LINK...</div>;
 
   if (!user) {
+    if (!hasSeenGuide) {
+      return <LocusGuide onInitialize={() => setHasSeenGuide(true)} />;
+    }
     return (
       <CinematicLanding
         email={email}

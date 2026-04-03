@@ -1,0 +1,91 @@
+/* LocusGuide.css */
+.locus-guide-wrapper {
+  background: #060a08;
+  color: #c8ffe8;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-x: hidden;
+  cursor: crosshair;
+  transition: background 0.6s, color 0.6s;
+  min-height: 100vh;
+  position: absolute;
+  inset: 0;
+  z-index: 9000;
+}
+
+.locus-guide-wrapper::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+}
+
+.locus-guide-wrapper::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: linear-gradient(rgba(0,255,157,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,157,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Stealth Mode Override */
+.locus-guide-wrapper.stealth {
+  background: #0a0c10; color: #e0f0ff;
+}
+.locus-guide-wrapper.stealth .nav-logo { color: #60a5fa; }
+.locus-guide-wrapper.stealth .btn-p { background: #60a5fa; color: #0a0c10; }
+.locus-guide-wrapper.stealth .hero-title { color: #60a5fa; text-shadow: 0 0 40px rgba(96,165,250,0.3); }
+
+/* Progress & Nav */
+.lg-prog { position: fixed; top: 0; left: 0; height: 2px; background: #00ff9d; z-index: 10000; box-shadow: 0 0 8px #00ff9d; transition: width 0.1s linear; }
+.lg-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 500; display: flex; justify-content: space-between; align-items: center; padding: 0 2.5rem; height: 56px; background: rgba(6,10,8,0.95); border-bottom: 1px solid rgba(0,255,157,0.18); backdrop-filter: blur(8px); }
+.nav-logo { font-family: 'Orbitron', monospace; font-size: 13px; font-weight: 700; letter-spacing: 4px; color: #00ff9d; }
+.nav-logo span { color: #6b9e82; font-weight: 400; font-size: 10px; }
+.nav-right { display: flex; align-items: center; gap: 1rem; }
+.theme-btn { font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 2px; padding: 5px 12px; background: transparent; color: #6b9e82; border: 1px solid rgba(0,255,157,0.18); cursor: crosshair; text-transform: uppercase; transition: all 0.2s; }
+.theme-btn:hover { color: #00ff9d; border-color: rgba(0,255,157,0.45); }
+
+/* Terminal Boot Sequence */
+.terminal-overlay { position: fixed; inset: 0; background: #060a08; z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+.t-box { border: 1px solid rgba(0,255,157,0.18); background: #0a0f0c; padding: 2.5rem 3rem; width: min(500px, 90vw); position: relative; }
+.t-box::before { content: 'LOCUS // BOOT SEQUENCE'; position: absolute; top: -10px; left: 20px; font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 2px; color: #00ff9d; background: #0a0f0c; padding: 0 8px; }
+.t-out { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: #00c97a; min-height: 240px; line-height: 2.1; }
+.t-cursor { display: inline-block; width: 8px; height: 14px; background: #00ff9d; animation: blink 1s step-end infinite; vertical-align: middle; margin-left: 4px; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.t-skip { font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 2px; color: #3a5c47; background: none; border: none; cursor: crosshair; margin-top: 1.5rem; text-transform: uppercase; transition: color 0.2s; }
+.t-skip:hover { color: #00ff9d; }
+
+/* Hero */
+.hero { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 7rem 2rem 4rem; }
+.hero-title { font-family: 'Orbitron', monospace; font-size: clamp(3.5rem, 10vw, 7rem); font-weight: 900; letter-spacing: 8px; line-height: 1; color: #00ff9d; text-shadow: 0 0 40px rgba(0,255,157,0.3); margin-bottom: 0.5rem; }
+.hero-desc { font-family: 'Rajdhani', sans-serif; font-size: 1.2rem; font-weight: 300; color: #6b9e82; max-width: 560px; line-height: 1.8; margin-bottom: 3rem; }
+.btn-p { font-family: 'Share Tech Mono', monospace; font-size: 14px; letter-spacing: 3px; text-transform: uppercase; padding: 16px 40px; background: #00ff9d; color: #060a08; border: none; cursor: crosshair; font-weight: 700; transition: all 0.2s; clip-path: polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%); }
+.btn-p:hover { transform: translateY(-2px); filter: brightness(1.2); box-shadow: 0 10px 20px rgba(0,255,157,0.2); }
+
+/* Oracle Chat */
+.orc-blk { border: 1px solid rgba(255,184,0,0.2); background: rgba(255,184,0,0.03); padding: 2.5rem; position: relative; max-width: 800px; margin: 4rem auto; z-index: 10; }
+.orc-tit { font-family: 'Orbitron', monospace; font-size: 1.1rem; color: #ffb800; text-transform: uppercase; margin-bottom: 1rem; }
+.chat-box { background: #060a08; border: 1px solid rgba(255,184,0,0.15); padding: 1.2rem; margin-top: 1rem; }
+.chat-msgs { min-height: 150px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 1rem; padding-right: 10px; }
+.chat-msgs::-webkit-scrollbar { width: 4px; }
+.chat-msgs::-webkit-scrollbar-thumb { background: rgba(255,184,0,0.3); }
+.cmsg { font-family: 'Share Tech Mono', monospace; font-size: 12px; line-height: 1.6; }
+.cmsg.u { color: #00c97a; } .cmsg.u::before { content: '> '; color: #3a5c47; }
+.cmsg.o { color: #ffb800; padding-left: 1rem; border-left: 2px solid rgba(255,184,0,0.3); }
+.cmsg.o::before { content: 'SYS_ORACLE // '; color: rgba(255,184,0,0.5); font-size: 10px; }
+.cmsg.p { color: rgba(255,184,0,0.5); font-style: italic; animation: pulse 1.5s infinite; }
+.chat-row { display: flex; gap: 8px; }
+.chat-row input { flex: 1; background: transparent; border: 1px solid rgba(255,184,0,0.25); color: #c8ffe8; font-family: 'Share Tech Mono', monospace; padding: 10px; outline: none; }
+.chat-send { font-family: 'Share Tech Mono', monospace; font-size: 10px; padding: 10px 20px; background: rgba(255,184,0,0.1); color: #ffb800; border: 1px solid rgba(255,184,0,0.3); cursor: crosshair; }
+
+/* Campus Grid */
+.campus-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: rgba(0,255,157,0.18); border: 1px solid rgba(0,255,157,0.18); max-width: 1000px; margin: 4rem auto; z-index: 10; position: relative; }
+.cn { background: #0a0f0c; padding: 1.5rem; cursor: crosshair; transition: all 0.3s; position: relative; overflow: hidden; }
+.cn:hover { background: #0e1510; }
+.cn-coords { position: absolute; bottom: -20px; left: 1.5rem; font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #00ff9d; opacity: 0; transition: all 0.3s; }
+.cn:hover .cn-coords { bottom: 1rem; opacity: 1; }
+.cn:hover .nt { opacity: 0; }
+.nn { font-family: 'Orbitron', monospace; font-size: 12px; color: #c8ffe8; text-transform: uppercase; margin-bottom: 6px; }
+.nt { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #3a5c47; transition: opacity 0.3s; }
+
+/* Utilities */
+.reveal { opacity: 0; transform: translateY(20px); transition: all 0.8s ease-out; }
+.reveal.vis { opacity: 1; transform: translateY(0); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
