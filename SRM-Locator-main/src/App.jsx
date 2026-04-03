@@ -10,14 +10,7 @@ import {
   Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
-import { auth, googleProvider } from './firebase';
-import { 
-  signInWithPopup, 
-  onAuthStateChanged, 
-  signOut,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
-} from 'firebase/auth';
+
 
 // 👇 ADD THIS LINE RIGHT HERE
 import LocusGuide from './LocusGuide';
