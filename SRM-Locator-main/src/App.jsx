@@ -328,44 +328,42 @@ const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSecon
     lng: projectedLng * (180 / Math.PI)
   };
 };
-// --- LOCUS GUIDE (Onboarding screen shown once before auth) ---
-const LocusGuide = ({ onInitialize }) => {
-  return (
-    <div className="h-screen w-full bg-black text-white flex flex-col items-center justify-center p-6 bg-dots font-inter">
-      <div className="w-full max-w-md border border-white/20 p-10 relative">
-        <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
-        <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
-        <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
-        <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
-        <div className="mb-8 text-center">
-          <Radio className="w-10 h-10 mx-auto mb-4 text-red-500" />
-          <h1 className="font-dot text-3xl uppercase tracking-widest mb-2">LOCUS</h1>
-          <p className="text-zinc-500 font-dot text-xs uppercase tracking-widest">Real-time squad tracker</p>
-        </div>
-        <div className="space-y-4 mb-8 font-dot text-xs uppercase tracking-widest text-zinc-400">
-          <div className="flex items-start gap-3 border border-white/10 p-3">
-            <Activity size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-            <span>Join a squad room and see your crew on the map in real-time</span>
-          </div>
-          <div className="flex items-start gap-3 border border-white/10 p-3">
-            <EyeOff size={14} className="text-zinc-400 shrink-0 mt-0.5" />
-            <span>Use GHOST mode to go invisible, FROZEN to lock your position</span>
-          </div>
-          <div className="flex items-start gap-3 border border-white/10 p-3">
-            <Radio size={14} className="text-red-500 shrink-0 mt-0.5" />
-            <span>SOS beacon pings your squad with your coordinates instantly</span>
-          </div>
-        </div>
-        <button
-          onClick={onInitialize}
-          className="w-full py-4 bg-white text-black font-dot uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
-        >
-          INITIALIZE LINK <ArrowRight size={16} />
-        </button>
+// --- LOCUS ONBOARDING GUIDE (shown once before auth) ---
+const LocusGuide = ({ onInitialize }) => (
+  <div className="h-screen w-full bg-black text-white flex flex-col items-center justify-center p-6 font-inter">
+    <div className="w-full max-w-md border border-white/20 p-10 relative">
+      <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
+      <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
+      <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
+      <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
+      <div className="mb-8 text-center">
+        <Radio className="w-10 h-10 mx-auto mb-4 text-red-500" />
+        <h1 className="font-dot text-3xl uppercase tracking-widest mb-2">LOCUS</h1>
+        <p className="text-zinc-500 font-dot text-xs uppercase tracking-widest">Real-time squad tracker</p>
       </div>
+      <div className="space-y-4 mb-8 font-dot text-xs uppercase tracking-widest text-zinc-400">
+        <div className="flex items-start gap-3 border border-white/10 p-3">
+          <Activity size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+          <span>Join a squad room and see your crew on the map in real-time</span>
+        </div>
+        <div className="flex items-start gap-3 border border-white/10 p-3">
+          <EyeOff size={14} className="text-zinc-400 shrink-0 mt-0.5" />
+          <span>Use GHOST mode to go invisible, FROZEN to lock your position</span>
+        </div>
+        <div className="flex items-start gap-3 border border-white/10 p-3">
+          <Radio size={14} className="text-red-500 shrink-0 mt-0.5" />
+          <span>SOS beacon pings your squad with your coordinates instantly</span>
+        </div>
+      </div>
+      <button
+        onClick={onInitialize}
+        className="w-full py-4 bg-white text-black font-dot uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
+      >
+        INITIALIZE LINK <ArrowRight size={16} />
+      </button>
     </div>
-  );
-};
+  </div>
+);
 
 const App = () => {
   const [isSatellite, setIsSatellite] = useState(false);
@@ -511,6 +509,29 @@ const App = () => {
       socket.off('pong-bounce');
     };
   }, [hasJoinedSquad]);
+  // --- CYBERPUNK SONAR AUDIO ENGINE ---
+  // Declared here so all effects below can safely reference it without TDZ errors
+  const playSonarPing = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (e) {
+      console.log("Audio not supported.");
+    }
+  };
+
   // --- 🌐 GEOFENCE PERIMETER LISTENER ---
   useEffect(() => {
     socket.on('geofence-alert', (alertData) => {
@@ -867,32 +888,6 @@ const App = () => {
     });
   }, [telemetryMode]);
 
-  // --- CYBERPUNK SONAR AUDIO ENGINE ---
-  const playSonarPing = () => {
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
-
-      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      osc.start();
-      osc.stop(ctx.currentTime + 0.5);
-    } catch (e) {
-      console.log("Audio not supported.");
-    }
-  };
 
   // 3. Listen for incoming P2P Pings
   useEffect(() => {
