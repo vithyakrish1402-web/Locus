@@ -1286,6 +1286,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
       return {
         zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
         mapTypeId: 'hybrid', // This triggers the real satellite imagery
+        tilt: 0,
         styles: [] // Clear custom styles so the photos show up
       };
     }
@@ -1316,6 +1317,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
     return {
       zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
       mapTypeId: 'roadmap',
+      tilt: 0,
       styles: theme === 'stealth' ? stealthStyles : tacticalStyles
     };
   }
