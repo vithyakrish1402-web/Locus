@@ -19,6 +19,14 @@ const locationCache = {};
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
 
+  // --- TACTICAL ZONE RELAY ---
+    socket.on('publish-zone', (data) => {
+      console.log(`[SYS] Relaying new Tactical Zone to squad: ${data.roomCode}`);
+      
+      // Broadcasts the zone to everyone in the room EXCEPT the person who drew it
+      socket.to(data.roomCode).emit('new-zone', data.zone);
+    });
+
   // --- BACKEND ---
 socket.on('check-ping', (clientTimestamp) => {
   // Immediately bounce the exact same timestamp back to the client

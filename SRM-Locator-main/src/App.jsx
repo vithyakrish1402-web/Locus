@@ -388,7 +388,11 @@ const App = () => {
   // --- ADMIN TACTICAL ZONE STATE ---
   const [isDrawingZone, setIsDrawingZone] = useState(false);
   const [zoneCoords, setZoneCoords] = useState([]);
-  const [liveZones, setLiveZones] = useState([]); // Stores the completed building footprints
+  const [liveZones, setLiveZones] = useState(() => {
+    // Attempt to load saved zones from local memory on boot
+    const saved = localStorage.getItem('locus_tactical_zones');
+    return saved ? JSON.parse(saved) : [];
+  });// Stores the completed building footprints
   
   const drawingPolygonRef = useRef(null); // The live preview polygon
   const activePolygonsRef = useRef([]);   // The saved/rendered polygons
@@ -447,6 +451,10 @@ const App = () => {
     setHasJoinedSquad(true);
   };
 
+  // --- AUTO-SAVE TACTICAL ZONES ---
+  useEffect(() => {
+    localStorage.setItem('locus_tactical_zones', JSON.stringify(liveZones));
+  }, [liveZones]);
 
   // --- 📡 NETWORK LATENCY TRACKER ---
   useEffect(() => {
@@ -605,6 +613,17 @@ const App = () => {
   useEffect(() => {
     if (!hasJoinedSquad) return;
 
+    socket.on('new-zone', (zoneData) => {
+      console.log(`[SYS_NET] New tactical zone received from Commander: ${zoneData.name}`);
+      setLiveZones(prev => {
+        // Prevent duplicates if the server bounces our own zone back to us
+        if (prev.some(z => z.id === zoneData.id)) return prev;
+        return [...prev, zoneData];
+      });
+    });
+    
+    // Don't forget to add socket.off('new-zone') in the cleanup return!
+
     socket.on('users-update', (activeUsers) => {
       setUsers(() => {
         const formattedUsers = [];
@@ -657,6 +676,7 @@ const App = () => {
     });
 
     return () => {
+      socket.off('new-zone');
       socket.off('users-update');
       socket.off('receive-ping');
       socket.off('new-custom-route');
@@ -1879,16 +1899,24 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                     onClick={() => {
                       const zoneName = prompt("Enter Tactical Zone Name (e.g., Tech Park Deadzone):");
                       if (zoneName && zoneCoords.length > 2) {
-                        const newZone = { name: zoneName, paths: zoneCoords };
+                        // Give it a unique ID
+                        const newZone = { id: `zone_${Date.now()}`, name: zoneName, paths: zoneCoords };
+                        
                         setLiveZones(prev => [...prev, newZone]);
                         
-                        // Emit to server later: socket.emit('publish-zone', newZone);
+                        // 🚨 UNCOMMENTED: Blast this to the backend server 🚨
+                        if (socket) {
+                          socket.emit('publish-zone', { 
+  roomCode: squadCode, 
+  zone: newZone 
+});
+                        }
                         
                         setIsDrawingZone(false);
                         setZoneCoords([]);
                         if (drawingPolygonRef.current) drawingPolygonRef.current.setMap(null);
                         drawingPolygonRef.current = null;
-                        alert(`[SYS] Zone '${zoneName}' published.`);
+                        alert(`[SYS] Zone '${zoneName}' saved to local mainframe and broadcasted.`);
                       } else {
                         alert("[SYS_ERROR] A zone requires at least 3 points.");
                       }
