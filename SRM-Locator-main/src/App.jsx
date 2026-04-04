@@ -332,6 +332,7 @@ const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSecon
   };
 };
 const App = () => {
+  const [isSatellite, setIsSatellite] = useState(false);
   const [latency, setLatency] = useState(0);
   const [username, setUsername] = useState('');
   // --- SYS_CONFIG STATE ---
@@ -1232,6 +1233,13 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
   // --- TACTICAL MAP RENDERING ENGINE ---
   const createMapOptions = (theme) => {
+    if (isSatelliteMode) {
+      return {
+        zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
+        mapTypeId: 'hybrid', // This triggers the real satellite imagery
+        styles: [] // Clear custom styles so the photos show up
+      };
+    }
     // Standard Cyberpunk Dark Theme
     const tacticalStyles = [
       { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
@@ -1258,6 +1266,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
     return {
       zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
+      mapTypeId: 'roadmap',
       styles: theme === 'stealth' ? stealthStyles : tacticalStyles
     };
   }
@@ -1702,7 +1711,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
           <GoogleMapReact
             bootstrapURLKeys={{ key: 'AIzaSyD10sWfHpczEuvmvwBkqkPHOu-QXQr8uM0' }}
             center={mapProps.center}
-            options={{ ...createMapOptions(sysConfig.theme), draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab') }}
+            options={{ ...createMapOptions(sysConfig.theme,isSatellite), draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab') }}
           
             onClick={handleMapClick}
             
@@ -1769,6 +1778,15 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
             {/* ... Your existing users.filter map loop stays exactly the same below this ... */}
           </GoogleMapReact>
+          <div className="absolute bottom-24 right-6 z-[500] pointer-events-auto">
+            <button
+              onClick={() => setIsSatellite(!isSatellite)}
+              className="flex items-center gap-2 bg-black/80 backdrop-blur-md border border-white/20 px-4 py-2 font-dot text-[10px] tracking-widest uppercase transition-all hover:border-emerald-500 hover:text-emerald-500"
+            >
+              <div className={`w-2 h-2 rounded-full ${isSatellite ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]' : 'bg-zinc-600'}`}></div>
+              {isSatellite ? 'ORBITAL RECON' : 'TACTICAL GRID'}
+            </button>
+          </div>
         </div>
 
         {/* --- ADMIN OVERRIDE PANEL --- */}
