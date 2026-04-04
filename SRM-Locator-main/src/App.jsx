@@ -1877,7 +1877,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         {/* --- ADMIN OVERRIDE PANEL --- */}
         {isAdmin && (
           <div className="absolute top-24 right-6 z-[600] flex flex-col gap-2 pointer-events-auto">
-            {/* IDLE STATE: Show both buttons */}
+            {/* IDLE STATE: Show buttons AND Active Zones */}
             {!isRecordingPath && !isDrawingZone && (
               <>
                 <button
@@ -1892,8 +1892,37 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                 >
                   [ADMIN] DRAW_ZONE
                 </button>
+
+                {/* 👇 NEW: ACTIVE PERIMETERS MANAGER 👇 */}
+                {liveZones.length > 0 && (
+                  <div className="mt-4 border-t border-red-500/30 pt-4 bg-black/80 backdrop-blur-md p-3">
+                    <span className="font-dot text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block">DEPLOYED_PERIMETERS [{liveZones.length}]</span>
+                    <div className="flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+                      {liveZones.map(zone => (
+                        <div key={zone.id} className="flex items-center justify-between border-l-2 border-l-red-500 bg-red-500/5 p-2 hover:bg-red-500/10 transition-colors">
+                          <span className="font-dot text-[10px] text-red-500 uppercase tracking-widest truncate max-w-[150px]">
+                            {zone.name}
+                          </span>
+                          <button
+                            onClick={() => {
+                              if(window.confirm(`Delete zone: ${zone.name}?`)) {
+                                setLiveZones(prev => prev.filter(z => z.id !== zone.id));
+                              }
+                            }}
+                            className="text-zinc-500 hover:text-white transition-colors"
+                            title="Deactivate Zone"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* 👆 END OF MANAGER 👆 */}
               </>
             )}
+            
 
             {/* DRAWING ZONE STATE */}
             {isDrawingZone && (
