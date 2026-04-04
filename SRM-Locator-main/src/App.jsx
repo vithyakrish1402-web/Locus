@@ -448,6 +448,13 @@ const App = () => {
   };
 
 
+  // --- 🚨 TACTICAL MAP OVERRIDE: FORCE 2D TOP-DOWN ---
+  useEffect(() => {
+    if (mapRef.current) {
+      // Bypasses React wrapper and commands the Google Maps engine directly
+      mapRef.current.setTilt(0);
+    }
+  }, [isSatellite, mapProps.zoom]); // Re-fires if mode or zoom changes
   // --- 📡 NETWORK LATENCY TRACKER ---
   useEffect(() => {
     if (!hasJoinedSquad) return;
@@ -1771,6 +1778,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
             yesIWantToUseGoogleMapApiInternals
             onGoogleApiLoaded={({ map, maps }) => {
               mapRef.current = map;
+              map.setTilt(0);
               directionsRendererRef.current = new maps.DirectionsRenderer({
                 suppressMarkers: true,
                 polylineOptions: { strokeColor: '#ef4444', strokeWeight: 4 }
