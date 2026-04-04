@@ -385,6 +385,13 @@ const App = () => {
   const ADMIN_EMAIL = "vithyakrish1402@gmail.com"; // 🚨 REPLACE WITH YOUR EXACT GOOGLE LOGIN EMAIL
   const isAdmin = user?.email === ADMIN_EMAIL;
 
+  // --- ADMIN TACTICAL ZONE STATE ---
+  const [isDrawingZone, setIsDrawingZone] = useState(false);
+  const [zoneCoords, setZoneCoords] = useState([]);
+  const [liveZones, setLiveZones] = useState([]); // Stores the completed building footprints
+  
+  const drawingPolygonRef = useRef(null); // The live preview polygon
+  const activePolygonsRef = useRef([]);   // The saved/rendered polygons
   const [isRecordingPath, setIsRecordingPath] = useState(false);
   const [recordedCoords, setRecordedCoords] = useState([]);
   const [liveSecretRoutes, setLiveSecretRoutes] = useState({
@@ -1113,8 +1120,50 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
     if (item) setSelectedItem(item);
   };
 
+  // --- RENDER SAVED TACTICAL ZONES ---
+  useEffect(() => {
+    if (!mapRef.current || !window.google) return;
+
+    // Clear old polygons from the map
+    activePolygonsRef.current.forEach(poly => poly.setMap(null));
+    activePolygonsRef.current = [];
+
+    // Draw all active zones
+    liveZones.forEach(zone => {
+      const poly = new window.google.maps.Polygon({
+        paths: zone.paths,
+        strokeColor: '#ef4444',
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+        fillColor: '#ef4444',
+        fillOpacity: 0.2, // We can animate this later!
+        map: mapRef.current
+      });
+      activePolygonsRef.current.push(poly);
+    });
+  }, [liveZones]);
   // --- 🚨 MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
   const handleMapClick = ({ lat, lng }) => {
+    if (isAdmin && isDrawingZone) {
+      const newCoords = [...zoneCoords, { lat, lng }];
+      setZoneCoords(newCoords);
+
+      // Draw or update the glowing polygon on the map in real-time
+      if (!drawingPolygonRef.current) {
+        drawingPolygonRef.current = new window.google.maps.Polygon({
+          paths: newCoords,
+          strokeColor: '#ef4444', // Red border
+          strokeOpacity: 1.0,
+          strokeWeight: 2,
+          fillColor: '#ef4444',   // Red glowing fill
+          fillOpacity: 0.3,
+          map: mapRef.current
+        });
+      } else {
+        drawingPolygonRef.current.setPaths(newCoords);
+      }
+      return; // Stop normal click behavior
+    }
     // 1. If Admin is recording a path, save the coordinate and draw it
     if (isAdmin && isRecordingPath) {
       const newCoords = [...recordedCoords, { lat, lng }];
@@ -1792,41 +1841,79 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         {/* --- ADMIN OVERRIDE PANEL --- */}
         {isAdmin && (
           <div className="absolute top-24 right-6 z-[600] flex flex-col gap-2 pointer-events-auto">
-            {!isRecordingPath ? (
-              <button
-                onClick={() => setIsRecordingPath(true)}
-                className="p-3 bg-black border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors font-dot text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(234,179,8,0.3)]"
-              >
-                [ADMIN] RECORD_PATH
-              </button>
-            ) : (
+            {/* IDLE STATE: Show both buttons */}
+            {!isRecordingPath && !isDrawingZone && (
+              <>
+                <button
+                  onClick={() => setIsRecordingPath(true)}
+                  className="p-3 bg-black border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors font-dot text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(234,179,8,0.3)]"
+                >
+                  [ADMIN] RECORD_PATH
+                </button>
+                <button
+                  onClick={() => setIsDrawingZone(true)}
+                  className="p-3 bg-black border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors font-dot text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(239,68,68,0.3)] mt-2"
+                >
+                  [ADMIN] DRAW_ZONE
+                </button>
+              </>
+            )}
+
+            {/* DRAWING ZONE STATE */}
+            {isDrawingZone && (
+              <div className="bg-black border border-red-500 p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(239,68,68,0.4)]">
+                <div className="text-red-500 font-dot text-xs tracking-widest animate-pulse">DRAWING_ZONE_VERTICES: {zoneCoords.length}</div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const zoneName = prompt("Enter Tactical Zone Name (e.g., Tech Park Deadzone):");
+                      if (zoneName && zoneCoords.length > 2) {
+                        const newZone = { name: zoneName, paths: zoneCoords };
+                        setLiveZones(prev => [...prev, newZone]);
+                        
+                        // Emit to server later: socket.emit('publish-zone', newZone);
+                        
+                        setIsDrawingZone(false);
+                        setZoneCoords([]);
+                        if (drawingPolygonRef.current) drawingPolygonRef.current.setMap(null);
+                        drawingPolygonRef.current = null;
+                        alert(`[SYS] Zone '${zoneName}' published.`);
+                      } else {
+                        alert("[SYS_ERROR] A zone requires at least 3 points.");
+                      }
+                    }}
+                    className="flex-1 p-2 bg-red-500 text-white font-dot text-[10px] hover:bg-red-600 transition-colors"
+                  >
+                    DEPLOY
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsDrawingZone(false);
+                      setZoneCoords([]);
+                      if (drawingPolygonRef.current) drawingPolygonRef.current.setMap(null);
+                      drawingPolygonRef.current = null;
+                    }}
+                    className="flex-1 p-2 border border-red-500 text-red-500 font-dot text-[10px] hover:bg-red-500 hover:text-white transition-colors"
+                  >
+                    ABORT
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* RECORDING PATH STATE (Your existing code) */}
+            {isRecordingPath && (
               <div className="bg-black border border-yellow-500 p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
                 <div className="text-yellow-500 font-dot text-xs tracking-widest animate-pulse">RECORDING_NODES: {recordedCoords.length}</div>
-
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
                       const startName = prompt("Enter START Building Name (e.g., Tech Park):");
                       const endName = prompt("Enter END Building Name (e.g., Java Green):");
-
                       if (startName && endName && recordedCoords.length > 1) {
-                        const newRouteData = {
-                          distance: "CUSTOM", eta: "TACTICAL",
-                          path: recordedCoords
-                        };
-
-                        // Save to local state
-                        setLiveSecretRoutes(prev => ({
-                          ...prev,
-                          [`${startName}_${endName}`]: newRouteData
-                        }));
-
-                        // Broadcast to backend
-                        socket.emit('publish-custom-route', {
-                          key: `${startName}_${endName}`,
-                          data: newRouteData
-                        });
-
+                        const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
+                        setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
+                        socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData });
                         setIsRecordingPath(false);
                         setRecordedCoords([]);
                         if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
