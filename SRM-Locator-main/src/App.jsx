@@ -385,6 +385,9 @@ const App = () => {
   const ADMIN_EMAIL = "vithyakrish1402@gmail.com"; // 🚨 REPLACE WITH YOUR EXACT GOOGLE LOGIN EMAIL
   const isAdmin = user?.email === ADMIN_EMAIL;
 
+  // --- GREEN LIGHT PROTOCOL: Map readiness gate ---
+  const [isMapReady, setIsMapReady] = useState(false);
+
   // --- ADMIN TACTICAL ZONE STATE ---
   const [isDrawingZone, setIsDrawingZone] = useState(false);
   const [zoneCoords, setZoneCoords] = useState([]);
@@ -1150,7 +1153,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
   // --- RENDER SAVED TACTICAL ZONES ---
   useEffect(() => {
-    if (!mapRef.current || !window.google) return;
+    if (!mapRef.current || !window.google || !isMapReady) return;
 
     // Clear old polygons from the map
     activePolygonsRef.current.forEach(poly => poly.setMap(null));
@@ -1169,7 +1172,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
       });
       activePolygonsRef.current.push(poly);
     });
-  }, [liveZones]);
+  }, [liveZones, isMapReady]);
   // --- 🚨 MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
   const handleMapClick = ({ lat, lng }) => {
     if (isAdmin && isDrawingZone) {
@@ -1805,6 +1808,8 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                 polylineOptions: { strokeColor: '#ef4444', strokeWeight: 4 }
               });
               directionsRendererRef.current.setMap(map);
+              // 🟢 GREEN LIGHT: Map canvas is live — safe to draw saved zones now
+              setIsMapReady(true);
             }}
           >
             {liveLocation && (
