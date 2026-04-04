@@ -1233,7 +1233,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
   // --- TACTICAL MAP RENDERING ENGINE ---
   const createMapOptions = (theme) => {
-    if (isSatelliteMode) {
+    if (isSatellite) {
       return {
         zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
         mapTypeId: 'hybrid', // This triggers the real satellite imagery
