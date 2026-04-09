@@ -16,7 +16,7 @@ import {
 import LocusGuide from './LocusGuide';
 
 // --- ADDED: FIREBASE AUTH ---
-import { auth, googleProvider } from './firebase';
+import { auth, googleProvider, db  } from './firebase';
 import { 
   signInWithPopup, 
   onAuthStateChanged, 
@@ -26,6 +26,7 @@ import {
   updateProfile    // <-- Required for new Registration
 } from 'firebase/auth';
 
+import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 const socket = io(BACKEND_URL, {
@@ -391,11 +392,7 @@ const App = () => {
   // --- ADMIN TACTICAL ZONE STATE ---
   const [isDrawingZone, setIsDrawingZone] = useState(false);
   const [zoneCoords, setZoneCoords] = useState([]);
-  const [liveZones, setLiveZones] = useState(() => {
-    // Attempt to load saved zones from local memory on boot
-    const saved = localStorage.getItem('locus_tactical_zones');
-    return saved ? JSON.parse(saved) : [];
-  });// Stores the completed building footprints
+  const [liveZones, setLiveZones] = useState([]); // Reverts to empty, Firebase will fill it
   
   const drawingPolygonRef = useRef(null); // The live preview polygon
   const activePolygonsRef = useRef([]);   // The saved/rendered polygons
@@ -454,10 +451,25 @@ const App = () => {
     setHasJoinedSquad(true);
   };
 
-  // --- AUTO-SAVE TACTICAL ZONES ---
+  // --- 🌐 FIRESTORE TACTICAL ZONE SYNC ---
   useEffect(() => {
-    localStorage.setItem('locus_tactical_zones', JSON.stringify(liveZones));
-  }, [liveZones]);
+    // This creates a live tunnel to the "tactical_zones" collection in your database
+    const zonesCollection = collection(db, 'tactical_zones');
+    
+    // onSnapshot listens for ANY changes in real-time
+    const unsubscribe = onSnapshot(zonesCollection, (snapshot) => {
+      const fetchedZones = snapshot.docs.map(doc => ({
+        id: doc.id, // We use Firebase's secure auto-generated document ID
+        ...doc.data()
+      }));
+      
+      console.log(`[SYS_DB] Synced ${fetchedZones.length} tactical zones from mainframe.`);
+      setLiveZones(fetchedZones);
+    });
+
+    // Close the tunnel if the user logs out
+    return () => unsubscribe();
+  }, []);
 
   // --- 📡 NETWORK LATENCY TRACKER ---
   useEffect(() => {
@@ -1892,6 +1904,38 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                 >
                   [ADMIN] DRAW_ZONE
                 </button>
+                {/* 👇 🚨 TEMPORARY ONE-TIME MIGRATION SCRIPT 🚨 👇 */}
+                <button
+                    onClick={async () => {
+                      const savedData = localStorage.getItem('locus_tactical_zones');
+                      if (!savedData) return alert("[SYS_ERROR] No local zones found in memory.");
+
+                      const oldZones = JSON.parse(savedData);
+                      let successCount = 0;
+
+                      for (const zone of oldZones) {
+                        try {
+                          await addDoc(collection(db, 'tactical_zones'), {
+                            name: zone.name,
+                            paths: zone.paths,
+                            author: user.displayName || "Admin_Migrator",
+                            timestamp: Date.now()
+                          });
+                          successCount++;
+                        } catch (err) {
+                          console.error("Migration failed for:", zone.name, err);
+                        }
+                      }
+
+                      alert(`[SYS_MIGRATION_COMPLETE] Successfully pushed ${successCount} zones to the global matrix!`);
+
+                      // Wipe the local memory clean so it doesn't duplicate later
+                      localStorage.removeItem('locus_tactical_zones');
+                    }}
+                    className="p-3 bg-blue-500/20 border border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors font-dot text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(59,130,246,0.3)] mt-2"
+                >
+                  [SYS] UPLOAD_LOCAL_ZONES_TO_CLOUD
+                </button>
 
                 {/* 👇 NEW: ACTIVE PERIMETERS MANAGER 👇 */}
                 {liveZones.length > 0 && (
@@ -1904,9 +1948,15 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                             {zone.name}
                           </span>
                           <button
-                            onClick={() => {
-                              if(window.confirm(`Delete zone: ${zone.name}?`)) {
-                                setLiveZones(prev => prev.filter(z => z.id !== zone.id));
+                            onClick={async () => {
+                              if(window.confirm(`PERMANENTLY delete zone: ${zone.name} from the global matrix?`)) {
+                                // 🚨 NEW: DELETE FROM FIREBASE CLOUD 🚨
+                                try {
+                                  const zoneDocRef = doc(db, 'tactical_zones', zone.id);
+                                  await deleteDoc(zoneDocRef);
+                                } catch (err) {
+                                  alert("[SYS_ERROR] Could not delete file from mainframe.");
+                                }
                               }
                             }}
                             className="text-zinc-500 hover:text-white transition-colors"
@@ -1930,27 +1980,29 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                 <div className="text-red-500 font-dot text-xs tracking-widest animate-pulse">DRAWING_ZONE_VERTICES: {zoneCoords.length}</div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const zoneName = prompt("Enter Tactical Zone Name (e.g., Tech Park Deadzone):");
                       if (zoneName && zoneCoords.length > 2) {
-                        // Give it a unique ID
-                        const newZone = { id: `zone_${Date.now()}`, name: zoneName, paths: zoneCoords };
                         
-                        setLiveZones(prev => [...prev, newZone]);
-                        
-                        // 🚨 UNCOMMENTED: Blast this to the backend server 🚨
-                        if (socket) {
-                          socket.emit('publish-zone', { 
-  roomCode: squadCode, 
-  zone: newZone 
-});
+                        // 🚨 NEW: PUSH TO FIREBASE CLOUD 🚨
+                        try {
+                          await addDoc(collection(db, 'tactical_zones'), {
+                            name: zoneName,
+                            paths: zoneCoords,
+                            author: user.displayName, // Tracks who drew it
+                            timestamp: Date.now()
+                          });
+                          
+                          setIsDrawingZone(false);
+                          setZoneCoords([]);
+                          if (drawingPolygonRef.current) drawingPolygonRef.current.setMap(null);
+                          drawingPolygonRef.current = null;
+                          alert(`[SYS] Zone '${zoneName}' permanently locked into the global matrix.`);
+                        } catch (error) {
+                          console.error("Firebase Error:", error);
+                          alert("[SYS_ERROR] Failed to push zone to cloud database.");
                         }
-                        
-                        setIsDrawingZone(false);
-                        setZoneCoords([]);
-                        if (drawingPolygonRef.current) drawingPolygonRef.current.setMap(null);
-                        drawingPolygonRef.current = null;
-                        alert(`[SYS] Zone '${zoneName}' saved to local mainframe and broadcasted.`);
+
                       } else {
                         alert("[SYS_ERROR] A zone requires at least 3 points.");
                       }
