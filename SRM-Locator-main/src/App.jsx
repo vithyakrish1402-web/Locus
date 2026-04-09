@@ -1904,38 +1904,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                 >
                   [ADMIN] DRAW_ZONE
                 </button>
-                {/* 👇 🚨 TEMPORARY ONE-TIME MIGRATION SCRIPT 🚨 👇 */}
-                <button
-                    onClick={async () => {
-                      const savedData = localStorage.getItem('locus_tactical_zones');
-                      if (!savedData) return alert("[SYS_ERROR] No local zones found in memory.");
 
-                      const oldZones = JSON.parse(savedData);
-                      let successCount = 0;
-
-                      for (const zone of oldZones) {
-                        try {
-                          await addDoc(collection(db, 'tactical_zones'), {
-                            name: zone.name,
-                            paths: zone.paths,
-                            author: user.displayName || "Admin_Migrator",
-                            timestamp: Date.now()
-                          });
-                          successCount++;
-                        } catch (err) {
-                          console.error("Migration failed for:", zone.name, err);
-                        }
-                      }
-
-                      alert(`[SYS_MIGRATION_COMPLETE] Successfully pushed ${successCount} zones to the global matrix!`);
-
-                      // Wipe the local memory clean so it doesn't duplicate later
-                      localStorage.removeItem('locus_tactical_zones');
-                    }}
-                    className="p-3 bg-blue-500/20 border border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors font-dot text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(59,130,246,0.3)] mt-2"
-                >
-                  [SYS] UPLOAD_LOCAL_ZONES_TO_CLOUD
-                </button>
 
                 {/* 👇 NEW: ACTIVE PERIMETERS MANAGER 👇 */}
                 {liveZones.length > 0 && (
