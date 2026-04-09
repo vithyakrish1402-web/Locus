@@ -91,6 +91,15 @@ export default function getHexGridOverlayClass(){
             this._canvas.style.width = `${width}px`;
             this._canvas.style.height = `${height}px`;
 
+            // ── 3.5. Cache the exact polygon pixel coordinates for clipping ──
+            this._pixelPolygon = this._coords.map(ll => {
+                const pt = proj.fromLatLngToDivPixel(ll);
+                return {
+                    x: pt.x - left,
+                    y: pt.y - top
+                };
+            });
+
             // Only resize the backing bitmap when dimensions actually change
             // (avoids clearing the canvas on every Maps redraw)
             if (
@@ -146,6 +155,18 @@ export default function getHexGridOverlayClass(){
             const H = this._logicalH ?? this._canvas.height;
 
             ctx.clearRect(0, 0, W, H);
+            // --- 🔴 THE CLIPPING MASK ---
+            ctx.save(); // Lock the canvas state
+            if (this._pixelPolygon && this._pixelPolygon.length > 2) {
+                ctx.beginPath();
+                ctx.moveTo(this._pixelPolygon[0].x, this._pixelPolygon[0].y);
+                for (let i = 1; i < this._pixelPolygon.length; i++) {
+                    ctx.lineTo(this._pixelPolygon[i].x, this._pixelPolygon[i].y);
+                }
+                ctx.closePath();
+                ctx.clip(); // The magic command: restricts all future drawing to this shape!
+            }
+            // ----------------------------
 
             const t = this._t;
             const cx = W / 2;
@@ -202,6 +223,8 @@ export default function getHexGridOverlayClass(){
                     // else INVISIBLE — nothing drawn
                 }
             }
+            // --- 🔴 RESTORE THE CANVAS ---
+            ctx.restore();
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
