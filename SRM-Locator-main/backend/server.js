@@ -19,6 +19,13 @@ const locationCache = {};
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
 
+  // --- GEOFENCE ALARM RELAY ---
+  socket.on('geofence-alert', (data) => {
+    console.log(`[🚨 BREACH] ${data.userName} ${data.type === 'ENTER' ? 'entered' : 'left'} ${data.zoneName}`);
+    // Broadcast the alarm to everyone else in the squad
+    socket.to(data.roomCode).emit('geofence-alert', data);
+  });
+
   // --- TACTICAL ZONE RELAY ---
     socket.on('publish-zone', (data) => {
       console.log(`[SYS] Relaying new Tactical Zone to squad: ${data.roomCode}`);

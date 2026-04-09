@@ -304,6 +304,21 @@ class PrecognitionFilter {
     return { lat: this.latEstimate, lng: this.lngEstimate };
   }
 }
+// --- 🎯 GEOFENCE MATHEMATICS (RAY-CASTING ENGINE) ---
+const isPointInPolygon = (point, polygonCoords) => {
+  let isInside = false;
+  const x = point.lng, y = point.lat;
+
+  for (let i = 0, j = polygonCoords.length - 1; i < polygonCoords.length; j = i++) {
+    const xi = polygonCoords[i].lng, yi = polygonCoords[i].lat;
+    const xj = polygonCoords[j].lng, yj = polygonCoords[j].lat;
+
+    const intersect = ((yi > y) !== (yj > y)) &&
+        (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) isInside = !isInside;
+  }
+  return isInside;
+};
 // --- 🧭 DEAD RECKONING ENGINE ---
 const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSeconds) => {
   // If they were standing still, just return exact coordinates
@@ -333,6 +348,8 @@ const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSecon
   };
 };
 const App = () => {
+  // --- 🚨 GEOFENCE BREACH TRACKER ---
+  const activeBreachesRef = useRef({}); // Remembers who is inside which zone
   const [isSatellite, setIsSatellite] = useState(false);
   const [latency, setLatency] = useState(0);
   const [username, setUsername] = useState('');
@@ -471,6 +488,55 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
+  // --- 🚨 ACTIVE GEOFENCE ENGINE ---
+  useEffect(() => {
+    if (!users || users.length === 0 || !liveZones || liveZones.length === 0) return;
+
+    users.forEach(userNode => {
+      // Skip dead signals
+      if (userNode.status === 'GHOST' || !userNode.lat || !userNode.lng) return;
+
+      liveZones.forEach(zone => {
+        const breachKey = `${userNode.id}_${zone.id}`;
+        const isInside = isPointInPolygon({ lat: userNode.lat, lng: userNode.lng }, zone.paths);
+        const wasInside = activeBreachesRef.current[breachKey];
+
+        // 🟢 TRIGGER: NODE ENTERED THE ZONE
+        if (isInside && !wasInside) {
+          activeBreachesRef.current[breachKey] = true;
+
+          // Fire Local UI Alert
+          setZoneAlerts(prev => [...prev, {
+            id: Date.now(),
+            type: 'ENTER',
+            userName: userNode.name,
+            zoneName: zone.name
+          }]);
+
+          // If you are the Admin, broadcast this breach to the whole network
+          if (isAdmin) {
+            socket.emit('geofence-alert', { type: 'ENTER', userName: userNode.name, zoneName: zone.name, roomCode: squadCode });
+          }
+        }
+
+        // 🔴 TRIGGER: NODE LEFT THE ZONE
+        if (!isInside && wasInside) {
+          activeBreachesRef.current[breachKey] = false;
+
+          setZoneAlerts(prev => [...prev, {
+            id: Date.now(),
+            type: 'EXIT',
+            userName: userNode.name,
+            zoneName: zone.name
+          }]);
+
+          if (isAdmin) {
+            socket.emit('geofence-alert', { type: 'EXIT', userName: userNode.name, zoneName: zone.name, roomCode: squadCode });
+          }
+        }
+      });
+    });
+  }, [users, liveZones, isAdmin, squadCode]); // Engine fires every time a GPS dot moves
   // --- 📡 NETWORK LATENCY TRACKER ---
   useEffect(() => {
     if (!hasJoinedSquad) return;
