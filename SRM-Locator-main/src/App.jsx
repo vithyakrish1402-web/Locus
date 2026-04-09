@@ -14,7 +14,7 @@ import {
 
 // 👇 ADD THIS LINE RIGHT HERE
 import LocusGuide from './LocusGuide';
-import HexGridOverlay from './HexGridOverlay';
+import getHexGridOverlayClass from './HexGridOverlay';
 // --- ADDED: FIREBASE AUTH ---
 import { auth, googleProvider, db  } from './firebase';
 import { 
@@ -1244,21 +1244,23 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
     // 3. Stealth Protocol: Only show a zone if a building is actively selected
     if (!selectedItem || activeTab !== 'buildings') return;
 
-    // 4. Search the Matrix: Find the zone that matches the selected building
     const targetZone = liveZones.find(z =>
         z.name.toLowerCase().includes(selectedItem.name.toLowerCase()) ||
         selectedItem.name.toLowerCase().includes(z.name.toLowerCase())
     );
 
-    if (!targetZone) return; // No zone exists for this building yet
+    if (!targetZone) return;
 
-    // 5. TRANSLATION: Convert plain {lat, lng} to official Google Maps objects
     const googleCoords = targetZone.paths.map(
         coord => new window.google.maps.LatLng(coord.lat, coord.lng)
     );
 
-    // 6. IGNITE THE HEX ENGINE (This is the React version of the code you found!)
-    const hexOverlay = new HexGridOverlay(mapRef.current, googleCoords, {
+    // --- NEW IGNITION SEQUENCE ---
+    // 1. Now that we know window.google exists, safely generate the class
+    const HexGridClass = getHexGridOverlayClass();
+
+    // 2. Instantiate the newly generated class
+    const hexOverlay = new HexGridClass(mapRef.current, googleCoords, {
       hexRadius: 18,
       speed: 1.2,
       chaos: 0.5,
@@ -1267,7 +1269,6 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
       padding: 8
     });
 
-    // Store it so we can wipe it when you click away
     activePolygonsRef.current.push(hexOverlay);
 
     // 7. Cleanup: Destroy the canvas when deselecting the building
