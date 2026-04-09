@@ -203,24 +203,40 @@ export default function getHexGridOverlayClass(){
                     const activation = sineVal * (1 - chaos) + (rng * 2 - 1) * chaos;
 
                     // ── Render state ─────────────────────────────────────────────────
-                    if (activation > 0.4) {
-                        // SOLID RED — peak of wave
-                        const alpha = Math.min(1, (activation - 0.4) / 0.6);
-                        ctx.fillStyle = this._colorWithAlpha(fillColor, 0.55 + alpha * 0.45);
-                        ctx.strokeStyle = this._colorWithAlpha(strokeColor, 0.4 + alpha * 0.3);
-                        ctx.lineWidth = 0.8;
-                        this._hexPath(ctx, hx, hy, r * 0.88);
+                    // ── 🔴 CINEMATIC RENDER STATE ──────────────────────────────────────
+                    if (activation > 0.3) {
+                        // ACTIVE CORE — peak of wave with heavy NEON GLOW
+                        const alpha = Math.min(1, (activation - 0.3) / 0.7);
+
+                        // Inject Sci-Fi Bloom (Glow Effect)
+                        ctx.shadowBlur = 18 * alpha; // Glow intensity scales with the wave
+                        ctx.shadowColor = strokeColor;
+
+                        // Deep crimson core, hyper-bright neon stroke
+                        ctx.fillStyle   = this._colorWithAlpha(fillColor,   0.15 + alpha * 0.4);
+                        ctx.strokeStyle = this._colorWithAlpha(strokeColor, 0.5  + alpha * 0.5);
+                        ctx.lineWidth   = 1.5;
+
+                        // r * 0.82 creates a wider, cleaner physical gap between individual hexes
+                        this._hexPath(ctx, hx, hy, r * 0.82);
                         ctx.fill();
                         ctx.stroke();
-                    } else if (activation > -0.1) {
-                        // HOLLOW — trough of wave (outline only)
-                        const frac = (activation + 0.1) / 0.5;
-                        ctx.strokeStyle = this._colorWithAlpha(fillColor, 0.2 + frac * 0.4);
-                        ctx.lineWidth = 0.7;
-                        this._hexPath(ctx, hx, hy, r * 0.88);
+
+                        // CRITICAL: Reset shadow to prevent severe performance drop on next hex
+                        ctx.shadowBlur = 0;
+
+                    } else if (activation > -0.2) {
+                        // GHOST TRACE — faint outline left behind by the wave
+                        const frac = (activation + 0.2) / 0.5;
+
+                        ctx.shadowBlur = 0; // Ensure no glow on dead hexes
+                        ctx.strokeStyle = this._colorWithAlpha(fillColor, 0.05 + frac * 0.2);
+                        ctx.lineWidth   = 0.5;
+
+                        this._hexPath(ctx, hx, hy, r * 0.82);
                         ctx.stroke();
                     }
-                    // else INVISIBLE — nothing drawn
+                    // else INVISIBLE — completely dark
                 }
             }
             // --- 🔴 RESTORE THE CANVAS ---

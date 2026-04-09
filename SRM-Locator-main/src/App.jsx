@@ -1260,13 +1260,14 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
     const HexGridClass = getHexGridOverlayClass();
 
     // 2. Instantiate the newly generated class
+    // 6. IGNITE THE CINEMATIC HEX ENGINE
     const hexOverlay = new HexGridClass(mapRef.current, googleCoords, {
-      hexRadius: 18,
-      speed: 1.2,
-      chaos: 0.5,
-      fillColor: '#ef4444',
-      strokeColor: '#ff7878',
-      padding: 8
+      hexRadius: 22,        // Slightly larger hexes to give the glow room to breathe
+      speed: 0.35,          // Drastically slowed down for a heavy, deliberate sonar sweep
+      chaos: 0.6,           // Higher chaos for a more organic, flickering tactical feel
+      fillColor: '#991b1b', // Deep, dark blood-crimson base
+      strokeColor: '#fca5a5',// Hyper-bright neon pinkish-red for the LED edges
+      padding: 12
     });
 
     activePolygonsRef.current.push(hexOverlay);
