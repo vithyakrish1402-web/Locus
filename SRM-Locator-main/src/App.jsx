@@ -14,7 +14,7 @@ import {
 
 // 👇 ADD THIS LINE RIGHT HERE
 import LocusGuide from './LocusGuide';
-
+import HexGridOverlay from './HexGridOverlay';
 // --- ADDED: FIREBASE AUTH ---
 import { auth, googleProvider, db  } from './firebase';
 import { 
@@ -1229,13 +1229,14 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
     if (item) setSelectedItem(item);
   };
 
-  // --- RENDER SAVED TACTICAL ZONES ---
-  // --- 🔴 ADVANCED TACTICAL SONAR PULSE ENGINE ---
+  // --- 🔴 DYNAMIC HEX-GRID OVERLAY ENGINE ---
   useEffect(() => {
-    // 1. Wipe the grid: Clear old polygons & stop old animations
-    activePolygonsRef.current.forEach(poly => poly.setMap(null));
+    // 1. Wipe the grid: Clear old overlays
+    activePolygonsRef.current.forEach(overlay => {
+      if (overlay.remove) overlay.remove(); // Custom hex overlay teardown
+      else overlay.setMap(null);            // Fallback for standard polygons
+    });
     activePolygonsRef.current = [];
-    if (window.zonePulseInterval) cancelAnimationFrame(window.zonePulseInterval);
 
     // 2. Gatekeeper: Only run if map is ready
     if (!isMapReady || !mapRef.current || !window.google) return;
@@ -1251,60 +1252,30 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
     if (!targetZone) return; // No zone exists for this building yet
 
-    // --- DEPLOY MULTI-LAYERED HOLOGRAM ---
+    // 5. TRANSLATION: Convert plain {lat, lng} to official Google Maps objects
+    const googleCoords = targetZone.paths.map(
+        coord => new window.google.maps.LatLng(coord.lat, coord.lng)
+    );
 
-    // Layer 1: The Base Trace (A stealthy, static footprint)
-    const baseTrace = new window.google.maps.Polygon({
-      paths: targetZone.paths,
-      strokeColor: '#ef4444',
-      strokeOpacity: 0.2,
-      strokeWeight: 1,
-      fillColor: '#000000', // Darkened core for contrast
-      fillOpacity: 0.4,
-      map: mapRef.current
-    });
-
-    // Layer 2: The Energy Pulse (Bright, animating overlay)
-    const pulseLayer = new window.google.maps.Polygon({
-      paths: targetZone.paths,
-      strokeColor: '#ef4444',
-      strokeOpacity: 0.8,
-      strokeWeight: 3,
+    // 6. IGNITE THE HEX ENGINE (This is the React version of the code you found!)
+    const hexOverlay = new HexGridOverlay(mapRef.current, googleCoords, {
+      hexRadius: 18,
+      speed: 1.2,
+      chaos: 0.5,
       fillColor: '#ef4444',
-      fillOpacity: 0.1,
-      map: mapRef.current
+      strokeColor: '#ff7878',
+      padding: 8
     });
 
-    activePolygonsRef.current.push(baseTrace, pulseLayer);
+    // Store it so we can wipe it when you click away
+    activePolygonsRef.current.push(hexOverlay);
 
-    // --- THE MATHEMATICAL WAVEFORM ---
-    // Uses a time-based Sine wave for a sharp, organic radar throb
-    const igniteEngine = () => {
-      const time = Date.now();
-
-      // Calculate a wave between 0 and 1
-      const wave = Math.abs(Math.sin(time / 300));
-
-      // Map the wave to specific opacity thresholds
-      const coreIntensity = 0.05 + (wave * 0.25); // Throbs between 0.05 and 0.30
-      const edgeIntensity = 0.3 + (wave * 0.7);   // Throbs between 0.3 and 1.0
-
-      pulseLayer.setOptions({
-        fillOpacity: coreIntensity,
-        strokeOpacity: edgeIntensity
-      });
-
-      // requestAnimationFrame is 10x smoother than setInterval
-      window.zonePulseInterval = requestAnimationFrame(igniteEngine);
-    };
-
-    igniteEngine(); // Fire it up
-
-    // 7. Cleanup: Stop the engine when they deselect the building
+    // 7. Cleanup: Destroy the canvas when deselecting the building
     return () => {
-      cancelAnimationFrame(window.zonePulseInterval);
+      hexOverlay.remove();
     };
   }, [liveZones, isMapReady, selectedItem, activeTab]);
+
   // --- 🚨 MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
   const handleMapClick = ({ lat, lng }) => {
     if (isAdmin && isDrawingZone) {
