@@ -1230,27 +1230,64 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
   };
 
   // --- RENDER SAVED TACTICAL ZONES ---
+  // --- 🔴 DYNAMIC PULSATING ZONE ENGINE ---
   useEffect(() => {
-    if (!mapRef.current || !window.google || !isMapReady) return;
-
-    // Clear old polygons from the map
+    // 1. Wipe the grid: Clear old polygons & stop old animations
     activePolygonsRef.current.forEach(poly => poly.setMap(null));
     activePolygonsRef.current = [];
+    if (window.zonePulseInterval) clearInterval(window.zonePulseInterval);
 
-    // Draw all active zones
-    liveZones.forEach(zone => {
-      const poly = new window.google.maps.Polygon({
-        paths: zone.paths,
-        strokeColor: '#ef4444',
-        strokeOpacity: 0.8,
-        strokeWeight: 2,
-        fillColor: '#ef4444',
-        fillOpacity: 0.2, // We can animate this later!
-        map: mapRef.current
-      });
-      activePolygonsRef.current.push(poly);
+    // 2. Gatekeeper: Only run if map is ready
+    if (!isMapReady || !mapRef.current || !window.google) return;
+
+    // 3. Stealth Protocol: Only show a zone if a building is actively selected
+    if (!selectedItem || activeTab !== 'buildings') return;
+
+    // 4. Search the Firebase Matrix: Find the zone that matches the selected building
+    const targetZone = liveZones.find(z =>
+        z.name.toLowerCase().includes(selectedItem.name.toLowerCase()) ||
+        selectedItem.name.toLowerCase().includes(z.name.toLowerCase())
+    );
+
+    if (!targetZone) return; // No zone exists for this building yet
+
+    // 5. Deploy the Polygon
+    const activePoly = new window.google.maps.Polygon({
+      paths: targetZone.paths,
+      strokeColor: '#ef4444',
+      strokeOpacity: 0.8,
+      strokeWeight: 3,
+      fillColor: '#ef4444',
+      fillOpacity: 0.1,
+      map: mapRef.current
     });
-  }, [liveZones, isMapReady]);
+    activePolygonsRef.current.push(activePoly);
+
+    // 6. The Aesthetic Engine: High-FPS "Breathing" Glow
+    let opacity = 0.1;
+    let growing = true;
+
+    window.zonePulseInterval = setInterval(() => {
+      // Oscillate the opacity up and down
+      if (growing) opacity += 0.015;
+      else opacity -= 0.015;
+
+      // Set the min/max glow thresholds
+      if (opacity >= 0.45) growing = false;
+      if (opacity <= 0.05) growing = true;
+
+      // Apply the new visual state to the Google Map polygon
+      activePoly.setOptions({
+        fillOpacity: opacity,
+        strokeOpacity: opacity + 0.5 // Makes the border pulse along with the core
+      });
+    }, 50); // Runs at 20 frames per second for smooth scanning
+
+    // 7. Cleanup: Stop the animation if they close the building card
+    return () => {
+      clearInterval(window.zonePulseInterval);
+    };
+  }, [liveZones, isMapReady, selectedItem, activeTab]);
   // --- 🚨 MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
   const handleMapClick = ({ lat, lng }) => {
     if (isAdmin && isDrawingZone) {
