@@ -1230,12 +1230,12 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
   };
 
   // --- RENDER SAVED TACTICAL ZONES ---
-  // --- 🔴 DYNAMIC PULSATING ZONE ENGINE ---
+  // --- 🔴 ADVANCED TACTICAL SONAR PULSE ENGINE ---
   useEffect(() => {
     // 1. Wipe the grid: Clear old polygons & stop old animations
     activePolygonsRef.current.forEach(poly => poly.setMap(null));
     activePolygonsRef.current = [];
-    if (window.zonePulseInterval) clearInterval(window.zonePulseInterval);
+    if (window.zonePulseInterval) cancelAnimationFrame(window.zonePulseInterval);
 
     // 2. Gatekeeper: Only run if map is ready
     if (!isMapReady || !mapRef.current || !window.google) return;
@@ -1243,7 +1243,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
     // 3. Stealth Protocol: Only show a zone if a building is actively selected
     if (!selectedItem || activeTab !== 'buildings') return;
 
-    // 4. Search the Firebase Matrix: Find the zone that matches the selected building
+    // 4. Search the Matrix: Find the zone that matches the selected building
     const targetZone = liveZones.find(z =>
         z.name.toLowerCase().includes(selectedItem.name.toLowerCase()) ||
         selectedItem.name.toLowerCase().includes(z.name.toLowerCase())
@@ -1251,8 +1251,21 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
     if (!targetZone) return; // No zone exists for this building yet
 
-    // 5. Deploy the Polygon
-    const activePoly = new window.google.maps.Polygon({
+    // --- DEPLOY MULTI-LAYERED HOLOGRAM ---
+
+    // Layer 1: The Base Trace (A stealthy, static footprint)
+    const baseTrace = new window.google.maps.Polygon({
+      paths: targetZone.paths,
+      strokeColor: '#ef4444',
+      strokeOpacity: 0.2,
+      strokeWeight: 1,
+      fillColor: '#000000', // Darkened core for contrast
+      fillOpacity: 0.4,
+      map: mapRef.current
+    });
+
+    // Layer 2: The Energy Pulse (Bright, animating overlay)
+    const pulseLayer = new window.google.maps.Polygon({
       paths: targetZone.paths,
       strokeColor: '#ef4444',
       strokeOpacity: 0.8,
@@ -1261,31 +1274,35 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
       fillOpacity: 0.1,
       map: mapRef.current
     });
-    activePolygonsRef.current.push(activePoly);
 
-    // 6. The Aesthetic Engine: High-FPS "Breathing" Glow
-    let opacity = 0.1;
-    let growing = true;
+    activePolygonsRef.current.push(baseTrace, pulseLayer);
 
-    window.zonePulseInterval = setInterval(() => {
-      // Oscillate the opacity up and down
-      if (growing) opacity += 0.015;
-      else opacity -= 0.015;
+    // --- THE MATHEMATICAL WAVEFORM ---
+    // Uses a time-based Sine wave for a sharp, organic radar throb
+    const igniteEngine = () => {
+      const time = Date.now();
 
-      // Set the min/max glow thresholds
-      if (opacity >= 0.45) growing = false;
-      if (opacity <= 0.05) growing = true;
+      // Calculate a wave between 0 and 1
+      const wave = Math.abs(Math.sin(time / 300));
 
-      // Apply the new visual state to the Google Map polygon
-      activePoly.setOptions({
-        fillOpacity: opacity,
-        strokeOpacity: opacity + 0.5 // Makes the border pulse along with the core
+      // Map the wave to specific opacity thresholds
+      const coreIntensity = 0.05 + (wave * 0.25); // Throbs between 0.05 and 0.30
+      const edgeIntensity = 0.3 + (wave * 0.7);   // Throbs between 0.3 and 1.0
+
+      pulseLayer.setOptions({
+        fillOpacity: coreIntensity,
+        strokeOpacity: edgeIntensity
       });
-    }, 50); // Runs at 20 frames per second for smooth scanning
 
-    // 7. Cleanup: Stop the animation if they close the building card
+      // requestAnimationFrame is 10x smoother than setInterval
+      window.zonePulseInterval = requestAnimationFrame(igniteEngine);
+    };
+
+    igniteEngine(); // Fire it up
+
+    // 7. Cleanup: Stop the engine when they deselect the building
     return () => {
-      clearInterval(window.zonePulseInterval);
+      cancelAnimationFrame(window.zonePulseInterval);
     };
   }, [liveZones, isMapReady, selectedItem, activeTab]);
   // --- 🚨 MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
