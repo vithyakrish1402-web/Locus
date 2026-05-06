@@ -60,15 +60,15 @@ const ARCompass = ({ target, liveLocation, onClose }) => {
 
   // 2. Initialize Compass
   const handleOrientation = (event) => {
-    let newHeading = 0;
     if (event.webkitCompassHeading) {
-      // iOS
-      newHeading = event.webkitCompassHeading;
+      // iOS absolute
+      setHeading(event.webkitCompassHeading);
     } else if (event.absolute && event.alpha !== null) {
-      // Android
-      newHeading = 360 - event.alpha; 
+      // Android absolute
+      setHeading(360 - event.alpha); 
     }
-    setHeading(newHeading);
+    // If it's a relative event (event.absolute is false), ignore it. 
+    // Otherwise it overwrites the absolute heading with 0!
   };
 
   const requestPermissions = async () => {
