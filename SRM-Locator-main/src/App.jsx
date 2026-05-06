@@ -15,6 +15,7 @@ import {
 // 👇 ADD THIS LINE RIGHT HERE
 import LocusGuide from './LocusGuide';
 import getHexGridOverlayClass from './HexGridOverlay';
+import ARCompass from './ARCompass';
 // --- ADDED: FIREBASE AUTH ---
 import { auth, googleProvider, db } from './firebase';
 import {
@@ -370,6 +371,7 @@ const App = () => {
   // --- TACTICAL WAYPOINT STATE ---
   const [isDroppingWaypoint, setIsDroppingWaypoint] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
+  const [arTarget, setArTarget] = useState(null);
   // --- SYS_CONFIG STATE ---
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAdminSettings, setShowAdminSettings] = useState(false);
@@ -1810,12 +1812,21 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                     <span className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest">[{building.id}]</span>
                   </div>
                   <p className="font-inter text-xs text-zinc-400 mb-4 leading-relaxed">{building.info}</p>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleWaypointSelect(building); }}
-                    className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white"
-                  >
-                    SELECT_WAYPOINT
-                  </button>
+                  <div className="flex gap-2 w-full">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setArTarget({ lat: building.lat, lng: building.lng, name: building.name }); }}
+                      className="w-12 flex-shrink-0 flex items-center justify-center border border-white/30 hover:border-red-500 hover:text-red-500 transition-colors text-white"
+                      title="AR Tracking"
+                    >
+                      <Crosshair size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleWaypointSelect(building); }}
+                      className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white"
+                    >
+                      SELECT_WAYPOINT
+                    </button>
+                  </div>
                 </motion.div>
               ))
             ) : (
@@ -1884,9 +1895,18 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                       FIRE_SOS_BEACON
                     </button>
                     {user.permission === 'accepted' ? (
-                      <button onClick={() => handleFocus({ lat: user.lat, lng: user.lng }, null)} className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white">
-                        TRACK_TARGET
-                      </button>
+                      <div className="flex gap-2 w-full">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setArTarget({ lat: user.lat, lng: user.lng, name: user.name }); }}
+                          className="w-12 flex-shrink-0 py-3 flex items-center justify-center border border-white/30 hover:border-red-500 hover:text-red-500 transition-colors text-white bg-black"
+                          title="AR Tracking"
+                        >
+                          <Crosshair size={14} />
+                        </button>
+                        <button onClick={() => handleFocus({ lat: user.lat, lng: user.lng }, null)} className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white">
+                          TRACK_TARGET
+                        </button>
+                      </div>
                     ) : (
                       <button onClick={() => requestPermission(user.id)} className="w-full py-3 bg-white text-black hover:bg-zinc-200 font-dot text-xs uppercase tracking-widest transition-colors">
                         REQUEST_LINK
@@ -2226,6 +2246,12 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
               )}
 
               {/* Always show the Waypoint/Destination button */}
+              <button
+                onClick={() => setArTarget({ lat: selectedItem.lat, lng: selectedItem.lng, name: selectedItem.name })}
+                className="flex-1 py-3 bg-black border border-white/20 text-white hover:border-red-500 hover:text-red-500 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
+              >
+                <Crosshair size={14} /> AR_TRACK
+              </button>
               <button
                 onClick={() => handleWaypointSelect(selectedItem)}
                 className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
@@ -2905,7 +2931,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
           </motion.div>
         )}
       </AnimatePresence>
-
+      {arTarget && <ARCompass target={arTarget} liveLocation={liveLocation} onClose={() => setArTarget(null)} />}
     </div>
   );
 };
