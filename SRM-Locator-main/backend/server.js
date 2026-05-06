@@ -87,7 +87,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const { roomCode, user } = data;
 
     if (!activeSquads[roomCode] || activeSquads[roomCode].members.length === 0) {
-      activeSquads[roomCode] = { ownerId: socket.id, members: [socket.id] };
+      activeSquads[roomCode] = { ownerId: socket.id, members: [socket.id], activeWaypoint: null };
       socket.join(roomCode);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
     } else {
@@ -107,6 +107,10 @@ socket.on('check-ping', (clientTimestamp) => {
         if (targetSocket) {
           targetSocket.join(roomCode);
           targetSocket.emit('access-granted', { role: 'MEMBER', roomCode });
+          
+          if (activeSquads[roomCode].activeWaypoint) {
+            targetSocket.emit('new-waypoint', activeSquads[roomCode].activeWaypoint);
+          }
         }
       } else {
         io.to(targetId).emit('access-denied');
@@ -116,6 +120,26 @@ socket.on('check-ping', (clientTimestamp) => {
 
   socket.on('publish-custom-route', (payload) => {
     socket.broadcast.emit('new-custom-route', payload); 
+  });
+
+  // --- 🎯 COMMANDER WAYPOINTS ---
+  socket.on('publish-waypoint', (data) => {
+    const { roomCode, waypoint } = data;
+    if (activeSquads[roomCode] && activeSquads[roomCode].ownerId === socket.id) {
+      console.log(`[🎯 TACTICAL] New Rally Point designated in ${roomCode} at ${waypoint.lat}, ${waypoint.lng}`);
+      activeSquads[roomCode].activeWaypoint = waypoint;
+      socket.to(roomCode).emit('new-waypoint', waypoint);
+      // Also emit back to the sender just in case they need to update state without trusting the client UI
+      socket.emit('new-waypoint', waypoint); 
+    }
+  });
+
+  socket.on('clear-waypoint', (roomCode) => {
+    if (activeSquads[roomCode] && activeSquads[roomCode].ownerId === socket.id) {
+      console.log(`[🚫 TACTICAL] Rally Point cleared in ${roomCode}`);
+      activeSquads[roomCode].activeWaypoint = null;
+      io.to(roomCode).emit('remove-waypoint');
+    }
   });
 
   // --- 🌐 LOCATION & ROOM ENGINE (CENTRALIZED) ---
