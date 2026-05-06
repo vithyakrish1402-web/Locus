@@ -16,6 +16,7 @@ import {
 import LocusGuide from './LocusGuide';
 import getHexGridOverlayClass from './HexGridOverlay';
 import ARCompass from './ARCompass';
+import { SRM_MASTER_DATABASE } from './srmDatabase';
 // --- ADDED: FIREBASE AUTH ---
 import { auth, googleProvider, db } from './firebase';
 import {
@@ -37,17 +38,6 @@ const socket = io(BACKEND_URL, {
 });
 
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
-
-const BUILDINGS = [
-  { id: 1, name: "Tech Park", category: "Academic", lat: 12.825020924230433, lng: 80.0453233376537, info: "Home to CSE & IT departments. 15 floors of innovation.", tacticalIntel: "» FACT 01: Largest academic block on campus.\n» FACT 02: Houses the primary Apple Mac Lab and supercomputing facility.\n» FACT 03: Contains 15 floors of dedicated tech infrastructure." },
-  { id: 2, name: "University Building (UB)", category: "Academic", lat: 12.824353553512712, lng: 80.04221892231276, info: "The administrative heart and main library block.", tacticalIntel: "» FACT 01: Houses the massive Central Library spanning multiple floors.\n» FACT 02: Directorate of Admissions and main admin offices are located here.\n» FACT 03: Serves as the architectural centerpiece of SRM KTR." },
-  { id: 3, name: "T.P. Ganesan Auditorium", category: "Event", lat: 12.824880056150072, lng: 80.04668508123501, info: "One of Asia's largest auditoriums, near the main gate.", tacticalIntel: "» FACT 01: Seating capacity exceeds 3,000 students.\n» FACT 02: Frequently hosts international tech conferences and hackathons.\n» FACT 03: Equipped with stadium-grade acoustics and VIP holding rooms." },
-  { id: 4, name: "CRC Block", category: "Academic", lat: 12.820344661045802, lng: 80.03784856136284, info: "The heritage block housing Mechanical and Civil Engineering.", tacticalIntel: "» FACT 01: One of the oldest legacy structures on campus.\n» FACT 02: Contains heavy-machinery testing labs on the ground floor.\n» FACT 03: Known for its expansive open-air central courtyard." },
-  { id: 5, name: "Hi-Tech Block", category: "Research", lat: 12.821075984327978, lng: 80.03893573761148, info: "Specialized labs for ECE and EEE students.", tacticalIntel: "» FACT 01: Home to advanced robotics and circuitry labs.\n» FACT 02: Features specialized RF (Radio Frequency) isolated rooms.\n» FACT 03: Connects directly to the main research grid." },
-  { id: 6, name: "SRM Medical College", category: "Medical", lat: 12.821098258984547, lng: 80.0481636983677, info: "Multi-specialty hospital and medical research center.", tacticalIntel: "» FACT 01: Fully functional multi-specialty hospital serving the public.\n» FACT 02: Houses critical trauma centers and surgical wards.\n» FACT 03: Operates on an independent backup power grid." },
-  { id: 7, name: "Java Green", category: "Food", lat: 12.823348807944917, lng: 80.04448904064235, info: "Popular outdoor student hangout and food court.", tacticalIntel: "» FACT 01: The highest-density social node during lunch hours.\n» FACT 02: Features multiple distinct vendor stalls and shaded seating.\n» FACT 03: Prime location for student club recruitment drives." },
-  { id: 8, name: "Bio-Tech Block", category: "Academic", lat: 12.825007113379733, lng: 80.04414300737659, info: "Genetic engineering and biotechnology research facility.", tacticalIntel: "» FACT 01: Contains Level-2 Bio-Safety laboratories.\n» FACT 02: Features an advanced greenhouse and genetic testing wing.\n» FACT 03: Located adjacent to the core Tech Park network." }
-];
 
 const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
   // --- NEW: THE GHOST MARKER (LAST KNOWN LOCATION) ---
@@ -453,7 +443,6 @@ const App = () => {
   const [selectedItem, setSelectedItem] = useState(null);
 
   const [isEditMode, setIsEditMode] = useState(false);
-  const [editableBuildings, setEditableBuildings] = useState(BUILDINGS);
 
   const [users, setUsers] = useState([]);
   const [liveLocation, setLiveLocation] = useState(null);
@@ -1781,7 +1770,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-black">
           <AnimatePresence mode="popLayout">
             {activeTab === 'buildings' ? (
-              editableBuildings.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).map(building => (
+              SRM_MASTER_DATABASE.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).map(building => (
                 <motion.div
                   layout
                   initial={{ opacity: 0 }}
@@ -2015,7 +2004,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
               onClick={() => handleFocus(liveLocation, null)}
             />
           )}
-          {activeTab === 'buildings' && editableBuildings.map(b => (
+          {activeTab === 'buildings' && SRM_MASTER_DATABASE.map(b => (
             <CustomMarker
               key={b.id}
               lat={b.lat}
