@@ -38,7 +38,8 @@ app.post('/api/oracle', async (req, res) => {
     }
 
     const data = await response.json();
-    res.json(data);
+    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response found.";
+    res.json({ reply: replyText });
   } catch (error) {
     console.error("🚨 [ORACLE PROXY ERROR]:", error);
     res.status(500).json({ error: 'Internal Server Error' });
