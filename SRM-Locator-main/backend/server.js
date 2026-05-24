@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
@@ -11,10 +12,10 @@ app.use(express.json());
 app.post('/api/oracle', async (req, res) => {
   try {
     const { prompt, systemInstruction } = req.body;
-    const apiKey = process.env.VITE_GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      console.error("🚨 [SYS_FAILURE] Missing VITE_GEMINI_API_KEY in backend environment");
+      console.error("🚨 [SYS_FAILURE] Missing GEMINI_API_KEY in backend environment");
       return res.status(500).json({ error: 'Missing API Key on Server' });
     }
 
