@@ -5,6 +5,45 @@ import cors from 'cors';
 
 const app = express();
 app.use(cors());
+app.use(express.json());
+
+// --- ORACLE PROXY ---
+app.post('/api/oracle', async (req, res) => {
+  try {
+    const { prompt, systemInstruction } = req.body;
+    const apiKey = process.env.VITE_GEMINI_API_KEY;
+
+    if (!apiKey) {
+      console.error("🚨 [SYS_FAILURE] Missing VITE_GEMINI_API_KEY in backend environment");
+      return res.status(500).json({ error: 'Missing API Key on Server' });
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
+    const combinedPrompt = `${systemInstruction}\n\nUSER_QUERY: ${prompt}`;
+
+    const payload = {
+      contents: [{ parts: [{ text: combinedPrompt }] }]
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("🚨 [GEMINI ERROR]:", errorData);
+      return res.status(response.status).json({ error: 'API Error' });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error("🚨 [ORACLE PROXY ERROR]:", error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {

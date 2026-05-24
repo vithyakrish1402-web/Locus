@@ -29,9 +29,9 @@ import {
 } from 'firebase/auth';
 
 import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://locus-1-896t.onrender.com');
 
-const socket = io("https://locus-1-896t.onrender.com", {
+const socket = io(BACKEND_URL, {
   transports: ['websocket'],
   upgrade: false
 });
@@ -1017,15 +1017,13 @@ const App = () => {
   const [aiQuery, setAiQuery] = useState('');
 
 
-  // Gemini API Utility
+  // Gemini API Utility (Proxied via Backend)
   const callGemini = async (prompt, systemInstruction = "You are a helpful campus assistant for SRM KTR.") => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-    const combinedPrompt = `${systemInstruction}\n\nUSER_QUERY: ${prompt}`;
+    const url = `${BACKEND_URL}/api/oracle`;
 
     const payload = {
-      contents: [{ parts: [{ text: combinedPrompt }] }]
+      prompt,
+      systemInstruction
     };
 
     let delay = 1000;
@@ -1039,12 +1037,12 @@ const App = () => {
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error("🚨 [GEMINI ERROR]:", errorData);
+          console.error("🚨 [ORACLE ERROR]:", errorData);
           throw new Error('API Error');
         }
 
         const data = await response.json();
-        return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response found.";
+        return data.reply || "No response found.";
       } catch (err) {
         if (i === 4) throw err;
         await new Promise(resolve => setTimeout(resolve, delay));
