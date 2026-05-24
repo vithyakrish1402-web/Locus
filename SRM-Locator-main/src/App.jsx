@@ -368,6 +368,8 @@ const App = () => {
   const [isDroppingWaypoint, setIsDroppingWaypoint] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
   const [arTarget, setArTarget] = useState(null);
+  // --- TARGETING MODE (Two-step Rally Point) ---
+  const [isTargetingMode, setIsTargetingMode] = useState(false);
   // --- SYS_CONFIG STATE ---
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAdminSettings, setShowAdminSettings] = useState(false);
@@ -1308,13 +1310,24 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
   // --- 🚨 MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
   const handleMapClick = ({ lat, lng }) => {
-    // 0. COMMANDER RALLY POINT OVERRIDE
+    // 0. TARGETING MODE RALLY POINT (Mobile two-step)
+    if (isTargetingMode) {
+      const waypoint = { lat, lng, name: "RALLY POINT" };
+      setActiveWaypoint(waypoint);
+      if (squadCode) {
+        socket.emit('publish-waypoint', { roomCode: squadCode, waypoint });
+      }
+      setIsTargetingMode(false);
+      return;
+    }
+
+    // 1. COMMANDER RALLY POINT OVERRIDE (Admin sidebar button)
     if (isAdmin && isDroppingWaypoint) {
       const waypoint = { lat, lng, name: "RALLY POINT" };
       setActiveWaypoint(waypoint);
       socket.emit('publish-waypoint', { roomCode: squadCode, waypoint });
       setIsDroppingWaypoint(false);
-      return; // Stop normal click behavior
+      return;
     }
 
     if (isAdmin && isDrawingZone) {
@@ -1657,12 +1670,34 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
             ? 'fixed inset-x-0 top-0 bottom-16 z-[900] flex flex-col bg-black/95 backdrop-blur-lg pointer-events-auto border-b border-red-900/50'
             : 'hidden md:flex w-80 bg-black border-r border-red-900/50 fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
         }`}
+        onTouchStart={(e) => { e.currentTarget._touchStartX = e.touches[0].clientX; }}
+        onTouchEnd={(e) => {
+          const startX = e.currentTarget._touchStartX;
+          const endX = e.changedTouches[0].clientX;
+          const diff = startX - endX;
+          if (diff > 60) {
+            // Swiped LEFT → go to Squad
+            setActiveTab('users'); setSelectedItem(null); setIsEditMode(false);
+            if (window.innerWidth < 768) setMobileView('squad');
+          } else if (diff < -60) {
+            // Swiped RIGHT → go to Matrix
+            setActiveTab('buildings'); setSelectedItem(null); setIsEditMode(false);
+            if (window.innerWidth < 768) setMobileView('matrix');
+          }
+        }}
       >
         {/* Mobile drag-down handle */}
         <div className="md:hidden w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-4 mb-2 shrink-0" onClick={() => setMobileView('grid')} />
 
-        {/* Tabs */}
-        <div className="flex border-b border-white/20">
+        {/* Gesture Dot Indicators (mobile) + Desktop Tabs */}
+        <div className="md:hidden flex items-center justify-center gap-3 py-3">
+          <div className={`w-2 h-2 rounded-full transition-all duration-300 ${activeTab === 'buildings' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-125' : 'bg-zinc-700'}`} />
+          <span className="font-dot text-[9px] text-zinc-500 uppercase tracking-widest">{activeTab === 'buildings' ? 'MATRIX' : 'SQUAD'}</span>
+          <div className={`w-2 h-2 rounded-full transition-all duration-300 ${activeTab === 'users' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-125' : 'bg-zinc-700'}`} />
+        </div>
+
+        {/* Desktop Tabs (hidden on mobile) */}
+        <div className="hidden md:flex border-b border-white/20">
           <button
             onClick={() => { setActiveTab('buildings'); setSelectedItem(null); setIsEditMode(false); }}
             className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors ${activeTab === 'buildings' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
@@ -2966,23 +3001,42 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
       </div>
 
-      {/* ========== PHASE 5: RALLY POINT FAB ========== */}
-      {liveLocation && (
-        <button
-          onClick={() => {
-            const waypoint = { lat: liveLocation.lat, lng: liveLocation.lng, name: "RALLY POINT" };
-            setActiveWaypoint(waypoint);
-            if (squadCode) {
-              socket.emit('publish-waypoint', { roomCode: squadCode, waypoint });
-            }
-          }}
-          className="md:hidden fixed bottom-20 right-4 bg-red-600 text-black p-4 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.6)] border-2 border-red-400 z-[1050] pointer-events-auto active:scale-90 transition-transform"
-          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
-          title="Drop Rally Point"
-        >
-          <Crosshair className="w-6 h-6" />
-        </button>
-      )}
+      {/* ========== TARGETING MODE BANNER ========== */}
+      <AnimatePresence>
+        {isTargetingMode && (
+          <motion.div
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -60, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25 }}
+            className="md:hidden fixed top-20 left-4 right-4 z-[1200] bg-yellow-500/10 border border-yellow-500/50 backdrop-blur-xl p-3 flex items-center gap-3 pointer-events-auto"
+            style={{ marginTop: 'env(safe-area-inset-top)' }}
+          >
+            <Target size={18} className="text-yellow-500 animate-pulse flex-shrink-0" />
+            <div>
+              <p className="font-dot text-[10px] text-yellow-500 uppercase tracking-widest leading-tight">TARGETING MODE ACTIVE</p>
+              <p className="font-dot text-[9px] text-yellow-500/60 uppercase tracking-widest">TAP ANYWHERE ON MAP TO DEPLOY RALLY POINT</p>
+            </div>
+            <button onClick={() => setIsTargetingMode(false)} className="ml-auto text-yellow-500 hover:text-white p-1 flex-shrink-0">
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ========== RALLY POINT FAB (Two-Step Targeting) ========== */}
+      <button
+        onClick={() => setIsTargetingMode(!isTargetingMode)}
+        className={`md:hidden fixed bottom-20 right-4 p-4 rounded-full z-[1050] pointer-events-auto active:scale-90 transition-all duration-300 ${
+          isTargetingMode
+            ? 'bg-yellow-500 text-black border-2 border-yellow-300 shadow-[0_0_25px_rgba(234,179,8,0.6)] animate-pulse'
+            : 'bg-red-600 text-black border-2 border-red-400 shadow-[0_0_20px_rgba(220,38,38,0.6)]'
+        }`}
+        style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+        title={isTargetingMode ? 'Cancel Targeting' : 'Deploy Rally Point'}
+      >
+        {isTargetingMode ? <X className="w-6 h-6" /> : <Crosshair className="w-6 h-6" />}
+      </button>
 
       {arTarget && <ARCompass target={arTarget} liveLocation={liveLocation} onClose={() => setArTarget(null)} />}
     </div>
