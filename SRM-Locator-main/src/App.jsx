@@ -1020,7 +1020,7 @@ const App = () => {
   // Gemini API Utility
   const callGemini = async (prompt, systemInstruction = "You are a helpful campus assistant for SRM KTR.") => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const combinedPrompt = `${systemInstruction}\n\nUSER_QUERY: ${prompt}`;
 
@@ -2442,73 +2442,91 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[3000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
+            className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[3000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-black w-full max-w-3xl border-2 border-white flex flex-col h-[85vh] relative shadow-[0_0_50px_rgba(255,255,255,0.05)]"
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-black/80 w-full max-w-3xl border border-cyan-500/50 flex flex-col h-[85vh] relative shadow-[0_0_40px_rgba(6,182,212,0.15)]"
             >
-              <div className="absolute top-0 left-0 w-4 h-4 bg-white" />
-              <div className="absolute top-0 right-0 w-4 h-4 bg-white" />
-              <div className="absolute bottom-0 left-0 w-4 h-4 bg-white" />
-              <div className="absolute bottom-0 right-0 w-4 h-4 bg-white" />
+              {/* HUD scanline effect */}
+              <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(6,182,212,0.05)_1px,transparent_1px)] bg-[length:100%_4px] opacity-20 z-0" />
 
-              <div className="p-6 border-b-2 border-white flex justify-between items-center bg-black z-10">
-                <div className="flex items-center gap-4 text-white">
-                  <BrainCircuit className="w-8 h-8" />
-                  <h3 className="font-dot text-2xl tracking-widest uppercase">SYS_ORACLE // NEURAL_LINK</h3>
+              {/* Corner brackets */}
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-cyan-500" />
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-cyan-500" />
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-cyan-500" />
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-cyan-500" />
+
+              {/* Header */}
+              <div className="p-5 border-b border-cyan-500/30 flex justify-between items-center bg-cyan-950/20 z-10">
+                <div className="flex items-center gap-4 text-cyan-400">
+                  <BrainCircuit className="w-6 h-6 animate-pulse" />
+                  <div>
+                    <h3 className="font-dot text-xl tracking-widest uppercase text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]">SYS_ORACLE</h3>
+                    <p className="font-dot text-[9px] text-cyan-600 uppercase tracking-[0.3em]">NEURAL_LINK // ACTIVE</p>
+                  </div>
                 </div>
-                <button onClick={() => setShowAiModal(false)} className="p-2 border-2 border-transparent hover:border-white transition-colors text-white">
-                  <X size={24} />
+                <button onClick={() => setShowAiModal(false)} className="p-2 text-cyan-600 hover:text-cyan-400 hover:bg-cyan-900/30 transition-all border border-transparent hover:border-cyan-500/50">
+                  <X size={20} />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar bg-black z-10 flex flex-col">
+              {/* Chat Area */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-transparent z-10 flex flex-col">
                 {aiResponse ? (
                   <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="p-8 border border-white/20 bg-black font-inter text-zinc-300 leading-relaxed text-lg"
+                    className="p-6 border border-cyan-500/30 bg-cyan-950/10 font-inter text-cyan-100 leading-relaxed text-sm relative"
                   >
+                    <div className="absolute -left-[1px] top-4 w-[2px] h-8 bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.8)]" />
                     {aiResponse}
                   </motion.div>
                 ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 gap-6 py-10">
-                    <MessageSquare size={80} className="text-white/10" />
-                    <p className="font-dot text-lg tracking-widest uppercase animate-pulse">AWAITING_QUERY_INPUT...</p>
+                  <div className="flex-1 flex flex-col items-center justify-center text-cyan-900 gap-6 py-10">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-cyan-500/20 blur-xl rounded-full" />
+                      <BrainCircuit size={64} className="text-cyan-500/40 relative z-10" />
+                    </div>
+                    <p className="font-dot text-sm tracking-widest uppercase text-cyan-600/60 animate-pulse">AWAITING_QUERY_INPUT...</p>
                   </div>
                 )}
 
                 {aiLoading && (
                   <motion.div
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="flex items-center gap-4 text-red-500 p-6 border border-red-500 bg-black mt-auto"
+                    className="flex items-center gap-4 text-emerald-400 p-4 border border-emerald-500/50 bg-emerald-950/20 mt-auto shadow-[0_0_15px_rgba(16,185,129,0.2)] relative overflow-hidden"
                   >
-                    <Loader2 className="animate-spin" size={24} />
-                    <span className="font-dot text-sm uppercase tracking-widest">PROCESSING_NEURAL_REQUEST...</span>
+                    <div className="absolute inset-0 bg-emerald-500/10 animate-pulse" />
+                    <Loader2 className="animate-spin relative z-10" size={20} />
+                    <div className="relative z-10 flex flex-col">
+                      <span className="font-dot text-xs uppercase tracking-widest">PROCESSING_NEURAL_REQUEST...</span>
+                      <span className="font-dot text-[8px] uppercase tracking-widest text-emerald-600">INTERFACING WITH DATASTREAMS</span>
+                    </div>
                   </motion.div>
                 )}
               </div>
 
-              <form onSubmit={handleGeneralAiQuery} className="p-6 border-t-2 border-white bg-black z-10">
-                <div className="flex gap-4 relative">
-                  <div className="absolute left-6 top-1/2 -translate-y-1/2 font-dot text-zinc-500">{">"}</div>
+              {/* Input Area */}
+              <form onSubmit={handleGeneralAiQuery} className="p-5 border-t border-cyan-500/30 bg-cyan-950/20 z-10">
+                <div className="flex gap-3 relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 font-dot text-cyan-600">{">"}</div>
                   <input
                     type="text"
                     placeholder="ENTER_QUERY..."
-                    className="flex-1 bg-black border border-white/30 focus:border-white pl-12 pr-6 py-5 text-sm font-dot uppercase tracking-widest focus:outline-none transition-colors text-white placeholder:text-zinc-600"
+                    className="flex-1 bg-black/50 border border-cyan-900 focus:border-cyan-500 pl-10 pr-4 py-4 text-xs font-dot uppercase tracking-widest focus:outline-none transition-colors text-cyan-100 placeholder:text-cyan-800 shadow-[inset_0_0_20px_rgba(6,182,212,0.05)]"
                     value={aiQuery}
                     onChange={(e) => setAiQuery(e.target.value)}
                   />
                   <button
                     type="submit"
-                    disabled={aiLoading}
-                    className="bg-white text-black hover:bg-zinc-200 px-8 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-dot uppercase tracking-widest"
+                    disabled={aiLoading || !aiQuery.trim()}
+                    className="bg-cyan-500/10 text-cyan-400 border border-cyan-500 hover:bg-cyan-500 hover:text-black px-6 flex items-center justify-center transition-all disabled:opacity-30 disabled:hover:bg-cyan-500/10 disabled:hover:text-cyan-400 font-dot uppercase tracking-widest text-xs"
                   >
-                    <Send size={20} className="mr-2" /> TRANSMIT
+                    <Send size={16} className="mr-2" /> TRANSMIT
                   </button>
                 </div>
               </form>
