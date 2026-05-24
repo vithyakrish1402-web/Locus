@@ -216,6 +216,8 @@ const AuthTerminal = ({
           </button>
         </div>
 
+        {/* TACTICAL BYPASS: Google Auth Disabled for Mobile WebViews. Enforcing Email/Passkey only. */}
+        {/*
         <div className="flex items-center gap-4 my-8 relative z-50">
           <div className="h-[1px] bg-white/20 flex-1"></div>
           <span className="text-[10px] font-dot text-zinc-500 uppercase">OR EXT_AUTH</span>
@@ -231,6 +233,7 @@ const AuthTerminal = ({
           </div>
           CONTINUE VIA GOOGLE
         </button>
+        */}
       </motion.div>
 
       {/* Auth Overlay Modal */}
@@ -357,6 +360,10 @@ const App = () => {
   const [isSatellite, setIsSatellite] = useState(false);
   const [latency, setLatency] = useState(0);
   const [username, setUsername] = useState('');
+  // --- MOBILE VIEW STATE ---
+  // Controls which panel is active on mobile bottom HUD: 'grid' | 'matrix' | 'squad' | 'cmd'
+  const [mobileView, setMobileView] = useState('grid');
+  const [showMobileCmd, setShowMobileCmd] = useState(false);
   // --- TACTICAL WAYPOINT STATE ---
   const [isDroppingWaypoint, setIsDroppingWaypoint] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
@@ -1541,12 +1548,13 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
   return (
     <div className="h-screen w-full bg-black flex overflow-hidden text-white font-inter selection:bg-red-500/30 bg-dots">
 
-      {/* Blocky Header Panel */}
+      {/* Blocky Header Panel — PURGED: Only Logo + Logout remain */}
       <motion.nav
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.5 }}
-        className="absolute top-0 left-0 z-[1000] w-full px-6 py-4 bg-black border-b border-white/20 flex items-center justify-between pointer-events-auto"
+        className="absolute top-0 left-0 z-[1000] w-full px-6 bg-black/95 backdrop-blur-md border-b border-white/20 flex items-center justify-between pointer-events-auto"
+        style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' , paddingBottom: '0.75rem' }}
       >
         <div className="flex items-center gap-4">
           <div className="p-2 border border-white text-white">
@@ -1554,11 +1562,13 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
           </div>
           <div>
             <h1 className="font-dot tracking-widest uppercase text-xl">LOCUS</h1>
+            <p className="font-dot text-[8px] text-zinc-600 uppercase tracking-[0.3em] -mt-0.5">{isSatellite ? 'ORBITAL RECON' : 'TACTICAL GRID'}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="hidden sm:flex items-center gap-3 px-4 py-2 border border-white/20 bg-black font-dot text-xs uppercase tracking-widest">
+        <div className="flex items-center gap-3">
+          {/* Desktop-only profile badge */}
+          <div className="hidden md:flex items-center gap-3 px-4 py-2 border border-white/20 bg-black font-dot text-xs uppercase tracking-widest">
             {user.photoURL ? (
               <img src={user.photoURL} className="w-6 h-6 rounded-full border border-white/50" alt="profile" />
             ) : (
@@ -1566,35 +1576,31 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
             )}
             {user.displayName || "GUEST_NODE"}
           </div>
-          {/* --- ADMIN: RESTRICTED SETTINGS --- */}
+          {/* Desktop-only: Admin Settings */}
           {isAdmin && (
             <button
               onClick={() => setShowAdminSettings(true)}
-              className="p-2 border border-yellow-500/60 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors shadow-[0_0_10px_rgba(234,179,8,0.2)]"
+              className="hidden md:flex p-2 border border-yellow-500/60 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors shadow-[0_0_10px_rgba(234,179,8,0.2)]"
               title="Admin Settings"
             >
               <ShieldAlert size={18} />
             </button>
           )}
-          {/* --- NEW: SYS_CONFIG BUTTON --- */}
+          {/* Desktop-only: SYS_CONFIG */}
           <button
             onClick={() => setShowSettingsModal(true)}
-            className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors"
+            className="hidden md:flex p-2 border border-white/20 hover:bg-white hover:text-black transition-colors"
             title="System Configuration"
           >
             <Sliders size={18} />
           </button>
+          {/* Logout — visible on all screens */}
           <button
             onClick={handleLogout}
-            className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors"
+            className="p-2 border border-white/20 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors"
+            title="Disconnect"
           >
             <LogOut size={18} />
-          </button>
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden p-2 border border-white/20 ml-2 hover:bg-white hover:text-black transition-colors"
-          >
-            {isMenuOpen ? <X size={20} /> : <Users size={20} />}
           </button>
         </div>
       </motion.nav>
@@ -1637,18 +1643,23 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         )}
       </AnimatePresence>
 
-      {/* Sidebar Panel */}
+      {/* Sidebar Panel — visible on desktop always, on mobile when mobileView is 'matrix' or 'squad' */}
       <motion.div
         initial={false}
         animate={{
-          y: window.innerWidth < 768 ? (isMenuOpen ? 0 : '100%') : 0,
-          x: window.innerWidth < 768 ? 0 : 0,
+          y: window.innerWidth < 768 ? ((mobileView === 'matrix' || mobileView === 'squad') ? 0 : '100%') : 0,
+          x: 0,
           opacity: 1
         }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="hidden md:flex w-80 bg-black border-r border-red-900/50 fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto"
+        className={`${
+          window.innerWidth < 768 
+            ? 'fixed inset-x-0 top-0 bottom-16 z-[900] flex flex-col bg-black/95 backdrop-blur-lg pointer-events-auto border-b border-red-900/50'
+            : 'hidden md:flex w-80 bg-black border-r border-red-900/50 fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
+        }`}
       >
-        <div className="md:hidden w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-4 mb-2 shrink-0" onClick={() => setIsMenuOpen(false)} />
+        {/* Mobile drag-down handle */}
+        <div className="md:hidden w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-4 mb-2 shrink-0" onClick={() => setMobileView('grid')} />
 
         {/* Tabs */}
         <div className="flex border-b border-white/20">
@@ -2047,15 +2058,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
           {/* ... Your existing users.filter map loop stays exactly the same below this ... */}
         </GoogleMapReact>
-        <div className="absolute bottom-24 right-6 z-[500] pointer-events-auto">
-          <button
-            onClick={() => setIsSatellite(!isSatellite)}
-            className="flex items-center gap-2 bg-black/80 backdrop-blur-md border border-white/20 px-4 py-2 font-dot text-[10px] tracking-widest uppercase transition-all hover:border-emerald-500 hover:text-emerald-500"
-          >
-            <div className={`w-2 h-2 rounded-full ${isSatellite ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]' : 'bg-zinc-600'}`}></div>
-            {isSatellite ? 'ORBITAL RECON' : 'TACTICAL GRID'}
-          </button>
-        </div>
+        {/* PHASE 3: Satellite toggle pill removed — function reassigned to Bottom HUD GRID button */}
       </div>
 
       {/* --- ADMIN INDICATOR (Compact HUD) --- */}
@@ -2150,35 +2153,39 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
       )}
 
       {/* Map Interactive Layers */}
-      <div className="absolute right-6 top-1/2 -translate-y-1/2 z-[500] flex flex-col gap-4 pointer-events-auto">
+      {/* Right-side Action Column */}
+      <div className="absolute right-4 top-1/3 flex flex-col gap-3 z-40 pointer-events-auto">
 
-        <button onClick={() => handleFocus(SRM_KTR_COORDS, null)} className="p-4 bg-black border border-white/20 text-white hover:bg-white hover:text-black transition-colors group" title="Recenter Campus">
-          <MapPin size={24} />
+        <button 
+          onClick={() => handleFocus(SRM_KTR_COORDS, null)} 
+          className="bg-black/80 border border-gray-700 p-3 rounded text-white shadow-lg transition-colors hover:bg-gray-900" 
+          title="Recenter Campus"
+        >
+          <MapPin size={20} />
         </button>
 
         {liveLocation && (
           <button
             onClick={() => handleFocus(liveLocation, null)}
-            className="p-4 bg-black border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors group"
+            className="bg-black/80 border border-red-900 p-3 rounded text-red-500 shadow-[0_0_10px_rgba(220,38,38,0.5)] transition-colors hover:bg-red-900/50"
             title="Locate Signal"
           >
-            <LocateFixed size={24} className="animate-pulse" />
+            <LocateFixed size={20} className="animate-pulse" />
           </button>
         )}
 
-        {activeTab === 'buildings' && (
-          <button
-            onClick={() => setIsEditMode(!isEditMode)}
-            className={`p-4 transition-colors border ${isEditMode ? 'bg-white text-black border-white' : 'bg-black text-white border-white/20 hover:bg-white hover:text-black'}`}
-            title="Edit Pins Mode"
-          >
-            <Settings size={24} className={`${isEditMode ? 'animate-spin-slow' : ''}`} />
-          </button>
-        )}
+        {/* PHASE 2: Gear icon now opens SYS_CONFIG modal */}
+        <button
+          onClick={() => setShowSettingsModal(true)}
+          className="bg-black/80 border border-gray-700 p-3 rounded text-white shadow-lg transition-colors hover:bg-gray-900"
+          title="System Configuration"
+        >
+          <Settings size={20} />
+        </button>
 
         {isEditMode && selectedItem && (
-          <div className="absolute top-1/2 -translate-y-1/2 right-[120%] whitespace-nowrap px-4 py-3 bg-red-500 text-white font-dot text-xs tracking-widest uppercase flex items-center gap-3">
-            <span className="w-2 h-2 bg-white animate-pulse"></span>
+          <div className="absolute top-1/2 -translate-y-1/2 right-[120%] whitespace-nowrap px-4 py-3 bg-red-500 text-white font-dot text-xs tracking-widest uppercase flex items-center gap-3 rounded shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+            <span className="w-2 h-2 bg-white animate-pulse rounded-full"></span>
             AWAITING_COORDS // {selectedItem.name}
           </div>
         )}
@@ -2916,25 +2923,66 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         )}
       </AnimatePresence>
 
-      {/* MOBILE BOTTOM HUD */}
-      <div className="md:hidden fixed bottom-0 w-full bg-black/90 backdrop-blur-md border-t border-red-600/30 flex justify-around items-center p-4 z-50 pointer-events-auto">
-        <button className="text-red-500 hover:text-red-400 flex flex-col items-center">
-          <Map className="w-6 h-6 mb-1" />
-          <span className="text-[10px] tracking-widest font-dot uppercase">GRID</span>
+      {/* ========== MOBILE BOTTOM HUD — REPROGRAMMED ========== */}
+      <div className="md:hidden fixed bottom-0 w-full bg-black/95 backdrop-blur-xl border-t border-red-600/30 flex justify-around items-center p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto">
+
+        {/* GRID — Toggles Satellite vs Dark Map */}
+        <button
+          onClick={() => { setIsSatellite(!isSatellite); setMobileView('grid'); }}
+          className={`flex flex-col items-center transition-all duration-200 ${mobileView === 'grid' && !isSatellite ? 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : isSatellite ? 'text-emerald-500 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'text-zinc-600 hover:text-zinc-400'}`}
+        >
+          <Map className="w-5 h-5 mb-1" />
+          <span className="text-[9px] tracking-widest font-dot uppercase">{isSatellite ? 'ORBITAL' : 'GRID'}</span>
+          <div className={`w-1 h-1 rounded-full mt-1 animate-pulse ${isSatellite ? 'bg-emerald-500' : 'bg-red-500'}`} />
         </button>
-        <button className="text-red-500 hover:text-red-400 flex flex-col items-center drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]">
-          <Scan className="w-6 h-6 mb-1" />
-          <span className="text-[10px] tracking-widest font-dot uppercase">SCAN</span>
+
+        {/* SCAN — Opens AR Compass / Friend Finder */}
+        <button
+          onClick={() => {
+            setMobileView('scan');
+            // If we have a live location, open the AR scanner targeting the nearest squad member
+            // If no squad members, scan toward campus center
+            const scanTarget = (users && users.length > 0 && users[0])
+              ? { lat: users[0].lat, lng: users[0].lng, name: users[0].name || 'SQUAD_NODE' }
+              : { lat: SRM_KTR_COORDS.lat, lng: SRM_KTR_COORDS.lng, name: 'SRM_HQ' };
+            setArTarget(scanTarget);
+          }}
+          className={`flex flex-col items-center transition-all duration-200 ${mobileView === 'scan' ? 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}
+        >
+          <Scan className="w-5 h-5 mb-1" />
+          <span className="text-[9px] tracking-widest font-dot uppercase">SCAN</span>
+          {mobileView === 'scan' && <div className="w-1 h-1 rounded-full bg-red-500 mt-1 animate-pulse" />}
         </button>
-        <button className="text-red-500 hover:text-red-400 flex flex-col items-center">
-          <Users className="w-6 h-6 mb-1" />
-          <span className="text-[10px] tracking-widest font-dot uppercase">SQUAD</span>
+
+        {/* SQUAD — Opens the Squad Room */}
+        <button
+          onClick={() => { setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); setIsEditMode(false); }}
+          className={`flex flex-col items-center transition-all duration-200 ${mobileView === 'squad' ? 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}
+        >
+          <Users className="w-5 h-5 mb-1" />
+          <span className="text-[9px] tracking-widest font-dot uppercase">SQUAD</span>
+          {mobileView === 'squad' && <div className="w-1 h-1 rounded-full bg-red-500 mt-1 animate-pulse" />}
         </button>
+
       </div>
 
-      <button className="md:hidden absolute bottom-24 right-6 bg-red-600 text-black p-4 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.8)] border border-red-400 font-bold z-40 pointer-events-auto">
-        <Crosshair className="w-6 h-6" />
-      </button>
+      {/* ========== PHASE 5: RALLY POINT FAB ========== */}
+      {liveLocation && (
+        <button
+          onClick={() => {
+            const waypoint = { lat: liveLocation.lat, lng: liveLocation.lng, name: "RALLY POINT" };
+            setActiveWaypoint(waypoint);
+            if (squadCode) {
+              socket.emit('publish-waypoint', { roomCode: squadCode, waypoint });
+            }
+          }}
+          className="md:hidden fixed bottom-20 right-4 bg-red-600 text-black p-4 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.6)] border-2 border-red-400 z-[1050] pointer-events-auto active:scale-90 transition-transform"
+          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+          title="Drop Rally Point"
+        >
+          <Crosshair className="w-6 h-6" />
+        </button>
+      )}
 
       {arTarget && <ARCompass target={arTarget} liveLocation={liveLocation} onClose={() => setArTarget(null)} />}
     </div>
