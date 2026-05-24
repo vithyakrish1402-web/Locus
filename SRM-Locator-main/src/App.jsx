@@ -7,7 +7,7 @@ import {
   Building2, Sparkles, MessageSquare, Send, Loader2,
   BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, Bluetooth, Radio, LocateFixed, OctagonAlert, Waypoints, Activity,
-  Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2
+  Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
@@ -1647,11 +1647,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
           opacity: 1
         }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className={`
-          fixed z-[900] bg-black border-white/20 flex flex-col pointer-events-auto
-          md:top-20 md:left-6 md:bottom-6 md:w-96 md:border md:h-auto
-          max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:h-[70vh] max-md:w-full max-md:border-t-2 max-md:rounded-t-[32px]
-        `}
+        className="hidden md:flex w-80 bg-black border-r border-red-900/50 fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto"
       >
         <div className="md:hidden w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-4 mb-2 shrink-0" onClick={() => setIsMenuOpen(false)} />
 
@@ -1777,7 +1773,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   key={building.id}
-                  className="p-4 border border-white/20 relative group hover:border-white/40 transition-colors bg-black cursor-pointer"
+                  className="p-4 mb-2 bg-gray-900 border border-gray-800 rounded-lg active:bg-gray-800 transition-colors relative group hover:border-white/40 cursor-pointer"
                   onClick={() => handleFocus({ lat: building.lat, lng: building.lng }, building)}
                 >
                   <div className="absolute top-0 left-0 w-2 h-2 bg-white/20" />
@@ -1826,7 +1822,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   key={user.id}
-                  className="p-4 border border-white/20 relative group hover:border-white/40 transition-colors bg-black"
+                  className="p-4 mb-2 bg-gray-900 border border-gray-800 rounded-lg active:bg-gray-800 transition-colors relative group hover:border-white/40"
                 >
                   <div className="absolute top-0 right-0 w-2 h-2 bg-white/20" />
 
@@ -2920,6 +2916,27 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* MOBILE BOTTOM HUD */}
+      <div className="md:hidden fixed bottom-0 w-full bg-black/90 backdrop-blur-md border-t border-red-600/30 flex justify-around items-center p-4 z-50 pointer-events-auto">
+        <button className="text-red-500 hover:text-red-400 flex flex-col items-center">
+          <Map className="w-6 h-6 mb-1" />
+          <span className="text-[10px] tracking-widest font-dot uppercase">GRID</span>
+        </button>
+        <button className="text-red-500 hover:text-red-400 flex flex-col items-center drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]">
+          <Scan className="w-6 h-6 mb-1" />
+          <span className="text-[10px] tracking-widest font-dot uppercase">SCAN</span>
+        </button>
+        <button className="text-red-500 hover:text-red-400 flex flex-col items-center">
+          <Users className="w-6 h-6 mb-1" />
+          <span className="text-[10px] tracking-widest font-dot uppercase">SQUAD</span>
+        </button>
+      </div>
+
+      <button className="md:hidden absolute bottom-24 right-6 bg-red-600 text-black p-4 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.8)] border border-red-400 font-bold z-40 pointer-events-auto">
+        <Crosshair className="w-6 h-6" />
+      </button>
+
       {arTarget && <ARCompass target={arTarget} liveLocation={liveLocation} onClose={() => setArTarget(null)} />}
     </div>
   );

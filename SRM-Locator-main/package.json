@@ -11,6 +11,8 @@
     "dev:all": "concurrently \"npm run dev\" \"npm run server\" \"npm run tunnel\""
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
     "@tailwindcss/vite": "^4.2.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
@@ -28,6 +30,7 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
     "@eslint/js": "^9.39.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
