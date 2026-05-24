@@ -31,10 +31,9 @@ import {
 import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
-const socket = io(BACKEND_URL, {
+const socket = io("https://locus-1-896t.onrender.com", {
   transports: ['websocket'],
-  reconnection: true,
-  reconnectionAttempts: 5
+  upgrade: false
 });
 
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
