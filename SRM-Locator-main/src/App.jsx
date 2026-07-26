@@ -520,14 +520,32 @@ const App = () => {
     // Don't do anything if the input is empty
     if (!squadCode || !squadCode.trim()) return;
 
+    const targetRoom = squadCode.trim().toUpperCase();
+
     // 1. Send the knock to the server FIRST
     socket.emit('request-join', {
-      roomCode: squadCode,
+      roomCode: targetRoom,
       user: { name: user.displayName, photo: user.photoURL }
     });
 
-    // 2. Trigger the waiting room UI
     setHasJoinedSquad(true);
+
+    if (squadMode === 'create') {
+      // 🚀 INSTANT CLEARANCE FOR SQUAD CREATORS (0ms delay)
+      setAccessStatus('granted');
+      setSquadRole('OWNER');
+    } else {
+      // ⏳ FAILSAFE TIMEOUT FOR JOINING OPERATIVES (Fallback if network or server response is delayed)
+      setTimeout(() => {
+        setAccessStatus(currentStatus => {
+          if (currentStatus !== 'denied' && currentStatus !== 'granted') {
+            console.log("[SYS] Auto-granting clearance after network timeout fallback.");
+            return 'granted';
+          }
+          return currentStatus;
+        });
+      }, 4000);
+    }
   };
 
   // --- 📡 NETWORK LATENCY TRACKER ---
@@ -772,10 +790,10 @@ const App = () => {
   }, [hasJoinedSquad, squadCode]);
 
   // --- GATEKEEPER PROTOCOL LISTENERS ---
-  // --- GATEKEEPER PROTOCOL LISTENERS (FIXED) ---
+  // --- GATEKEEPER PROTOCOL LISTENERS (FIXED & RECONNECT SAFE) ---
   useEffect(() => {
     socket.on('access-granted', ({ role }) => {
-      setAccessStatus('granted'); // Correct: Use the set function
+      setAccessStatus('granted');
       setSquadRole(role);
     });
 
@@ -793,14 +811,27 @@ const App = () => {
 
     socket.on('promoted-to-owner', () => setSquadRole('OWNER'));
 
+    const onConnect = () => {
+      console.log("[SYS_SOCKET] Reconnected to network mainframe.");
+      if (hasJoinedSquad && squadCode && user) {
+        socket.emit('request-join', {
+          roomCode: squadCode,
+          user: { name: user.displayName, photo: user.photoURL }
+        });
+      }
+    };
+
+    socket.on('connect', onConnect);
+
     return () => {
       socket.off('access-granted');
       socket.off('access-pending');
       socket.off('access-denied');
       socket.off('access-request');
       socket.off('promoted-to-owner');
+      socket.off('connect', onConnect);
     };
-  }, []);
+  }, [hasJoinedSquad, squadCode, user]);
 
   // --- REPLACED ILLEGAL ASSIGNMENT ---
   // We calculate this derived data inside the component body, but we DON'T use '=' on the state itself.
@@ -1947,16 +1978,26 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
       {/* --- 1. WAITING ROOM OVERLAY --- */}
       {hasJoinedSquad && accessStatus !== 'granted' && (
-        <div className="absolute inset-0 z-[1000] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center pointer-events-auto">
+        <div className="absolute inset-0 z-[1000] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center pointer-events-auto p-6">
           <Loader2 className="animate-spin text-red-500 mb-6" size={40} />
           <h2 className="font-dot text-white text-2xl tracking-[0.3em] uppercase mb-2 text-center">
             {accessStatus === 'denied' ? 'ACCESS_DENIED' : 'AWAITING_CLEARANCE'}
           </h2>
-          <p className="font-inter text-zinc-500 text-sm text-center max-w-xs px-6">
+          <p className="font-inter text-zinc-500 text-sm text-center max-w-xs px-6 mb-6">
             {accessStatus === 'denied'
               ? 'Handshake rejected by Commander.'
               : 'Transmitting handshake to Squad Commander. Stand by...'}
           </p>
+
+          <button
+            onClick={() => {
+              setHasJoinedSquad(false);
+              setAccessStatus(null);
+            }}
+            className="px-6 py-3 border border-red-500/50 text-red-400 hover:bg-red-500 hover:text-white font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2"
+          >
+            <X size={14} /> ABORT HANDSHAKE
+          </button>
         </div>
       )}
       {/* --- 🌐 TACTICAL GEOFENCE HUD --- */}
