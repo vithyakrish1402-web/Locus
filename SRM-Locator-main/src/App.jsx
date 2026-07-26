@@ -92,6 +92,27 @@ const AuthTerminal = ({
 }) => {
   const [isRegistering, setIsRegistering] = useState(false);
 
+  // --- 🔑 FORGOT PASSWORD / KEY RECOVERY HANDLER ---
+  const handleForgotPassword = async () => {
+    if (!email || !email.trim()) {
+      alert("[SYS_ERROR] ID // EMAIL IS REQUIRED FOR KEY RECOVERY.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      alert(`[RECOVERY_DISPATCHED] RESET SIGNAL TRANSMITTED TO ${email.trim().toUpperCase()}. CHECK YOUR INBOX.`);
+    } catch (error) {
+      console.error("Password Reset Error:", error.code);
+      let errorMessage = `[SYS_FAILURE] ${error.message}`;
+      switch (error.code) {
+        case 'auth/user-not-found': errorMessage = "[ACCESS_DENIED] NO OPERATIVE FOUND WITH THIS EMAIL."; break;
+        case 'auth/invalid-email': errorMessage = "[SYS_ERROR] MALFORMED ID // EMAIL SYNTAX."; break;
+        case 'auth/too-many-requests': errorMessage = "[SEC_LOCKOUT] TOO MANY REQUESTS. STAND BY BEFORE RETRYING."; break;
+      }
+      alert(errorMessage);
+    }
+  };
+
   // Dynamic Ping Color Logic
   const getPingColor = (ping) => {
     if (!ping) return 'bg-zinc-500';
@@ -504,15 +525,21 @@ const App = () => {
     const zonesCollection = collection(db, 'tactical_zones');
 
     // onSnapshot listens for ANY changes in real-time
-    const unsubscribe = onSnapshot(zonesCollection, (snapshot) => {
-      const fetchedZones = snapshot.docs.map(doc => ({
-        id: doc.id, // We use Firebase's secure auto-generated document ID
-        ...doc.data()
-      }));
+    const unsubscribe = onSnapshot(
+      zonesCollection,
+      (snapshot) => {
+        const fetchedZones = snapshot.docs.map(doc => ({
+          id: doc.id, // We use Firebase's secure auto-generated document ID
+          ...doc.data()
+        }));
 
-      console.log(`[SYS_DB] Synced ${fetchedZones.length} tactical zones from mainframe.`);
-      setLiveZones(fetchedZones);
-    });
+        console.log(`[SYS_DB] Synced ${fetchedZones.length} tactical zones from mainframe.`);
+        setLiveZones(fetchedZones);
+      },
+      (error) => {
+        console.warn(`[SYS_DB] Firestore snapshot permission error:`, error.message);
+      }
+    );
 
     // Close the tunnel if the user logs out
     return () => unsubscribe();
@@ -1121,27 +1148,6 @@ const App = () => {
       }
       alert(errorMessage);
       setLoginMethod(null);
-    }
-  };
-
-  // --- 🔑 FORGOT PASSWORD / KEY RECOVERY HANDLER ---
-  const handleForgotPassword = async () => {
-    if (!email || !email.trim()) {
-      alert("[SYS_ERROR] ID // EMAIL IS REQUIRED FOR KEY RECOVERY.");
-      return;
-    }
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
-      alert(`[RECOVERY_DISPATCHED] RESET SIGNAL TRANSMITTED TO ${email.trim().toUpperCase()}. CHECK YOUR INBOX.`);
-    } catch (error) {
-      console.error("Password Reset Error:", error.code);
-      let errorMessage = `[SYS_FAILURE] ${error.message}`;
-      switch (error.code) {
-        case 'auth/user-not-found': errorMessage = "[ACCESS_DENIED] NO OPERATIVE FOUND WITH THIS EMAIL."; break;
-        case 'auth/invalid-email': errorMessage = "[SYS_ERROR] MALFORMED ID // EMAIL SYNTAX."; break;
-        case 'auth/too-many-requests': errorMessage = "[SEC_LOCKOUT] TOO MANY REQUESTS. STAND BY BEFORE RETRYING."; break;
-      }
-      alert(errorMessage);
     }
   };
 
