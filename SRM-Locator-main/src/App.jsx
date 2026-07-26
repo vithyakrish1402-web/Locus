@@ -7,7 +7,7 @@ import {
   Building2, Sparkles, MessageSquare, Send, Loader2,
   BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, Bluetooth, Radio, LocateFixed, OctagonAlert, Waypoints, Activity,
-  Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan
+  Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
@@ -38,6 +38,16 @@ const socket = io(BACKEND_URL, {
 });
 
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
+
+// --- 🎲 AUTOMATIC SQUAD CODE RANDOMIZER (ALPHANUMERIC ONLY) ---
+const generateRandomSquadCode = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
 
 const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
   // --- NEW: THE GHOST MARKER (LAST KNOWN LOCATION) ---
@@ -491,7 +501,15 @@ const App = () => {
   const [telemetryMode, setTelemetryMode] = useState('ACTIVE');
 
   const [squadCode, setSquadCode] = useState('');
+  const [squadMode, setSquadMode] = useState('create'); // 'create' or 'join'
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
+
+  // Auto-generate squad code when in 'create' mode
+  useEffect(() => {
+    if (squadMode === 'create' && !squadCode) {
+      setSquadCode(generateRandomSquadCode());
+    }
+  }, [squadMode]);
   // --- SQUAD GATEKEEPER STATES ---
   const [accessStatus, setAccessStatus] = useState(null);
   const [squadRole, setSquadRole] = useState(null);
@@ -1575,26 +1593,97 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
   if (user && !hasJoinedSquad) {
     return (
       <div className="h-screen w-full bg-black flex flex-col items-center justify-center text-white p-6 bg-dots">
-        <div className="w-full max-w-md p-12 border border-white/20 bg-black relative shadow-[0_0_100px_rgba(255,0,0,0.1)] text-center">
-          <ShieldCheck size={48} className="text-red-500 mx-auto mb-6" />
-          <h2 className="text-3xl font-dot uppercase tracking-widest mb-2">SECURE_CHANNEL</h2>
-          <p className="text-zinc-500 font-dot text-[10px] uppercase mb-10 tracking-widest">Enter Squad Designation</p>
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-md p-8 md:p-10 border border-white/20 bg-black relative shadow-[0_0_50px_rgba(255,0,0,0.1)] text-center pointer-events-auto"
+        >
+          <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
+          <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
+          <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
+          <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
 
-          <input
-            type="text"
-            placeholder="E.G. ALPHA_TEAM"
-            className="w-full bg-black border border-white/30 py-4 text-center font-dot text-lg uppercase tracking-widest focus:outline-none focus:border-red-500 mb-8 text-white transition-colors"
-            value={squadCode}
-            onChange={(e) => setSquadCode(e.target.value.toUpperCase())}
-            maxLength={12}
-          />
-          <button
-            onClick={handleJoinSquad}
-            className="w-full py-5 bg-white text-black font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-500 hover:text-white transition-all"
-          >
-            JOIN SQUAD
-          </button>
-        </div>
+          <ShieldCheck size={44} className="text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-dot uppercase tracking-widest mb-1">SECURE_CHANNEL</h2>
+          <p className="text-zinc-500 font-dot text-[10px] uppercase mb-6 tracking-widest">
+            {squadMode === 'create' ? 'INITIALIZE NEW SQUAD PROTOCOL' : 'JOIN EXISTING OPERATIVE NETWORK'}
+          </p>
+
+          {/* Mode Switcher Tabs */}
+          <div className="flex border border-white/20 mb-6 font-dot text-xs uppercase tracking-widest">
+            <button
+              onClick={() => {
+                setSquadMode('create');
+                setSquadCode(generateRandomSquadCode());
+              }}
+              className={`flex-1 py-3 transition-colors ${squadMode === 'create' ? 'bg-white text-black font-bold' : 'text-zinc-500 hover:text-white'}`}
+            >
+              CREATE SQUAD
+            </button>
+            <button
+              onClick={() => {
+                setSquadMode('join');
+                setSquadCode('');
+              }}
+              className={`flex-1 py-3 transition-colors border-l border-white/20 ${squadMode === 'join' ? 'bg-white text-black font-bold' : 'text-zinc-500 hover:text-white'}`}
+            >
+              JOIN SQUAD
+            </button>
+          </div>
+
+          {squadMode === 'create' ? (
+            <div className="space-y-6">
+              <div className="p-4 border border-red-500/40 bg-red-500/5 relative">
+                <p className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest mb-2">GENERATED SQUAD DESIGNATOR</p>
+                <div className="flex items-center justify-center gap-3">
+                  <span className="font-dot text-2xl text-red-500 tracking-[0.25em] font-bold">
+                    {squadCode || 'GENERATING...'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSquadCode(generateRandomSquadCode())}
+                    className="p-2 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
+                    title="Generate New Code"
+                  >
+                    <RefreshCw size={16} />
+                  </button>
+                </div>
+                <p className="text-[9px] font-dot text-zinc-500 uppercase tracking-widest mt-2">
+                  Share this code with your team to grant entry clearance.
+                </p>
+              </div>
+
+              <button
+                onClick={handleJoinSquad}
+                className="w-full py-4 bg-red-500 text-white font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-600 shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all flex items-center justify-center gap-2"
+              >
+                INITIALIZE SQUAD <ArrowRight size={16} />
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="space-y-2 text-left">
+                <label className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ENTER SQUAD CODE (ALPHANUMERIC ONLY)</label>
+                <input
+                  type="text"
+                  placeholder="E.G. KTR7X9"
+                  className="w-full bg-black border border-white/30 py-4 text-center font-dot text-lg uppercase tracking-[0.2em] focus:outline-none focus:border-red-500 text-white transition-colors placeholder:text-zinc-700"
+                  value={squadCode}
+                  onChange={(e) => setSquadCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                  maxLength={8}
+                />
+              </div>
+
+              <button
+                onClick={handleJoinSquad}
+                disabled={!squadCode.trim()}
+                className="w-full py-4 bg-white text-black font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-500 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                CONNECT TO SQUAD <ArrowRight size={16} />
+              </button>
+            </div>
+          )}
+        </motion.div>
       </div>
     );
   }
