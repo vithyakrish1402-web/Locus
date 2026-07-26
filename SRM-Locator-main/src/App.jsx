@@ -521,6 +521,9 @@ const App = () => {
 
   // --- 🌐 FIRESTORE TACTICAL ZONE SYNC ---
   useEffect(() => {
+    // Only attempt sync once user is authenticated
+    if (!user) return;
+
     // This creates a live tunnel to the "tactical_zones" collection in your database
     const zonesCollection = collection(db, 'tactical_zones');
 
@@ -543,7 +546,7 @@ const App = () => {
 
     // Close the tunnel if the user logs out
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // --- 🚨 ACTIVE GEOFENCE ENGINE ---
   useEffect(() => {
