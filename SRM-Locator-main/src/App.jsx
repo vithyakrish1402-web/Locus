@@ -7,7 +7,7 @@ import {
   Building2, Sparkles, MessageSquare, Send, Loader2,
   BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, Bluetooth, Radio, LocateFixed, OctagonAlert, Waypoints, Activity,
-  Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw
+  Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
@@ -2339,11 +2339,20 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
           </button>
         )}
 
-        {/* PHASE 2: Gear icon now opens SYS_CONFIG modal */}
+        {/* Satellite Recon Toggle Button */}
+        <button
+          onClick={() => setIsSatellite(!isSatellite)}
+          className={`p-3 rounded border transition-colors shadow-lg ${isSatellite ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-black/80 text-white border-gray-700 hover:bg-gray-900'}`}
+          title={isSatellite ? "Switch to Tactical Grid" : "Switch to Satellite Recon"}
+        >
+          <Globe size={20} />
+        </button>
+
+        {/* Gear icon opens SYS_CONFIG modal */}
         <button
           onClick={() => setShowSettingsModal(true)}
           className="bg-black/80 border border-gray-700 p-3 rounded text-white shadow-lg transition-colors hover:bg-gray-900"
-          title="System Configuration"
+          title="System Configuration (SYS_CONFIG)"
         >
           <Settings size={20} />
         </button>
@@ -2806,15 +2815,25 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                   </div>
                 </div>
 
-                {/* Setting 2: Map Theme */}
+                {/* Setting 2: Map Theme & Satellite Mode */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Map size={16} className="text-blue-400" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">GRID_OVERLAY_THEME</span>
+                    <Globe size={16} className="text-emerald-400" />
+                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">MAP_RENDER_MODE</span>
                   </div>
                   <div className="flex gap-4">
-                    <button onClick={() => toggleConfig('theme', 'tactical')} className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${sysConfig.theme === 'tactical' ? 'bg-blue-500/20 text-blue-400 border-blue-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>TACTICAL (DARK)</button>
-                    <button onClick={() => toggleConfig('theme', 'stealth')} className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${sysConfig.theme === 'stealth' ? 'bg-white/10 text-white border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>STEALTH (MINIMAL)</button>
+                    <button 
+                      onClick={() => setIsSatellite(false)} 
+                      className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${!isSatellite ? 'bg-blue-500/20 text-blue-400 border-blue-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}
+                    >
+                      TACTICAL (DARK GRID)
+                    </button>
+                    <button 
+                      onClick={() => setIsSatellite(true)} 
+                      className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${isSatellite ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}
+                    >
+                      ORBITAL (SATELLITE)
+                    </button>
                   </div>
                 </div>
 
