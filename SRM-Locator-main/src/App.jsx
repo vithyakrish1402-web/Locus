@@ -14,7 +14,6 @@ import {
 
 // 👇 ADD THIS LINE RIGHT HERE
 import LocusGuide from './LocusGuide';
-import getHexGridOverlayClass from './HexGridOverlay';
 import ARCompass from './ARCompass';
 import { SRM_MASTER_DATABASE } from './srmDatabase';
 // --- ADDED: FIREBASE AUTH ---
@@ -468,12 +467,6 @@ const App = () => {
   // --- GREEN LIGHT PROTOCOL: Map readiness gate ---
   const [isMapReady, setIsMapReady] = useState(false);
 
-  // --- ADMIN TACTICAL ZONE STATE ---
-  const [isDrawingZone, setIsDrawingZone] = useState(false);
-  const [zoneCoords, setZoneCoords] = useState([]);
-  const [liveZones, setLiveZones] = useState([]); // Reverts to empty, Firebase will fill it
-
-  const drawingPolygonRef = useRef(null); // The live preview polygon
   const activePolygonsRef = useRef([]);   // The saved/rendered polygons
   const [isRecordingPath, setIsRecordingPath] = useState(false);
   const [recordedCoords, setRecordedCoords] = useState([]);
@@ -537,84 +530,6 @@ const App = () => {
     setHasJoinedSquad(true);
   };
 
-  // --- 🌐 FIRESTORE TACTICAL ZONE SYNC ---
-  useEffect(() => {
-    // Only attempt sync once user is authenticated
-    if (!user) return;
-
-    // This creates a live tunnel to the "tactical_zones" collection in your database
-    const zonesCollection = collection(db, 'tactical_zones');
-
-    // onSnapshot listens for ANY changes in real-time
-    const unsubscribe = onSnapshot(
-      zonesCollection,
-      (snapshot) => {
-        const fetchedZones = snapshot.docs.map(doc => ({
-          id: doc.id, // We use Firebase's secure auto-generated document ID
-          ...doc.data()
-        }));
-
-        console.log(`[SYS_DB] Synced ${fetchedZones.length} tactical zones from mainframe.`);
-        setLiveZones(fetchedZones);
-      },
-      (error) => {
-        console.warn(`[SYS_DB] Firestore snapshot permission error:`, error.message);
-      }
-    );
-
-    // Close the tunnel if the user logs out
-    return () => unsubscribe();
-  }, [user]);
-
-  // --- 🚨 ACTIVE GEOFENCE ENGINE ---
-  useEffect(() => {
-    if (!users || users.length === 0 || !liveZones || liveZones.length === 0) return;
-
-    users.forEach(userNode => {
-      // Skip dead signals
-      if (userNode.status === 'GHOST' || !userNode.lat || !userNode.lng) return;
-
-      liveZones.forEach(zone => {
-        const breachKey = `${userNode.id}_${zone.id}`;
-        const isInside = isPointInPolygon({ lat: userNode.lat, lng: userNode.lng }, zone.paths);
-        const wasInside = activeBreachesRef.current[breachKey];
-
-        // 🟢 TRIGGER: NODE ENTERED THE ZONE
-        if (isInside && !wasInside) {
-          activeBreachesRef.current[breachKey] = true;
-
-          // Fire Local UI Alert
-          setZoneAlerts(prev => [...prev, {
-            id: Date.now(),
-            type: 'ENTER',
-            userName: userNode.name,
-            zoneName: zone.name
-          }]);
-
-          // If you are the Admin, broadcast this breach to the whole network
-          if (isAdmin) {
-            socket.emit('geofence-alert', { type: 'ENTER', userName: userNode.name, zoneName: zone.name, roomCode: squadCode });
-          }
-        }
-
-        // 🔴 TRIGGER: NODE LEFT THE ZONE
-        if (!isInside && wasInside) {
-          activeBreachesRef.current[breachKey] = false;
-
-          setZoneAlerts(prev => [...prev, {
-            id: Date.now(),
-            type: 'EXIT',
-            userName: userNode.name,
-            zoneName: zone.name
-          }]);
-
-          if (isAdmin) {
-            socket.emit('geofence-alert', { type: 'EXIT', userName: userNode.name, zoneName: zone.name, roomCode: squadCode });
-          }
-        }
-      });
-    });
-  }, [users, liveZones, isAdmin, squadCode]); // Engine fires every time a GPS dot moves
   // --- 📡 NETWORK LATENCY TRACKER ---
   useEffect(() => {
     if (!hasJoinedSquad) return;
@@ -1318,55 +1233,6 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
     if (item) setSelectedItem(item);
   };
 
-  // --- 🔴 DYNAMIC HEX-GRID OVERLAY ENGINE ---
-  useEffect(() => {
-    // 1. Wipe the grid: Clear old overlays
-    activePolygonsRef.current.forEach(overlay => {
-      if (overlay.remove) overlay.remove(); // Custom hex overlay teardown
-      else overlay.setMap(null);            // Fallback for standard polygons
-    });
-    activePolygonsRef.current = [];
-
-    // 2. Gatekeeper: Only run if map is ready
-    if (!isMapReady || !mapRef.current || !window.google) return;
-
-    // 3. Stealth Protocol: Only show a zone if a building is actively selected
-    if (!selectedItem || activeTab !== 'buildings') return;
-
-    const targetZone = liveZones.find(z =>
-      z.name.toLowerCase().includes(selectedItem.name.toLowerCase()) ||
-      selectedItem.name.toLowerCase().includes(z.name.toLowerCase())
-    );
-
-    if (!targetZone) return;
-
-    const googleCoords = targetZone.paths.map(
-      coord => new window.google.maps.LatLng(coord.lat, coord.lng)
-    );
-
-    // --- NEW IGNITION SEQUENCE ---
-    // 1. Now that we know window.google exists, safely generate the class
-    const HexGridClass = getHexGridOverlayClass();
-
-    // 2. Instantiate the newly generated class
-    // 6. IGNITE THE CINEMATIC HEX ENGINE
-    const hexOverlay = new HexGridClass(mapRef.current, googleCoords, {
-      hexRadius: 22,        // Slightly larger hexes to give the glow room to breathe
-      speed: 0.35,          // Drastically slowed down for a heavy, deliberate sonar sweep
-      chaos: 0.6,           // Higher chaos for a more organic, flickering tactical feel
-      fillColor: '#991b1b', // Deep, dark blood-crimson base
-      strokeColor: '#fca5a5',// Hyper-bright neon pinkish-red for the LED edges
-      padding: 12
-    });
-
-    activePolygonsRef.current.push(hexOverlay);
-
-    // 7. Cleanup: Destroy the canvas when deselecting the building
-    return () => {
-      hexOverlay.remove();
-    };
-  }, [liveZones, isMapReady, selectedItem, activeTab]);
-
   // --- 🚨 MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
   const handleMapClick = ({ lat, lng }) => {
     // 0. TARGETING MODE RALLY POINT (Mobile two-step)
@@ -1389,26 +1255,6 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
       return;
     }
 
-    if (isAdmin && isDrawingZone) {
-      const newCoords = [...zoneCoords, { lat, lng }];
-      setZoneCoords(newCoords);
-
-      // Draw or update the glowing polygon on the map in real-time
-      if (!drawingPolygonRef.current) {
-        drawingPolygonRef.current = new window.google.maps.Polygon({
-          paths: newCoords,
-          strokeColor: '#ef4444', // Red border
-          strokeOpacity: 1.0,
-          strokeWeight: 2,
-          fillColor: '#ef4444',   // Red glowing fill
-          fillOpacity: 0.3,
-          map: mapRef.current
-        });
-      } else {
-        drawingPolygonRef.current.setPaths(newCoords);
-      }
-      return; // Stop normal click behavior
-    }
     // 1. If Admin is recording a path, save the coordinate and draw it
     if (isAdmin && isRecordingPath) {
       const newCoords = [...recordedCoords, { lat, lng }];
@@ -2227,93 +2073,43 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
       </div>
 
       {/* --- ADMIN INDICATOR (Compact HUD) --- */}
-      {isAdmin && (isRecordingPath || isDrawingZone) && (
+      {isAdmin && isRecordingPath && (
         <div className="absolute top-24 right-6 z-[600] flex flex-col gap-2 pointer-events-auto">
-          {/* DRAWING ZONE STATE */}
-          {isDrawingZone && (
-            <div className="bg-black border border-red-500 p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(239,68,68,0.4)]">
-              <div className="text-red-500 font-dot text-xs tracking-widest animate-pulse">DRAWING_ZONE_VERTICES: {zoneCoords.length}</div>
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    const zoneName = prompt("Enter Tactical Zone Name (e.g., Tech Park Deadzone):");
-                    if (zoneName && zoneCoords.length > 2) {
-                      try {
-                        await addDoc(collection(db, 'tactical_zones'), {
-                          name: zoneName,
-                          paths: zoneCoords,
-                          author: user.displayName,
-                          timestamp: Date.now()
-                        });
-                        setIsDrawingZone(false);
-                        setZoneCoords([]);
-                        if (drawingPolygonRef.current) drawingPolygonRef.current.setMap(null);
-                        drawingPolygonRef.current = null;
-                        alert(`[SYS] Zone '${zoneName}' permanently locked into the global matrix.`);
-                      } catch (error) {
-                        alert("[SYS_ERROR] Failed to push zone to cloud database.");
-                      }
-                    } else {
-                      alert("[SYS_ERROR] A zone requires at least 3 points.");
-                    }
-                  }}
-                  className="flex-1 p-2 bg-red-500 text-white font-dot text-[10px] hover:bg-red-600 transition-colors"
-                >
-                  DEPLOY
-                </button>
-                <button
-                  onClick={() => {
-                    setIsDrawingZone(false);
-                    setZoneCoords([]);
-                    if (drawingPolygonRef.current) drawingPolygonRef.current.setMap(null);
-                    drawingPolygonRef.current = null;
-                  }}
-                  className="flex-1 p-2 border border-red-500 text-red-500 font-dot text-[10px] hover:bg-red-500 hover:text-white transition-colors"
-                >
-                  ABORT
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* RECORDING PATH STATE */}
-          {isRecordingPath && (
-            <div className="bg-black border border-yellow-500 p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
-              <div className="text-yellow-500 font-dot text-xs tracking-widest animate-pulse">RECORDING_NODES: {recordedCoords.length}</div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const startName = prompt("Enter START Building Name (e.g., Tech Park):");
-                    const endName = prompt("Enter END Building Name (e.g., Java Green):");
-                    if (startName && endName && recordedCoords.length > 1) {
-                      const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
-                      setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
-                      socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData });
-                      setIsRecordingPath(false);
-                      setRecordedCoords([]);
-                      if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
-                      recordingPolylineRef.current = null;
-                      alert(`[SYS] Route ${startName} -> ${endName} published successfully.`);
-                    }
-                  }}
-                  className="flex-1 p-2 bg-yellow-500 text-black font-dot text-[10px] hover:bg-yellow-400 transition-colors"
-                >
-                  PUBLISH
-                </button>
-                <button
-                  onClick={() => {
+          <div className="bg-black border border-yellow-500 p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
+            <div className="text-yellow-500 font-dot text-xs tracking-widest animate-pulse">RECORDING_NODES: {recordedCoords.length}</div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const startName = prompt("Enter START Building Name (e.g., Tech Park):");
+                  const endName = prompt("Enter END Building Name (e.g., Java Green):");
+                  if (startName && endName && recordedCoords.length > 1) {
+                    const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
+                    setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
+                    socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData });
                     setIsRecordingPath(false);
                     setRecordedCoords([]);
                     if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
                     recordingPolylineRef.current = null;
-                  }}
-                  className="flex-1 p-2 border border-red-500 text-red-500 font-dot text-[10px] hover:bg-red-500 hover:text-white transition-colors"
-                >
-                  ABORT
-                </button>
-              </div>
+                    alert(`[SYS] Route ${startName} -> ${endName} published successfully.`);
+                  }
+                }}
+                className="flex-1 p-2 bg-yellow-500 text-black font-dot text-[10px] hover:bg-yellow-400 transition-colors"
+              >
+                PUBLISH
+              </button>
+              <button
+                onClick={() => {
+                  setIsRecordingPath(false);
+                  setRecordedCoords([]);
+                  if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
+                  recordingPolylineRef.current = null;
+                }}
+                className="flex-1 p-2 border border-red-500 text-red-500 font-dot text-[10px] hover:bg-red-500 hover:text-white transition-colors"
+              >
+                ABORT
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -2978,134 +2774,6 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
                   )}
                 </div>
 
-                {/* ─── SECTION 2: ZONE PAINTER ─── */}
-                <div className="p-6 border-b border-white/10">
-                  <div className="flex items-center gap-3 mb-5">
-                    <Crosshair size={16} className="text-red-500" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-300">SECTION_02 // GEOFENCE_PAINTER</span>
-                    <div className="flex-1 h-[1px] bg-red-500/20" />
-                  </div>
-                  <p className="font-inter text-[11px] text-zinc-500 mb-5 leading-relaxed">
-                    Draw perimeter zones on the map canvas. Each vertex defines a geofence boundary. When squad members cross the perimeter, breach alerts fire across the network in real-time.
-                  </p>
-
-                  {!isDrawingZone ? (
-                    <button
-                      onClick={() => { setIsDrawingZone(true); setShowAdminSettings(false); }}
-                      className="w-full py-4 bg-black border border-red-500 text-red-500 hover:bg-red-500 hover:text-white font-dot text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
-                    >
-                      <Crosshair size={16} className="animate-pulse" />
-                      INITIATE_ZONE_DRAW
-                    </button>
-                  ) : (
-                    <div className="border border-red-500 p-4 bg-red-500/5">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-2 h-2 bg-red-500 rounded-full animate-ping" />
-                        <span className="font-dot text-xs text-red-500 uppercase tracking-widest animate-pulse">
-                          ZONE DRAW ACTIVE — {zoneCoords.length} VERTICES PLACED
-                        </span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={async () => {
-                            const zoneName = prompt("Enter Tactical Zone Name:");
-                            if (zoneName && zoneCoords.length > 2) {
-                              try {
-                                await addDoc(collection(db, 'tactical_zones'), {
-                                  name: zoneName,
-                                  paths: zoneCoords,
-                                  author: user.displayName,
-                                  timestamp: Date.now()
-                                });
-                                setIsDrawingZone(false);
-                                setZoneCoords([]);
-                                if (drawingPolygonRef.current) drawingPolygonRef.current.setMap(null);
-                                drawingPolygonRef.current = null;
-                                alert(`[SYS] Zone '${zoneName}' locked into global matrix.`);
-                              } catch (error) {
-                                alert("[SYS_ERROR] Failed to push zone to cloud.");
-                              }
-                            } else {
-                              alert("[SYS_ERROR] A zone requires at least 3 points.");
-                            }
-                          }}
-                          className="flex-1 py-3 bg-red-500 text-white font-dot text-[10px] uppercase tracking-widest hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Terminal size={12} /> DEPLOY_ZONE
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsDrawingZone(false);
-                            setZoneCoords([]);
-                            if (drawingPolygonRef.current) drawingPolygonRef.current.setMap(null);
-                            drawingPolygonRef.current = null;
-                          }}
-                          className="flex-1 py-3 border border-zinc-500 text-zinc-500 font-dot text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <X size={12} /> ABORT
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* ─── SECTION 3: DEPLOYED PERIMETERS ─── */}
-                <div className="p-6">
-                  <div className="flex items-center gap-3 mb-5">
-                    <Waypoints size={16} className="text-red-400" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-300">SECTION_03 // ACTIVE_PERIMETERS</span>
-                    <div className="flex-1 h-[1px] bg-red-500/20" />
-                    <span className="font-dot text-[10px] text-red-500 border border-red-500/40 px-2 py-0.5">{liveZones.length} ACTIVE</span>
-                  </div>
-
-                  {liveZones.length === 0 ? (
-                    <div className="border border-dashed border-white/10 p-8 flex flex-col items-center gap-3">
-                      <Waypoints size={24} className="text-zinc-700" />
-                      <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">NO_PERIMETERS_DEPLOYED</span>
-                      <span className="font-inter text-[11px] text-zinc-700 text-center">Draw a zone using the tool above to begin geofence monitoring.</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {liveZones.map((zone, index) => (
-                        <motion.div
-                          key={zone.id}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="flex items-center justify-between p-4 border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 transition-colors group"
-                        >
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
-                            <div className="flex flex-col min-w-0">
-                              <span className="font-dot text-sm text-red-400 uppercase tracking-widest truncate">
-                                {zone.name}
-                              </span>
-                              <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">
-                                {zone.paths?.length || 0} VERTICES // BY {zone.author || 'UNKNOWN'}
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={async () => {
-                              if (window.confirm(`PERMANENTLY delete zone: ${zone.name}?`)) {
-                                try {
-                                  const zoneDocRef = doc(db, 'tactical_zones', zone.id);
-                                  await deleteDoc(zoneDocRef);
-                                } catch (err) {
-                                  alert("[SYS_ERROR] Could not delete from mainframe.");
-                                }
-                              }
-                            }}
-                            className="shrink-0 p-2 border border-transparent hover:border-red-500/50 text-zinc-600 hover:text-red-500 transition-colors ml-2"
-                            title="Deactivate Zone"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Footer */}
