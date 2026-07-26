@@ -25,7 +25,8 @@ import {
   signOut,
   signInWithEmailAndPassword,       // <-- Required for standard Login
   createUserWithEmailAndPassword,
-  updateProfile    // <-- Required for new Registration
+  updateProfile,    // <-- Required for new Registration
+  sendPasswordResetEmail
 } from 'firebase/auth';
 
 import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
@@ -194,6 +195,18 @@ const AuthTerminal = ({
               </button>
             </div>
           </div>
+
+          {!isRegistering && (
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-[10px] font-dot text-zinc-500 hover:text-red-400 uppercase tracking-widest transition-colors border-b border-transparent hover:border-red-400 pb-0.5"
+              >
+                [ FORGOT KEY? RECOVER ACCESS ]
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -1108,6 +1121,27 @@ const App = () => {
       }
       alert(errorMessage);
       setLoginMethod(null);
+    }
+  };
+
+  // --- 🔑 FORGOT PASSWORD / KEY RECOVERY HANDLER ---
+  const handleForgotPassword = async () => {
+    if (!email || !email.trim()) {
+      alert("[SYS_ERROR] ID // EMAIL IS REQUIRED FOR KEY RECOVERY.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      alert(`[RECOVERY_DISPATCHED] RESET SIGNAL TRANSMITTED TO ${email.trim().toUpperCase()}. CHECK YOUR INBOX.`);
+    } catch (error) {
+      console.error("Password Reset Error:", error.code);
+      let errorMessage = `[SYS_FAILURE] ${error.message}`;
+      switch (error.code) {
+        case 'auth/user-not-found': errorMessage = "[ACCESS_DENIED] NO OPERATIVE FOUND WITH THIS EMAIL."; break;
+        case 'auth/invalid-email': errorMessage = "[SYS_ERROR] MALFORMED ID // EMAIL SYNTAX."; break;
+        case 'auth/too-many-requests': errorMessage = "[SEC_LOCKOUT] TOO MANY REQUESTS. STAND BY BEFORE RETRYING."; break;
+      }
+      alert(errorMessage);
     }
   };
 
