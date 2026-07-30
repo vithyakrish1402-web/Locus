@@ -53,9 +53,31 @@ const io = new Server(server, {
 });
 
 // --- STATE MANAGERS ---
-const activeSquads = {}; 
-const users = {}; 
-const locationCache = {}; 
+const activeSquads = {};
+const users = {};
+const locationCache = {};
+
+// --- 🧹 STALE SQUAD SWEEP ---
+// Defense-in-depth against ghost rooms: mobile clients that get killed/backgrounded
+// don't always fire a clean 'disconnect', so a squad can be left with a dead owner
+// or dead members for a while. Prune anything with no live members, a dead owner,
+// or no activity for 5+ minutes so an old test-session code can't shadow a new one.
+const ROOM_TTL_MS = 5 * 60 * 1000;
+setInterval(() => {
+  const now = Date.now();
+  for (const roomCode in activeSquads) {
+    const squad = activeSquads[roomCode];
+    squad.members = squad.members.filter(id => io.sockets.sockets.has(id));
+
+    const ownerIsLive = io.sockets.sockets.has(squad.ownerId);
+    const isStale = now - (squad.lastActivity || 0) > ROOM_TTL_MS;
+
+    if (squad.members.length === 0 || !ownerIsLive || isStale) {
+      console.log(`[🧹 SWEEP] Removing abandoned/stale squad: ${roomCode}`);
+      delete activeSquads[roomCode];
+    }
+  }
+}, 60 * 1000);
 
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
@@ -126,17 +148,23 @@ socket.on('check-ping', (clientTimestamp) => {
   // --- GATEKEEPER ENTRY PROTOCOL ---
   socket.on('request-join', (data) => {
     const { roomCode, user } = data;
+    const existing = activeSquads[roomCode];
+    // A room only counts as "occupied" if its owner socket is still actually
+    // connected. Mobile clients (killed/backgrounded APKs) often vanish without
+    // a clean disconnect, leaving a ghost owner that a real request-join would
+    // otherwise be silently routed to (see 'access-request' below).
+    const ownerIsLive = existing && io.sockets.sockets.has(existing.ownerId);
 
-    if (!activeSquads[roomCode] || activeSquads[roomCode].members.length === 0) {
-      activeSquads[roomCode] = { ownerId: socket.id, members: [socket.id], activeWaypoint: null };
+    if (!existing || existing.members.length === 0 || !ownerIsLive) {
+      activeSquads[roomCode] = { ownerId: socket.id, members: [socket.id], activeWaypoint: null, lastActivity: Date.now() };
       socket.join(roomCode);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
     } else {
-      const commanderId = activeSquads[roomCode].ownerId;
+      const commanderId = existing.ownerId;
       io.to(commanderId).emit('access-request', {
         targetId: socket.id, name: user.name, photo: user.photo, roomCode: roomCode
       });
-      socket.emit('access-pending'); 
+      socket.emit('access-pending');
     }
   });
 
@@ -187,11 +215,23 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.on('update-location', (data) => {
     const { roomCode, lat, lng, speed, battery, status, name, photo, heading } = data;
     const newRoom = data.roomCode || 'GLOBAL';
+
+    // 🔒 GATEKEEPER ENFORCEMENT: this used to join any roomCode the client sent,
+    // regardless of whether the socket ever passed request-join/resolve-access.
+    // That let a client "tailgate" straight into another squad's live feed —
+    // skipping approval entirely. Only accept telemetry from sockets already
+    // recorded as members of that squad.
+    const squad = activeSquads[newRoom];
+    if (!squad || !squad.members.includes(socket.id)) {
+      return;
+    }
+    squad.lastActivity = Date.now();
+
     const oldRoom = users[socket.id]?.roomCode;
 
     if (oldRoom && oldRoom !== newRoom) socket.leave(oldRoom);
     socket.join(newRoom);
-    
+
     // 👇 Armored Cache Assignment
     users[socket.id] = { 
       ...data, 
