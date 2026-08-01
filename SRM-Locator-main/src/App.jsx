@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 import { Capacitor } from '@capacitor/core';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
 import {
@@ -17,6 +17,16 @@ import {
 import LocusGuide from './LocusGuide';
 import ARCompass from './ARCompass';
 import { SRM_MASTER_DATABASE } from './srmDatabase';
+import { useDeviceHeading } from './hooks/useDeviceHeading';
+import LocationMarker from './components/LocationMarker';
+import WaypointMarker from './components/WaypointMarker';
+import BuildingMarker from './components/BuildingMarker';
+import { deriveMarkerStatus } from './utils/markerStatus';
+
+// Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
+// Google Maps fails to load — code-split it so the common path never pays
+// for it.
+const TacticalLeafletMap = React.lazy(() => import('./components/TacticalLeafletMap'));
 // --- ADDED: FIREBASE AUTH ---
 import { auth, googleProvider, db } from './firebase';
 import {
@@ -57,53 +67,6 @@ const generateRandomSquadCode = () => {
   return result;
 };
 
-const CustomMarker = ({ isUser, name, photo, onClick, isOffline }) => {
-  // --- NEW: THE GHOST MARKER (LAST KNOWN LOCATION) ---
-  if (isOffline) {
-    return (
-      <div
-        onClick={onClick}
-        // 👇 TACTICAL VISUAL OFFSET: Slides the UI 8px down and right, leaving the GPS data mathematically pure.
-        style={{ transform: 'translate(8px, 8px)' }}
-        className="w-10 h-10 -ml-5 -mt-5 bg-zinc-900/90 backdrop-blur-md rounded-full border-2 border-zinc-600 border-dashed shadow-[0_0_15px_rgba(113,113,122,0.4)] flex items-center justify-center text-zinc-400 font-bold tracking-tighter cursor-pointer overflow-hidden relative z-[45]"
-        title={`SIGNAL LOST: ${name}`}
-      >
-        {/* Flashing red distress indicator */}
-        <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-600 rounded-full animate-ping z-50" />
-        <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full z-50" />
-
-        {photo ? (
-          <img src={photo} alt={name} className="w-full h-full object-cover opacity-40 grayscale mix-blend-luminosity" />
-        ) : (
-          <span className="text-[10px] uppercase font-dot text-zinc-500">LKL</span>
-        )}
-      </div>
-    )
-  }
-
-  // --- EXISTING LIVE MARKERS ---
-  if (isUser) {
-    return (
-      <div
-        onClick={onClick}
-        className="w-10 h-10 -ml-5 -mt-5 bg-gradient-to-br from-emerald-400/80 to-teal-500/80 backdrop-blur-md rounded-full border border-emerald-200/50 shadow-[0_0_15px_rgba(52,211,153,0.6)] flex items-center justify-center text-white font-bold tracking-tighter cursor-pointer overflow-hidden relative z-50"
-      >
-        {photo ? <img src={photo} alt={name} className="w-full h-full object-cover" /> : name?.charAt(0)}
-      </div>
-    )
-  }
-  return (
-    <div
-      onClick={onClick}
-      className="relative flex items-center justify-center cursor-pointer z-40 group -ml-3 -mt-3 w-6 h-6 pointer-events-auto"
-    >
-      {/* Outer pulsing red radar ring */}
-      <div className="absolute w-6 h-6 bg-red-500/40 rounded-full animate-ping pointer-events-none" />
-      {/* Inner glowing red dot with white border & red drop shadow */}
-      <div className="w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white/90 shadow-[0_0_12px_rgba(239,68,68,0.9)] group-hover:scale-125 transition-transform duration-200" />
-    </div>
-  );
-};
 // --- THE NEW AUTH TERMINAL (Replaces CinematicLanding) ---
 const AuthTerminal = ({
   email, setEmail, password, setPassword, showPassword, setShowPassword, executeAuthDirective, loginMethod, username, setUsername, latency
@@ -391,29 +354,6 @@ const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSecon
     lng: projectedLng * (180 / Math.PI)
   };
 };
-const WaypointMarker = ({ name, onClick, onClear, canClear }) => (
-  <div
-    onClick={onClick}
-    className="w-12 h-12 -ml-6 -mt-6 rounded-full flex items-center justify-center cursor-pointer relative z-[60]"
-  >
-    <div className="absolute inset-0 rounded-full border-2 border-red-500 bg-red-500/20 animate-ping" />
-    <div className="absolute inset-2 rounded-full border-2 border-red-500 bg-black/80 shadow-[0_0_20px_rgba(239,68,68,0.8)] flex items-center justify-center">
-      <Crosshair size={18} className="text-red-500" />
-    </div>
-    <div className="absolute top-full mt-1 whitespace-nowrap bg-red-500 text-white font-dot text-[10px] uppercase px-2 py-0.5 tracking-widest pointer-events-none">
-      {name}
-    </div>
-    {canClear && (
-      <button
-        onClick={(e) => { e.stopPropagation(); onClear(); }}
-        title="Clear Rally Point"
-        className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-black border-2 border-white/60 flex items-center justify-center text-white hover:bg-red-500 hover:border-red-500 transition-colors z-[61] shadow-[0_0_8px_rgba(0,0,0,0.6)]"
-      >
-        <X size={12} />
-      </button>
-    )}
-  </div>
-);
 
 const App = () => {
   // --- 🚨 GEOFENCE BREACH TRACKER ---
@@ -484,6 +424,21 @@ const App = () => {
 
   // --- GREEN LIGHT PROTOCOL: Map readiness gate ---
   const [isMapReady, setIsMapReady] = useState(false);
+  // --- MAP ENGINE FALLBACK: switch to the Leaflet map if Google's never loads ---
+  const [mapEngineFailed, setMapEngineFailed] = useState(false);
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (!isMapReady) {
+        console.warn('[SYS_MAP] Google Maps did not initialize in time — falling back to Leaflet.');
+        setMapEngineFailed(true);
+      }
+    }, 8000);
+    return () => clearTimeout(timeoutId);
+    // Runs once: this is a one-shot "did Google ever come up" check, not a
+    // recurring watchdog — re-arming it on every isMapReady flip would just
+    // immediately clear itself the instant isMapReady becomes true.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const activePolygonsRef = useRef([]);   // The saved/rendered polygons
   const [isRecordingPath, setIsRecordingPath] = useState(false);
@@ -509,6 +464,9 @@ const App = () => {
 
   const [users, setUsers] = useState([]);
   const [liveLocation, setLiveLocation] = useState(null);
+  // Raw m/s from geolocation's coords.speed, tracked separately from the km/h value
+  // broadcast over the wire — drives this device's own LocationMarker status.
+  const [liveSpeed, setLiveSpeed] = useState(0);
   const [telemetryMode, setTelemetryMode] = useState('ACTIVE');
 
   const [squadCode, setSquadCode] = useState('');
@@ -526,10 +484,26 @@ const App = () => {
   const [squadRole, setSquadRole] = useState(null);
   const [pendingRequests, setPendingRequests] = useState([]);
   const liveLocationRef = useRef(null);
-  const [heading, setHeading] = useState(0); // compass heading in degrees
+  // Shared with ARCompass.jsx (src/hooks/useDeviceHeading.js) so both the AR
+  // targeting view and this device's own map marker read the same compass value.
+  const { heading, requestHeadingPermission } = useDeviceHeading();
+  // Mirrors `heading` for the GPS-tracking effect below, which intentionally does
+  // NOT list `heading` as a dependency (that would tear down and re-register the
+  // geolocation watch on every compass tick). Read via ref instead so the emitted
+  // heading is always current without restarting the watch.
+  const headingRef = useRef(0);
+  useEffect(() => { headingRef.current = heading; }, [heading]);
   // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
   // always read the current value — they close over the ref, not the stale state.
   const telemetryModeRef = useRef('ACTIVE');
+
+  // Start listening for compass heading as soon as we're signed in — on Android
+  // this needs no user gesture. On iOS 13+ this call is a silent no-op (that
+  // platform requires the permission request to originate from a click handler,
+  // which ARCompass's own "GRANT_ACCESS" button still provides separately).
+  useEffect(() => {
+    if (user) requestHeadingPermission();
+  }, [user, requestHeadingPermission]);
 
   const handleJoinSquad = (e) => {
     // Prevent the page from refreshing if this is inside a form
@@ -761,6 +735,7 @@ const App = () => {
             lat: smoothed.lat,
             lng: smoothed.lng,
             speed: data.speed || 0,
+            heading: data.heading || 0,
             battery: data.battery || 0,
             status: data.status || 'ACTIVE',
             permission: 'accepted',
@@ -876,7 +851,7 @@ const App = () => {
           speed: 0, battery: 100,
           status: telemetryModeRef.current,
           roomCode: squadCode,
-          heading: heading || 0,
+          heading: headingRef.current,
         });
       },
       (err) => console.log('[SYS] Initial GPS lock delayed...'),
@@ -908,7 +883,7 @@ const App = () => {
           speed: 0, battery: currentBattery,
           status: telemetryModeRef.current,
           roomCode: squadCode,
-          heading: 0 // You can enhance this by calculating heading from previous coordinates if needed
+          heading: headingRef.current,
         });
       }
     }, currentPollingRate); // <-- WIRED HERE
@@ -921,6 +896,7 @@ const App = () => {
 
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
+        setLiveSpeed(speed || 0);
 
         let batteryLevel = 100;
         try {
@@ -941,7 +917,7 @@ const App = () => {
           battery: batteryLevel,
           status: telemetryModeRef.current,
           roomCode: squadCode,
-          heading: 0 // You can enhance this by calculating heading from previous coordinates if needed
+          heading: headingRef.current,
         });
       },
       (error) => console.error('🚨 [SYS_ERROR] Geolocation lost:', error.message),
@@ -966,7 +942,7 @@ const App = () => {
       speed: 0, battery: 100,
       status: telemetryMode, // use state here — this effect re-runs when it changes
       roomCode: squadCode,
-      heading: 0,
+      heading: headingRef.current,
     });
   }, [telemetryMode]);
 
@@ -1016,40 +992,9 @@ const App = () => {
     }
   }, [isSatellite, mapProps.zoom]);
 
+  // aiLoading is still used by the building-intel "QUERY_DATA" panel below
+  // (generateBuildingInsights) — that's static local data, not an API call.
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiResponse, setAiResponse] = useState('');
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiQuery, setAiQuery] = useState('');
-
-
-  // Gemini API Utility (Proxied via Backend /api/oracle)
-  const callGemini = async (spatialPayload) => {
-    const url = `${BACKEND_URL}/api/oracle`;
-
-    let delay = 1000;
-    for (let i = 0; i < 3; i++) {
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(spatialPayload)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error("🚨 [ORACLE ERROR]:", errorData);
-          throw new Error('API Error');
-        }
-
-        const data = await response.json();
-        return data.reply || "No response found.";
-      } catch (err) {
-        if (i === 2) throw err;
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2;
-      }
-    }
-  };
 
   // --- 🔐 THE MASTER AUTH ENGINE ---
   const executeAuthDirective = async (method, isRegistering = false) => {
@@ -1183,54 +1128,6 @@ const App = () => {
     });
 
     alert(`[SYSTEM] SOS Signal transmitted directly to node: ${targetNodeName}.`);
-  };
-
-  const handleGeneralAiQuery = async (e) => {
-    e.preventDefault();
-    if (!aiQuery.trim() || aiLoading) return;
-    setAiLoading(true); setAiResponse('');
-
-    try {
-      // --- 🧠 SYS_ORACLE TACTICAL COMPRESSOR ---
-
-      // 1. Squad Context: Compress active nodes and ghosts into dense strings
-      const activeNodes = users.filter(u => u.permission === 'accepted' && u.status !== 'GHOST' && !blockedUserIds.includes(u.id));
-      const ghostNodes = Object.values(offlineNodes);
-
-      let squadStr = activeNodes.length > 0
-        ? activeNodes.map(u => `[NODE:${u.name}|DIST:${calculateDistance(liveLocation?.lat, liveLocation?.lng, u.lat, u.lng)}|BAT:${u.battery}%|SPD:${u.speed}kmh]`).join('')
-        : "NO_ACTIVE_NODES";
-
-      if (ghostNodes.length > 0) {
-        squadStr += ` | GHOSTS: ${ghostNodes.map(g => `[${g.name}(Lost Signal)]`).join('')}`;
-      }
-
-      // 2. Map Context: Calculate distance and ONLY send the 3 closest buildings to save tokens
-      let mapStr = "UNKNOWN";
-      if (liveLocation) {
-        const nearbyBuildings = SRM_MASTER_DATABASE.map(b => {
-          const distStr = calculateDistance(liveLocation.lat, liveLocation.lng, b.lat, b.lng);
-          const isKM = distStr.includes('KM');
-          const num = parseFloat(distStr.replace(/[^0-9.]/g, ''));
-          return { name: b.name, distStr, val: isKM ? num * 1000 : num };
-        }).sort((a, b) => a.val - b.val).slice(0, 3); // Extract top 3
-
-        mapStr = nearbyBuildings.map(b => `[${b.name}:${b.distStr}]`).join('');
-      }
-
-      // 3. Send spatial telemetry payload to Oracle backend endpoint
-      const res = await callGemini({
-        query: aiQuery,
-        myStatus: liveLocation ? 'ONLINE' : 'OFFLINE',
-        squadTelemetry: squadStr,
-        nearestBuildings: mapStr
-      });
-      setAiResponse(res);
-    } catch (err) {
-      setAiResponse("[SYS_FAILURE] Neural link to Oracle severed. Retrying connection...");
-    } finally {
-      setAiLoading(false); setAiQuery('');
-    }
   };
 
   const requestPermission = (userId) => {
@@ -1952,24 +1849,6 @@ const App = () => {
             )}
           </AnimatePresence>
 
-          {activeTab === 'buildings' && (
-            <motion.div layout className="mt-8 p-6 border border-white/20 relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-white -translate-x-1 -translate-y-1" />
-              <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white translate-x-1 translate-y-1" />
-              <div className="flex flex-col gap-4 relative z-10">
-                <div className="flex items-center gap-2 text-white">
-                  <Sparkles size={16} />
-                  <h4 className="font-dot text-sm uppercase tracking-widest">SYS_ORACLE</h4>
-                </div>
-                <button
-                  onClick={() => { setShowAiModal(true); setAiResponse(''); }}
-                  className="w-full py-4 bg-white text-black hover:bg-zinc-300 font-dot text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
-                >
-                  INITIATE_PROCEDURE <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
-            </motion.div>
-          )}
         </div>
       </motion.div>
 
@@ -2024,12 +1903,49 @@ const App = () => {
           ))}
         </AnimatePresence>
       </div>
-      {/* FULLSCREEN GOOGLE MAP */}
+      {/* FULLSCREEN MAP */}
       <div className="absolute inset-0 z-0 bg-black">
+        {mapEngineFailed ? (
+          <Suspense
+            fallback={
+              <div className="w-full h-full flex items-center justify-center font-dot text-xs uppercase tracking-widest text-zinc-500">
+                LOADING_FALLBACK_GRID...
+              </div>
+            }
+          >
+            <TacticalLeafletMap
+              center={mapProps.center}
+              zoom={mapProps.zoom}
+              onMapClick={handleMapClick}
+              onFocus={handleFocus}
+              liveLocation={liveLocation}
+              heading={heading}
+              liveSpeed={liveSpeed}
+              users={users}
+              blockedUserIds={blockedUserIds}
+              offlineNodes={offlineNodes}
+              activeTab={activeTab}
+              activeWaypoint={activeWaypoint}
+              squadRole={squadRole}
+              onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}
+              isSatellite={isSatellite}
+            />
+          </Suspense>
+        ) : (
         <GoogleMapReact
           bootstrapURLKeys={{ key: 'AIzaSyD10sWfHpczEuvmvwBkqkPHOu-QXQr8uM0' }}
           center={mapProps.center}
-          options={{ ...createMapOptions(sysConfig.theme, isSatellite), draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab') }}
+          options={{
+            ...createMapOptions(sysConfig.theme, isSatellite),
+            // Google renders its own clickable POI icons (hospitals, colleges, etc.)
+            // straight onto the map tiles. Tapping one pops up Google's native white
+            // InfoWindow on top of this app's own custom SYS_NODE panel — two
+            // competing overlays stacked with clashing borders. This app already has
+            // its own complete building database + marker/panel system, so Google's
+            // built-in POI layer is pure UI collision here, not a needed feature.
+            clickableIcons: false,
+            draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab'),
+          }}
 
           onClick={handleMapClick}
 
@@ -2049,22 +1965,25 @@ const App = () => {
           }}
         >
           {liveLocation && (
-            <CustomMarker
+            <div
               key="live-user"
               lat={liveLocation.lat}
               lng={liveLocation.lng}
-              isUser={true}
-              name={user.displayName}
-              photo={user.photoURL}
               onClick={() => handleFocus(liveLocation, null)}
-            />
+              style={{ cursor: 'pointer' }}
+            >
+              <LocationMarker
+                heading={heading}
+                status={deriveMarkerStatus(liveSpeed)}
+                color="#10B981"
+              />
+            </div>
           )}
           {activeTab === 'buildings' && SRM_MASTER_DATABASE.map(b => (
-            <CustomMarker
+            <BuildingMarker
               key={b.id}
               lat={b.lat}
               lng={b.lng}
-              isUser={false}
               onClick={() => handleFocus({ lat: b.lat, lng: b.lng }, b)}
             />
           ))}
@@ -2081,34 +2000,38 @@ const App = () => {
           )}
           {/* Filter out: blocked, ghost, and users with no coordinates yet */}
           {activeTab === 'users' && users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng).map(u => (
-            <CustomMarker
+            <div
               key={u.id}
               lat={u.lat}
               lng={u.lng}
-              isUser={true}
-              name={u.name}
-              photo={u.photo}
               onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)}
-            />
+              style={{ cursor: 'pointer' }}
+            >
+              <LocationMarker
+                heading={u.heading}
+                status={deriveMarkerStatus(u.speed / 3.6)}
+                color="#EF4444"
+              />
+            </div>
           ))}
 
           {/* FIX 3: ghost markers always render — removed activeTab gate so they show on any tab */}
           {Object.values(offlineNodes).map(ghost => (
-            <CustomMarker
+            <div
               key={`ghost-${ghost.id}`}
               lat={ghost.lat}
               lng={ghost.lng}
-              isUser={false}
-              isOffline={true} // This triggers the grey dashed UI you already wrote
-              name={ghost.name}
-              photo={ghost.photo}
               onClick={() => handleFocus({ lat: ghost.lat, lng: ghost.lng }, { name: `LOST: ${ghost.name}`, info: `Last seen with ${ghost.battery} battery.` })}
-            />
+              style={{ cursor: 'pointer' }}
+            >
+              <LocationMarker status="signal-lost" color="#A1A1AA" />
+            </div>
           ))}
 
 
           {/* ... Your existing users.filter map loop stays exactly the same below this ... */}
         </GoogleMapReact>
+        )}
         {/* PHASE 3: Satellite toggle pill removed — function reassigned to Bottom HUD GRID button */}
       </div>
 
@@ -2410,105 +2333,6 @@ const App = () => {
         )}
       </AnimatePresence>
 
-      {/* --- AI ORACLE MODAL --- */}
-      <AnimatePresence>
-        {showAiModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[3000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="bg-black/80 w-full max-w-3xl border border-cyan-500/50 flex flex-col h-[85vh] relative shadow-[0_0_40px_rgba(6,182,212,0.15)]"
-            >
-              {/* HUD scanline effect */}
-              <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(6,182,212,0.05)_1px,transparent_1px)] bg-[length:100%_4px] opacity-20 z-0" />
-
-              {/* Corner brackets */}
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-cyan-500" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-cyan-500" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-cyan-500" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-cyan-500" />
-
-              {/* Header */}
-              <div className="p-5 border-b border-cyan-500/30 flex justify-between items-center bg-cyan-950/20 z-10">
-                <div className="flex items-center gap-4 text-cyan-400">
-                  <BrainCircuit className="w-6 h-6 animate-pulse" />
-                  <div>
-                    <h3 className="font-dot text-xl tracking-widest uppercase text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]">SYS_ORACLE</h3>
-                    <p className="font-dot text-[9px] text-cyan-600 uppercase tracking-[0.3em]">NEURAL_LINK // ACTIVE</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowAiModal(false)} className="p-2 text-cyan-600 hover:text-cyan-400 hover:bg-cyan-900/30 transition-all border border-transparent hover:border-cyan-500/50">
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Chat Area */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-transparent z-10 flex flex-col">
-                {aiResponse ? (
-                  <motion.div
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4 }}
-                    className="p-6 border border-cyan-500/30 bg-cyan-950/10 font-inter text-cyan-100 leading-relaxed text-sm relative"
-                  >
-                    <div className="absolute -left-[1px] top-4 w-[2px] h-8 bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.8)]" />
-                    {aiResponse}
-                  </motion.div>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-cyan-900 gap-6 py-10">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-cyan-500/20 blur-xl rounded-full" />
-                      <BrainCircuit size={64} className="text-cyan-500/40 relative z-10" />
-                    </div>
-                    <p className="font-dot text-sm tracking-widest uppercase text-cyan-600/60 animate-pulse">AWAITING_QUERY_INPUT...</p>
-                  </div>
-                )}
-
-                {aiLoading && (
-                  <motion.div
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="flex items-center gap-4 text-emerald-400 p-4 border border-emerald-500/50 bg-emerald-950/20 mt-auto shadow-[0_0_15px_rgba(16,185,129,0.2)] relative overflow-hidden"
-                  >
-                    <div className="absolute inset-0 bg-emerald-500/10 animate-pulse" />
-                    <Loader2 className="animate-spin relative z-10" size={20} />
-                    <div className="relative z-10 flex flex-col">
-                      <span className="font-dot text-xs uppercase tracking-widest">PROCESSING_NEURAL_REQUEST...</span>
-                      <span className="font-dot text-[8px] uppercase tracking-widest text-emerald-600">INTERFACING WITH DATASTREAMS</span>
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-
-              {/* Input Area */}
-              <form onSubmit={handleGeneralAiQuery} className="p-5 border-t border-cyan-500/30 bg-cyan-950/20 z-10">
-                <div className="flex gap-3 relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 font-dot text-cyan-600">{">"}</div>
-                  <input
-                    type="text"
-                    placeholder="ENTER_QUERY..."
-                    className="flex-1 bg-black/50 border border-cyan-900 focus:border-cyan-500 pl-10 pr-4 py-4 text-xs font-dot uppercase tracking-widest focus:outline-none transition-colors text-cyan-100 placeholder:text-cyan-800 shadow-[inset_0_0_20px_rgba(6,182,212,0.05)]"
-                    value={aiQuery}
-                    onChange={(e) => setAiQuery(e.target.value)}
-                  />
-                  <button
-                    type="submit"
-                    disabled={aiLoading || !aiQuery.trim()}
-                    className="bg-cyan-500/10 text-cyan-400 border border-cyan-500 hover:bg-cyan-500 hover:text-black px-6 flex items-center justify-center transition-all disabled:opacity-30 disabled:hover:bg-cyan-500/10 disabled:hover:text-cyan-400 font-dot uppercase tracking-widest text-xs"
-                  >
-                    <Send size={16} className="mr-2" /> TRANSMIT
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
       {/* --- COMMANDER'S TELEMETRY MATRIX MODAL --- */}
       <AnimatePresence>
         {showTelemetryModal && rawTelemetryData && (

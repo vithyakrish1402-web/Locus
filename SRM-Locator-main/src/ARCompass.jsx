@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Navigation, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useDeviceHeading } from './hooks/useDeviceHeading';
 
 // --- MATH HELPERS ---
 const toRad = (deg) => (deg * Math.PI) / 180;
@@ -37,14 +38,13 @@ const ARCompass = ({ target, liveLocation, onClose }) => {
   const videoRef = useRef(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(false);
-  const [heading, setHeading] = useState(0);
-  const [permissionsGranted, setPermissionsGranted] = useState(false);
+  const { heading, permissionsGranted, requestHeadingPermission } = useDeviceHeading();
 
   // 1. Initialize Camera
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -58,59 +58,21 @@ const ARCompass = ({ target, liveLocation, onClose }) => {
     }
   };
 
-  // 2. Initialize Compass
-  // useCallback with empty deps keeps this function's identity stable across renders
-  // (setHeading is guaranteed stable by React) so addEventListener/removeEventListener
-  // always operate on the same reference — otherwise removeEventListener silently no-ops
-  // against a stale closure from an earlier render and the listener leaks past unmount.
-  const handleOrientation = useCallback((event) => {
-    if (typeof event.webkitCompassHeading === 'number') {
-      // iOS absolute (0 is a valid heading — due north — so this must not be a truthy check)
-      setHeading(event.webkitCompassHeading);
-    } else if (event.absolute && event.alpha !== null) {
-      // Android absolute
-      setHeading(360 - event.alpha);
-    }
-    // If it's a relative event (event.absolute is false), ignore it.
-    // Otherwise it overwrites the absolute heading with 0!
-  }, []);
-
   const requestPermissions = async () => {
-    // iOS 13+ requires explicit permission for DeviceOrientation
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      try {
-        const permissionState = await DeviceOrientationEvent.requestPermission();
-        if (permissionState === 'granted') {
-          window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-          // fallback
-          window.addEventListener('deviceorientation', handleOrientation, true);
-          setPermissionsGranted(true);
-        } else {
-          alert("[SYS_ERROR] Compass access denied.");
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    } else {
-      // Non-iOS 13+
-      window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-      window.addEventListener('deviceorientation', handleOrientation, true);
-      setPermissionsGranted(true);
-    }
+    const granted = await requestHeadingPermission();
+    if (!granted) alert("[SYS_ERROR] Compass access denied.");
     startCamera();
   };
 
-  // Cleanup on unmount
+  // Cleanup on unmount (device orientation listeners are torn down by useDeviceHeading itself)
   useEffect(() => {
     return () => {
-      window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
-      window.removeEventListener('deviceorientation', handleOrientation, true);
       if (videoRef.current && videoRef.current.srcObject) {
         const tracks = videoRef.current.srcObject.getTracks();
         tracks.forEach(track => track.stop());
       }
     };
-  }, [handleOrientation]);
+  }, []);
 
   // Math variables
   const bearing = (liveLocation && target) ? calculateBearing(liveLocation.lat, liveLocation.lng, target.lat, target.lng) : 0;
