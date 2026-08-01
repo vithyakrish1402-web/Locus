@@ -197,9 +197,13 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.on('resolve-access', ({ targetId, roomCode, approved }) => {
     if (activeSquads[roomCode] && activeSquads[roomCode].ownerId === socket.id) {
       if (approved) {
-        activeSquads[roomCode].members.push(targetId);
         const targetSocket = io.sockets.sockets.get(targetId);
+        // Only add to the roster if the requester is still actually connected —
+        // pushing targetId unconditionally left a phantom member in squad.members
+        // (never cleaned up until the next 60s stale sweep) whenever someone
+        // disconnected while their join request was awaiting approval.
         if (targetSocket) {
+          activeSquads[roomCode].members.push(targetId);
           targetSocket.join(roomCode);
           targetSocket.emit('access-granted', { role: 'MEMBER', roomCode });
           activeSquads[roomCode].memberUids = activeSquads[roomCode].memberUids || {};
@@ -235,7 +239,10 @@ socket.on('check-ping', (clientTimestamp) => {
   });
 
   socket.on('publish-custom-route', (payload) => {
-    socket.broadcast.emit('new-custom-route', payload); 
+    // Scoped to the sender's own squad — this used to be socket.broadcast.emit,
+    // which leaked every squad's secret tactical routes to every other squad
+    // connected to the server, regardless of room membership.
+    if (payload?.roomCode) socket.to(payload.roomCode).emit('new-custom-route', payload);
   });
 
   // --- 🎯 COMMANDER WAYPOINTS ---
@@ -260,7 +267,7 @@ socket.on('check-ping', (clientTimestamp) => {
 
   // --- 🌐 LOCATION & ROOM ENGINE (CENTRALIZED) ---
   socket.on('update-location', (data) => {
-    const { roomCode, lat, lng, speed, battery, status, name, photo, heading } = data;
+    const { lat, lng, speed, battery, heading } = data;
     const newRoom = data.roomCode || 'GLOBAL';
 
     // 🔒 GATEKEEPER ENFORCEMENT: this used to join any roomCode the client sent,

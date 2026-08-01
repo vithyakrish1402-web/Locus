@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Navigation, X, AlertTriangle, ShieldAlert } from 'lucide-react';
+// eslint-disable-next-line no-unused-vars -- used via <motion.div> (see App.jsx's import for why the linter can't see this)
 import { motion } from 'framer-motion';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
 
@@ -36,7 +37,6 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 
 const ARCompass = ({ target, liveLocation, onClose }) => {
   const videoRef = useRef(null);
-  const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(false);
   const { heading, permissionsGranted, requestHeadingPermission } = useDeviceHeading();
 
@@ -49,12 +49,10 @@ const ARCompass = ({ target, liveLocation, onClose }) => {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-      setCameraActive(true);
       setCameraError(false);
     } catch (err) {
       console.warn("[SYS_AR] Optics offline. Switching to Instrument Flight Rules (IFR).", err);
       setCameraError(true);
-      setCameraActive(false);
     }
   };
 
@@ -64,11 +62,14 @@ const ARCompass = ({ target, liveLocation, onClose }) => {
     startCamera();
   };
 
-  // Cleanup on unmount (device orientation listeners are torn down by useDeviceHeading itself)
+  // Cleanup on unmount (device orientation listeners are torn down by useDeviceHeading itself).
+  // Capture the video node now rather than reading videoRef.current inside the cleanup —
+  // by the time cleanup runs, React may have already cleared the ref.
   useEffect(() => {
+    const video = videoRef.current;
     return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const tracks = videoRef.current.srcObject.getTracks();
+      if (video && video.srcObject) {
+        const tracks = video.srcObject.getTracks();
         tracks.forEach(track => track.stop());
       }
     };
