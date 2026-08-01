@@ -1002,26 +1002,21 @@ const App = () => {
   const [aiQuery, setAiQuery] = useState('');
 
 
-  // Gemini API Utility (Proxied via Backend)
-  const callGemini = async (prompt, systemInstruction = "You are a helpful campus assistant for SRM KTR.") => {
+  // Gemini API Utility (Proxied via Backend /api/oracle)
+  const callGemini = async (spatialPayload) => {
     const url = `${BACKEND_URL}/api/oracle`;
 
-    const payload = {
-      prompt,
-      systemInstruction
-    };
-
     let delay = 1000;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 3; i++) {
       try {
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(spatialPayload)
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
+          const errorData = await response.json().catch(() => ({}));
           console.error("🚨 [ORACLE ERROR]:", errorData);
           throw new Error('API Error');
         }
@@ -1029,7 +1024,7 @@ const App = () => {
         const data = await response.json();
         return data.reply || "No response found.";
       } catch (err) {
-        if (i === 4) throw err;
+        if (i === 2) throw err;
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
       }
@@ -1203,14 +1198,13 @@ const App = () => {
         mapStr = nearbyBuildings.map(b => `[${b.name}:${b.distStr}]`).join('');
       }
 
-      // 3. The Injection: Feed the compressed data to Gemini
-      const systemInstruction = `You are SYS_ORACLE, a tactical AI on the LOCUS network at SRM KTR. 
-MY_STATUS: ${liveLocation ? 'ONLINE' : 'OFFLINE'}
-SQUAD_TELEMETRY: ${squadStr}
-NEAREST_BUILDINGS: ${mapStr}
-DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strictly under 3 sentences. Use a concise, military-comms tone. Provide spatial awareness when asked.`;
-
-      const res = await callGemini(aiQuery, systemInstruction);
+      // 3. Send spatial telemetry payload to Oracle backend endpoint
+      const res = await callGemini({
+        query: aiQuery,
+        myStatus: liveLocation ? 'ONLINE' : 'OFFLINE',
+        squadTelemetry: squadStr,
+        nearestBuildings: mapStr
+      });
       setAiResponse(res);
     } catch (err) {
       setAiResponse("[SYS_FAILURE] Neural link to Oracle severed. Retrying connection...");

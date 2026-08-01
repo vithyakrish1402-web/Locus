@@ -125,7 +125,7 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
   - 3 Closest Campus Buildings (`NEAREST_BUILDINGS`) calculated via distance sorting from `SRM_MASTER_DATABASE`.
 - **System Directive:**
   > "You are SYS_ORACLE, a tactical AI on the LOCUS network at SRM KTR. Keep answers strictly under 3 sentences. Use a concise, military-comms tone. Provide spatial awareness when asked."
-- **Direct Client Endpoint:** `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${VITE_GEMINI_API_KEY}`
+- **Backend Oracle Endpoint:** `/api/oracle` (proxies Gemini API requests using server-side `GEMINI_API_KEY`)
 
 ---
 
