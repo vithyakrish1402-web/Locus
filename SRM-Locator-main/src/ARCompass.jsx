@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Navigation, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -59,17 +59,21 @@ const ARCompass = ({ target, liveLocation, onClose }) => {
   };
 
   // 2. Initialize Compass
-  const handleOrientation = (event) => {
-    if (event.webkitCompassHeading) {
-      // iOS absolute
+  // useCallback with empty deps keeps this function's identity stable across renders
+  // (setHeading is guaranteed stable by React) so addEventListener/removeEventListener
+  // always operate on the same reference — otherwise removeEventListener silently no-ops
+  // against a stale closure from an earlier render and the listener leaks past unmount.
+  const handleOrientation = useCallback((event) => {
+    if (typeof event.webkitCompassHeading === 'number') {
+      // iOS absolute (0 is a valid heading — due north — so this must not be a truthy check)
       setHeading(event.webkitCompassHeading);
     } else if (event.absolute && event.alpha !== null) {
       // Android absolute
-      setHeading(360 - event.alpha); 
+      setHeading(360 - event.alpha);
     }
-    // If it's a relative event (event.absolute is false), ignore it. 
+    // If it's a relative event (event.absolute is false), ignore it.
     // Otherwise it overwrites the absolute heading with 0!
-  };
+  }, []);
 
   const requestPermissions = async () => {
     // iOS 13+ requires explicit permission for DeviceOrientation
@@ -106,12 +110,34 @@ const ARCompass = ({ target, liveLocation, onClose }) => {
         tracks.forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [handleOrientation]);
 
   // Math variables
   const bearing = (liveLocation && target) ? calculateBearing(liveLocation.lat, liveLocation.lng, target.lat, target.lng) : 0;
   const distance = (liveLocation && target) ? calculateDistance(liveLocation.lat, liveLocation.lng, target.lat, target.lng) : 0;
-  const rotation = bearing - heading;
+
+  // --- 🧭 WRAPAROUND-SAFE ROTATION ---
+  // (bearing - heading) is a raw difference of two 0-360deg values, which jumps
+  // discontinuously whenever either crosses the 0/360 boundary (e.g. heading 359 -> 1
+  // makes the raw value swing by ~358 instead of ~2). Framer Motion interpolates
+  // `rotate` numerically with no wraparound awareness, so the arrow visibly spins the
+  // long way around anytime the user turns through north. Instead, accumulate an
+  // unbounded rotation and nudge it each update by the shortest signed delta (<=180deg)
+  // needed to reach the new target angle, so the animated value never jumps.
+  const rotationRef = useRef(0);
+  const [displayRotation, setDisplayRotation] = useState(0);
+
+  useEffect(() => {
+    const targetAngle = ((bearing - heading) % 360 + 360) % 360;
+    const prev = rotationRef.current;
+    const prevMod = ((prev % 360) + 360) % 360;
+    let delta = targetAngle - prevMod;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    const next = prev + delta;
+    rotationRef.current = next;
+    setDisplayRotation(next);
+  }, [bearing, heading]);
 
   if (!permissionsGranted) {
     return (
@@ -203,7 +229,7 @@ const ARCompass = ({ target, liveLocation, onClose }) => {
 
           {/* Rotating Arrow */}
           <motion.div
-            animate={{ rotate: rotation }}
+            animate={{ rotate: displayRotation }}
             transition={{ type: "spring", damping: 15, stiffness: 100 }}
             className="w-48 h-48 rounded-full border-4 border-red-500 flex flex-col items-center justify-start pt-2 relative z-30 shadow-[0_0_30px_rgba(239,68,68,0.3)] bg-black/20 backdrop-blur-sm"
           >

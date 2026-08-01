@@ -705,15 +705,6 @@ const App = () => {
   useEffect(() => {
     if (!hasJoinedSquad) return;
 
-    socket.on('new-zone', (zoneData) => {
-      console.log(`[SYS_NET] New tactical zone received from Commander: ${zoneData.name}`);
-      setLiveZones(prev => {
-        // Prevent duplicates if the server bounces our own zone back to us
-        if (prev.some(z => z.id === zoneData.id)) return prev;
-        return [...prev, zoneData];
-      });
-    });
-
     socket.on('new-waypoint', (waypointData) => {
       console.log(`[SYS_NET] New Rally Point acquired:`, waypointData);
       setActiveWaypoint(waypointData);
@@ -724,8 +715,6 @@ const App = () => {
       console.log(`[SYS_NET] Rally Point cleared.`);
       setActiveWaypoint(null);
     });
-
-    // Don't forget to add socket.off('new-zone') in the cleanup return!
 
     socket.on('users-update', (activeUsers) => {
       setUsers(() => {
@@ -779,7 +768,6 @@ const App = () => {
     });
 
     return () => {
-      socket.off('new-zone');
       socket.off('users-update');
       socket.off('receive-ping');
       socket.off('new-custom-route');
@@ -988,16 +976,6 @@ const App = () => {
       console.log("Audio not supported.");
     }
   };
-
-  // 3. Listen for incoming P2P Pings
-  useEffect(() => {
-    socket.on('receive-ping', ({ senderName }) => {
-      playSonarPing();
-      alert(`🚨 [INCOMING_SIGNAL] \n\nNode '${senderName}' is pinging your location!`);
-    });
-
-    return () => socket.off('receive-ping');
-  }, []);
 
   useEffect(() => {
     clearRoute();
@@ -1215,7 +1193,7 @@ const App = () => {
       // 2. Map Context: Calculate distance and ONLY send the 3 closest buildings to save tokens
       let mapStr = "UNKNOWN";
       if (liveLocation) {
-        const nearbyBuildings = BUILDINGS.map(b => {
+        const nearbyBuildings = SRM_MASTER_DATABASE.map(b => {
           const distStr = calculateDistance(liveLocation.lat, liveLocation.lng, b.lat, b.lng);
           const isKM = distStr.includes('KM');
           const num = parseFloat(distStr.replace(/[^0-9.]/g, ''));

@@ -131,7 +131,9 @@ socket.on('check-ping', (clientTimestamp) => {
   // --- SAFETY PING ENGINE (LKL) ---
   socket.on('safety-ping', (data) => {
     const { latitude, longitude, timestamp, batteryLevel } = data;
-    locationCache[socket.id] = { latitude, longitude, timestamp, batteryLevel: batteryLevel || 'Unknown' };
+    // Merge rather than overwrite: 'update-location' writes speed/heading/lastSeen
+    // into this same cache entry, and clobbering it here would erase that trajectory data.
+    locationCache[socket.id] = { ...locationCache[socket.id], latitude, longitude, timestamp, batteryLevel: batteryLevel || 'Unknown' };
   });
 
   socket.on('request-telemetry', (roomCode) => {
@@ -233,13 +235,25 @@ socket.on('check-ping', (clientTimestamp) => {
     socket.join(newRoom);
 
     // 👇 Armored Cache Assignment
-    users[socket.id] = { 
-      ...data, 
+    users[socket.id] = {
+      ...data,
       roomCode: newRoom,
       heading: heading || 0,       // Failsafe: Prevents NaN crashes on the frontend
       lastSeen: Date.now()         // Anchor: Records the exact millisecond of the last known ping
     };
-    
+
+    // Mirror the live trajectory into locationCache too (merged with whatever
+    // safety-ping last wrote), so the disconnect handler's Dead Man's Switch
+    // actually has real speed/heading/lastSeen instead of permanently-undefined fields.
+    locationCache[socket.id] = {
+      ...locationCache[socket.id],
+      lat, lng,
+      speed: speed || 0,
+      heading: heading || 0,
+      battery: battery || 0,
+      lastSeen: Date.now()
+    };
+
     broadcastSquadUpdate(newRoom);
   });
 
@@ -262,7 +276,7 @@ socket.on('check-ping', (clientTimestamp) => {
     if (users[socket.id]) {
       const room = users[socket.id].roomCode;
       const userData = users[socket.id];
-      const lastLocation = locationCache[socket.id]; // ⚠️ Ensure 'heading' and 'lastSeen' are saved here!
+      const lastLocation = locationCache[socket.id];
       const squad = activeSquads[room];
 
       // TRIGGER DEAD MAN'S SWITCH 

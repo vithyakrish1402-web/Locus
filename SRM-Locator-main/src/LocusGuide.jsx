@@ -37,16 +37,20 @@ const LocusGuide = ({ onInitialize }) => {
   // --- TERMINAL BOOT EFFECT ---
   useEffect(() => {
     let currentLine = 0;
+    let finishTimeout = null;
     const interval = setInterval(() => {
       if (currentLine < BOOT_SEQUENCE.length) {
         setBootLines(prev => [...prev, BOOT_SEQUENCE[currentLine]]);
         currentLine++;
       } else {
         clearInterval(interval);
-        setTimeout(() => setBooting(false), 800);
+        finishTimeout = setTimeout(() => setBooting(false), 800);
       }
     }, 300);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(finishTimeout);
+    };
   }, []);
 
   // --- SCROLL & REVEAL ---
@@ -54,7 +58,7 @@ const LocusGuide = ({ onInitialize }) => {
     const handleScroll = () => {
       const totalScroll = document.documentElement.scrollTop;
       const windowHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-      setScrollProgress(`${(totalScroll / windowHeight) * 100}%`);
+      setScrollProgress(windowHeight > 0 ? `${(totalScroll / windowHeight) * 100}%` : '0%');
     };
     window.addEventListener('scroll', handleScroll);
 
