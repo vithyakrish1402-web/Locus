@@ -85,8 +85,18 @@ const locationCache = {};
 // --- 🧹 STALE SQUAD SWEEP ---
 // Defense-in-depth against ghost rooms: mobile clients that get killed/backgrounded
 // don't always fire a clean 'disconnect', so a squad can be left with a dead owner
-// or dead members for a while. Prune anything with no live members, a dead owner,
-// or no activity for 5+ minutes so an old test-session code can't shadow a new one.
+// or dead members for a while. Prune anything with no live members or no activity
+// for 5+ minutes so an old test-session code can't shadow a new one.
+//
+// Deliberately NOT killing a squad just because the owner's socket looks offline
+// at this exact instant ("!ownerIsLive" used to be an immediate kill switch here):
+// that fires on any brief reconnect (app backgrounded, signal blip — normal on
+// mobile), and this sweep runs every 60s, so it was routinely nuking perfectly
+// live squads — with other members still actively connected — out from under
+// everyone mid-session. `isStale` already covers real abandonment: lastActivity
+// is refreshed by any live member's traffic, not just the owner's, so an owner
+// who's genuinely gone for good still gets caught once nobody's been active for
+// the full TTL.
 const ROOM_TTL_MS = 5 * 60 * 1000;
 setInterval(() => {
   const now = Date.now();
@@ -94,10 +104,9 @@ setInterval(() => {
     const squad = activeSquads[roomCode];
     squad.members = squad.members.filter(id => io.sockets.sockets.has(id));
 
-    const ownerIsLive = io.sockets.sockets.has(squad.ownerId);
     const isStale = now - (squad.lastActivity || 0) > ROOM_TTL_MS;
 
-    if (squad.members.length === 0 || !ownerIsLive || isStale) {
+    if (squad.members.length === 0 || isStale) {
       console.log(`[🧹 SWEEP] Removing abandoned/stale squad: ${roomCode}`);
       delete activeSquads[roomCode];
     }
@@ -176,23 +185,77 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.on('request-join', (data) => {
     const { roomCode, user } = data;
     const existing = activeSquads[roomCode];
-    // A room only counts as "occupied" if its owner socket is still actually
-    // connected. Mobile clients (killed/backgrounded APKs) often vanish without
-    // a clean disconnect, leaving a ghost owner that a real request-join would
-    // otherwise be silently routed to (see 'access-request' below).
-    const ownerIsLive = existing && io.sockets.sockets.has(existing.ownerId);
+    // Ownership used to be tracked purely by ephemeral socket.id. Any reconnect
+    // (backgrounding the app, a signal blip — routine on mobile) killed the old
+    // socket and handed a squad member's disconnect handler a chance to silently
+    // promote someone else to owner (see handleSquadSuccession below), so the real
+    // creator would come back to their OWN squad and get dropped into the pending
+    // "awaiting clearance" queue behind a "commander" who never asked to be one.
+    // A stable per-person uid (Firebase uid, survives reconnects/new socket ids)
+    // lets the server recognize "this is genuinely the same person who owns this
+    // squad" and let them straight back in, no race, no vote required.
+    const requesterUid = user?.uid || null;
+    socket.data.uid = requesterUid;
 
-    if (!existing || existing.members.length === 0 || !ownerIsLive) {
-      activeSquads[roomCode] = { ownerId: socket.id, members: [socket.id], activeWaypoint: null, lastActivity: Date.now() };
+    // Case 1: brand-new or fully abandoned room -> requester becomes the owner.
+    if (!existing || existing.members.length === 0) {
+      activeSquads[roomCode] = {
+        ownerId: socket.id,
+        ownerUid: requesterUid,
+        members: [socket.id],
+        memberUids: requesterUid ? { [socket.id]: requesterUid } : {},
+        blockedUids: existing?.blockedUids || [],
+        activeWaypoint: null,
+        lastActivity: Date.now()
+      };
       socket.join(roomCode);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
-    } else {
-      const commanderId = existing.ownerId;
-      io.to(commanderId).emit('access-request', {
-        targetId: socket.id, name: user.name, photo: user.photo, roomCode: roomCode
-      });
-      socket.emit('access-pending');
+      return;
     }
+
+    // Case 2: this identity was explicitly blocked by the commander -> hard deny.
+    if (requesterUid && existing.blockedUids?.includes(requesterUid)) {
+      socket.emit('access-denied');
+      return;
+    }
+
+    // Case 3: the reconnecting socket IS the squad's owner (uid match) -> always
+    // let them straight back in as OWNER. Rebind their new socket id and keep
+    // everyone else already in the roster instead of wiping it.
+    if (requesterUid && existing.ownerUid && requesterUid === existing.ownerUid) {
+      existing.members = existing.members.filter(id => id !== existing.ownerId && io.sockets.sockets.has(id));
+      existing.members.push(socket.id);
+      existing.ownerId = socket.id;
+      existing.memberUids = existing.memberUids || {};
+      existing.memberUids[socket.id] = requesterUid;
+      existing.lastActivity = Date.now();
+      socket.join(roomCode);
+      socket.emit('access-granted', { role: 'OWNER', roomCode });
+      return;
+    }
+
+    // Case 4: someone else's request against a room whose owner socket is truly
+    // gone (crashed/uninstalled, not just mid-reconnect) -> let them take over as
+    // caretaker owner rather than stranding the squad, keeping the roster intact.
+    const ownerIsLive = io.sockets.sockets.has(existing.ownerId);
+    if (!ownerIsLive) {
+      existing.ownerId = socket.id;
+      existing.ownerUid = requesterUid;
+      if (!existing.members.includes(socket.id)) existing.members.push(socket.id);
+      existing.memberUids = existing.memberUids || {};
+      existing.memberUids[socket.id] = requesterUid;
+      existing.lastActivity = Date.now();
+      socket.join(roomCode);
+      socket.emit('access-granted', { role: 'OWNER', roomCode });
+      return;
+    }
+
+    // Case 5: normal gatekeeper flow — a genuine new joiner needs the live owner's approval.
+    const commanderId = existing.ownerId;
+    io.to(commanderId).emit('access-request', {
+      targetId: socket.id, name: user.name, photo: user.photo, roomCode: roomCode
+    });
+    socket.emit('access-pending');
   });
 
   socket.on('resolve-access', ({ targetId, roomCode, approved }) => {
@@ -203,7 +266,9 @@ socket.on('check-ping', (clientTimestamp) => {
         if (targetSocket) {
           targetSocket.join(roomCode);
           targetSocket.emit('access-granted', { role: 'MEMBER', roomCode });
-          
+          activeSquads[roomCode].memberUids = activeSquads[roomCode].memberUids || {};
+          activeSquads[roomCode].memberUids[targetId] = targetSocket.data?.uid || null;
+
           if (activeSquads[roomCode].activeWaypoint) {
             targetSocket.emit('new-waypoint', activeSquads[roomCode].activeWaypoint);
           }
@@ -212,6 +277,25 @@ socket.on('check-ping', (clientTimestamp) => {
         io.to(targetId).emit('access-denied');
       }
     }
+  });
+
+  // --- 🚫 COMMANDER BLOCK (durable — survives the target's reconnects) ---
+  socket.on('block-user', ({ roomCode, targetId }) => {
+    const squad = activeSquads[roomCode];
+    if (!squad || squad.ownerId !== socket.id || targetId === socket.id) return;
+
+    const targetUid = squad.memberUids?.[targetId] || io.sockets.sockets.get(targetId)?.data?.uid;
+    squad.blockedUids = squad.blockedUids || [];
+    if (targetUid && !squad.blockedUids.includes(targetUid)) squad.blockedUids.push(targetUid);
+
+    squad.members = squad.members.filter(id => id !== targetId);
+    if (squad.memberUids) delete squad.memberUids[targetId];
+    delete users[targetId];
+    delete locationCache[targetId];
+
+    console.log(`[🚫 BLOCK] Commander banned node ${targetId} from ${roomCode}`);
+    io.to(targetId).emit('exiled', { reason: 'blocked' });
+    broadcastSquadUpdate(roomCode);
   });
 
   socket.on('publish-custom-route', (payload) => {
@@ -330,11 +414,19 @@ socket.on('check-ping', (clientTimestamp) => {
       }
 
       delete users[socket.id];
-      delete locationCache[socket.id]; 
+      delete locationCache[socket.id];
       if (room) broadcastSquadUpdate(room);
     }
-    
-    handleSquadSuccession(socket.id);
+
+    // NOTE: deliberately NOT calling handleSquadSuccession() here. A raw 'disconnect'
+    // fires on any transient drop (app backgrounded, brief signal loss — routine on
+    // mobile), not just genuine departures. Immediately handing ownership to another
+    // member on every blip meant the real owner's own reconnect would find someone
+    // else already crowned commander and get stuck begging them for "clearance" to
+    // re-enter their own squad. Ownership now only changes hands on deliberate exits
+    // (leave-squad, vote-to-kick/block) or, for a truly-gone owner, lazily the next
+    // time someone actually tries to join the room (see request-join's Case 4) or via
+    // the periodic stale-squad sweep.
   });
 
   function broadcastSquadUpdate(roomCode) {

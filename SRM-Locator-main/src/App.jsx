@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { Capacitor } from '@capacitor/core';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
@@ -29,7 +30,15 @@ import {
 } from 'firebase/auth';
 
 import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://locus-1-896t.onrender.com');
+// Capacitor's Android/iOS WebView serves the bundled app from "https://localhost" by
+// default, which is indistinguishable from a real local dev server by hostname alone.
+// Without this check, the native app would try to hit a "backend" on the phone itself
+// and never reach the real server at all. Capacitor.isNativePlatform() is the only
+// reliable way to tell "actually running inside the app" apart from "actually on localhost".
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
+  || (!Capacitor.isNativePlatform() && window.location.hostname === 'localhost'
+    ? 'http://localhost:5000'
+    : 'https://locus-1-896t.onrender.com');
 
 const socket = io(BACKEND_URL, {
   transports: ['websocket'],
@@ -382,7 +391,7 @@ const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSecon
     lng: projectedLng * (180 / Math.PI)
   };
 };
-const WaypointMarker = ({ name, onClick }) => (
+const WaypointMarker = ({ name, onClick, onClear, canClear }) => (
   <div
     onClick={onClick}
     className="w-12 h-12 -ml-6 -mt-6 rounded-full flex items-center justify-center cursor-pointer relative z-[60]"
@@ -394,6 +403,15 @@ const WaypointMarker = ({ name, onClick }) => (
     <div className="absolute top-full mt-1 whitespace-nowrap bg-red-500 text-white font-dot text-[10px] uppercase px-2 py-0.5 tracking-widest pointer-events-none">
       {name}
     </div>
+    {canClear && (
+      <button
+        onClick={(e) => { e.stopPropagation(); onClear(); }}
+        title="Clear Rally Point"
+        className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-black border-2 border-white/60 flex items-center justify-center text-white hover:bg-red-500 hover:border-red-500 transition-colors z-[61] shadow-[0_0_8px_rgba(0,0,0,0.6)]"
+      >
+        <X size={12} />
+      </button>
+    )}
   </div>
 );
 
@@ -525,7 +543,7 @@ const App = () => {
     // 1. Send the knock to the server FIRST
     socket.emit('request-join', {
       roomCode: targetRoom,
-      user: { name: user.displayName, photo: user.photoURL }
+      user: { name: user.displayName, photo: user.photoURL, uid: user.uid }
     });
 
     setHasJoinedSquad(true);
@@ -644,9 +662,11 @@ const App = () => {
   }, []);
   // --- 💀 ADDITION: MUTINY LISTENER ---
   useEffect(() => {
-    socket.on('exiled', () => {
+    socket.on('exiled', ({ reason } = {}) => {
       // 1. Sound the alarm
-      alert("💀 [SYS_MUTINY] You have been democratically exiled from the squad by majority vote.");
+      alert(reason === 'blocked'
+        ? "🚫 [SYS_BANNED] The Squad Commander has blocked you from this channel."
+        : "💀 [SYS_MUTINY] You have been democratically exiled from the squad by majority vote.");
 
       // 2. Trigger your existing leave function to wipe local state and return to the join screen
       handleLeaveSquad();
@@ -804,7 +824,7 @@ const App = () => {
       if (hasJoinedSquad && squadCode && user) {
         socket.emit('request-join', {
           roomCode: squadCode,
-          user: { name: user.displayName, photo: user.photoURL }
+          user: { name: user.displayName, photo: user.photoURL, uid: user.uid }
         });
       }
     };
@@ -1225,6 +1245,11 @@ const App = () => {
   const toggleBlock = (userId) => {
     setBlockedUserIds(prev => {
       if (prev.includes(userId)) return prev.filter(id => id !== userId);
+      // Tell the server too — this actually removes them from the squad and bans
+      // their account from rejoining, not just hiding them on this screen.
+      if (squadRole === 'OWNER') {
+        socket.emit('block-user', { roomCode: squadCode, targetId: userId });
+      }
       setUsers(uPrev => uPrev.map(u => u.id === userId ? { ...u, permission: 'none' } : u));
       return [...prev, userId];
     });
@@ -2050,6 +2075,8 @@ const App = () => {
               lng={activeWaypoint.lng}
               name={activeWaypoint.name}
               onClick={() => handleFocus(activeWaypoint, null)}
+              canClear={squadRole === 'OWNER'}
+              onClear={() => socket.emit('clear-waypoint', squadCode)}
             />
           )}
           {/* Filter out: blocked, ghost, and users with no coordinates yet */}
