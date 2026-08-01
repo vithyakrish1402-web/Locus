@@ -46,6 +46,12 @@ body {
   100% { transform: scale(1.4); opacity: 0; }
 }
 
+/* SosTrigger ARMED-state pulse (src/components/SosTrigger.jsx) */
+@keyframes locus-sos-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .glass-panel {
   background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(12px);
