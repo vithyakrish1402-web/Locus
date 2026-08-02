@@ -177,7 +177,15 @@ const SosTrigger = ({
       onPointerCancel={cancelHold}
       onContextMenu={(e) => e.preventDefault()}
       aria-label={ARIA_LABELS[phase]}
-      className={`fixed bottom-4 left-4 z-[1050] w-20 h-20 rounded-full select-none touch-none pointer-events-auto flex items-center justify-center border-2 bg-red-600 text-white active:scale-95 transition-[border-color,box-shadow] duration-200 ${PHASE_STYLES[phase]} ${className}`}
+      // Placement has to dodge two different chrome layouts, and an SOS control must
+      // never end up underneath either of them:
+      //   mobile  - the bottom HUD (GRID/SCAN/SQUAD) is fixed bottom-0 at z-[1100]
+      //             and ~70px tall, so bottom-4 put this button straight behind it.
+      //             bottom-20 clears it and mirrors the Rally Point FAB on the right.
+      //   desktop - the squad sidebar is fixed left-6 w-80 (ends ~344px in), so
+      //             left-4 overlapped it; left-[23rem] sits just clear of its edge.
+      // z-[1150] keeps it above both regardless, so it can never be buried again.
+      className={`fixed bottom-20 left-4 md:bottom-6 md:left-[23rem] z-[1150] w-20 h-20 rounded-full select-none touch-none pointer-events-auto flex items-center justify-center border-2 bg-red-600 text-white active:scale-95 transition-[border-color,box-shadow] duration-200 ${PHASE_STYLES[phase]} ${className}`}
       style={{
         marginBottom: 'env(safe-area-inset-bottom)',
         animation: phase === 'armed' ? 'locus-sos-pulse 0.6s ease-in-out infinite' : 'none',

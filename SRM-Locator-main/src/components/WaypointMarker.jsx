@@ -1,10 +1,10 @@
 import React from 'react';
-import { Crosshair, X } from 'lucide-react';
+import { Crosshair, Navigation, X } from 'lucide-react';
 
 // Extracted out of App.jsx so both the google-map-react primary map and the
 // Leaflet fallback (TacticalLeafletMap.jsx) can render the same rally-point
 // marker without duplicating it.
-const WaypointMarker = ({ name, onClick, onClear, canClear }) => (
+const WaypointMarker = ({ name, onClick, onClear, canClear, onTrack }) => (
   <div
     onClick={onClick}
     className="w-12 h-12 -ml-6 -mt-6 rounded-full flex items-center justify-center cursor-pointer relative z-[60]"
@@ -16,6 +16,17 @@ const WaypointMarker = ({ name, onClick, onClear, canClear }) => (
     <div className="absolute top-full mt-1 whitespace-nowrap bg-red-500 text-white font-dot text-[10px] uppercase px-2 py-0.5 tracking-widest pointer-events-none">
       {name}
     </div>
+    {/* AR_TRACK — every squad member (not just the Commander who dropped it) needs a
+        live bearing from their own position to the rally point, not just a static pin. */}
+    {onTrack && (
+      <button
+        onClick={(e) => { e.stopPropagation(); onTrack(); }}
+        title="AR Track Rally Point"
+        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-black border-2 border-white/60 flex items-center justify-center text-white hover:bg-red-500 hover:border-red-500 transition-colors z-[61] shadow-[0_0_8px_rgba(0,0,0,0.6)]"
+      >
+        <Navigation size={12} />
+      </button>
+    )}
     {canClear && (
       <button
         onClick={(e) => { e.stopPropagation(); onClear(); }}

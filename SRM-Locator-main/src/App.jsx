@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 import { Capacitor } from '@capacitor/core';
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 // `motion` is used throughout via <motion.div>/<motion.nav> JSX member expressions.
 // This project's eslint config has no eslint-plugin-react (only react-hooks/react-refresh),
 // so core no-unused-vars can't see through JSXMemberExpression tag names — false positive.
@@ -26,8 +26,8 @@ import LocationMarker from './components/LocationMarker';
 import WaypointMarker from './components/WaypointMarker';
 import BuildingMarker from './components/BuildingMarker';
 import SosTrigger from './components/SosTrigger';
+import SosOverlay from './components/SosOverlay';
 import { deriveMarkerStatus } from './utils/markerStatus';
-import { BUILDING_FOOTPRINT_STYLE, BUILDING_FOOTPRINT_HIGHLIGHT_STYLE } from './utils/buildingFootprintStyle';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -65,7 +65,62 @@ const socket = io(BACKEND_URL, {
 // android/local.properties (see AndroidManifest.xml's MAPS_API_KEY meta-data placeholder).
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
+if (!GOOGLE_MAPS_API_KEY) {
+  // Say this out loud. Without a key Google would still "work" — it just renders a
+  // watermarked "For development purposes only" map — which looks like an app bug
+  // rather than a missing build secret. The app uses the keyless Leaflet engine
+  // instead; this line explains why the map looks different from the Google one.
+  console.warn(
+    '[SYS_MAP] No VITE_GOOGLE_MAPS_API_KEY set — using the keyless Leaflet/OSM engine. ' +
+    'To use Google Maps, put a billing-enabled Maps JavaScript API key in SRM-Locator-main/.env (see .env.example).'
+  );
+}
+
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
+
+// --- MAP STYLE / OPTION CONSTANTS ---
+// Deliberately module-scope: google-map-react shallow-compares the `options` prop,
+// so these must keep a stable identity across renders. Rebuilding them inside the
+// component made every render look like an options change and triggered a full
+// map.setOptions() restyle each time.
+const BASE_MAP_OPTIONS = {
+  zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
+  mapTypeId: 'roadmap',
+  tilt: 0,
+  gestureHandling: 'greedy', // single-finger drag pans immediately — no "use two fingers" cooperative-mode fight
+};
+
+const SATELLITE_MAP_OPTIONS = {
+  zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
+  mapTypeId: 'hybrid', // This triggers the real satellite imagery
+  tilt: 0,
+  gestureHandling: 'greedy',
+  styles: [], // Clear custom styles so the photos show up
+};
+
+// Standard Cyberpunk Dark Theme
+const TACTICAL_MAP_STYLES = [
+  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+];
+
+// Ultra-Minimal Stealth Theme (Pitch black, no POI icons, dark grey roads)
+const STEALTH_MAP_STYLES = [
+  { elementType: "geometry", stylers: [{ color: "#000000" }] },
+  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#333333" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#000000" }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#0a0a0a" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#111111" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] }
+];
 
 // --- 🎲 AUTOMATIC SQUAD CODE RANDOMIZER (ALPHANUMERIC ONLY) ---
 const generateRandomSquadCode = () => {
@@ -360,6 +415,11 @@ const App = () => {
   // --- TACTICAL WAYPOINT STATE ---
   const [isDroppingWaypoint, setIsDroppingWaypoint] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
+  // Holds the most recent squad-wide SOS this client hasn't acknowledged yet.
+  // Deliberately a single slot, not a queue: only one SosOverlay can be on screen
+  // at a time, and a second beacon while one is still up should replace it (same
+  // squadmate holding again, or a different one) rather than stack behind it.
+  const [incomingSos, setIncomingSos] = useState(null);
   const [arTarget, setArTarget] = useState(null);
   // --- TARGETING MODE (Two-step Rally Point) ---
   const [isTargetingMode, setIsTargetingMode] = useState(false);
@@ -402,7 +462,6 @@ const App = () => {
   const [routeStart, setRouteStart] = useState(null);
   const [routeEnd, setRouteEnd] = useState(null);
   const [routeData, setRouteData] = useState(null);
-  const buildingPolygonsRef = useRef({}); // id -> google.maps.Polygon, real OSM building footprints
 
   // --- MODIFIED: FIREBASE AUTH STATE ---
   const [user, setUser] = useState(null);
@@ -415,7 +474,14 @@ const App = () => {
   // --- GREEN LIGHT PROTOCOL: Map readiness gate ---
   const [isMapReady, setIsMapReady] = useState(false);
   // --- MAP ENGINE FALLBACK: switch to the Leaflet map if Google's never loads ---
-  const [mapEngineFailed, setMapEngineFailed] = useState(false);
+  // Seeded true when no Maps API key is configured. Loading the Google Maps JS API
+  // without a key doesn't fail outright — it silently renders a degraded map plastered
+  // with "For development purposes only", and still fires onGoogleApiLoaded, so the
+  // 8s watchdog below never trips and the watermarked map just stays on screen.
+  // The Leaflet engine uses CARTO + Esri tiles, which need no key and carry no
+  // watermark, so with no key it is strictly the better engine — use it immediately
+  // rather than rendering a broken-looking Google map.
+  const [mapEngineFailed, setMapEngineFailed] = useState(!GOOGLE_MAPS_API_KEY);
 
   const [isRecordingPath, setIsRecordingPath] = useState(false);
   const [recordedCoords, setRecordedCoords] = useState([]);
@@ -454,7 +520,9 @@ const App = () => {
   // mount, so it fell back to Leaflet on every real session regardless of
   // whether Google Maps would've loaded fine.
   useEffect(() => {
-    if (!user || !hasJoinedSquad || isMapReady) return;
+    // mapEngineFailed short-circuits the no-API-key case: Leaflet is already the
+    // active engine, so there is no Google map left to wait on.
+    if (!user || !hasJoinedSquad || isMapReady || mapEngineFailed) return;
     const timeoutId = setTimeout(() => {
       if (!isMapReady) {
         console.warn('[SYS_MAP] Google Maps did not initialize in time — falling back to Leaflet.');
@@ -462,7 +530,7 @@ const App = () => {
       }
     }, 8000);
     return () => clearTimeout(timeoutId);
-  }, [user, hasJoinedSquad, isMapReady]);
+  }, [user, hasJoinedSquad, isMapReady, mapEngineFailed]);
 
   // Auto-generate squad code when in 'create' mode. Intentionally keyed only on
   // squadMode: this should fire once per switch into 'create', not every time
@@ -480,13 +548,11 @@ const App = () => {
   const liveLocationRef = useRef(null);
   // Shared with ARCompass.jsx (src/hooks/useDeviceHeading.js) so both the AR
   // targeting view and this device's own map marker read the same compass value.
-  const { heading, requestHeadingPermission } = useDeviceHeading();
-  // Mirrors `heading` for the GPS-tracking effect below, which intentionally does
-  // NOT list `heading` as a dependency (that would tear down and re-register the
-  // geolocation watch on every compass tick). Read via ref instead so the emitted
-  // heading is always current without restarting the watch.
-  const headingRef = useRef(0);
-  useEffect(() => { headingRef.current = heading; }, [heading]);
+  // `heading` is throttled for rendering; `headingRef` always holds the newest raw
+  // bearing. The GPS-tracking effect below intentionally does NOT list `heading` as
+  // a dependency (that would tear down and re-register the geolocation watch on
+  // every compass tick), so it reads the ref instead and still emits a current value.
+  const { heading, headingRef, requestHeadingPermission } = useDeviceHeading();
   // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
   // always read the current value — they close over the ref, not the stale state.
   const telemetryModeRef = useRef('ACTIVE');
@@ -517,20 +583,28 @@ const App = () => {
     setHasJoinedSquad(true);
 
     if (squadMode === 'create') {
-      // 🚀 INSTANT CLEARANCE FOR SQUAD CREATORS (0ms delay)
+      // 🚀 INSTANT CLEARANCE FOR SQUAD CREATORS (0ms delay) — you can't need your
+      // own approval to enter a squad you're creating.
       setAccessStatus('granted');
       setSquadRole('OWNER');
     } else {
-      // ⏳ FAILSAFE TIMEOUT FOR JOINING OPERATIVES (Fallback if network or server response is delayed)
-      setTimeout(() => {
-        setAccessStatus(currentStatus => {
-          if (currentStatus !== 'denied' && currentStatus !== 'granted') {
-            console.log("[SYS] Auto-granting clearance after network timeout fallback.");
-            return 'granted';
-          }
-          return currentStatus;
-        });
-      }, 4000);
+      // Explicitly (re)set to 'pending' rather than leaving whatever accessStatus
+      // already held. Without this, a user who was ever 'granted' before — e.g.
+      // the owner of their own squad a moment ago — kept that stale value straight
+      // through handleLeaveSquad (which didn't reset it either, fixed below), so
+      // the very next join, to a squad they'd never actually been let into, showed
+      // the full map immediately: the waiting-room gate below checks
+      // `accessStatus !== 'granted'`, which was already false before the server
+      // had said anything at all.
+      setAccessStatus('pending');
+      // No client-side auto-grant timeout here anymore. There used to be one
+      // ("fallback if network or server response is delayed") that flipped
+      // accessStatus to 'granted' after 4s no matter what — which is exactly the
+      // bug this comment is describing, just on a delay instead of instant: it
+      // let a joiner in whether or not the Commander had actually approved them,
+      // as long as they'd waited long enough. Approval-gating is a real feature
+      // here, not cosmetic, so a slow Commander should mean a slow join, not a
+      // silent bypass.
     }
   };
 
@@ -756,12 +830,27 @@ const App = () => {
       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
     });
 
+    // Squad-wide SOS (see SosTrigger.jsx / backend's sos-broadcast handler).
+    // Distinct from 'receive-ping' above, which is the single-target Commander
+    // ping — conflating the two meant an actual emergency looked identical to a
+    // routine ping-check on the receiving end.
+    // SosOverlay is the entire UI response to this event — it owns its own
+    // klaxon (useAlertAudio) and vibrate() call once mounted, so nothing else
+    // fires here. A native OS Notification would still be the only way to catch
+    // this while the app is backgrounded/screen-off, since in-app audio and
+    // vibrate need the tab actually running; that tradeoff is intentional here,
+    // not an oversight — flag it if background delivery turns out to matter.
+    socket.on('sos-received', (data) => {
+      setIncomingSos(data);
+    });
+
     return () => {
       socket.off('users-update');
       socket.off('receive-ping');
       socket.off('new-custom-route');
       socket.off('new-waypoint');
       socket.off('remove-waypoint');
+      socket.off('sos-received');
       setUsers([]);
     };
   }, [hasJoinedSquad, squadCode]);
@@ -925,7 +1014,10 @@ const App = () => {
       clearInterval(heartbeatInterval);
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [user, hasJoinedSquad, squadCode, accessStatus, sysConfig.polling]); // <-- CRITICAL: ADDED TO DEPENDENCIES
+    // headingRef is a ref (stable identity, never triggers a re-run) — listed only
+    // to satisfy exhaustive-deps now that it comes from useDeviceHeading rather
+    // than a local useRef the lint rule can recognise on its own.
+  }, [user, hasJoinedSquad, squadCode, accessStatus, sysConfig.polling, headingRef]); // <-- CRITICAL: ADDED TO DEPENDENCIES
   // --- ⚡ INSTANT MODE OVERRIDE ---
   // Fires the moment a telemetry button is clicked so the server gets the new
   // status immediately, without waiting for the next watchPosition tick.
@@ -1074,6 +1166,9 @@ const App = () => {
     setSquadCode('');
     setUsers([]);
     setOfflineNodes({});
+    // Without this, a stale 'granted' (e.g. from owning the squad just left)
+    // survives into the next join attempt — see handleJoinSquad's comment.
+    setAccessStatus(null);
   };
 
   // --- TACTICAL DISTANCE ENGINE (HAVERSINE FORMULA) ---
@@ -1214,9 +1309,9 @@ const App = () => {
 
   // --- WAYPOINT DISTANCE ENGINE ---
   // Deliberately draws no line/route on the map — the destination building is
-  // shown as a highlighted real footprint (buildingPolygonsRef) instead. This
-  // also means it no longer depends on Google's Directions API/DirectionsRenderer,
-  // so it works identically on the Google engine and the Leaflet fallback.
+  // highlighted on its own marker dot instead. This also means it doesn't
+  // depend on Google's Directions API/DirectionsRenderer, so it works
+  // identically on the Google engine and the Leaflet fallback.
   const calculateActualRoute = (start, end) => {
     // 1. Prefer a hand-recorded secret shortcut's curated distance/ETA if one exists
     const routeKey = `${start.name}_${end.name}`;
@@ -1254,83 +1349,26 @@ const App = () => {
   };
 
 
-  // --- REAL BUILDING FOOTPRINTS (Google engine) — actual traced building
-  // shapes instead of abstract circle pins. Recreated whenever the map
-  // becomes ready or the buildings tab toggles visibility. ---
-  useEffect(() => {
-    if (!isMapReady || !mapRef.current || !window.google) return;
-    const maps = window.google.maps;
-    const polygons = {};
-    SRM_MASTER_DATABASE.forEach(b => {
-      if (!b.footprint) return;
-      const polygon = new maps.Polygon({
-        paths: b.footprint.map(([lat, lng]) => ({ lat, lng })),
-        ...BUILDING_FOOTPRINT_STYLE,
-        map: activeTab === 'buildings' ? mapRef.current : null,
-        clickable: true,
-      });
-      polygon.addListener('click', () => handleFocus({ lat: b.lat, lng: b.lng }, b));
-      polygons[b.id] = polygon;
-    });
-    buildingPolygonsRef.current = polygons;
-    return () => {
-      Object.values(polygons).forEach(p => p.setMap(null));
-    };
-  }, [isMapReady, activeTab]);
-
-  // Highlight whichever building footprint is selected or is the active waypoint destination
-  useEffect(() => {
-    const highlightId = (activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null;
-    Object.entries(buildingPolygonsRef.current).forEach(([id, polygon]) => {
-      polygon.setOptions(Number(id) === highlightId ? BUILDING_FOOTPRINT_HIGHLIGHT_STYLE : BUILDING_FOOTPRINT_STYLE);
-    });
-  }, [selectedItem, routeEnd, activeTab]);
-
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
   // --- TACTICAL MAP RENDERING ENGINE ---
-  const createMapOptions = (theme) => {
-    if (isSatellite) {
-      return {
-        zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
-        mapTypeId: 'hybrid', // This triggers the real satellite imagery
-        tilt: 0,
-        gestureHandling: 'greedy', // single-finger drag pans immediately — no "use two fingers" cooperative-mode fight
-        styles: [] // Clear custom styles so the photos show up
-      };
-    }
-    // Standard Cyberpunk Dark Theme
-    const tacticalStyles = [
-      { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-      { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-      { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-      { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-      { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
-      { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
-      { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
-      { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
-    ];
-
-    // Ultra-Minimal Stealth Theme (Pitch black, no POI icons, dark grey roads)
-    const stealthStyles = [
-      { elementType: "geometry", stylers: [{ color: "#000000" }] },
-      { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-      { elementType: "labels.text.fill", stylers: [{ color: "#333333" }] },
-      { elementType: "labels.text.stroke", stylers: [{ color: "#000000" }] },
-      { featureType: "poi", stylers: [{ visibility: "off" }] },
-      { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#0a0a0a" }] },
-      { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#111111" }] },
-      { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] }
-    ];
-
-    return {
-      zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
-      mapTypeId: 'roadmap',
-      tilt: 0,
-      gestureHandling: 'greedy', // single-finger drag pans immediately — no "use two fingers" cooperative-mode fight
-      styles: theme === 'stealth' ? stealthStyles : tacticalStyles
-    };
-  }
+  // Memoised on exactly the inputs that can change the map's configuration.
+  // google-map-react shallow-compares this prop, so returning a fresh object (or a
+  // freshly-built `styles` array) on every render made it call map.setOptions() —
+  // a full restyle — on every render, which is what made the map flicker and feel
+  // unresponsive to drags while the compass was ticking.
+  const mapOptions = useMemo(() => ({
+    ...(isSatellite ? SATELLITE_MAP_OPTIONS : BASE_MAP_OPTIONS),
+    ...(isSatellite ? {} : { styles: sysConfig.theme === 'stealth' ? STEALTH_MAP_STYLES : TACTICAL_MAP_STYLES }),
+    // Google renders its own clickable POI icons (hospitals, colleges, etc.)
+    // straight onto the map tiles. Tapping one pops up Google's native white
+    // InfoWindow on top of this app's own custom SYS_NODE panel — two
+    // competing overlays stacked with clashing borders. This app already has
+    // its own complete building database + marker/panel system, so Google's
+    // built-in POI layer is pure UI collision here, not a needed feature.
+    clickableIcons: false,
+    draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : 'grab',
+  }), [isSatellite, sysConfig.theme, isAdmin, isRecordingPath]);
 
   if (authLoading) return <div className="h-screen bg-black text-white flex justify-center items-center font-dot">INITIALIZING_SECURE_LINK...</div>;
 
@@ -1923,6 +1961,7 @@ const App = () => {
               squadRole={squadRole}
               highlightBuildingId={(activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null}
               onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}
+              onArTrack={setArTarget}
               isSatellite={isSatellite}
             />
           </Suspense>
@@ -1930,17 +1969,7 @@ const App = () => {
         <GoogleMapReact
           bootstrapURLKeys={{ key: GOOGLE_MAPS_API_KEY }}
           center={mapProps.center}
-          options={{
-            ...createMapOptions(sysConfig.theme, isSatellite),
-            // Google renders its own clickable POI icons (hospitals, colleges, etc.)
-            // straight onto the map tiles. Tapping one pops up Google's native white
-            // InfoWindow on top of this app's own custom SYS_NODE panel — two
-            // competing overlays stacked with clashing borders. This app already has
-            // its own complete building database + marker/panel system, so Google's
-            // built-in POI layer is pure UI collision here, not a needed feature.
-            clickableIcons: false,
-            draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : 'grab',
-          }}
+          options={mapOptions}
 
           onClick={handleMapClick}
 
@@ -1969,8 +1998,24 @@ const App = () => {
               />
             </div>
           )}
-          {/* Buildings render as real traced footprints via buildingPolygonsRef (imperative google.maps.Polygon), not as circle pins here. */}
-          {/* ... other markers ... */}
+          {/* Buildings render as a single red dot marker each, not a traced outline —
+              even for the subset with a verified OSM footprint, the polygon shape only
+              ever matches the roof as seen from directly overhead. Real-world imagery
+              here is captured off-nadir (at an angle), which displaces the visible roof
+              from the ground footprint OSM actually traces, so the outline reads as
+              "wrong" even when the underlying data is correct. A dot has no such
+              failure mode. (TacticalLeafletMap.jsx renders the same way.) */}
+          {activeTab === 'buildings' && SRM_MASTER_DATABASE.map(b => (
+            <div
+              key={`building-${b.id}`}
+              lat={b.lat}
+              lng={b.lng}
+              onClick={() => handleFocus({ lat: b.lat, lng: b.lng }, b)}
+              style={{ cursor: 'pointer' }}
+            >
+              <BuildingMarker highlighted={(activeTab === 'buildings' && selectedItem?.id === b.id) || routeEnd?.id === b.id} />
+            </div>
+          ))}
           {activeWaypoint && (
             <WaypointMarker
               lat={activeWaypoint.lat}
@@ -1979,6 +2024,7 @@ const App = () => {
               onClick={() => handleFocus(activeWaypoint, null)}
               canClear={squadRole === 'OWNER'}
               onClear={() => socket.emit('clear-waypoint', squadCode)}
+              onTrack={() => setArTarget({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })}
             />
           )}
           {/* Filter out: blocked, ghost, and users with no coordinates yet */}
@@ -2724,6 +2770,16 @@ const App = () => {
         roomCode={squadCode}
         senderName={user.displayName}
       />
+
+      {/* ========== INCOMING SOS (stays up until acknowledged) ========== */}
+      {incomingSos && (
+        <SosOverlay
+          senderName={incomingSos.senderName}
+          lat={incomingSos.lat}
+          lng={incomingSos.lng}
+          onAcknowledge={() => setIncomingSos(null)}
+        />
+      )}
     </div>
   );
 };

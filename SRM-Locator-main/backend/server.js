@@ -245,15 +245,23 @@ socket.on('check-ping', (clientTimestamp) => {
     if (payload?.roomCode) socket.to(payload.roomCode).emit('new-custom-route', payload);
   });
 
-  // --- 🎯 COMMANDER WAYPOINTS ---
+  // --- 🎯 RALLY POINT WAYPOINTS ---
+  // Any accepted squad member can drop one — the mobile Rally Point FAB (App.jsx's
+  // "TARGETING MODE" two-step tap) is shown to every member, not just the Commander,
+  // so gating this to ownerId only silently dropped every non-owner's rally point:
+  // the presser's own client had already optimistically shown it to themselves
+  // (setActiveWaypoint runs before the emit), so only they ever saw it — nobody else
+  // in the squad did, without so much as a console warning that anything failed.
+  // Clearing stays Commander-only, matching the client UI (WaypointMarker's clear
+  // button is gated by canClear={squadRole === 'OWNER'}).
   socket.on('publish-waypoint', (data) => {
     const { roomCode, waypoint } = data;
-    if (activeSquads[roomCode] && activeSquads[roomCode].ownerId === socket.id) {
+    if (activeSquads[roomCode] && activeSquads[roomCode].members.includes(socket.id)) {
       console.log(`[🎯 TACTICAL] New Rally Point designated in ${roomCode} at ${waypoint.lat}, ${waypoint.lng}`);
       activeSquads[roomCode].activeWaypoint = waypoint;
       socket.to(roomCode).emit('new-waypoint', waypoint);
       // Also emit back to the sender just in case they need to update state without trusting the client UI
-      socket.emit('new-waypoint', waypoint); 
+      socket.emit('new-waypoint', waypoint);
     }
   });
 
@@ -317,10 +325,24 @@ socket.on('check-ping', (clientTimestamp) => {
   // to every other member of the sender's own squad, trusting the server-side
   // roomCode recorded on join rather than whatever the client claims, same
   // gatekeeper reasoning as the telemetry handler above.
-  socket.on('sos-broadcast', ({ senderName }) => {
+  //
+  // Emits its own 'sos-received' event rather than reusing 'receive-ping' — that
+  // event belongs to the separate single-target 'ping-user' feature (Commander
+  // pinging one specific member), and reusing it here meant a squad-wide SOS was
+  // indistinguishable from a single ping on the client, plus lat/lng/timestamp
+  // from the sender's payload were being silently discarded (only senderName was
+  // ever destructured), so nothing downstream could show the sender's location.
+  socket.on('sos-broadcast', ({ senderName, lat, lng, timestamp }) => {
     const roomCode = users[socket.id]?.roomCode;
     if (!roomCode) return;
-    socket.to(roomCode).emit('receive-ping', { senderName });
+    console.log(`[🚨 SOS] ${senderName} triggered a distress beacon in ${roomCode}`);
+    socket.to(roomCode).emit('sos-received', {
+      senderId: socket.id,
+      senderName,
+      lat: lat ?? null,
+      lng: lng ?? null,
+      timestamp: timestamp || Date.now(),
+    });
   });
 
   socket.on('leave-squad', () => {

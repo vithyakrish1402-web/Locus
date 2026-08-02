@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Polygon, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { SRM_MASTER_DATABASE } from '../srmDatabase';
 import LocationMarker from './LocationMarker';
@@ -7,20 +7,6 @@ import WaypointMarker from './WaypointMarker';
 import BuildingMarker from './BuildingMarker';
 import LeafletReactMarker from './LeafletReactMarker';
 import { deriveMarkerStatus } from '../utils/markerStatus';
-import { BUILDING_FOOTPRINT_STYLE, BUILDING_FOOTPRINT_HIGHLIGHT_STYLE } from '../utils/buildingFootprintStyle';
-
-// react-leaflet's pathOptions use `color`/`weight`/`opacity` naming (not the
-// Google Maps strokeColor/strokeWeight/strokeOpacity used in App.jsx), so the
-// shared style constants get translated here rather than passed through raw.
-const toLeafletPathOptions = (style) => ({
-  color: style.strokeColor,
-  opacity: style.strokeOpacity,
-  weight: style.strokeWeight,
-  fillColor: style.fillColor,
-  fillOpacity: style.fillOpacity,
-});
-const FOOTPRINT_PATH_OPTIONS = toLeafletPathOptions(BUILDING_FOOTPRINT_STYLE);
-const FOOTPRINT_HIGHLIGHT_PATH_OPTIONS = toLeafletPathOptions(BUILDING_FOOTPRINT_HIGHLIGHT_STYLE);
 
 const DARK_TILES = {
   url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
@@ -80,6 +66,7 @@ const TacticalLeafletMap = ({
   activeWaypoint,
   squadRole,
   onClearWaypoint,
+  onArTrack,
   isSatellite,
   highlightBuildingId,
 }) => {
@@ -107,18 +94,9 @@ const TacticalLeafletMap = ({
       )}
 
       {activeTab === 'buildings' && SRM_MASTER_DATABASE.map((b) => (
-        b.footprint ? (
-          <Polygon
-            key={b.id}
-            positions={b.footprint}
-            pathOptions={highlightBuildingId === b.id ? FOOTPRINT_HIGHLIGHT_PATH_OPTIONS : FOOTPRINT_PATH_OPTIONS}
-            eventHandlers={{ click: () => onFocus({ lat: b.lat, lng: b.lng }, b) }}
-          />
-        ) : (
-          <LeafletReactMarker key={b.id} lat={b.lat} lng={b.lng} onClick={() => onFocus({ lat: b.lat, lng: b.lng }, b)}>
-            <BuildingMarker />
-          </LeafletReactMarker>
-        )
+        <LeafletReactMarker key={b.id} lat={b.lat} lng={b.lng} onClick={() => onFocus({ lat: b.lat, lng: b.lng }, b)}>
+          <BuildingMarker highlighted={highlightBuildingId === b.id} />
+        </LeafletReactMarker>
       ))}
 
       {activeWaypoint && (
@@ -128,6 +106,7 @@ const TacticalLeafletMap = ({
             onClick={() => onFocus(activeWaypoint, null)}
             canClear={squadRole === 'OWNER'}
             onClear={onClearWaypoint}
+            onTrack={() => onArTrack({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })}
           />
         </LeafletReactMarker>
       )}
