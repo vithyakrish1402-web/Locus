@@ -306,6 +306,16 @@ socket.on('check-ping', (clientTimestamp) => {
     io.to(targetId).emit('receive-ping', { senderName });
   });
 
+  // Squad-wide distress beacon (the "SOS" promised in onboarding) — broadcasts
+  // to every other member of the sender's own squad, trusting the server-side
+  // roomCode recorded on join rather than whatever the client claims, same
+  // gatekeeper reasoning as the telemetry handler above.
+  socket.on('sos-broadcast', ({ senderName }) => {
+    const roomCode = users[socket.id]?.roomCode;
+    if (!roomCode) return;
+    socket.to(roomCode).emit('receive-ping', { senderName });
+  });
+
   socket.on('leave-squad', () => {
     if (users[socket.id]) {
       const room = users[socket.id].roomCode;

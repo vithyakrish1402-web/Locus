@@ -1133,6 +1133,15 @@ const App = () => {
     alert(`[SYSTEM] SOS Signal transmitted directly to node: ${targetNodeName}.`);
   };
 
+  // --- SOS PROTOCOL (squad-wide distress beacon promised in onboarding) ---
+  // Single tap, broadcasts to the whole squad — not the same as fireSOSBeacon
+  // above, which only pings one chosen member.
+  const fireSelfSOS = () => {
+    const myName = auth.currentUser?.displayName || "A Squad Member";
+    socket.emit('sos-broadcast', { senderName: myName });
+    alert('[SYSTEM] SOS BEACON BROADCAST TO ENTIRE SQUAD.');
+  };
+
   const requestPermission = (userId) => {
     if (blockedUserIds.includes(userId)) return;
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, permission: 'requested' } : u));
@@ -1309,6 +1318,7 @@ const App = () => {
         zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
         mapTypeId: 'hybrid', // This triggers the real satellite imagery
         tilt: 0,
+        gestureHandling: 'greedy', // single-finger drag pans immediately — no "use two fingers" cooperative-mode fight
         styles: [] // Clear custom styles so the photos show up
       };
     }
@@ -1340,6 +1350,7 @@ const App = () => {
       zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
       mapTypeId: 'roadmap',
       tilt: 0,
+      gestureHandling: 'greedy', // single-finger drag pans immediately — no "use two fingers" cooperative-mode fight
       styles: theme === 'stealth' ? stealthStyles : tacticalStyles
     };
   }
@@ -2075,8 +2086,20 @@ const App = () => {
       {/* Right-side Action Column */}
       <div className="absolute right-4 top-1/3 flex flex-col gap-3 z-40 pointer-events-auto">
 
-        <button 
-          onClick={() => handleFocus(SRM_KTR_COORDS, null)} 
+        {/* SOS PROTOCOL — single tap, broadcasts a distress beacon to the whole
+            squad (sonar + push notification on their end). Set apart from the
+            utility buttons below with extra spacing so it isn't fumbled into
+            by accident while reaching for "Locate Signal". */}
+        <button
+          onClick={fireSelfSOS}
+          className="mb-2 bg-red-600 border-2 border-red-400 p-3 rounded-full text-white shadow-[0_0_20px_rgba(220,38,38,0.6)] transition-colors hover:bg-red-500 animate-pulse"
+          title="SOS — Broadcast Distress Beacon to Squad"
+        >
+          <OctagonAlert size={20} />
+        </button>
+
+        <button
+          onClick={() => handleFocus(SRM_KTR_COORDS, null)}
           className="bg-black/80 border border-gray-700 p-3 rounded text-white shadow-lg transition-colors hover:bg-gray-900" 
           title="Recenter Campus"
         >
