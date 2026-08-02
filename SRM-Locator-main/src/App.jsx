@@ -1923,6 +1923,7 @@ const App = () => {
               squadRole={squadRole}
               highlightBuildingId={(activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null}
               onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}
+              onArTrack={setArTarget}
               isSatellite={isSatellite}
             />
           </Suspense>
@@ -1979,6 +1980,7 @@ const App = () => {
               onClick={() => handleFocus(activeWaypoint, null)}
               canClear={squadRole === 'OWNER'}
               onClear={() => socket.emit('clear-waypoint', squadCode)}
+              onTrack={() => setArTarget({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })}
             />
           )}
           {/* Filter out: blocked, ghost, and users with no coordinates yet */}

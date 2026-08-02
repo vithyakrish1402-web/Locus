@@ -80,6 +80,7 @@ const TacticalLeafletMap = ({
   activeWaypoint,
   squadRole,
   onClearWaypoint,
+  onArTrack,
   isSatellite,
   highlightBuildingId,
 }) => {
@@ -128,6 +129,7 @@ const TacticalLeafletMap = ({
             onClick={() => onFocus(activeWaypoint, null)}
             canClear={squadRole === 'OWNER'}
             onClear={onClearWaypoint}
+            onTrack={() => onArTrack({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })}
           />
         </LeafletReactMarker>
       )}
