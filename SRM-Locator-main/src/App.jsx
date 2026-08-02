@@ -1,13 +1,17 @@
 import { io } from "socket.io-client";
 import { Capacitor } from '@capacitor/core';
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
+// `motion` is used throughout via <motion.div>/<motion.nav> JSX member expressions.
+// This project's eslint config has no eslint-plugin-react (only react-hooks/react-refresh),
+// so core no-unused-vars can't see through JSXMemberExpression tag names — false positive.
+// eslint-disable-next-line no-unused-vars
+import { motion, AnimatePresence } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
 import {
   MapPin, Users, Search, Settings, Navigation, ShieldCheck,
   Building2, Sparkles, MessageSquare, Send, Loader2,
   BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
-  Wifi, Bluetooth, Radio, LocateFixed, OctagonAlert, Waypoints, Activity,
+  Wifi, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
   Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
@@ -20,6 +24,8 @@ import { SRM_MASTER_DATABASE } from './srmDatabase';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
 import LocationMarker from './components/LocationMarker';
 import WaypointMarker from './components/WaypointMarker';
+import BuildingMarker from './components/BuildingMarker';
+import SosTrigger from './components/SosTrigger';
 import { deriveMarkerStatus } from './utils/markerStatus';
 import { BUILDING_FOOTPRINT_STYLE, BUILDING_FOOTPRINT_HIGHLIGHT_STYLE } from './utils/buildingFootprintStyle';
 
@@ -28,7 +34,7 @@ import { BUILDING_FOOTPRINT_STYLE, BUILDING_FOOTPRINT_HIGHLIGHT_STYLE } from './
 // for it.
 const TacticalLeafletMap = React.lazy(() => import('./components/TacticalLeafletMap'));
 // --- ADDED: FIREBASE AUTH ---
-import { auth, googleProvider, db } from './firebase';
+import { auth, googleProvider } from './firebase';
 import {
   signInWithPopup,
   onAuthStateChanged,
@@ -39,7 +45,6 @@ import {
   sendPasswordResetEmail
 } from 'firebase/auth';
 
-import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 // Capacitor's Android/iOS WebView serves the bundled app from "https://localhost" by
 // default, which is indistinguishable from a real local dev server by hostname alone.
 // Without this check, the native app would try to hit a "backend" on the phone itself
@@ -54,6 +59,11 @@ const socket = io(BACKEND_URL, {
   transports: ['websocket'],
   upgrade: false
 });
+
+// Baked in at Vite build time from .env's VITE_GOOGLE_MAPS_API_KEY (gitignored) —
+// never hardcode this. The Capacitor/Android build reads the same key separately from
+// android/local.properties (see AndroidManifest.xml's MAPS_API_KEY meta-data placeholder).
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
 
@@ -311,21 +321,6 @@ class PrecognitionFilter {
     return { lat: this.latEstimate, lng: this.lngEstimate };
   }
 }
-// --- 🎯 GEOFENCE MATHEMATICS (RAY-CASTING ENGINE) ---
-const isPointInPolygon = (point, polygonCoords) => {
-  let isInside = false;
-  const x = point.lng, y = point.lat;
-
-  for (let i = 0, j = polygonCoords.length - 1; i < polygonCoords.length; j = i++) {
-    const xi = polygonCoords[i].lng, yi = polygonCoords[i].lat;
-    const xj = polygonCoords[j].lng, yj = polygonCoords[j].lat;
-
-    const intersect = ((yi > y) !== (yj > y)) &&
-      (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-    if (intersect) isInside = !isInside;
-  }
-  return isInside;
-};
 // --- 🧭 DEAD RECKONING ENGINE ---
 const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSeconds) => {
   // If they were standing still, just return exact coordinates
@@ -356,15 +351,12 @@ const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSecon
 };
 
 const App = () => {
-  // --- 🚨 GEOFENCE BREACH TRACKER ---
-  const activeBreachesRef = useRef({}); // Remembers who is inside which zone
   const [isSatellite, setIsSatellite] = useState(false);
   const [latency, setLatency] = useState(0);
   const [username, setUsername] = useState('');
   // --- MOBILE VIEW STATE ---
   // Controls which panel is active on mobile bottom HUD: 'grid' | 'matrix' | 'squad' | 'cmd'
   const [mobileView, setMobileView] = useState('grid');
-  const [showMobileCmd, setShowMobileCmd] = useState(false);
   // --- TACTICAL WAYPOINT STATE ---
   const [isDroppingWaypoint, setIsDroppingWaypoint] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
@@ -403,7 +395,6 @@ const App = () => {
 
   const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const [buildingIntel, setBuildingIntel] = useState('');
 
@@ -426,7 +417,6 @@ const App = () => {
   // --- MAP ENGINE FALLBACK: switch to the Leaflet map if Google's never loads ---
   const [mapEngineFailed, setMapEngineFailed] = useState(false);
 
-  const activePolygonsRef = useRef([]);   // The saved/rendered polygons
   const [isRecordingPath, setIsRecordingPath] = useState(false);
   const [recordedCoords, setRecordedCoords] = useState([]);
   const [liveSecretRoutes, setLiveSecretRoutes] = useState({
@@ -445,8 +435,6 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('buildings');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
-
-  const [isEditMode, setIsEditMode] = useState(false);
 
   const [users, setUsers] = useState([]);
   const [liveLocation, setLiveLocation] = useState(null);
@@ -476,11 +464,14 @@ const App = () => {
     return () => clearTimeout(timeoutId);
   }, [user, hasJoinedSquad, isMapReady]);
 
-  // Auto-generate squad code when in 'create' mode
+  // Auto-generate squad code when in 'create' mode. Intentionally keyed only on
+  // squadMode: this should fire once per switch into 'create', not every time
+  // squadCode itself changes (which would include the very setSquadCode call below).
   useEffect(() => {
     if (squadMode === 'create' && !squadCode) {
       setSquadCode(generateRandomSquadCode());
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [squadMode]);
   // --- SQUAD GATEKEEPER STATES ---
   const [accessStatus, setAccessStatus] = useState(null);
@@ -588,7 +579,7 @@ const App = () => {
   useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
       // FIX 1: destructure timeDelta so projectGhostLocation receives the real lag time
-      const { targetId, name, photo, lastKnownLocation, timeDelta, disconnectTime } = emergencyData;
+      const { targetId, name, photo, lastKnownLocation, timeDelta } = emergencyData;
 
       console.log("🔥 [FRONTEND] Received Ghost Data:", emergencyData);
 
@@ -819,9 +810,6 @@ const App = () => {
     };
   }, [hasJoinedSquad, squadCode, user]);
 
-  // --- REPLACED ILLEGAL ASSIGNMENT ---
-  // We calculate this derived data inside the component body, but we DON'T use '=' on the state itself.
-  const activePendingRequests = pendingRequests;
   /// 2. Broadcast your live GPS data to the network
   // 2. Broadcast your live GPS data to the network
   useEffect(() => {
@@ -857,7 +845,7 @@ const App = () => {
           heading: headingRef.current,
         });
       },
-      (err) => console.log('[SYS] Initial GPS lock delayed...'),
+      (err) => console.log('[SYS] Initial GPS lock delayed:', err.message),
       { enableHighAccuracy: true }
     );
 
@@ -872,7 +860,10 @@ const App = () => {
           const battery = await navigator.getBattery();
           currentBattery = Math.round(battery.level * 100);
         }
-      } catch (e) { }
+      } catch {
+        // getBattery() is unsupported in Firefox/Safari and can reject (permission,
+        // insecure context) even in Chrome — fall back to the 100 default silently.
+      }
 
       socket.emit('safety-ping', {
         latitude: currentLoc.lat, longitude: currentLoc.lng,
@@ -907,7 +898,10 @@ const App = () => {
             const battery = await navigator.getBattery();
             batteryLevel = Math.round(battery.level * 100);
           }
-        } catch (e) { }
+        } catch {
+        // getBattery() is unsupported in Firefox/Safari and can reject (permission,
+        // insecure context) even in Chrome — fall back to the 100 default silently.
+      }
 
         if (telemetryModeRef.current === 'FROZEN') return;
 
@@ -935,6 +929,9 @@ const App = () => {
   // --- ⚡ INSTANT MODE OVERRIDE ---
   // Fires the moment a telemetry button is clicked so the server gets the new
   // status immediately, without waiting for the next watchPosition tick.
+  // Intentionally keyed only on telemetryMode — user/hasJoinedSquad/squadCode are
+  // read for their current value at fire time, not meant to retrigger this effect
+  // (the heartbeat/watchPosition effect above already re-broadcasts on those changes).
   useEffect(() => {
     const currentLoc = liveLocationRef.current;
     if (!currentLoc || !user || !hasJoinedSquad) return;
@@ -947,6 +944,7 @@ const App = () => {
       roomCode: squadCode,
       heading: headingRef.current,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [telemetryMode]);
 
   // --- CYBERPUNK SONAR AUDIO ENGINE ---
@@ -971,7 +969,7 @@ const App = () => {
 
       osc.start();
       osc.stop(ctx.currentTime + 0.5);
-    } catch (e) {
+    } catch {
       console.log("Audio not supported.");
     }
   };
@@ -1133,22 +1131,9 @@ const App = () => {
     alert(`[SYSTEM] SOS Signal transmitted directly to node: ${targetNodeName}.`);
   };
 
-  // --- SOS PROTOCOL (squad-wide distress beacon promised in onboarding) ---
-  // Single tap, broadcasts to the whole squad — not the same as fireSOSBeacon
-  // above, which only pings one chosen member.
-  const fireSelfSOS = () => {
-    const myName = auth.currentUser?.displayName || "A Squad Member";
-    socket.emit('sos-broadcast', { senderName: myName });
-    alert('[SYSTEM] SOS BEACON BROADCAST TO ENTIRE SQUAD.');
-  };
-
   const requestPermission = (userId) => {
     if (blockedUserIds.includes(userId)) return;
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, permission: 'requested' } : u));
-  };
-
-  const simulateAccept = (userId) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, permission: 'accepted' } : u));
   };
 
   const toggleBlock = (userId) => {
@@ -1206,14 +1191,6 @@ const App = () => {
         recordingPolylineRef.current.setPath(newCoords);
       }
       return; // Stop normal click behavior
-    }
-
-    // 2. Standard Edit Mode Logic
-    if (isEditMode && selectedItem && activeTab === 'buildings') {
-      setEditableBuildings(prev => prev.map(b =>
-        b.id === selectedItem.id ? { ...b, lat, lng } : b
-      ));
-      setSelectedItem(prev => ({ ...prev, lat, lng }));
     }
   };
 
@@ -1595,11 +1572,11 @@ const App = () => {
           const diff = startX - endX;
           if (diff > 60) {
             // Swiped LEFT → go to Squad
-            setActiveTab('users'); setSelectedItem(null); setIsEditMode(false);
+            setActiveTab('users'); setSelectedItem(null);
             if (window.innerWidth < 768) setMobileView('squad');
           } else if (diff < -60) {
             // Swiped RIGHT → go to Matrix
-            setActiveTab('buildings'); setSelectedItem(null); setIsEditMode(false);
+            setActiveTab('buildings'); setSelectedItem(null);
             if (window.innerWidth < 768) setMobileView('matrix');
           }
         }}
@@ -1617,14 +1594,14 @@ const App = () => {
         {/* Desktop Tabs (hidden on mobile) */}
         <div className="hidden md:flex border-b border-white/20">
           <button
-            onClick={() => { setActiveTab('buildings'); setSelectedItem(null); setIsEditMode(false); }}
+            onClick={() => { setActiveTab('buildings'); setSelectedItem(null); }}
             className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors ${activeTab === 'buildings' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
               }`}
           >
             <Building2 size={16} /> MATRIX
           </button>
           <button
-            onClick={() => { setActiveTab('users'); setSelectedItem(null); setIsEditMode(false); }}
+            onClick={() => { setActiveTab('users'); setSelectedItem(null); }}
             className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors border-l border-white/20 ${activeTab === 'users' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
               }`}
           >
@@ -1951,7 +1928,7 @@ const App = () => {
           </Suspense>
         ) : (
         <GoogleMapReact
-          bootstrapURLKeys={{ key: 'AIzaSyD10sWfHpczEuvmvwBkqkPHOu-QXQr8uM0' }}
+          bootstrapURLKeys={{ key: GOOGLE_MAPS_API_KEY }}
           center={mapProps.center}
           options={{
             ...createMapOptions(sysConfig.theme, isSatellite),
@@ -1962,7 +1939,7 @@ const App = () => {
             // its own complete building database + marker/panel system, so Google's
             // built-in POI layer is pure UI collision here, not a needed feature.
             clickableIcons: false,
-            draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab'),
+            draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : 'grab',
           }}
 
           onClick={handleMapClick}
@@ -2054,7 +2031,7 @@ const App = () => {
                   if (startName && endName && recordedCoords.length > 1) {
                     const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
                     setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
-                    socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData });
+                    socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData, roomCode: squadCode });
                     setIsRecordingPath(false);
                     setRecordedCoords([]);
                     if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
@@ -2085,18 +2062,6 @@ const App = () => {
       {/* Map Interactive Layers */}
       {/* Right-side Action Column */}
       <div className="absolute right-4 top-1/3 flex flex-col gap-3 z-40 pointer-events-auto">
-
-        {/* SOS PROTOCOL — single tap, broadcasts a distress beacon to the whole
-            squad (sonar + push notification on their end). Set apart from the
-            utility buttons below with extra spacing so it isn't fumbled into
-            by accident while reaching for "Locate Signal". */}
-        <button
-          onClick={fireSelfSOS}
-          className="mb-2 bg-red-600 border-2 border-red-400 p-3 rounded-full text-white shadow-[0_0_20px_rgba(220,38,38,0.6)] transition-colors hover:bg-red-500 animate-pulse"
-          title="SOS — Broadcast Distress Beacon to Squad"
-        >
-          <OctagonAlert size={20} />
-        </button>
 
         <button
           onClick={() => handleFocus(SRM_KTR_COORDS, null)}
@@ -2133,13 +2098,6 @@ const App = () => {
         >
           <Settings size={20} />
         </button>
-
-        {isEditMode && selectedItem && (
-          <div className="absolute top-1/2 -translate-y-1/2 right-[120%] whitespace-nowrap px-4 py-3 bg-red-500 text-white font-dot text-xs tracking-widest uppercase flex items-center gap-3 rounded shadow-[0_0_10px_rgba(239,68,68,0.5)]">
-            <span className="w-2 h-2 bg-white animate-pulse rounded-full"></span>
-            AWAITING_COORDS // {selectedItem.name}
-          </div>
-        )}
       </div>
 
       {/* Selected Location Card */}
@@ -2628,7 +2586,7 @@ const App = () => {
                             if (startName && endName && recordedCoords.length > 1) {
                               const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
                               setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
-                              socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData });
+                              socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData, roomCode: squadCode });
                               setIsRecordingPath(false);
                               setRecordedCoords([]);
                               if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
@@ -2708,7 +2666,7 @@ const App = () => {
 
         {/* SQUAD — Opens the Squad Room */}
         <button
-          onClick={() => { setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); setIsEditMode(false); }}
+          onClick={() => { setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); }}
           className={`flex flex-col items-center transition-all duration-200 ${mobileView === 'squad' ? 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}
         >
           <Users className="w-5 h-5 mb-1" />
@@ -2758,6 +2716,14 @@ const App = () => {
       )}
 
       {arTarget && <ARCompass target={arTarget} liveLocation={liveLocation} onClose={() => setArTarget(null)} />}
+
+      {/* ========== SOS TRIGGER (double press-and-hold confirm) ========== */}
+      <SosTrigger
+        socket={socket}
+        getLocation={() => liveLocationRef.current}
+        roomCode={squadCode}
+        senderName={user.displayName}
+      />
     </div>
   );
 };

@@ -46,6 +46,12 @@ body {
   100% { transform: scale(1.4); opacity: 0; }
 }
 
+/* SosTrigger ARMED-state pulse (src/components/SosTrigger.jsx) */
+@keyframes locus-sos-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .glass-panel {
   background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(12px);
@@ -75,5 +81,54 @@ body {
 }
 .border-nothing-red {
   border-color: #f00;
+}
+
+/* --- LocusGuide (landing page) --- */
+
+/* Scroll-reveal: IntersectionObserver toggles .vis directly via classList,
+   outside React state, so this stays plain CSS rather than Tailwind classes
+   (which Tailwind's build wouldn't generate for a runtime-only toggle). */
+.reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
+.reveal.vis { opacity: 1; transform: translateY(0); }
+
+@keyframes locus-guide-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes locus-guide-ring-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Glitch title effect: needs a `data-text` attribute mirroring the element's
+   text content so the two offset ::before/::after layers have something to
+   render — Tailwind has no equivalent for content-from-attribute. */
+.locus-glitch { position: relative; display: inline-block; }
+.locus-glitch:hover::before,
+.locus-glitch:hover::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  font: inherit;
+  letter-spacing: inherit;
+}
+.locus-glitch:hover::before {
+  color: #fff;
+  clip-path: polygon(0 20%, 100% 20%, 100% 40%, 0 40%);
+  animation: locus-guide-glitch-1 0.3s steps(2) infinite;
+}
+.locus-glitch:hover::after {
+  color: #7f1d1d;
+  clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%);
+  animation: locus-guide-glitch-2 0.3s steps(2) infinite;
+}
+@keyframes locus-guide-glitch-1 {
+  0%, 100% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+}
+@keyframes locus-guide-glitch-2 {
+  0%, 100% { transform: translateX(3px); }
+  50% { transform: translateX(-3px); }
 }
 

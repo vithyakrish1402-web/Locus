@@ -1,38 +1,63 @@
-import React, { useState, useEffect, useRef } from 'react';
-import './LocusGuide.css';
+import React, { useState, useEffect } from 'react';
 
+// Boot sequence lines only reference features that actually exist in the app —
+// no AI/Oracle claims (that feature was intentionally removed, see App.jsx history).
 const BOOT_SEQUENCE = [
   "> INITIALIZING LOCUS NETWORK...",
-  "> AUTH NODE v4.0 QUANTUM ONLINE",
+  "> AUTH NODE v4.0 ONLINE",
   "> SCANNING CREDENTIALS...",
   "> IDENTITY VERIFIED: OPERATIVE",
   "> CONNECTING TO SRM KTR GRID...",
   "  [████████████████████] 100%",
   "> SQUAD MATRIX: ONLINE",
   "> DEAD RECKONING ENGINE: ACTIVE",
-  "> SYS_ORACLE: NEURAL LINK UP",
+  "> AR COMPASS: CALIBRATED",
   "> ALL SYSTEMS NOMINAL",
   "  WELCOME TO LOCUS, OPERATIVE."
 ];
+
+const FAQS = [
+  { q: "How accurate is the GPS tracking?", a: "LOCUS applies a Kalman filter to raw GPS sensor data, smoothing erratic phone sensor noise. Accuracy is within 3–5 meters under open sky." },
+  { q: "Can the Commander track me without my knowledge?", a: "No. You control your broadcast mode at all times. FROZEN locks your avatar in place, GHOST removes you from the map entirely." },
+  { q: "What happens to my location data when I close the app?", a: "Your live telemetry session ends on app close. The system records your last known ping position, visible to squad members as an offline marker." },
+  { q: "How do Secret Routes work?", a: "Secret Routes are custom path overlays recorded and published by administrators. They bypass standard walking paths and show the actual fastest shortcuts." },
+];
+
+const NAV_LINKS = [
+  { href: '#start', label: 'Start' },
+  { href: '#features', label: 'Features' },
+  { href: '#modes', label: 'Stealth' },
+  { href: '#access', label: 'Access' },
+  { href: '#sos', label: 'SOS' },
+  { href: '#faq', label: 'FAQ' },
+];
+
+// Small reusable corner-bracket decoration used on panels throughout App.jsx
+// (see e.g. the SECURE_CHANNEL auth card) — reused here for visual continuity.
+const CornerBrackets = () => (
+  <>
+    <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
+    <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
+    <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
+    <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
+  </>
+);
+
+const SectionHeader = ({ n, title }) => (
+  <div className="reveal mb-12 flex items-baseline gap-6">
+    <span className="font-dot text-xs text-zinc-600 tracking-widest">{n}</span>
+    <span className="locus-glitch font-dot text-2xl uppercase tracking-widest text-white" data-text={title}>{title}</span>
+    <div className="flex-1 h-px bg-white/20" />
+  </div>
+);
 
 const LocusGuide = ({ onInitialize }) => {
   const [booting, setBooting] = useState(true);
   const [bootLines, setBootLines] = useState([]);
   const [stealthMode, setStealthMode] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
-
-  // Interactive States from original HTML
-  const [selectedMode, setSelectedMode] = useState('active');
+  const [scrollProgress, setScrollProgress] = useState('0%');
   const [openFaq, setOpenFaq] = useState(null);
-
-  // Oracle State
-  const [chatQuery, setChatQuery] = useState('');
-  const [chatMsgs, setChatMsgs] = useState([
-    { text: 'SYS_ORACLE online. Spatial link established. Awaiting your query, operative.', type: 'o' }
-  ]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const chatBoxRef = useRef(null);
 
   // --- TERMINAL BOOT EFFECT ---
   useEffect(() => {
@@ -78,237 +103,273 @@ const LocusGuide = ({ onInitialize }) => {
     };
   }, [booting]);
 
-  // --- SYS_ORACLE LOGIC ---
-  const handleSendChat = (presetQuery = null) => {
-    const query = presetQuery || chatQuery;
-    if (!query.trim() || isProcessing) return;
-
-    setChatMsgs(prev => [...prev, { text: query, type: 'u' }]);
-    if (!presetQuery) setChatQuery('');
-    setIsProcessing(true);
-
-    setTimeout(() => {
-      let reply = 'Analyzing spatial data... Query processed. Standby for tactical intel.';
-      const lq = query.toLowerCase();
-      if (lq.includes('java')) reply = 'JAVA GREEN NODE — bearing 247°, 340m from your current position. Squad member GHOST_X detected 18m from target.';
-      if (lq.includes('medical')) reply = 'MEDICAL COLLEGE — northeast quadrant, 820m. Fastest route: Secret Route DELTA-7 via Tech Park shortcut.';
-      if (lq.includes('squad') || lq.includes('where')) reply = 'Active nodes: GHOST_X near Java Green, VIPER_7 in Tech Park (signal intermittent). Total: 3 nodes confirmed online.';
-      if (lq.includes('ganesan') || lq.includes('tp')) reply = 'T.P. GANESAN AUDITORIUM — node status: ACCESSIBLE. No active event flagged. Entry via main corridor. Distance from your position: 510m.';
-      
-      setChatMsgs(prev => [...prev, { text: reply, type: 'o' }]);
-      setIsProcessing(false);
-    }, 1000 + Math.random() * 800);
-  };
-
-  useEffect(() => {
-    if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
-  }, [chatMsgs, isProcessing]);
-
-  const toggleFaq = (index) => {
-    setOpenFaq(openFaq === index ? null : index);
-  };
+  const toggleFaq = (index) => setOpenFaq(openFaq === index ? null : index);
 
   // --- RENDER BOOT SCREEN ---
   if (booting) {
     return (
-      <div id="terminal-overlay" style={{ display: 'flex' }}>
-        <div className="t-box">
-          <div id="t-out">
+      <div className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center p-6">
+        <div className="relative border border-white/20 bg-black px-10 py-10 w-full max-w-lg">
+          <CornerBrackets />
+          <p className="absolute -top-2.5 left-5 bg-black px-2 font-dot text-[10px] tracking-widest text-red-500">
+            LOCUS // AUTH NODE v4.0
+          </p>
+          <div className="min-h-[220px] font-inter text-[13px] leading-loose">
             {bootLines.map((line, i) => (
-              <div key={i} className={line?.includes('100%') || line?.includes('WELCOME') ? 'tb' : 'tc'}>
+              <div key={i} className={line?.includes('100%') || line?.includes('WELCOME') ? 'text-red-500' : 'text-zinc-400'}>
                 {line}
               </div>
             ))}
-            <span className="t-cursor"></span>
+            <span
+              className="inline-block w-2 h-3.5 bg-red-500 ml-1 align-middle"
+              style={{ animation: 'locus-guide-cursor-blink 1s step-end infinite' }}
+            />
           </div>
         </div>
-        <button id="t-skip" onClick={() => setBooting(false)}>[ skip intro ]</button>
+        <button
+          onClick={() => setBooting(false)}
+          className="mt-6 font-dot text-[10px] uppercase tracking-widest text-zinc-600 hover:text-red-500 transition-colors"
+        >
+          [ skip intro ]
+        </button>
       </div>
     );
   }
 
   // --- RENDER MAIN GUIDE ---
   return (
-    <div className={`locus-guide-wrapper ${stealthMode ? 'stealth' : ''}`}>
-      <div id="prog" style={{ width: scrollProgress }}></div>
+    <div
+      className="relative min-h-screen w-full bg-black text-white bg-dots cursor-crosshair overflow-x-hidden"
+      style={{ filter: stealthMode ? 'grayscale(1)' : 'grayscale(0)', transition: 'filter 0.5s' }}
+    >
+      {/* SCROLL PROGRESS */}
+      <div className="fixed top-0 left-0 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] z-[10000] transition-[width] duration-75" style={{ width: scrollProgress }} />
 
       {/* NAV */}
-      <nav>
-        <div className="nav-logo">LOCUS <span>V 4.0 QUANTUM</span></div>
-        <ul className="nav-links">
-          <li><a href="#start">Start</a></li>
-          <li><a href="#features">Features</a></li>
-          <li><a href="#modes">Stealth</a></li>
-          <li><a href="#access">Access</a></li>
-          <li><a href="#intel">Intel</a></li>
-          <li><a href="#faq">FAQ</a></li>
+      <nav className="fixed top-0 left-0 right-0 z-[500] flex items-center justify-between h-14 px-6 md:px-10 bg-black/95 backdrop-blur-md border-b border-white/20">
+        <div className="font-dot text-sm tracking-widest text-white">
+          LOCUS <span className="text-zinc-600 text-[10px]">V 4.0</span>
+        </div>
+        <ul className="hidden md:flex items-center gap-7 list-none">
+          {NAV_LINKS.map(link => (
+            <li key={link.href}>
+              <a href={link.href} className="font-dot text-[11px] uppercase tracking-widest text-zinc-500 hover:text-red-500 transition-colors">
+                {link.label}
+              </a>
+            </li>
+          ))}
         </ul>
-        <div className="nav-right">
-          <button className="theme-btn" onClick={() => setStealthMode(!stealthMode)}>
-            {stealthMode ? '🟢 Tactical' : '⬛ Stealth'}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setStealthMode(!stealthMode)}
+            className="font-dot text-[9px] uppercase tracking-widest px-3 py-1.5 border border-white/20 text-zinc-400 hover:text-red-500 hover:border-red-500/50 transition-colors"
+          >
+            {stealthMode ? '● Tactical' : '○ Stealth'}
           </button>
-          <div className="nav-status"><div className="pulse"></div> ONLINE</div>
-          <button className={`ham ${mobileNavOpen ? 'open' : ''}`} onClick={() => setMobileNavOpen(!mobileNavOpen)}>
-            <span></span><span></span><span></span>
+          <div className="hidden sm:flex items-center gap-2 font-dot text-[10px] uppercase tracking-widest text-zinc-600">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Online
+          </div>
+          <button
+            onClick={() => setMobileNavOpen(!mobileNavOpen)}
+            className="md:hidden flex flex-col gap-1 p-2"
+          >
+            <span className={`block w-5 h-px bg-white transition-transform ${mobileNavOpen ? 'translate-y-1.5 rotate-45' : ''}`} />
+            <span className={`block w-5 h-px bg-white transition-opacity ${mobileNavOpen ? 'opacity-0' : ''}`} />
+            <span className={`block w-5 h-px bg-white transition-transform ${mobileNavOpen ? '-translate-y-1.5 -rotate-45' : ''}`} />
           </button>
         </div>
       </nav>
 
-      <div className={`mobile-nav ${mobileNavOpen ? 'open' : ''}`}>
-        <a href="#start" onClick={() => setMobileNavOpen(false)}>Start</a>
-        <a href="#features" onClick={() => setMobileNavOpen(false)}>Features</a>
-        <a href="#modes" onClick={() => setMobileNavOpen(false)}>Stealth</a>
-        <a href="#access" onClick={() => setMobileNavOpen(false)}>Access</a>
-        <a href="#intel" onClick={() => setMobileNavOpen(false)}>Intel</a>
-        <a href="#faq" onClick={() => setMobileNavOpen(false)}>FAQ</a>
-      </div>
+      {mobileNavOpen && (
+        <div className="md:hidden fixed top-14 left-0 right-0 z-[490] bg-black/98 backdrop-blur-md border-b border-white/20 flex flex-col gap-5 p-6">
+          {NAV_LINKS.map(link => (
+            <a key={link.href} href={link.href} onClick={() => setMobileNavOpen(false)} className="font-dot text-xs uppercase tracking-widest text-zinc-400 hover:text-red-500">
+              {link.label}
+            </a>
+          ))}
+        </div>
+      )}
 
       {/* HERO */}
-      <div className="hero" id="hero">
-        <div className="h-ring r1"></div><div className="h-ring r2"></div><div className="h-ring r3"></div>
-        <div className="hero-tag">// SRM KTR Campus Network //</div>
-        <div className="hero-title"><span className="glitch" data-text="LOCUS">LOCUS</span></div>
-        <div className="hero-ver">V 4.0 &nbsp;·&nbsp; QUANTUM POSITIONING &nbsp;·&nbsp; DECENTRALIZED</div>
-        <p className="hero-desc">A hyper-accurate <strong>tactical tracking network</strong> for squads navigating the SRM KTR campus. Real-time telemetry. Predictive routing. AI-driven intelligence.</p>
-        <div className="hero-cta">
-          {/* 🚨 THE BUTTON THAT OPENS YOUR APP 🚨 */}
-          <button onClick={onInitialize} className="btn-p">INITIALIZE SECURE LINK</button>
-          <a href="#start" className="btn-g">Explore Systems</a>
+      <div id="hero" className="relative z-[1] min-h-screen flex flex-col items-center justify-center text-center px-6 pt-28 pb-16 overflow-hidden">
+        <div className="absolute w-[420px] h-[420px] rounded-full border border-white/[0.08]" style={{ animation: 'locus-guide-ring-spin 30s linear infinite' }} />
+        <div className="absolute w-[620px] h-[620px] rounded-full border border-red-500/[0.06]" style={{ animation: 'locus-guide-ring-spin 50s linear infinite reverse' }} />
+        <div className="absolute w-[820px] h-[820px] rounded-full border border-white/[0.04]" style={{ animation: 'locus-guide-ring-spin 80s linear infinite' }} />
+
+        <p className="relative font-dot text-[11px] uppercase tracking-[0.3em] text-red-500 mb-6">// SRM KTR Campus Network //</p>
+        <h1 className="locus-glitch relative font-dot uppercase leading-none text-[clamp(3.5rem,10vw,7rem)] tracking-widest text-white drop-shadow-[0_0_40px_rgba(239,68,68,0.35)] mb-2" data-text="LOCUS">
+          LOCUS
+        </h1>
+        <p className="relative font-dot text-[11px] uppercase tracking-widest text-zinc-600 mb-8">
+          V 4.0 &nbsp;·&nbsp; Tactical Positioning &nbsp;·&nbsp; Decentralized
+        </p>
+        <p className="relative font-inter text-lg font-light text-zinc-400 max-w-xl leading-relaxed mb-10">
+          A hyper-accurate <strong className="font-medium text-white">tactical tracking network</strong> for squads navigating the SRM KTR campus. Real-time telemetry. Predictive routing. One-tap emergency alerts.
+        </p>
+        <div className="relative flex gap-4 flex-wrap justify-center">
+          <button onClick={onInitialize} className="px-8 py-3 bg-red-500 text-white font-dot text-xs uppercase tracking-widest hover:bg-red-600 shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-colors">
+            Initialize Secure Link
+          </button>
+          <a href="#start" className="px-8 py-3 border border-white/30 text-white font-dot text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-colors">
+            Explore Systems
+          </a>
         </div>
       </div>
 
       {/* STATS */}
-      <div className="stats-bar reveal">
-        <div className="stat-it"><span className="sv">&lt;70ms</span><span className="sl">Sync Latency</span></div>
-        <div className="stat-it"><span className="sv">3</span><span className="sl">Stealth Modes</span></div>
-        <div className="stat-it"><span className="sv">360°</span><span className="sl">Campus Coverage</span></div>
-        <div className="stat-it"><span className="sv">SYS_AI</span><span className="sl">Oracle Core</span></div>
+      <div className="reveal relative z-[1] grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 border-y border-white/10">
+        {[
+          { v: '<70ms', l: 'Sync Latency' },
+          { v: '3', l: 'Stealth Modes' },
+          { v: '360°', l: 'Campus Coverage' },
+          { v: 'AR', l: 'Compass Tracking' },
+        ].map(s => (
+          <div key={s.l} className="bg-black text-center py-6 px-4">
+            <span className="block font-dot text-xl text-red-500">{s.v}</span>
+            <span className="block font-dot text-[10px] uppercase tracking-widest text-zinc-600 mt-1">{s.l}</span>
+          </div>
+        ))}
       </div>
 
       {/* GETTING STARTED */}
-      <section id="start">
-        <div className="sh reveal"><span className="sn">01</span><span className="st glitch" data-text="Getting Started">Getting Started</span><div className="sl2"></div></div>
-        <div className="steps-grid reveal">
-          <div className="step-card"><span className="sico">🔐</span><span className="snum">STEP_01</span><div className="stit">Authenticate</div><p className="sdesc">Sign in via Google OAuth or create an independent ID. Tactical avatars auto-assigned.</p></div>
-          <div className="step-card"><span className="sico">📡</span><span className="snum">STEP_02</span><div className="stit">Join a Channel</div><p className="sdesc">Enter a squad channel. The Commander reviews and grants your handshake request.</p></div>
-          <div className="step-card"><span className="sico">🗺️</span><span className="snum">STEP_03</span><div className="stit">Go Live</div><p className="sdesc">See all connected squad members, speed, battery, and ping on the tactical map.</p></div>
-          <div className="step-card"><span className="sico">🤖</span><span className="snum">STEP_04</span><div className="stit">Query Oracle</div><p className="sdesc">Ask SYS_ORACLE about squad positions, fastest routes, and facility intel.</p></div>
+      <section id="start" className="relative z-[1] max-w-5xl mx-auto px-6 py-24">
+        <SectionHeader n="01" title="Getting Started" />
+        <div className="reveal grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-white/10 border border-white/10">
+          {[
+            { icon: '🔐', step: 'STEP_01', title: 'Authenticate', desc: 'Sign in via Google OAuth or create an independent ID. Tactical avatars auto-assigned.' },
+            { icon: '📡', step: 'STEP_02', title: 'Join a Channel', desc: 'Enter a squad channel. The Commander reviews and grants your handshake request.' },
+            { icon: '🗺️', step: 'STEP_03', title: 'Go Live', desc: 'See all connected squad members, speed, battery, and ping on the tactical map.' },
+            { icon: '🎯', step: 'STEP_04', title: 'AR Track', desc: 'Point your camera at a target and follow the live compass bearing straight to it.' },
+          ].map(s => (
+            <div key={s.step} className="group bg-black p-8 relative overflow-hidden hover:bg-zinc-950 transition-colors">
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-red-500 scale-x-0 group-hover:scale-x-100 origin-left transition-transform" />
+              <span className="text-3xl mb-4 block">{s.icon}</span>
+              <span className="font-dot text-[11px] tracking-widest text-red-500 mb-3 block">{s.step}</span>
+              <h3 className="font-dot text-sm uppercase tracking-widest text-white mb-3">{s.title}</h3>
+              <p className="font-inter text-sm text-zinc-500 leading-relaxed">{s.desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* FEATURES */}
-      <section id="features">
-        <div className="sh reveal"><span className="sn">02</span><span className="st glitch" data-text="Core Systems">Core Systems</span><div className="sl2"></div></div>
-        <div className="feat-list reveal">
-          <div className="feat-row"><div className="feat-lbl"><div className="feat-dot"></div><span className="feat-txt">Squad Matrix</span></div><div className="feat-con"><p>Live HUD displaying every connected node — their <strong>GPS coordinates, speed, battery level, and ping</strong>.</p></div></div>
-          <div className="feat-row"><div className="feat-lbl"><div className="feat-dot"></div><span className="feat-txt">Dead Reckoning</span></div><div className="feat-con"><p>Lost signal? LOCUS projects a <strong>Ghost Marker</strong> based on last known heading, speed, and time offline.</p></div></div>
-          <div className="feat-row"><div className="feat-lbl"><div className="feat-dot"></div><span className="feat-txt">Tactical Routing</span></div><div className="feat-con"><p>Admins unlock <strong>Secret Routes</strong> — custom shortcut paths hidden from standard maps for the fastest lines.</p></div></div>
-          <div className="feat-row"><div className="feat-lbl"><div className="feat-dot"></div><span className="feat-txt">Geofence Alerts</span></div><div className="feat-con"><p>Define a perimeter. When a squad member <strong>breaches or departs</strong> the boundary, alerts fire instantly.</p></div></div>
+      {/* CORE SYSTEMS */}
+      <section id="features" className="relative z-[1] max-w-5xl mx-auto px-6 py-24">
+        <SectionHeader n="02" title="Core Systems" />
+        <div className="reveal flex flex-col gap-px bg-white/10 border border-white/10">
+          {[
+            { label: 'Squad Matrix', desc: <>Live HUD displaying every connected node — their <strong className="text-white font-medium">GPS coordinates, speed, battery level, and ping</strong>.</> },
+            { label: 'Dead Reckoning', desc: <>Lost signal? LOCUS projects a <strong className="text-white font-medium">Ghost Marker</strong> based on last known heading, speed, and time offline.</> },
+            { label: 'Tactical Routing', desc: <>Admins unlock <strong className="text-white font-medium">Secret Routes</strong> — custom shortcut paths hidden from standard maps for the fastest lines.</> },
+            { label: 'Geofence Alerts', desc: <>Define a perimeter. When a squad member <strong className="text-white font-medium">breaches or departs</strong> the boundary, alerts fire instantly.</> },
+          ].map(f => (
+            <div key={f.label} className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-px bg-white/10">
+              <div className="bg-black px-7 py-6 flex items-center gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                <span className="font-dot text-[11px] uppercase tracking-widest text-red-500">{f.label}</span>
+              </div>
+              <div className="bg-black px-7 py-6">
+                <p className="font-inter text-sm text-zinc-400 leading-relaxed">{f.desc}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* STEALTH MODES */}
-      <section id="modes">
-        <div className="sh reveal"><span className="sn">03</span><span className="st glitch" data-text="Stealth Controls">Stealth Controls</span><div className="sl2"></div></div>
-        <div className="modes-grid reveal">
-          <div className={`mode-card ${selectedMode === 'active' ? 'sel' : ''}`} onClick={() => setSelectedMode('active')}><div className="mind a"></div><div className="mlbl">Active</div><p className="mdesc">Standard broadcast. Real-time location visible to squad.</p></div>
-          <div className={`mode-card ${selectedMode === 'frozen' ? 'sel' : ''}`} onClick={() => setSelectedMode('frozen')}><div className="mind f"></div><div className="mlbl">Frozen</div><p className="mdesc">Locks your avatar at your last position. You move freely offline.</p></div>
-          <div className={`mode-card ${selectedMode === 'ghost' ? 'sel' : ''}`} onClick={() => setSelectedMode('ghost')}><div className="mind g"></div><div className="mlbl">Ghost</div><p className="mdesc">Full dark mode. Vanish from the map entirely.</p></div>
+      <section id="modes" className="relative z-[1] max-w-5xl mx-auto px-6 py-24">
+        <SectionHeader n="03" title="Stealth Controls" />
+        <div className="reveal grid grid-cols-1 sm:grid-cols-3 gap-px bg-white/10 border border-white/10">
+          {[
+            { dot: 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]', label: 'Active', color: 'text-emerald-500', desc: 'Standard broadcast. Real-time location visible to squad.' },
+            { dot: 'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.6)]', label: 'Frozen', color: 'text-blue-400', desc: 'Locks your avatar at your last position. You move freely offline.' },
+            { dot: 'bg-zinc-600', label: 'Ghost', color: 'text-zinc-400', desc: 'Full dark mode. Vanish from the map entirely.' },
+          ].map(m => (
+            <div key={m.label} className="bg-black p-8 text-center hover:bg-zinc-950 transition-colors">
+              <div className={`w-3.5 h-3.5 rounded-full mx-auto mb-4 ${m.dot}`} />
+              <h3 className={`font-dot text-xs uppercase tracking-[0.25em] font-bold mb-3 ${m.color}`}>{m.label}</h3>
+              <p className="font-inter text-[13px] text-zinc-500 leading-relaxed">{m.desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* ACCESS */}
-      <section id="access">
-        <div className="sh reveal"><span className="sn">04</span><span className="st glitch" data-text="Access Control">Access Control</span><div className="sl2"></div></div>
-        <div className="acc-grid reveal">
-          <div className="acc-card"><div className="acc-ico">🔑</div><div className="acc-tit">Auth Node</div><p className="acc-desc">Secure gateway. No anonymous nodes permitted.</p></div>
-          <div className="acc-card"><div className="acc-ico">⏳</div><div className="acc-tit">Waiting Room</div><p className="acc-desc">Join requests held until Commander manually approves.</p></div>
-          <div className="acc-card"><div className="acc-ico">🛡️</div><div className="acc-tit">Commander</div><p className="acc-desc">Owner controls approvals and can blacklist rogue nodes.</p></div>
+      {/* ACCESS CONTROL */}
+      <section id="access" className="relative z-[1] max-w-5xl mx-auto px-6 py-24">
+        <SectionHeader n="04" title="Access Control" />
+        <div className="reveal grid grid-cols-1 sm:grid-cols-3 gap-px bg-white/10 border border-white/10">
+          {[
+            { icon: '🔑', title: 'Auth Node', desc: 'Secure gateway. No anonymous nodes permitted.' },
+            { icon: '⏳', title: 'Waiting Room', desc: 'Join requests held until Commander manually approves.' },
+            { icon: '🛡️', title: 'Commander', desc: 'Owner controls approvals and can blacklist rogue nodes.' },
+          ].map(a => (
+            <div key={a.title} className="bg-black p-7 hover:bg-zinc-950 transition-colors">
+              <div className="w-10 h-10 border border-white/20 flex items-center justify-center text-lg mb-4">{a.icon}</div>
+              <h3 className="font-dot text-xs uppercase tracking-widest text-white mb-2">{a.title}</h3>
+              <p className="font-inter text-[13px] text-zinc-500 leading-relaxed">{a.desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* INTEL & ORACLE */}
-      <section id="intel">
-        <div className="sh reveal"><span className="sn">05</span><span className="st glitch" data-text="Emergency & AI Intel">Emergency & AI Intel</span><div className="sl2"></div></div>
-        <div className="sos-blk reveal">
-          <div className="sos-tit">⚠ SOS Protocol</div>
-          <p className="sos-d">A single tap broadcasts a <strong>high-priority distress beacon</strong>. Receiving devices are hit with a native push notification and a sonar alarm — ensuring the signal is never missed.</p>
-        </div>
-        <div className="orc-blk reveal">
-          <div className="orc-tit">◈ SYS_ORACLE — Tactical AI</div>
-          <p className="orc-d">LOCUS ships with an onboard AI assistant spatially aware of your position. Ask it anything.</p>
-          <div className="qchips">
-            <button className="qchip" onClick={() => handleSendChat("Who is closest to Java Green?")}>Who is closest to Java Green?</button>
-            <button className="qchip" onClick={() => handleSendChat("Fastest route to Medical College?")}>Fastest route to Medical College?</button>
-          </div>
-          <div className="chat-box">
-            <div className="chat-msgs" ref={chatBoxRef}>
-              {chatMsgs.map((msg, i) => (
-                <div key={i} className={`cmsg ${msg.type}`}>
-                  {msg.text}
-                </div>
-              ))}
-              {isProcessing && <div className="cmsg p" style={{color: 'rgba(255,184,0,0.5)', animation: 'pulse 1.5s infinite'}}>Processing neural request...</div>}
-            </div>
-            <div className="chat-row">
-              <input 
-                type="text" 
-                placeholder="enter query..." 
-                value={chatQuery}
-                onChange={(e) => setChatQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-              />
-              <button className="chat-send" onClick={() => handleSendChat()}>TRANSMIT</button>
-            </div>
-          </div>
+      {/* EMERGENCY PROTOCOL */}
+      <section id="sos" className="relative z-[1] max-w-5xl mx-auto px-6 py-24">
+        <SectionHeader n="05" title="Emergency Protocol" />
+        <div className="reveal relative border border-red-500/40 bg-red-500/[0.04] p-10 overflow-hidden">
+          <span className="absolute top-4 right-6 font-dot text-[9px] uppercase tracking-widest text-red-500/50">SOS Trigger</span>
+          <h3 className="font-dot text-lg uppercase tracking-widest text-red-500 mb-4">⚠ Press-and-Hold Distress Beacon</h3>
+          <p className="font-inter text-sm text-zinc-400 leading-relaxed max-w-2xl">
+            Arm the SOS button with a press-and-hold, then confirm with a second press-and-hold within four seconds —
+            a deliberate two-step gesture so it can never fire by accident in your pocket. Once confirmed, it
+            broadcasts a <strong className="text-white font-medium">high-priority distress beacon with your live coordinates</strong> to
+            your squad, triggering a native push notification and sonar alarm on every receiving device.
+          </p>
         </div>
       </section>
 
       {/* CAMPUS NODES */}
-      <section id="campus">
-        <div className="sh reveal"><span className="sn">06</span><span className="st glitch" data-text="Campus Nodes">Campus Nodes</span><div className="sl2"></div></div>
-        <div className="campus-grid reveal">
-          <div className="cn"><div className="nd"></div><div className="nn">University Building</div><div className="nt">ADMIN // PRIMARY</div></div>
-          <div className="cn"><div className="nd" style={{background:'#ffb800', boxShadow:'0 0 6px #ffb800'}}></div><div className="nn">Java Green</div><div className="nt">FOOD // HIGH TRAFFIC</div></div>
-          <div className="cn"><div className="nd" style={{background:'#00e5ff', boxShadow:'0 0 6px #00e5ff'}}></div><div className="nn">T.P. Ganesan</div><div className="nt">AUDITORIUM // EVENT</div></div>
-          <div className="cn"><div className="nd"></div><div className="nn">Tech Park</div><div className="nt">LABS // SIGNAL WEAK</div></div>
-        </div>
-      </section>
-
-      {/* COMMS */}
-      <section id="comms">
-        <div className="sh reveal"><span className="sn">07</span><span className="st glitch" data-text="Intercepted Comms">Intercepted Comms</span><div className="sl2"></div></div>
-        <div className="comms-list reveal">
-          <div className="comm"><div className="cav">GX</div><div><div className="chdr"><span className="ccod">GHOST_X</span><span className="ctim">14:32 // KTR GRID</span></div><p className="ctxt">"Frozen mode saved me during the faculty inspection. My marker stayed in the hostel."</p></div></div>
-          <div className="comm"><div className="cav">V7</div><div><div className="chdr"><span className="ccod">VIPER_7</span><span className="ctim">09:15 // TECH PARK</span></div><p className="ctxt">"Dead Reckoning Ghost Marker found me when I lost signal in the basement labs. Precision tracking."</p></div></div>
+      <section id="campus" className="relative z-[1] max-w-5xl mx-auto px-6 py-24">
+        <SectionHeader n="06" title="Campus Nodes" />
+        <div className="reveal grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/10 border border-white/10">
+          {[
+            { name: 'University Building', tag: 'ADMIN // PRIMARY', color: 'bg-red-500' },
+            { name: 'Java Green', tag: 'FOOD // HIGH TRAFFIC', color: 'bg-amber-500' },
+            { name: 'T.P. Ganesan', tag: 'AUDITORIUM // EVENT', color: 'bg-cyan-400' },
+            { name: 'Tech Park', tag: 'LABS // SIGNAL WEAK', color: 'bg-red-500' },
+          ].map(n => (
+            <div key={n.name} className="bg-black p-6 hover:bg-zinc-950 transition-colors">
+              <div className={`w-2 h-2 rounded-full mb-3 ${n.color}`} />
+              <div className="font-dot text-[11px] uppercase tracking-widest text-white mb-1.5">{n.name}</div>
+              <div className="font-dot text-[9px] uppercase tracking-widest text-zinc-600">{n.tag}</div>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* FAQ */}
-      <section id="faq">
-        <div className="sh reveal"><span className="sn">08</span><span className="st glitch" data-text="FAQ // Command Log">FAQ // Command Log</span><div className="sl2"></div></div>
-        <div className="faq-list reveal">
-          {[
-            { q: "How accurate is the GPS tracking?", a: "LOCUS applies a Kalman filter to raw GPS sensor data, smoothing erratic phone sensor noise. Accuracy is within 3–5 meters under open sky." },
-            { q: "Can the Commander track me without my knowledge?", a: "No. You control your broadcast mode at all times. FROZEN locks your avatar in place, GHOST removes you from the map entirely." },
-            { q: "What happens to my location data when I close the app?", a: "Your live telemetry session ends on app close. The system records your last known ping position, visible to squad members as an offline marker." },
-            { q: "How do Secret Routes work?", a: "Secret Routes are custom path overlays recorded and published by administrators. They bypass standard walking paths and show the actual fastest shortcuts." }
-          ].map((item, i) => (
-            <div key={i} className={`faq-item ${openFaq === i ? 'open' : ''}`}>
-              <button className="faq-q" onClick={() => toggleFaq(i)}>
-                <span className="faq-qt">{item.q}</span><span className="faq-arr">›</span>
+      <section id="faq" className="relative z-[1] max-w-5xl mx-auto px-6 py-24">
+        <SectionHeader n="07" title="FAQ // Command Log" />
+        <div className="reveal flex flex-col gap-px bg-white/10 border border-white/10">
+          {FAQS.map((item, i) => (
+            <div key={item.q} className="bg-black">
+              <button onClick={() => toggleFaq(i)} className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left hover:bg-zinc-950 transition-colors">
+                <span className="font-inter text-[13px] text-zinc-300"><span className="text-zinc-600">{'> '}</span>{item.q}</span>
+                <span className={`text-zinc-600 transition-transform shrink-0 ${openFaq === i ? 'rotate-90 text-red-500' : ''}`}>›</span>
               </button>
-              <div className="faq-ans"><div className="faq-ans-in">{item.a}</div></div>
+              <div className={`overflow-hidden transition-[max-height] duration-400 ${openFaq === i ? 'max-h-52' : 'max-h-0'}`}>
+                <p className="font-inter text-[13px] text-zinc-500 leading-relaxed px-6 pb-5 border-t border-white/10 pt-4">{item.a}</p>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer>
-        <div className="f-logo">LOCUS</div>
-        <div className="f-copy">SRM KTR Campus Network &nbsp;·&nbsp; All Rights Reserved</div>
-        <div className="f-sig"><div className="pulse"></div> SIGNAL ACTIVE</div>
+      <footer className="relative z-[1] border-t border-white/20 bg-black/90 px-8 py-8 flex flex-wrap items-center justify-between gap-4">
+        <div className="font-dot text-sm tracking-widest text-white">LOCUS</div>
+        <div className="font-dot text-[10px] uppercase tracking-widest text-zinc-600">SRM KTR Campus Network &nbsp;·&nbsp; All Rights Reserved</div>
+        <div className="flex items-center gap-2 font-dot text-[10px] uppercase tracking-widest text-zinc-600">
+          <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Signal Active
+        </div>
       </footer>
     </div>
   );
