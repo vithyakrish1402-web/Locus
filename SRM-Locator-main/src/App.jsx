@@ -28,7 +28,6 @@ import BuildingMarker from './components/BuildingMarker';
 import SosTrigger from './components/SosTrigger';
 import SosOverlay from './components/SosOverlay';
 import { deriveMarkerStatus } from './utils/markerStatus';
-import { BUILDING_FOOTPRINT_STYLE, BUILDING_FOOTPRINT_HIGHLIGHT_STYLE } from './utils/buildingFootprintStyle';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -463,7 +462,6 @@ const App = () => {
   const [routeStart, setRouteStart] = useState(null);
   const [routeEnd, setRouteEnd] = useState(null);
   const [routeData, setRouteData] = useState(null);
-  const buildingPolygonsRef = useRef({}); // id -> google.maps.Polygon, real OSM building footprints
 
   // --- MODIFIED: FIREBASE AUTH STATE ---
   const [user, setUser] = useState(null);
@@ -585,20 +583,28 @@ const App = () => {
     setHasJoinedSquad(true);
 
     if (squadMode === 'create') {
-      // 🚀 INSTANT CLEARANCE FOR SQUAD CREATORS (0ms delay)
+      // 🚀 INSTANT CLEARANCE FOR SQUAD CREATORS (0ms delay) — you can't need your
+      // own approval to enter a squad you're creating.
       setAccessStatus('granted');
       setSquadRole('OWNER');
     } else {
-      // ⏳ FAILSAFE TIMEOUT FOR JOINING OPERATIVES (Fallback if network or server response is delayed)
-      setTimeout(() => {
-        setAccessStatus(currentStatus => {
-          if (currentStatus !== 'denied' && currentStatus !== 'granted') {
-            console.log("[SYS] Auto-granting clearance after network timeout fallback.");
-            return 'granted';
-          }
-          return currentStatus;
-        });
-      }, 4000);
+      // Explicitly (re)set to 'pending' rather than leaving whatever accessStatus
+      // already held. Without this, a user who was ever 'granted' before — e.g.
+      // the owner of their own squad a moment ago — kept that stale value straight
+      // through handleLeaveSquad (which didn't reset it either, fixed below), so
+      // the very next join, to a squad they'd never actually been let into, showed
+      // the full map immediately: the waiting-room gate below checks
+      // `accessStatus !== 'granted'`, which was already false before the server
+      // had said anything at all.
+      setAccessStatus('pending');
+      // No client-side auto-grant timeout here anymore. There used to be one
+      // ("fallback if network or server response is delayed") that flipped
+      // accessStatus to 'granted' after 4s no matter what — which is exactly the
+      // bug this comment is describing, just on a delay instead of instant: it
+      // let a joiner in whether or not the Commander had actually approved them,
+      // as long as they'd waited long enough. Approval-gating is a real feature
+      // here, not cosmetic, so a slow Commander should mean a slow join, not a
+      // silent bypass.
     }
   };
 
@@ -1160,6 +1166,9 @@ const App = () => {
     setSquadCode('');
     setUsers([]);
     setOfflineNodes({});
+    // Without this, a stale 'granted' (e.g. from owning the squad just left)
+    // survives into the next join attempt — see handleJoinSquad's comment.
+    setAccessStatus(null);
   };
 
   // --- TACTICAL DISTANCE ENGINE (HAVERSINE FORMULA) ---
@@ -1300,9 +1309,9 @@ const App = () => {
 
   // --- WAYPOINT DISTANCE ENGINE ---
   // Deliberately draws no line/route on the map — the destination building is
-  // shown as a highlighted real footprint (buildingPolygonsRef) instead. This
-  // also means it no longer depends on Google's Directions API/DirectionsRenderer,
-  // so it works identically on the Google engine and the Leaflet fallback.
+  // highlighted on its own marker dot instead. This also means it doesn't
+  // depend on Google's Directions API/DirectionsRenderer, so it works
+  // identically on the Google engine and the Leaflet fallback.
   const calculateActualRoute = (start, end) => {
     // 1. Prefer a hand-recorded secret shortcut's curated distance/ETA if one exists
     const routeKey = `${start.name}_${end.name}`;
@@ -1339,38 +1348,6 @@ const App = () => {
     setRouteData(null);
   };
 
-
-  // --- REAL BUILDING FOOTPRINTS (Google engine) — actual traced building
-  // shapes instead of abstract circle pins. Recreated whenever the map
-  // becomes ready or the buildings tab toggles visibility. ---
-  useEffect(() => {
-    if (!isMapReady || !mapRef.current || !window.google) return;
-    const maps = window.google.maps;
-    const polygons = {};
-    SRM_MASTER_DATABASE.forEach(b => {
-      if (!b.footprint) return;
-      const polygon = new maps.Polygon({
-        paths: b.footprint.map(([lat, lng]) => ({ lat, lng })),
-        ...BUILDING_FOOTPRINT_STYLE,
-        map: activeTab === 'buildings' ? mapRef.current : null,
-        clickable: true,
-      });
-      polygon.addListener('click', () => handleFocus({ lat: b.lat, lng: b.lng }, b));
-      polygons[b.id] = polygon;
-    });
-    buildingPolygonsRef.current = polygons;
-    return () => {
-      Object.values(polygons).forEach(p => p.setMap(null));
-    };
-  }, [isMapReady, activeTab]);
-
-  // Highlight whichever building footprint is selected or is the active waypoint destination
-  useEffect(() => {
-    const highlightId = (activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null;
-    Object.entries(buildingPolygonsRef.current).forEach(([id, polygon]) => {
-      polygon.setOptions(Number(id) === highlightId ? BUILDING_FOOTPRINT_HIGHLIGHT_STYLE : BUILDING_FOOTPRINT_STYLE);
-    });
-  }, [selectedItem, routeEnd, activeTab]);
 
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
@@ -2021,12 +1998,14 @@ const App = () => {
               />
             </div>
           )}
-          {/* Buildings with a verified OSM outline are drawn as real traced footprints
-              via buildingPolygonsRef (imperative google.maps.Polygon). The rest have no
-              trustworthy outline in OSM, so they fall back to a pin here — without this
-              they rendered as nothing at all on the Google engine and were untappable.
-              The Leaflet engine already does the same (TacticalLeafletMap.jsx). */}
-          {activeTab === 'buildings' && SRM_MASTER_DATABASE.filter(b => !b.footprint).map(b => (
+          {/* Buildings render as a single red dot marker each, not a traced outline —
+              even for the subset with a verified OSM footprint, the polygon shape only
+              ever matches the roof as seen from directly overhead. Real-world imagery
+              here is captured off-nadir (at an angle), which displaces the visible roof
+              from the ground footprint OSM actually traces, so the outline reads as
+              "wrong" even when the underlying data is correct. A dot has no such
+              failure mode. (TacticalLeafletMap.jsx renders the same way.) */}
+          {activeTab === 'buildings' && SRM_MASTER_DATABASE.map(b => (
             <div
               key={`building-${b.id}`}
               lat={b.lat}
@@ -2034,7 +2013,7 @@ const App = () => {
               onClick={() => handleFocus({ lat: b.lat, lng: b.lng }, b)}
               style={{ cursor: 'pointer' }}
             >
-              <BuildingMarker />
+              <BuildingMarker highlighted={(activeTab === 'buildings' && selectedItem?.id === b.id) || routeEnd?.id === b.id} />
             </div>
           ))}
           {activeWaypoint && (
