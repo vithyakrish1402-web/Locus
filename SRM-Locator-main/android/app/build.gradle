@@ -1,5 +1,14 @@
 apply plugin: 'com.android.application'
 
+// Load local.properties by hand (Capacitor's Groovy build scripts don't expose the
+// project's `localProperties` object the way a stock Android Studio project would) so
+// MAPS_API_KEY never has to be hardcoded/committed anywhere in this file or the manifest.
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+
 android {
     namespace = "com.locus.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -10,6 +19,9 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Empty string (not null) so a missing key fails obviously inside Google Maps
+        // (invalid key error) instead of Gradle throwing over an unresolved placeholder.
+        manifestPlaceholders = [MAPS_API_KEY: localProperties.getProperty('MAPS_API_KEY', '')]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61

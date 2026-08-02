@@ -59,6 +59,11 @@ const socket = io(BACKEND_URL, {
   upgrade: false
 });
 
+// Baked in at Vite build time from .env's VITE_GOOGLE_MAPS_API_KEY (gitignored) —
+// never hardcode this. The Capacitor/Android build reads the same key separately from
+// android/local.properties (see AndroidManifest.xml's MAPS_API_KEY meta-data placeholder).
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
 
 // --- 🎲 AUTOMATIC SQUAD CODE RANDOMIZER (ALPHANUMERIC ONLY) ---
@@ -1913,7 +1918,7 @@ const App = () => {
           </Suspense>
         ) : (
         <GoogleMapReact
-          bootstrapURLKeys={{ key: 'AIzaSyD10sWfHpczEuvmvwBkqkPHOu-QXQr8uM0' }}
+          bootstrapURLKeys={{ key: GOOGLE_MAPS_API_KEY }}
           center={mapProps.center}
           options={{
             ...createMapOptions(sysConfig.theme, isSatellite),
