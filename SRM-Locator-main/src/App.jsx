@@ -20,8 +20,8 @@ import { SRM_MASTER_DATABASE } from './srmDatabase';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
 import LocationMarker from './components/LocationMarker';
 import WaypointMarker from './components/WaypointMarker';
-import BuildingMarker from './components/BuildingMarker';
 import { deriveMarkerStatus } from './utils/markerStatus';
+import { BUILDING_FOOTPRINT_STYLE, BUILDING_FOOTPRINT_HIGHLIGHT_STYLE } from './utils/buildingFootprintStyle';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -411,8 +411,7 @@ const App = () => {
   const [routeStart, setRouteStart] = useState(null);
   const [routeEnd, setRouteEnd] = useState(null);
   const [routeData, setRouteData] = useState(null);
-  const directionsRendererRef = useRef(null);
-  const customPolylineRef = useRef(null);
+  const buildingPolygonsRef = useRef({}); // id -> google.maps.Polygon, real OSM building footprints
 
   // --- MODIFIED: FIREBASE AUTH STATE ---
   const [user, setUser] = useState(null);
@@ -1223,60 +1222,38 @@ const App = () => {
     }
   };
 
-  // --- 🚨 MODIFIED: HYBRID ENGINE (Checks Custom Routes First) ---
+  // --- WAYPOINT DISTANCE ENGINE ---
+  // Deliberately draws no line/route on the map — the destination building is
+  // shown as a highlighted real footprint (buildingPolygonsRef) instead. This
+  // also means it no longer depends on Google's Directions API/DirectionsRenderer,
+  // so it works identically on the Google engine and the Leaflet fallback.
   const calculateActualRoute = (start, end) => {
-    // BULLETPROOF SAFEGUARD
-    if (typeof window === 'undefined' || !window.google || !window.google.maps) {
-      console.error("🚨 [SYS_ERROR] Google Maps API is offline or blocked.");
-      alert("[SYS_ERROR] TACTICAL ROUTING OFFLINE. (API BLOCKED)");
-      return;
-    }
-
-    // 1. CHECK FOR SECRET SHORTCUT OVERRIDES FIRST
+    // 1. Prefer a hand-recorded secret shortcut's curated distance/ETA if one exists
     const routeKey = `${start.name}_${end.name}`;
     const reverseRouteKey = `${end.name}_${start.name}`;
     const secretData = liveSecretRoutes[routeKey] || liveSecretRoutes[reverseRouteKey];
-
-    // Only trigger secret route if going Building-to-Building (not from live GPS)
     if (secretData && start.name !== "MY_LOCATION") {
-      console.log("🕵️‍♂️ [OVERRIDE] Secret route detected. Bypassing Google.");
-
-      // Clear standard red line if it exists
-      if (directionsRendererRef.current) directionsRendererRef.current.setDirections({ routes: [] });
-      if (customPolylineRef.current) customPolylineRef.current.setMap(null);
-
-      // Draw custom emerald green path
-      const pathCoords = liveSecretRoutes[routeKey] ? secretData.path : [...secretData.path].reverse();
-      customPolylineRef.current = new window.google.maps.Polyline({
-        path: pathCoords,
-        geodesic: true,
-        strokeColor: '#10b981', // Emerald green
-        strokeOpacity: 1.0,
-        strokeWeight: 5,
-        map: mapRef.current
-      });
-
       setRouteData({
         distance: { text: secretData.distance },
         duration: { text: secretData.eta }
       });
-      return; // Abort Google request completely
+      return;
     }
 
-    // 2. FALLBACK: STANDARD GOOGLE MAPS ROUTING
-    const directionsService = new window.google.maps.DirectionsService();
-    directionsService.route({
-      origin: { lat: start.lat, lng: start.lng },
-      destination: { lat: end.lat, lng: end.lng },
-      travelMode: window.google.maps.TravelMode.WALKING
-    }, (result, status) => {
-      if (status === 'OK') {
-        if (customPolylineRef.current) customPolylineRef.current.setMap(null); // Clear green line
-        directionsRendererRef.current.setDirections(result);
-        setRouteData(result.routes[0].legs[0]);
-      } else {
-        alert("[SYS_ERROR] UNAVAILABLE WALKING PATH.");
-      }
+    // 2. Straight-line (Haversine) distance + an assumed walking pace
+    const R = 6371e3;
+    const rad = Math.PI / 180;
+    const phi1 = start.lat * rad, phi2 = end.lat * rad;
+    const deltaPhi = (end.lat - start.lat) * rad;
+    const deltaLambda = (end.lng - start.lng) * rad;
+    const a = Math.sin(deltaPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) ** 2;
+    const meters = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const WALKING_SPEED_MPS = 1.4; // ~5 km/h
+    const minutes = Math.max(1, Math.round(meters / WALKING_SPEED_MPS / 60));
+
+    setRouteData({
+      distance: { text: meters > 1000 ? `${(meters / 1000).toFixed(2)} KM` : `${Math.round(meters)} M` },
+      duration: { text: `${minutes} MIN${minutes === 1 ? '' : 'S'}` }
     });
   };
 
@@ -1284,15 +1261,40 @@ const App = () => {
     setRouteStart(null);
     setRouteEnd(null);
     setRouteData(null);
-    if (directionsRendererRef.current) {
-      directionsRendererRef.current.setDirections({ routes: [] });
-    }
-    if (customPolylineRef.current) {
-      customPolylineRef.current.setMap(null);
-      customPolylineRef.current = null;
-    }
   };
 
+
+  // --- REAL BUILDING FOOTPRINTS (Google engine) — actual traced building
+  // shapes instead of abstract circle pins. Recreated whenever the map
+  // becomes ready or the buildings tab toggles visibility. ---
+  useEffect(() => {
+    if (!isMapReady || !mapRef.current || !window.google) return;
+    const maps = window.google.maps;
+    const polygons = {};
+    SRM_MASTER_DATABASE.forEach(b => {
+      if (!b.footprint) return;
+      const polygon = new maps.Polygon({
+        paths: b.footprint.map(([lat, lng]) => ({ lat, lng })),
+        ...BUILDING_FOOTPRINT_STYLE,
+        map: activeTab === 'buildings' ? mapRef.current : null,
+        clickable: true,
+      });
+      polygon.addListener('click', () => handleFocus({ lat: b.lat, lng: b.lng }, b));
+      polygons[b.id] = polygon;
+    });
+    buildingPolygonsRef.current = polygons;
+    return () => {
+      Object.values(polygons).forEach(p => p.setMap(null));
+    };
+  }, [isMapReady, activeTab]);
+
+  // Highlight whichever building footprint is selected or is the active waypoint destination
+  useEffect(() => {
+    const highlightId = (activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null;
+    Object.entries(buildingPolygonsRef.current).forEach(([id, polygon]) => {
+      polygon.setOptions(Number(id) === highlightId ? BUILDING_FOOTPRINT_HIGHLIGHT_STYLE : BUILDING_FOOTPRINT_STYLE);
+    });
+  }, [selectedItem, routeEnd, activeTab]);
 
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
@@ -1927,6 +1929,7 @@ const App = () => {
               activeTab={activeTab}
               activeWaypoint={activeWaypoint}
               squadRole={squadRole}
+              highlightBuildingId={(activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null}
               onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}
               isSatellite={isSatellite}
             />
@@ -1952,14 +1955,9 @@ const App = () => {
           zoom={mapProps.zoom}
 
           yesIWantToUseGoogleMapApiInternals
-          onGoogleApiLoaded={({ map, maps }) => {
+          onGoogleApiLoaded={({ map }) => {
             mapRef.current = map;
             map.setTilt(0);
-            directionsRendererRef.current = new maps.DirectionsRenderer({
-              suppressMarkers: true,
-              polylineOptions: { strokeColor: '#ef4444', strokeWeight: 4 }
-            });
-            directionsRendererRef.current.setMap(map);
             // 🟢 GREEN LIGHT: Map canvas is live — safe to draw saved zones now
             setIsMapReady(true);
           }}
@@ -1979,14 +1977,7 @@ const App = () => {
               />
             </div>
           )}
-          {activeTab === 'buildings' && SRM_MASTER_DATABASE.map(b => (
-            <BuildingMarker
-              key={b.id}
-              lat={b.lat}
-              lng={b.lng}
-              onClick={() => handleFocus({ lat: b.lat, lng: b.lng }, b)}
-            />
-          ))}
+          {/* Buildings render as real traced footprints via buildingPolygonsRef (imperative google.maps.Polygon), not as circle pins here. */}
           {/* ... other markers ... */}
           {activeWaypoint && (
             <WaypointMarker
@@ -2132,7 +2123,7 @@ const App = () => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 60 }}
             transition={{ duration: 0.4 }}
-            className="absolute bottom-6 right-6 z-[600] w-80 bg-black border border-white/20 pointer-events-auto flex flex-col pt-6 pb-2"
+            className="absolute inset-x-4 bottom-24 md:inset-x-auto md:bottom-6 md:right-6 z-[600] md:w-80 max-h-[60vh] md:max-h-none overflow-y-auto bg-black border border-white/20 pointer-events-auto flex flex-col pt-6 pb-2"
           >
             <div className="px-6 pb-4 border-b border-white/20 flex justify-between items-start">
               <div className="flex-1 pr-4">
@@ -2724,18 +2715,20 @@ const App = () => {
       </AnimatePresence>
 
       {/* ========== RALLY POINT FAB (Two-Step Targeting) ========== */}
-      <button
-        onClick={() => setIsTargetingMode(!isTargetingMode)}
-        className={`md:hidden fixed bottom-20 right-4 p-4 rounded-full z-[1050] pointer-events-auto active:scale-90 transition-all duration-300 ${
-          isTargetingMode
-            ? 'bg-yellow-500 text-black border-2 border-yellow-300 shadow-[0_0_25px_rgba(234,179,8,0.6)] animate-pulse'
-            : 'bg-red-600 text-black border-2 border-red-400 shadow-[0_0_20px_rgba(220,38,38,0.6)]'
-        }`}
-        style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
-        title={isTargetingMode ? 'Cancel Targeting' : 'Deploy Rally Point'}
-      >
-        {isTargetingMode ? <X className="w-6 h-6" /> : <Crosshair className="w-6 h-6" />}
-      </button>
+      {!(selectedItem && activeTab === 'buildings') && (
+        <button
+          onClick={() => setIsTargetingMode(!isTargetingMode)}
+          className={`md:hidden fixed bottom-20 right-4 p-4 rounded-full z-[1050] pointer-events-auto active:scale-90 transition-all duration-300 ${
+            isTargetingMode
+              ? 'bg-yellow-500 text-black border-2 border-yellow-300 shadow-[0_0_25px_rgba(234,179,8,0.6)] animate-pulse'
+              : 'bg-red-600 text-black border-2 border-red-400 shadow-[0_0_20px_rgba(220,38,38,0.6)]'
+          }`}
+          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+          title={isTargetingMode ? 'Cancel Targeting' : 'Deploy Rally Point'}
+        >
+          {isTargetingMode ? <X className="w-6 h-6" /> : <Crosshair className="w-6 h-6" />}
+        </button>
+      )}
 
       {arTarget && <ARCompass target={arTarget} liveLocation={liveLocation} onClose={() => setArTarget(null)} />}
     </div>
