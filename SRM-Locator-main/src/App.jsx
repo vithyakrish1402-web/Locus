@@ -26,6 +26,7 @@ import LocationMarker from './components/LocationMarker';
 import WaypointMarker from './components/WaypointMarker';
 import BuildingMarker from './components/BuildingMarker';
 import SosTrigger from './components/SosTrigger';
+import SosOverlay from './components/SosOverlay';
 import { deriveMarkerStatus } from './utils/markerStatus';
 import { BUILDING_FOOTPRINT_STYLE, BUILDING_FOOTPRINT_HIGHLIGHT_STYLE } from './utils/buildingFootprintStyle';
 
@@ -415,6 +416,11 @@ const App = () => {
   // --- TACTICAL WAYPOINT STATE ---
   const [isDroppingWaypoint, setIsDroppingWaypoint] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
+  // Holds the most recent squad-wide SOS this client hasn't acknowledged yet.
+  // Deliberately a single slot, not a queue: only one SosOverlay can be on screen
+  // at a time, and a second beacon while one is still up should replace it (same
+  // squadmate holding again, or a different one) rather than stack behind it.
+  const [incomingSos, setIncomingSos] = useState(null);
   const [arTarget, setArTarget] = useState(null);
   // --- TARGETING MODE (Two-step Rally Point) ---
   const [isTargetingMode, setIsTargetingMode] = useState(false);
@@ -818,12 +824,27 @@ const App = () => {
       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
     });
 
+    // Squad-wide SOS (see SosTrigger.jsx / backend's sos-broadcast handler).
+    // Distinct from 'receive-ping' above, which is the single-target Commander
+    // ping — conflating the two meant an actual emergency looked identical to a
+    // routine ping-check on the receiving end.
+    // SosOverlay is the entire UI response to this event — it owns its own
+    // klaxon (useAlertAudio) and vibrate() call once mounted, so nothing else
+    // fires here. A native OS Notification would still be the only way to catch
+    // this while the app is backgrounded/screen-off, since in-app audio and
+    // vibrate need the tab actually running; that tradeoff is intentional here,
+    // not an oversight — flag it if background delivery turns out to matter.
+    socket.on('sos-received', (data) => {
+      setIncomingSos(data);
+    });
+
     return () => {
       socket.off('users-update');
       socket.off('receive-ping');
       socket.off('new-custom-route');
       socket.off('new-waypoint');
       socket.off('remove-waypoint');
+      socket.off('sos-received');
       setUsers([]);
     };
   }, [hasJoinedSquad, squadCode]);
@@ -2770,6 +2791,16 @@ const App = () => {
         roomCode={squadCode}
         senderName={user.displayName}
       />
+
+      {/* ========== INCOMING SOS (stays up until acknowledged) ========== */}
+      {incomingSos && (
+        <SosOverlay
+          senderName={incomingSos.senderName}
+          lat={incomingSos.lat}
+          lng={incomingSos.lng}
+          onAcknowledge={() => setIncomingSos(null)}
+        />
+      )}
     </div>
   );
 };

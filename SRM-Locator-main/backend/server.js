@@ -325,10 +325,24 @@ socket.on('check-ping', (clientTimestamp) => {
   // to every other member of the sender's own squad, trusting the server-side
   // roomCode recorded on join rather than whatever the client claims, same
   // gatekeeper reasoning as the telemetry handler above.
-  socket.on('sos-broadcast', ({ senderName }) => {
+  //
+  // Emits its own 'sos-received' event rather than reusing 'receive-ping' — that
+  // event belongs to the separate single-target 'ping-user' feature (Commander
+  // pinging one specific member), and reusing it here meant a squad-wide SOS was
+  // indistinguishable from a single ping on the client, plus lat/lng/timestamp
+  // from the sender's payload were being silently discarded (only senderName was
+  // ever destructured), so nothing downstream could show the sender's location.
+  socket.on('sos-broadcast', ({ senderName, lat, lng, timestamp }) => {
     const roomCode = users[socket.id]?.roomCode;
     if (!roomCode) return;
-    socket.to(roomCode).emit('receive-ping', { senderName });
+    console.log(`[🚨 SOS] ${senderName} triggered a distress beacon in ${roomCode}`);
+    socket.to(roomCode).emit('sos-received', {
+      senderId: socket.id,
+      senderName,
+      lat: lat ?? null,
+      lng: lng ?? null,
+      timestamp: timestamp || Date.now(),
+    });
   });
 
   socket.on('leave-squad', () => {
