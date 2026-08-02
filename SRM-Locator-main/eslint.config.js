@@ -5,7 +5,9 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // `android/` is the Capacitor-generated native project: it holds copied/compiled web
+  // build output (app/src/main/assets/public, app/build/**), not source to lint.
+  globalIgnores(['dist', 'android']),
   {
     files: ['**/*.{js,jsx}'],
     ignores: ['backend/**'],
