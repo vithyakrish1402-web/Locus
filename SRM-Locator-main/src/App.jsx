@@ -425,19 +425,6 @@ const App = () => {
   const [isMapReady, setIsMapReady] = useState(false);
   // --- MAP ENGINE FALLBACK: switch to the Leaflet map if Google's never loads ---
   const [mapEngineFailed, setMapEngineFailed] = useState(false);
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (!isMapReady) {
-        console.warn('[SYS_MAP] Google Maps did not initialize in time — falling back to Leaflet.');
-        setMapEngineFailed(true);
-      }
-    }, 8000);
-    return () => clearTimeout(timeoutId);
-    // Runs once: this is a one-shot "did Google ever come up" check, not a
-    // recurring watchdog — re-arming it on every isMapReady flip would just
-    // immediately clear itself the instant isMapReady becomes true.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const activePolygonsRef = useRef([]);   // The saved/rendered polygons
   const [isRecordingPath, setIsRecordingPath] = useState(false);
@@ -471,6 +458,23 @@ const App = () => {
   const [squadCode, setSquadCode] = useState('');
   const [squadMode, setSquadMode] = useState('create'); // 'create' or 'join'
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
+
+  // --- MAP ENGINE FALLBACK WATCHDOG ---
+  // Armed only once the map screen is actually about to render (past auth +
+  // squad-join) — arming it at app boot meant the 8s clock usually expired
+  // during login/registration, before <GoogleMapReact> ever got a chance to
+  // mount, so it fell back to Leaflet on every real session regardless of
+  // whether Google Maps would've loaded fine.
+  useEffect(() => {
+    if (!user || !hasJoinedSquad || isMapReady) return;
+    const timeoutId = setTimeout(() => {
+      if (!isMapReady) {
+        console.warn('[SYS_MAP] Google Maps did not initialize in time — falling back to Leaflet.');
+        setMapEngineFailed(true);
+      }
+    }, 8000);
+    return () => clearTimeout(timeoutId);
+  }, [user, hasJoinedSquad, isMapReady]);
 
   // Auto-generate squad code when in 'create' mode
   useEffect(() => {
