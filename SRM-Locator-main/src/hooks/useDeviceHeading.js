@@ -21,7 +21,7 @@ const angularDelta = (a, b) => {
 };
 
 // Extracted from ARCompass.jsx so the AR compass and the live map marker
-// (LocationMarker) both read from the same compass value instead of each
+// (LiveLocationMarker) both read from the same compass value instead of each
 // running their own DeviceOrientation listener.
 export function useDeviceHeading() {
   const [heading, setHeading] = useState(0);

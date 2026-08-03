@@ -4,12 +4,12 @@ import L from 'leaflet';
 import { useMap } from 'react-leaflet';
 
 /**
- * Renders arbitrary React content (e.g. LocationMarker, WaypointMarker) as a
- * Leaflet marker, WITHOUT losing CSS transitions across updates.
+ * Renders arbitrary React content (e.g. LiveLocationMarker, WaypointMarker) as
+ * a Leaflet marker, WITHOUT losing CSS transitions across updates.
  *
  * The naive approach — rebuilding an L.divIcon's `html` string from
  * ReactDOMServer on every prop change — replaces the marker's DOM node each
- * time, which kills LocationMarker's heading/pulse CSS transitions (there's
+ * time, which kills LiveLocationMarker's heading/pulse CSS transitions (there's
  * no "from" state left in the DOM to animate from). Instead this mounts a
  * single persistent React root onto the marker's own icon element once, then
  * just re-renders into it — the marker's DOM node (and therefore any CSS

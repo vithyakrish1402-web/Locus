@@ -24,7 +24,7 @@ import { SRM_MASTER_DATABASE } from './srmDatabase';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
-import LocationMarker from './components/LocationMarker';
+import { useWaypointNavigationLine } from './hooks/useWaypointNavigationLine';
 import LiveLocationMarker, { NAVIGATING_SPEED_MPS } from './LiveLocationMarker';
 import GhostMemberMarker from './GhostMemberMarker';
 import WaypointMarker from './components/WaypointMarker';
@@ -37,7 +37,6 @@ import { useIncomingSos } from './hooks/useIncomingSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
-import { deriveMarkerStatus } from './utils/markerStatus';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { PrecognitionFilter } from './utils/precognition';
@@ -485,7 +484,7 @@ const App = () => {
   const [users, setUsers] = useState([]);
   const [liveLocation, setLiveLocation] = useState(null);
   // Raw m/s from geolocation's coords.speed, tracked separately from the km/h value
-  // broadcast over the wire — drives this device's own LocationMarker status.
+  // broadcast over the wire — drives this device's own LiveLocationMarker isNavigating state.
   const [liveSpeed, setLiveSpeed] = useState(0);
   const [telemetryMode, setTelemetryMode] = useState('ACTIVE');
   // Set on any geolocation error (denied/timeout/unavailable), cleared the moment a
@@ -1359,10 +1358,25 @@ const App = () => {
     });
   };
 
+  // Also fired automatically on every sidebar tab switch (see the effect
+  // below) — must stay a plain local reset, not touch the squad's shared
+  // waypoint, or just swiping between MATRIX/SQUAD would clear everyone's
+  // rally point.
   const clearRoute = () => {
     setRouteStart(null);
     setRouteEnd(null);
     setRouteData(null);
+  };
+
+  // The tracking panel's own close (X) button, specifically — asks the server
+  // to clear the squad's shared waypoint too (mirroring the Commander's
+  // dedicated CLEAR button exactly: same emit, same server-side owner-only
+  // check), rather than optimistically clearing activeWaypoint here and
+  // risking this viewer's map disagreeing with everyone else's about whether
+  // the rally point still exists.
+  const closeWaypointTrackingPanel = () => {
+    clearRoute();
+    if (activeWaypoint) socket.emit('clear-waypoint', squadCode);
   };
 
 
@@ -1384,6 +1398,15 @@ const App = () => {
   // map instance) or before the map's finished mounting. TacticalLeafletMap
   // renders the Leaflet-engine equivalent itself, declaratively.
   useGhostProjectionLines(!mapEngineFailed && isMapReady ? mapRef.current : null, ghostMembers);
+
+  // Live navigation line from the operative's own position to the active
+  // squad waypoint — same "no-op on Leaflet/before mount" gating as above.
+  useWaypointNavigationLine(
+    !mapEngineFailed && isMapReady ? mapRef.current : null,
+    liveLocation,
+    activeWaypoint,
+    '#EF4444'
+  );
 
   // --- TACTICAL MAP RENDERING ENGINE ---
   // Memoised on exactly the inputs that can change the map's configuration.
@@ -1624,7 +1647,7 @@ const App = () => {
             className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-md bg-black border border-red-500 pointer-events-auto shadow-[0_0_30px_rgba(239,68,68,0.2)]"
           >
             <div className="p-4 flex flex-col gap-2 relative">
-              <button onClick={clearRoute} className="absolute top-2 right-2 text-zinc-500 hover:text-white">
+              <button onClick={closeWaypointTrackingPanel} className="absolute top-2 right-2 text-zinc-500 hover:text-white">
                 <X size={16} />
               </button>
 
@@ -2183,9 +2206,10 @@ const App = () => {
               onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)}
               style={{ cursor: 'pointer', animation: 'locus-member-fade-in 0.6s ease' }}
             >
-              <LocationMarker
+              <LiveLocationMarker
+                zoom={currentZoom}
+                isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
                 heading={u.heading}
-                status={deriveMarkerStatus(u.speed / 3.6)}
                 color="#EF4444"
               />
             </div>
