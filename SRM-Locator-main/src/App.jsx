@@ -25,6 +25,7 @@ import { useDeviceHeading } from './hooks/useDeviceHeading';
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
 import { useWaypointNavigationLine } from './hooks/useWaypointNavigationLine';
+import { useWalkingRoute } from './hooks/useWalkingRoute';
 import LiveLocationMarker, { NAVIGATING_SPEED_MPS } from './LiveLocationMarker';
 import GhostMemberMarker from './GhostMemberMarker';
 import WaypointMarker from './components/WaypointMarker';
@@ -1447,14 +1448,37 @@ const App = () => {
   // renders the Leaflet-engine equivalent itself, declaratively.
   useGhostProjectionLines(!mapEngineFailed && isMapReady ? mapRef.current : null, ghostMembers);
 
+  // Live walking route to the active squad waypoint — real routed path from
+  // Google Directions (or OSRM on the Leaflet fallback) when available,
+  // throttled so it isn't recomputed on every GPS tick, straight-line "best
+  // effort" fallback otherwise. Single source of truth consumed by both the
+  // Google engine's imperative Polyline below and TacticalLeafletMap's
+  // declarative one, so there's only one throttling clock, not two.
+  const walkingRoute = useWalkingRoute({
+    engine: mapEngineFailed ? 'leaflet' : 'google',
+    liveLocation,
+    activeWaypoint,
+  });
+
   // Live navigation line from the operative's own position to the active
   // squad waypoint — same "no-op on Leaflet/before mount" gating as above.
   useWaypointNavigationLine(
     !mapEngineFailed && isMapReady ? mapRef.current : null,
-    liveLocation,
-    activeWaypoint,
+    walkingRoute?.path,
+    walkingRoute?.isRealRoute,
     '#EF4444'
   );
+
+  // The ACTIVE_WAYPOINT_TRACKING panel prefers the real route's distance/
+  // duration once one exists for this exact destination — a path around
+  // buildings is often meaningfully longer than crow-flies, so the ETA is
+  // only actually honest once it's real. Falls back to routeData's haversine
+  // number otherwise (also what still drives building-to-building personal
+  // routing, which never touches activeWaypoint at all).
+  const isTrackingSquadWaypoint = Boolean(
+    routeEnd && activeWaypoint && routeEnd.lat === activeWaypoint.lat && routeEnd.lng === activeWaypoint.lng
+  );
+  const displayedRouteData = (isTrackingSquadWaypoint && walkingRoute) || routeData;
 
   // --- TACTICAL MAP RENDERING ENGINE ---
   // Memoised on exactly the inputs that can change the map's configuration.
@@ -1682,10 +1706,10 @@ const App = () => {
                   <span>{routeEnd?.name || "AWAITING_TARGET"}</span>
                 </div>
 
-                {routeData && (
+                {displayedRouteData && (
                   <div className="text-right flex flex-col">
-                    <span className="text-2xl font-dot text-red-500 leading-none">{routeData.distance.text}</span>
-                    <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ETA: {routeData.duration.text}</span>
+                    <span className="text-2xl font-dot text-red-500 leading-none">{displayedRouteData.distance.text}</span>
+                    <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ETA: {displayedRouteData.duration.text}</span>
                   </div>
                 )}
               </div>
@@ -2140,6 +2164,7 @@ const App = () => {
               ghostMembers={ghostMembers}
               activeTab={activeTab}
               activeWaypoint={activeWaypoint}
+              walkingRoute={walkingRoute}
               squadRole={squadRole}
               highlightBuildingId={(activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null}
               onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}

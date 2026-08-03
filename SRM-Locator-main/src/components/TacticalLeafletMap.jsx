@@ -79,6 +79,7 @@ const TacticalLeafletMap = ({
   ghostMembers,
   activeTab,
   activeWaypoint,
+  walkingRoute,
   squadRole,
   onClearWaypoint,
   onArTrack,
@@ -127,14 +128,22 @@ const TacticalLeafletMap = ({
         </LeafletReactMarker>
       )}
 
-      {/* Live navigation line to the active waypoint — react-leaflet renders this
+      {/* Live walking route to the active waypoint — react-leaflet renders this
           declaratively, unlike the Google engine which needs an imperative
-          Polyline (see App.jsx's useWaypointNavigationLine). Re-renders naturally
-          on every liveLocation update, so it visibly shortens while walking. */}
-      {liveLocation && activeWaypoint && (
+          Polyline (see App.jsx's useWaypointNavigationLine). walkingRoute is
+          computed once in App.jsx (useWalkingRoute) and shared with the
+          Google engine so there's a single throttling clock, not two.
+          Sparser/lighter dash when it's the straight-line "best effort"
+          fallback rather than a real routed path, so it visually reads as
+          less certain. */}
+      {walkingRoute && (
         <Polyline
-          positions={[[liveLocation.lat, liveLocation.lng], [activeWaypoint.lat, activeWaypoint.lng]]}
-          pathOptions={{ color: '#EF4444', dashArray: '6 8', weight: 2, opacity: 0.8 }}
+          positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
+          pathOptions={
+            walkingRoute.isRealRoute
+              ? { color: '#EF4444', dashArray: '6 8', weight: 2, opacity: 0.8 }
+              : { color: '#EF4444', dashArray: '2 12', weight: 2, opacity: 0.45 }
+          }
         />
       )}
 
