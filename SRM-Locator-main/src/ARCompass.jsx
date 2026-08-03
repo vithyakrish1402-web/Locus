@@ -3,22 +3,10 @@ import { Navigation, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 // eslint-disable-next-line no-unused-vars -- used via <motion.div> (see App.jsx's import for why the linter can't see this)
 import { motion } from 'framer-motion';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
+import { calculateBearing } from './utils/bearing';
 
 // --- MATH HELPERS ---
 const toRad = (deg) => (deg * Math.PI) / 180;
-const toDeg = (rad) => (rad * 180) / Math.PI;
-
-const calculateBearing = (lat1, lng1, lat2, lng2) => {
-  const dLng = toRad(lng2 - lng1);
-  const rLat1 = toRad(lat1);
-  const rLat2 = toRad(lat2);
-
-  const y = Math.sin(dLng) * Math.cos(rLat2);
-  const x = Math.cos(rLat1) * Math.sin(rLat2) - Math.sin(rLat1) * Math.cos(rLat2) * Math.cos(dLng);
-
-  const brng = toDeg(Math.atan2(y, x));
-  return (brng + 360) % 360;
-};
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371e3; // Earth radius in meters
