@@ -512,6 +512,10 @@ const App = () => {
   // broadcast over the wire — drives this device's own LocationMarker status.
   const [liveSpeed, setLiveSpeed] = useState(0);
   const [telemetryMode, setTelemetryMode] = useState('ACTIVE');
+  // Set on any geolocation error (denied/timeout/unavailable), cleared the moment a
+  // real fix comes through — so a friend testing this actually finds out they're
+  // invisible to the squad instead of just seeing no marker with no explanation.
+  const [locationAccessDenied, setLocationAccessDenied] = useState(false);
 
   const [squadCode, setSquadCode] = useState('');
   const [squadMode, setSquadMode] = useState('create'); // 'create' or 'join'
@@ -947,6 +951,7 @@ const App = () => {
         const smoothed = localPrecognition.current.filter(latitude, longitude);
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
+        setLocationAccessDenied(false);
 
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
@@ -957,7 +962,10 @@ const App = () => {
           heading: headingRef.current,
         });
       },
-      (err) => console.log('[SYS] Initial GPS lock delayed:', err.message),
+      (err) => {
+        console.log('[SYS] Initial GPS lock delayed:', err.message);
+        setLocationAccessDenied(true);
+      },
       { enableHighAccuracy: true }
     );
 
@@ -1003,6 +1011,7 @@ const App = () => {
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
         setLiveSpeed(speed || 0);
+        setLocationAccessDenied(false);
 
         let batteryLevel = 100;
         try {
@@ -1029,7 +1038,10 @@ const App = () => {
           heading: headingRef.current,
         });
       },
-      (error) => console.error('🚨 [SYS_ERROR] Geolocation lost:', error.message),
+      (error) => {
+        console.error('🚨 [SYS_ERROR] Geolocation lost:', error.message);
+        setLocationAccessDenied(true);
+      },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: currentPollingRate } // <-- AND WIRED HERE
     );
 
@@ -1195,6 +1207,7 @@ const App = () => {
     signOut(auth);
     setOfflineNodes({});
     clearGhostFadeTimers();
+    setLocationAccessDenied(false);
   };
 
   const handleLeaveSquad = () => {
@@ -2041,6 +2054,28 @@ const App = () => {
       {/* --- 👻 SIGNAL LOST BANNER (one-time, auto-dismissing) --- */}
       <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-md pointer-events-none flex flex-col gap-2">
         <AnimatePresence>
+          {/* Persistent (not auto-dismissing) — the underlying problem doesn't go away
+              on its own, so this stays until either a real GPS fix clears it or the
+              operative dismisses it themselves. Without this, a friend testing LOCUS
+              with location denied just sees no marker anywhere, with zero indication
+              of why — the exact silent failure this is meant to replace. */}
+          {locationAccessDenied && (
+            <motion.div
+              key="location-access-denied"
+              initial={{ opacity: 0, y: -30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -30, scale: 0.95 }}
+              className="p-3 border border-red-500 bg-red-950/90 backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-[0_0_15px_rgba(239,68,68,0.4)]"
+            >
+              <ShieldAlert size={16} className="text-red-500 shrink-0" />
+              <p className="font-dot text-xs text-white uppercase tracking-widest leading-tight flex-1">
+                ⚠ LOCATION ACCESS DENIED — SQUAD CANNOT SEE YOU
+              </p>
+              <button onClick={() => setLocationAccessDenied(false)} className="text-red-400 hover:text-white shrink-0" title="Dismiss">
+                <X size={14} />
+              </button>
+            </motion.div>
+          )}
           {signalLostAlerts.map(alert => (
             <motion.div
               key={alert.id}
@@ -2153,8 +2188,13 @@ const App = () => {
               onTrack={() => setArTarget({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })}
             />
           )}
-          {/* Filter out: blocked, ghost, and users with no coordinates yet */}
-          {activeTab === 'users' && users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng).map(u => (
+          {/* Filter out: blocked, ghost, and users with no coordinates yet. Deliberately
+              NOT gated on activeTab — squad members' live positions are core tactical
+              data, not something that should vanish just because the sidebar happens
+              to be showing the buildings list (which defaults to being the active tab
+              on load, so this used to hide every squad member until you flipped to
+              the SQUAD tab and back). */}
+          {users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng).map(u => (
             <div
               key={u.id}
               lat={u.lat}
