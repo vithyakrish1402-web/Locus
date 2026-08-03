@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-// Fixed 80x80 design grid for the progress rings (see LocationMarker.jsx for
-// the same pattern) so radii/strokes stay proportional regardless of the
+// Fixed 80x80 design grid for the progress rings (see LiveLocationMarker.jsx
+// for the same pattern) so radii/strokes stay proportional regardless of the
 // rendered button size.
 const GRID = 80;
 const CENTER = GRID / 2;

@@ -2,13 +2,11 @@ import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { SRM_MASTER_DATABASE } from '../srmDatabase';
-import LocationMarker from './LocationMarker';
-import LiveLocationMarker from '../LiveLocationMarker';
+import LiveLocationMarker, { NAVIGATING_SPEED_MPS } from '../LiveLocationMarker';
 import GhostMemberMarker from '../GhostMemberMarker';
 import WaypointMarker from './WaypointMarker';
 import BuildingMarker from './BuildingMarker';
 import LeafletReactMarker from './LeafletReactMarker';
-import { deriveMarkerStatus } from '../utils/markerStatus';
 import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
 
 const DARK_TILES = {
@@ -129,13 +127,29 @@ const TacticalLeafletMap = ({
         </LeafletReactMarker>
       )}
 
+      {/* Live navigation line to the active waypoint — react-leaflet renders this
+          declaratively, unlike the Google engine which needs an imperative
+          Polyline (see App.jsx's useWaypointNavigationLine). Re-renders naturally
+          on every liveLocation update, so it visibly shortens while walking. */}
+      {liveLocation && activeWaypoint && (
+        <Polyline
+          positions={[[liveLocation.lat, liveLocation.lng], [activeWaypoint.lat, activeWaypoint.lng]]}
+          pathOptions={{ color: '#EF4444', dashArray: '6 8', weight: 2, opacity: 0.8 }}
+        />
+      )}
+
       {/* Not gated on activeTab — see App.jsx's matching comment on the Google engine. */}
       {users
         .filter((u) => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng)
         .map((u) => (
           <LeafletReactMarker key={u.id} lat={u.lat} lng={u.lng} onClick={() => onFocus({ lat: u.lat, lng: u.lng }, null)}>
             <div style={{ animation: 'locus-member-fade-in 0.6s ease' }}>
-              <LocationMarker heading={u.heading} status={deriveMarkerStatus(u.speed / 3.6)} color="#EF4444" />
+              <LiveLocationMarker
+                zoom={currentZoom}
+                isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
+                heading={u.heading}
+                color="#EF4444"
+              />
             </div>
           </LeafletReactMarker>
         ))}
