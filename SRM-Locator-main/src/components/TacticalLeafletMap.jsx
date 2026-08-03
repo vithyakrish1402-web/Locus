@@ -129,7 +129,8 @@ const TacticalLeafletMap = ({
         </LeafletReactMarker>
       )}
 
-      {activeTab === 'users' && users
+      {/* Not gated on activeTab — see App.jsx's matching comment on the Google engine. */}
+      {users
         .filter((u) => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng)
         .map((u) => (
           <LeafletReactMarker key={u.id} lat={u.lat} lng={u.lng} onClick={() => onFocus({ lat: u.lat, lng: u.lng }, null)}>
