@@ -11,7 +11,7 @@ import {
   MapPin, Users, Search, Settings, Navigation, ShieldCheck,
   Building2, Sparkles, MessageSquare, Send, Loader2,
   BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
-  Wifi, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
+  Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
   Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
@@ -22,12 +22,17 @@ import LocusGuide from './LocusGuide';
 import ARCompass from './ARCompass';
 import { SRM_MASTER_DATABASE } from './srmDatabase';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
+import { useLiveHeading } from './hooks/useLiveHeading';
+import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
 import LocationMarker from './components/LocationMarker';
+import LiveLocationMarker, { NAVIGATING_SPEED_MPS } from './LiveLocationMarker';
+import GhostMemberMarker from './GhostMemberMarker';
 import WaypointMarker from './components/WaypointMarker';
 import BuildingMarker from './components/BuildingMarker';
 import SosTrigger from './components/SosTrigger';
 import SosOverlay from './components/SosOverlay';
 import { deriveMarkerStatus } from './utils/markerStatus';
+import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -377,33 +382,10 @@ class PrecognitionFilter {
   }
 }
 // --- 🧭 DEAD RECKONING ENGINE ---
-const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSeconds) => {
-  // If they were standing still, just return exact coordinates
-  if (!speedKmh || speedKmh < 1) return { lat, lng };
-
-  const R = 6371e3; // Earth's radius in meters
-  // Convert km/h to m/s, then multiply by seconds offline (e.g., 5 seconds)
-  const distanceMeters = (speedKmh * (5 / 18)) * timeDeltaSeconds;
-
-  const radLat = lat * (Math.PI / 180);
-  const radLng = lng * (Math.PI / 180);
-  const radHeading = headingDegrees * (Math.PI / 180);
-
-  const projectedLat = Math.asin(
-    Math.sin(radLat) * Math.cos(distanceMeters / R) +
-    Math.cos(radLat) * Math.sin(distanceMeters / R) * Math.cos(radHeading)
-  );
-
-  const projectedLng = radLng + Math.atan2(
-    Math.sin(radHeading) * Math.sin(distanceMeters / R) * Math.cos(radLat),
-    Math.cos(distanceMeters / R) - Math.sin(radLat) * Math.sin(projectedLat)
-  );
-
-  return {
-    lat: projectedLat * (180 / Math.PI),
-    lng: projectedLng * (180 / Math.PI)
-  };
-};
+// Moved to src/utils/ghostProjection.js — the ghost's position now needs
+// re-projecting every clock tick (up to the projection cap) rather than
+// once at disconnect time, so the math lives where App.jsx's live 1Hz
+// ghost clock and GhostMemberMarker can both reach it.
 
 const App = () => {
   const [isSatellite, setIsSatellite] = useState(false);
@@ -455,6 +437,28 @@ const App = () => {
 
   const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
+  const [signalLostAlerts, setSignalLostAlerts] = useState([]); // one-time auto-dismissing banners
+  const offlineNodesRef = useRef({}); // mirrors offlineNodes so users-update's stable closure can read live state
+  const ghostFadeTimersRef = useRef({}); // targetId -> timeout, guards against double-scheduling a fade-out
+
+  // Shared 1Hz clock so every ghost's elapsed-time tag / projection decay
+  // recomputes together instead of each running its own interval.
+  const [ghostClockTick, setGhostClockTick] = useState(() => Date.now());
+  const hasGhosts = Object.keys(offlineNodes).length > 0;
+  useEffect(() => {
+    if (!hasGhosts) return;
+    const id = setInterval(() => setGhostClockTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [hasGhosts]);
+
+  useEffect(() => {
+    offlineNodesRef.current = offlineNodes;
+  }, [offlineNodes]);
+
+  const ghostMembers = useMemo(
+    () => deriveGhostMembers(offlineNodes, ghostClockTick),
+    [offlineNodes, ghostClockTick]
+  );
 
   const [buildingIntel, setBuildingIntel] = useState('');
 
@@ -652,10 +656,7 @@ const App = () => {
   // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
-      // FIX 1: destructure timeDelta so projectGhostLocation receives the real lag time
       const { targetId, name, photo, lastKnownLocation, timeDelta } = emergencyData;
-
-      console.log("🔥 [FRONTEND] Received Ghost Data:", emergencyData);
 
       if (typeof playSonarPing === 'function') {
         playSonarPing();
@@ -663,29 +664,32 @@ const App = () => {
 
       setUsers(prev => prev.filter(u => u.id !== targetId));
 
-      const projectedCoords = projectGhostLocation(
-        lastKnownLocation.latitude,
-        lastKnownLocation.longitude,
-        lastKnownLocation.speed || 0,
-        lastKnownLocation.heading || 0,
-        timeDelta || 5
-      );
-
-      // FIX 2: use projectedCoords (pre-cog position) instead of raw lastKnownLocation
+      // Store the raw last-known fix, undisturbed — GhostMemberMarker/
+      // deriveGhostMembers re-projects from this every clock tick (up to the
+      // decay cap) rather than baking in a single one-shot guess here.
       setOfflineNodes(prev => ({
         ...prev,
         [targetId]: {
           id: targetId,
-          name: name,
-          photo: photo,
-          lat: projectedCoords.lat,
-          lng: projectedCoords.lng,
+          name,
+          photo,
+          lat: lastKnownLocation.latitude,
+          lng: lastKnownLocation.longitude,
+          heading: lastKnownLocation.heading || 0,
+          speedKmh: lastKnownLocation.speed || 0,
           battery: lastKnownLocation.batteryLevel,
-          time: Date.now()
+          timeDelta: timeDelta || 0,
+          receivedAt: Date.now(),
         }
       }));
 
-      alert(`[CRITICAL DISCONNECT]\n\n${name} went offline.`);
+      // One-time auto-dismissing banner — replaces the old blocking alert(),
+      // which froze the whole UI thread until someone clicked OK.
+      const alertId = `signal-lost-${targetId}-${Date.now()}`;
+      setSignalLostAlerts(prev => [...prev, { id: alertId, name }]);
+      setTimeout(() => {
+        setSignalLostAlerts(prev => prev.filter(a => a.id !== alertId));
+      }, 6000);
     });
 
     return () => {
@@ -723,6 +727,9 @@ const App = () => {
       socket.off('exiled');
       socket.off('mutiny-status');
     };
+    // Mount-once listener registration; handleLeaveSquad is read at call time
+    // via closure, not meant to retrigger this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // --- FIREBASE AUTH LISTENER ---
   useEffect(() => {
@@ -808,6 +815,22 @@ const App = () => {
             status: data.status || 'ACTIVE',
             permission: 'accepted',
           });
+
+          // Reconnect: this id just came back with a real position while still
+          // flagged dark. Fade the ghost out instead of snapping it away —
+          // offlineNodesRef (not the closed-over offlineNodes state) so this
+          // reads live even though the effect only subscribes once.
+          if (offlineNodesRef.current[id] && !ghostFadeTimersRef.current[id]) {
+            setOfflineNodes(prev => (prev[id] ? { ...prev, [id]: { ...prev[id], fading: true } } : prev));
+            ghostFadeTimersRef.current[id] = setTimeout(() => {
+              setOfflineNodes(prev => {
+                const next = { ...prev };
+                delete next[id];
+                return next;
+              });
+              delete ghostFadeTimersRef.current[id];
+            }, GHOST_FADE_MS);
+          }
         });
         return formattedUsers;
       });
@@ -1077,6 +1100,12 @@ const App = () => {
   const [mapProps, setMapProps] = useState({ center: SRM_KTR_COORDS, zoom: 17 });
   const mapRef = useRef(null);
 
+  // Tracks the map's actual on-screen zoom (pinch/scroll), separately from
+  // mapProps.zoom which is only the value WE last programmatically set (e.g.
+  // handleFocus jumping to zoom 19) — LiveLocationMarker's near/far state
+  // needs the real thing, not just our own last command.
+  const [currentZoom, setCurrentZoom] = useState(mapProps.zoom);
+
   // --- 🚨 TACTICAL MAP OVERRIDE: FORCE 2D TOP-DOWN ---
   // Moved here so mapProps and mapRef are declared before this runs
   useEffect(() => {
@@ -1149,6 +1178,13 @@ const App = () => {
     }
   };
 
+  // Cancels any in-flight ghost fade-out timers so a stray one doesn't fire
+  // a no-op setOfflineNodes update after the squad's already been left.
+  const clearGhostFadeTimers = () => {
+    Object.values(ghostFadeTimersRef.current).forEach(clearTimeout);
+    ghostFadeTimersRef.current = {};
+  };
+
   // --- 🚨 KILL SWITCH LOGOUT HANDLER ---
   const handleLogout = () => {
     socket.emit('leave-squad');
@@ -1158,6 +1194,7 @@ const App = () => {
     setLiveLocation(null);
     signOut(auth);
     setOfflineNodes({});
+    clearGhostFadeTimers();
   };
 
   const handleLeaveSquad = () => {
@@ -1166,6 +1203,7 @@ const App = () => {
     setSquadCode('');
     setUsers([]);
     setOfflineNodes({});
+    clearGhostFadeTimers();
     // Without this, a stale 'granted' (e.g. from owning the squad just left)
     // survives into the next join attempt — see handleJoinSquad's comment.
     setAccessStatus(null);
@@ -1290,12 +1328,25 @@ const App = () => {
   };
 
   // --- TACTICAL ROUTING ENGINE ---
+  // Finalizing a destination here also designates it as the squad's shared
+  // rally point (publish-waypoint) — SELECT_WAYPOINT previously only ever
+  // updated this client's own local route HUD, so no marker ever reached
+  // anyone else in the squad.
+  const publishSquadWaypoint = (destination) => {
+    const waypoint = { lat: destination.lat, lng: destination.lng, name: destination.name };
+    setActiveWaypoint(waypoint);
+    if (squadCode) {
+      socket.emit('publish-waypoint', { roomCode: squadCode, waypoint });
+    }
+  };
+
   const handleWaypointSelect = (targetCoords) => {
     if (!routeStart) {
       if (liveLocation) {
         setRouteStart({ name: "MY_LOCATION", ...liveLocation });
         setRouteEnd(targetCoords);
         calculateActualRoute({ name: "MY_LOCATION", ...liveLocation }, targetCoords);
+        publishSquadWaypoint(targetCoords);
       } else {
         setRouteStart(targetCoords);
       }
@@ -1304,6 +1355,7 @@ const App = () => {
       setRouteEnd(targetCoords);
       setSelectedItem(null);
       calculateActualRoute(routeStart, targetCoords);
+      publishSquadWaypoint(targetCoords);
     }
   };
 
@@ -1350,6 +1402,23 @@ const App = () => {
 
 
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
+
+  // --- LIVE LOCATION MARKER STATE ---
+  // Movement alone (no waypoint needed) already counts as "navigating" —
+  // drop the speed clause here if that should require an explicit waypoint instead.
+  const isNavigating = Boolean(activeWaypoint) || liveSpeed > NAVIGATING_SPEED_MPS;
+  const liveHeading = useLiveHeading({
+    lat: liveLocation?.lat,
+    lng: liveLocation?.lng,
+    speedMps: liveSpeed,
+    compassHeading: heading,
+  });
+
+  // Native Google Maps polylines for each dark member's projection vector —
+  // no-ops when the Leaflet fallback is active (mapRef only holds a Google
+  // map instance) or before the map's finished mounting. TacticalLeafletMap
+  // renders the Leaflet-engine equivalent itself, declaratively.
+  useGhostProjectionLines(!mapEngineFailed && isMapReady ? mapRef.current : null, ghostMembers);
 
   // --- TACTICAL MAP RENDERING ENGINE ---
   // Memoised on exactly the inputs that can change the map's configuration.
@@ -1793,7 +1862,40 @@ const App = () => {
                 </motion.div>
               ))
             ) : (
-              users.filter(u => !blockedUserIds.includes(u.id)).map(user => (
+              <>
+                {/* Persistent per-row ghost badge — independent of the transient
+                    top-of-screen banner, so anyone opening the Squad panel later
+                    still sees who's dark, not just whoever was looking when it fired. */}
+                {ghostMembers.map(ghost => (
+                  <motion.div
+                    layout
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    key={`ghost-row-${ghost.id}`}
+                    onClick={() => handleFocus(ghost.position, null)}
+                    className="p-4 mb-2 bg-gray-900 border border-dashed border-zinc-600 rounded-lg active:bg-gray-800 transition-colors relative group hover:border-zinc-400 cursor-pointer opacity-80"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 flex items-center justify-center font-dot text-sm border border-dashed border-zinc-600 text-zinc-400 overflow-hidden shrink-0">
+                          {ghost.photo ? <img src={ghost.photo} className="w-full h-full object-cover grayscale" alt="" /> : ghost.name.charAt(0)}
+                        </div>
+                        <div className="flex flex-col">
+                          <h4 className="font-dot text-sm uppercase tracking-widest text-zinc-300 leading-none mb-1">{ghost.name}</h4>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-dot uppercase tracking-widest px-1.5 py-0.5 border border-dashed border-zinc-500 text-zinc-400">
+                              {ghost.phase === 'expired' ? 'LAST KNOWN' : 'SIGNAL LOST'}
+                            </span>
+                            <span className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest">{ghost.elapsedLabel} AGO</span>
+                          </div>
+                        </div>
+                      </div>
+                      <WifiOff size={16} className="text-zinc-500 shrink-0" />
+                    </div>
+                  </motion.div>
+                ))}
+                {users.filter(u => !blockedUserIds.includes(u.id)).map(user => (
                 <motion.div
                   layout
                   initial={{ opacity: 0 }}
@@ -1877,7 +1979,8 @@ const App = () => {
                     )}
                   </div>
                 </motion.div>
-              ))
+                ))}
+              </>
             )}
           </AnimatePresence>
 
@@ -1935,6 +2038,25 @@ const App = () => {
           ))}
         </AnimatePresence>
       </div>
+      {/* --- 👻 SIGNAL LOST BANNER (one-time, auto-dismissing) --- */}
+      <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-md pointer-events-none flex flex-col gap-2">
+        <AnimatePresence>
+          {signalLostAlerts.map(alert => (
+            <motion.div
+              key={alert.id}
+              initial={{ opacity: 0, y: -30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -30, scale: 0.95 }}
+              className="p-3 border border-zinc-500 bg-zinc-900/90 backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+            >
+              <WifiOff size={16} className="text-zinc-400 shrink-0" />
+              <p className="font-dot text-xs text-white uppercase tracking-widest leading-tight">
+                ⚠ <span className="text-zinc-300">{alert.name}</span> SIGNAL LOST — TRACKING LAST VECTOR
+              </p>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
       {/* FULLSCREEN MAP */}
       <div className="absolute inset-0 z-0 bg-black">
         {mapEngineFailed ? (
@@ -1948,14 +2070,16 @@ const App = () => {
             <TacticalLeafletMap
               center={mapProps.center}
               zoom={mapProps.zoom}
+              onZoomChange={setCurrentZoom}
               onMapClick={handleMapClick}
               onFocus={handleFocus}
               liveLocation={liveLocation}
-              heading={heading}
-              liveSpeed={liveSpeed}
+              liveIsNavigating={isNavigating}
+              liveHeading={liveHeading}
+              currentZoom={currentZoom}
               users={users}
               blockedUserIds={blockedUserIds}
-              offlineNodes={offlineNodes}
+              ghostMembers={ghostMembers}
               activeTab={activeTab}
               activeWaypoint={activeWaypoint}
               squadRole={squadRole}
@@ -1974,6 +2098,7 @@ const App = () => {
           onClick={handleMapClick}
 
           zoom={mapProps.zoom}
+          onChange={({ zoom }) => setCurrentZoom(zoom)}
 
           yesIWantToUseGoogleMapApiInternals
           onGoogleApiLoaded={({ map }) => {
@@ -1991,9 +2116,10 @@ const App = () => {
               onClick={() => handleFocus(liveLocation, null)}
               style={{ cursor: 'pointer' }}
             >
-              <LocationMarker
-                heading={heading}
-                status={deriveMarkerStatus(liveSpeed)}
+              <LiveLocationMarker
+                zoom={currentZoom}
+                isNavigating={isNavigating}
+                heading={liveHeading}
                 color="#10B981"
               />
             </div>
@@ -2034,7 +2160,7 @@ const App = () => {
               lat={u.lat}
               lng={u.lng}
               onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'pointer', animation: 'locus-member-fade-in 0.6s ease' }}
             >
               <LocationMarker
                 heading={u.heading}
@@ -2044,16 +2170,18 @@ const App = () => {
             </div>
           ))}
 
-          {/* FIX 3: ghost markers always render — removed activeTab gate so they show on any tab */}
-          {Object.values(offlineNodes).map(ghost => (
+          {/* Ghost markers always render — no activeTab gate so they show on any tab.
+              Position is ghost.position (live-projected, capped, then frozen at
+              lastKnownLocation once expired), not a one-shot frozen guess. */}
+          {ghostMembers.map(ghost => (
             <div
               key={`ghost-${ghost.id}`}
-              lat={ghost.lat}
-              lng={ghost.lng}
-              onClick={() => handleFocus({ lat: ghost.lat, lng: ghost.lng }, { name: `LOST: ${ghost.name}`, info: `Last seen with ${ghost.battery} battery.` })}
-              style={{ cursor: 'pointer' }}
+              lat={ghost.position.lat}
+              lng={ghost.position.lng}
+              onClick={() => handleFocus(ghost.position, { name: `${ghost.phase === 'expired' ? 'LAST KNOWN' : 'SIGNAL LOST'}: ${ghost.name}`, info: `Last seen with ${ghost.battery ?? 0}% battery.` })}
+              style={{ cursor: 'pointer', opacity: ghost.fading ? 0 : 1, transition: `opacity ${GHOST_FADE_MS}ms ease` }}
             >
-              <LocationMarker status="signal-lost" color="#A1A1AA" />
+              <GhostMemberMarker phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} color="#A1A1AA" />
             </div>
           ))}
 

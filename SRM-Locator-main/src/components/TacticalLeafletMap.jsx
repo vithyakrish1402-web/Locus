@@ -1,12 +1,15 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { SRM_MASTER_DATABASE } from '../srmDatabase';
 import LocationMarker from './LocationMarker';
+import LiveLocationMarker from '../LiveLocationMarker';
+import GhostMemberMarker from '../GhostMemberMarker';
 import WaypointMarker from './WaypointMarker';
 import BuildingMarker from './BuildingMarker';
 import LeafletReactMarker from './LeafletReactMarker';
 import { deriveMarkerStatus } from '../utils/markerStatus';
+import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
 
 const DARK_TILES = {
   url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
@@ -43,6 +46,18 @@ const ClickHandler = ({ onMapClick }) => {
   return null;
 };
 
+// Reports the map's actual live zoom back up so LiveLocationMarker's
+// near/far state tracks real pinch/scroll zoom, not just the last zoom we
+// programmatically requested.
+const ZoomTracker = ({ onZoomChange }) => {
+  useMapEvents({
+    zoomend(e) {
+      onZoomChange?.(e.target.getZoom());
+    },
+  });
+  return null;
+};
+
 /**
  * Fallback map engine used only when Google Maps fails to load (see App.jsx's
  * `mapEngineFailed` timeout). Deliberately reduced scope compared to the
@@ -54,14 +69,16 @@ const ClickHandler = ({ onMapClick }) => {
 const TacticalLeafletMap = ({
   center,
   zoom,
+  onZoomChange,
   onMapClick,
   onFocus,
   liveLocation,
-  heading,
-  liveSpeed,
+  liveIsNavigating,
+  liveHeading,
+  currentZoom,
   users,
   blockedUserIds,
-  offlineNodes,
+  ghostMembers,
   activeTab,
   activeWaypoint,
   squadRole,
@@ -82,6 +99,7 @@ const TacticalLeafletMap = ({
       <TileLayer url={tiles.url} attribution={tiles.attribution} />
       <ViewController center={center} zoom={zoom} />
       <ClickHandler onMapClick={onMapClick} />
+      <ZoomTracker onZoomChange={onZoomChange} />
 
       {liveLocation && (
         <LeafletReactMarker
@@ -89,7 +107,7 @@ const TacticalLeafletMap = ({
           lng={liveLocation.lng}
           onClick={() => onFocus(liveLocation, null)}
         >
-          <LocationMarker heading={heading} status={deriveMarkerStatus(liveSpeed)} color="#10B981" />
+          <LiveLocationMarker zoom={currentZoom} isNavigating={liveIsNavigating} heading={liveHeading} color="#10B981" />
         </LeafletReactMarker>
       )}
 
@@ -115,18 +133,33 @@ const TacticalLeafletMap = ({
         .filter((u) => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng)
         .map((u) => (
           <LeafletReactMarker key={u.id} lat={u.lat} lng={u.lng} onClick={() => onFocus({ lat: u.lat, lng: u.lng }, null)}>
-            <LocationMarker heading={u.heading} status={deriveMarkerStatus(u.speed / 3.6)} color="#EF4444" />
+            <div style={{ animation: 'locus-member-fade-in 0.6s ease' }}>
+              <LocationMarker heading={u.heading} status={deriveMarkerStatus(u.speed / 3.6)} color="#EF4444" />
+            </div>
           </LeafletReactMarker>
         ))}
 
-      {Object.values(offlineNodes).map((ghost) => (
+      {ghostMembers.flatMap((ghost) => {
+        if (ghost.phase === 'expired') return [];
+        return getProjectionSegments(ghost.lastKnownLocation, ghost.position).map((segment, i) => (
+          <Polyline
+            key={`ghost-line-${ghost.id}-${i}`}
+            positions={[[segment.from.lat, segment.from.lng], [segment.to.lat, segment.to.lng]]}
+            pathOptions={{ color: '#A1A1AA', opacity: segment.opacity, weight: 2, dashArray: '4 6' }}
+          />
+        ));
+      })}
+
+      {ghostMembers.map((ghost) => (
         <LeafletReactMarker
           key={`ghost-${ghost.id}`}
-          lat={ghost.lat}
-          lng={ghost.lng}
-          onClick={() => onFocus({ lat: ghost.lat, lng: ghost.lng }, { name: `LOST: ${ghost.name}`, info: `Last seen with ${ghost.battery} battery.` })}
+          lat={ghost.position.lat}
+          lng={ghost.position.lng}
+          onClick={() => onFocus(ghost.position, { name: `${ghost.phase === 'expired' ? 'LAST KNOWN' : 'SIGNAL LOST'}: ${ghost.name}`, info: `Last seen with ${ghost.battery ?? 0}% battery.` })}
         >
-          <LocationMarker status="signal-lost" color="#A1A1AA" />
+          <div style={{ opacity: ghost.fading ? 0 : 1, transition: `opacity ${GHOST_FADE_MS}ms ease` }}>
+            <GhostMemberMarker phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} color="#A1A1AA" />
+          </div>
         </LeafletReactMarker>
       ))}
     </MapContainer>
