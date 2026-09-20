@@ -36,7 +36,14 @@ const LeafletReactMarker = ({ lat, lng, zIndexOffset, onClick, children }) => {
     rootRef.current = el ? createRoot(el) : null;
 
     return () => {
-      rootRef.current?.unmount();
+      // Deferred, not synchronous. This cleanup runs inside React's commit phase, and
+      // unmounting a root from there logs "Attempted to synchronously unmount a root
+      // while React was already rendering" for every marker torn down — switching the
+      // sidebar to the buildings tab unmounts 24 at once, so the console filled with
+      // hundreds of them and buried anything real. The root is captured into a local
+      // first, since the ref is reassigned when this marker remounts.
+      const root = rootRef.current;
+      queueMicrotask(() => root?.unmount());
       marker.remove();
     };
     // Marker is created once per mount; lat/lng/children updates are handled

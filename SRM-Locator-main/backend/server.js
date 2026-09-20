@@ -4,7 +4,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { resolveSosRoom, recordSos, toSosPayload, pendingSosFor, ackSos, memberKey } from './sosRelay.js';
-import { rememberMember, forgetMember, rebindReturningMember } from './squadRoster.js';
+import { rememberMember, forgetMember, rebindReturningMember, collectStaleSocketIds } from './squadRoster.js';
 
 const app = express();
 app.use(cors());
@@ -138,6 +138,11 @@ socket.on('check-ping', (clientTimestamp) => {
     // squad" and let them straight back in, no race, no vote required.
     const requesterUid = user?.uid || null;
     socket.data.uid = requesterUid;
+    // Remember who this socket is independently of their telemetry. broadcastSquadUpdate
+    // needs a name and photo for members who haven't got a GPS fix yet (indoors, location
+    // permission denied, just joined) — they're on the roster, so they must be nameable
+    // there, rather than being invisible until their first coordinate arrives.
+    socket.data.profile = { name: user?.name || null, photo: user?.photo || null };
 
     // Case 1: brand-new or fully abandoned room -> requester becomes the owner.
     if (!existing || existing.members.length === 0) {
@@ -166,15 +171,27 @@ socket.on('check-ping', (clientTimestamp) => {
     // let them straight back in as OWNER. Rebind their new socket id and keep
     // everyone else already in the roster instead of wiping it.
     if (requesterUid && existing.ownerUid && requesterUid === existing.ownerUid) {
-      existing.members = existing.members.filter(id => id !== existing.ownerId && io.sockets.sockets.has(id));
-      existing.members.push(socket.id);
+      // Their own superseded connection(s). This used to only drop the old id from
+      // `members` and leave everything else behind: the stale socket stayed subscribed to
+      // the room, and its `users`/`locationCache` entries survived — so every other client
+      // saw the Commander twice (once stale, once live), the Commander saw a phantom of
+      // themselves listed as a squad member, and when the dead socket finally timed out it
+      // raised a 'member-signal-lost' for someone sitting right there, leaving a ghost
+      // marker nobody could ever clear. Same teardown the member path (Case 4b) already did.
+      const staleIds = collectStaleSocketIds(existing, requesterUid, socket.id);
+      existing.members = existing.members.filter(id => !staleIds.includes(id) && io.sockets.sockets.has(id));
+      if (!existing.members.includes(socket.id)) existing.members.push(socket.id);
       existing.ownerId = socket.id;
       existing.memberUids = existing.memberUids || {};
+      staleIds.forEach(id => delete existing.memberUids[id]);
       existing.memberUids[socket.id] = requesterUid;
       rememberMember(existing, requesterUid);
       existing.lastActivity = Date.now();
       socket.join(roomCode);
+      purgeStaleSockets(roomCode, staleIds);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
+      if (existing.activeWaypoint) socket.emit('new-waypoint', existing.activeWaypoint);
+      broadcastSquadUpdate(roomCode);
       return;
     }
 
@@ -183,15 +200,22 @@ socket.on('check-ping', (clientTimestamp) => {
     // caretaker owner rather than stranding the squad, keeping the roster intact.
     const ownerIsLive = io.sockets.sockets.has(existing.ownerId);
     if (!ownerIsLive) {
+      // The caretaker may themselves be arriving on a new socket, so tear their old one
+      // down here too — same reason as Case 3 above.
+      const staleIds = collectStaleSocketIds(existing, requesterUid, socket.id);
       existing.ownerId = socket.id;
       existing.ownerUid = requesterUid;
+      existing.members = existing.members.filter(id => !staleIds.includes(id));
       if (!existing.members.includes(socket.id)) existing.members.push(socket.id);
       existing.memberUids = existing.memberUids || {};
+      staleIds.forEach(id => delete existing.memberUids[id]);
       existing.memberUids[socket.id] = requesterUid;
       rememberMember(existing, requesterUid);
       existing.lastActivity = Date.now();
       socket.join(roomCode);
+      purgeStaleSockets(roomCode, staleIds);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
+      broadcastSquadUpdate(roomCode);
       return;
     }
 
@@ -204,14 +228,10 @@ socket.on('check-ping', (clientTimestamp) => {
     // squad whose owner has vanished) is still handled the way it always was.
     const returning = rebindReturningMember(existing, { uid: requesterUid, socketId: socket.id });
     if (returning) {
-      for (const staleId of returning.staleIds) {
-        // The same person's previous connection: it's superseded. Detach it from the
-        // room and drop its per-socket state so it can't show as a duplicate marker, or
-        // later raise a false "signal lost" for someone who is in fact back.
-        io.sockets.sockets.get(staleId)?.leave(roomCode);
-        delete users[staleId];
-        delete locationCache[staleId];
-      }
+      // The same person's previous connection(s): superseded. Detached from the room and
+      // stripped of per-socket state so they can't show as a duplicate marker, or later
+      // raise a false "signal lost" for someone who is in fact back.
+      purgeStaleSockets(roomCode, returning.staleIds);
       existing.lastActivity = Date.now();
       socket.join(roomCode);
       socket.emit('access-granted', { role: returning.role, roomCode });
@@ -248,6 +268,11 @@ socket.on('check-ping', (clientTimestamp) => {
           if (activeSquads[roomCode].activeWaypoint) {
             targetSocket.emit('new-waypoint', activeSquads[roomCode].activeWaypoint);
           }
+          // Put them on everyone's roster now. Previously the squad only learned of a new
+          // member when that member's first telemetry arrived, so a mid-session joiner was
+          // missing from the list for a polling interval (up to 15s in eco mode) — and
+          // indefinitely if they never got a fix at all.
+          broadcastSquadUpdate(roomCode);
         }
       } else {
         io.to(targetId).emit('access-denied');
@@ -468,6 +493,10 @@ socket.on('check-ping', (clientTimestamp) => {
         // 2. Broadcast to the ENTIRE squad (or keep it ownerId if strictly classified)
         io.to(room).emit('member-signal-lost', {
           targetId: socket.id,
+          // Stable identity alongside the (now dead) socket id: without it the client
+          // can't tell that the node it just ghosted is the same person who reconnects
+          // a second later under a fresh socket id.
+          uid: squad.memberUids?.[socket.id] || socket.data?.uid || null,
           name: userData.name,
           photo: userData.photo,
           // 3. Package the trajectory data for the frontend's Pre-Cog engine
@@ -499,10 +528,59 @@ socket.on('check-ping', (clientTimestamp) => {
     // the periodic stale-squad sweep.
   });
 
+  // Tear down a person's superseded connection(s) after they've been rebound onto a new
+  // socket: out of the room, and clear of the per-socket state that would otherwise keep
+  // them on everyone's map as a second, frozen copy of themselves.
+  function purgeStaleSockets(roomCode, staleIds = []) {
+    for (const staleId of staleIds) {
+      io.sockets.sockets.get(staleId)?.leave(roomCode);
+      delete users[staleId];
+      delete locationCache[staleId];
+    }
+  }
+
+  // The squad's roster, as everyone else's member list and map see it.
+  //
+  // Built from `squad.members` — the authoritative roster — rather than only from whoever
+  // has sent telemetry. `users` fills in on the first GPS fix, so a member who is indoors,
+  // has denied location permission, or has simply just been approved used to be missing
+  // from this payload altogether: absent from the squad list as well as the map. They now
+  // come through with their telemetry merged in where there is any and `hasFix: false`
+  // where there isn't, so the client can list them without trying to plot them.
+  //
+  // Every entry carries `uid`, the person's stable identity. Socket ids are reminted on
+  // every mobile reconnect, and a client holding only socket ids cannot tell "same person,
+  // new socket" — which is what left a returning member buried under an orphaned ghost
+  // marker of themselves that nothing could clear.
   function broadcastSquadUpdate(roomCode) {
+    const squad = activeSquads[roomCode];
+    const ids = new Set(squad ? squad.members : []);
+    Object.keys(users).forEach(id => { if (users[id].roomCode === roomCode) ids.add(id); });
+
     const roomUsers = {};
-    Object.keys(users).forEach(id => {
-      if (users[id].roomCode === roomCode) roomUsers[id] = users[id];
+    ids.forEach(id => {
+      const telemetry = users[id];
+      if (telemetry && telemetry.roomCode !== roomCode) return;
+      const live = io.sockets.sockets.get(id);
+      // A roster entry whose socket is gone and which never reported a fix: there is
+      // nothing to show, and its own disconnect handler is about to prune it anyway.
+      if (!telemetry && !live) return;
+
+      const uid = squad?.memberUids?.[id] || live?.data?.uid || null;
+      const profile = live?.data?.profile || {};
+      roomUsers[id] = telemetry
+        ? { ...telemetry, uid, hasFix: true }
+        : {
+            uid,
+            roomCode,
+            name: profile.name,
+            photo: profile.photo,
+            status: 'ACTIVE',
+            speed: 0,
+            heading: 0,
+            battery: 0,
+            hasFix: false,
+          };
     });
     io.to(roomCode).emit('users-update', roomUsers);
   }

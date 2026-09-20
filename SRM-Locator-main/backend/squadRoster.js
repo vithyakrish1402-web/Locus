@@ -46,13 +46,32 @@ export function forgetMember(squad, uid) {
 // Returns null if this isn't a known member (caller falls through to normal approval);
 // otherwise { role, staleIds } so the caller can detach the old sockets and clear their
 // per-socket state.
+// Every socket id the squad still has on file for `uid`, other than the one they're
+// arriving on now. These are superseded connections: the same person's previous
+// session(s), which on mobile are routinely still on the roster because a reconnect
+// mints a new socket id long before the old one's 'disconnect' fires.
+//
+// Callers use this to tear the old connections down — leave the room, drop their
+// telemetry — so a returning member is one node on everyone's map, not two, and their
+// dead socket can't later raise a "signal lost" for someone who is in fact right here.
+export function collectStaleSocketIds(squad, uid, socketId) {
+  if (!uid || !squad) return [];
+  const byUid = Object.keys(squad.memberUids || {}).filter(
+    (id) => id !== socketId && squad.memberUids[id] === uid
+  );
+  // The owner's previous socket isn't always in memberUids (older squads, or an
+  // ownership handover), so take it from ownerUid too rather than leaving it behind.
+  if (squad.ownerUid === uid && squad.ownerId && squad.ownerId !== socketId && !byUid.includes(squad.ownerId)) {
+    byUid.push(squad.ownerId);
+  }
+  return byUid;
+}
+
 export function rebindReturningMember(squad, { uid, socketId }) {
   if (!isKnownMember(squad, uid)) return null;
 
   squad.memberUids = squad.memberUids || {};
-  const staleIds = Object.keys(squad.memberUids).filter(
-    (id) => id !== socketId && squad.memberUids[id] === uid
-  );
+  const staleIds = collectStaleSocketIds(squad, uid, socketId);
 
   const wasOwner = staleIds.includes(squad.ownerId);
 

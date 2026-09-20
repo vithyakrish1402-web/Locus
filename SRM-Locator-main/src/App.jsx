@@ -10,7 +10,7 @@ import GoogleMapReact from 'google-map-react';
 import {
   MapPin, Users, Search, Settings, Navigation, ShieldCheck,
   Building2, Sparkles, MessageSquare, Send, Loader2,
-  BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
+  BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
   Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
 } from 'lucide-react';
@@ -414,8 +414,10 @@ const App = () => {
   const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
   const [signalLostAlerts, setSignalLostAlerts] = useState([]); // one-time auto-dismissing banners
-  const offlineNodesRef = useRef({}); // mirrors offlineNodes so users-update's stable closure can read live state
   const ghostFadeTimersRef = useRef({}); // targetId -> timeout, guards against double-scheduling a fade-out
+  // Own stable identity, readable from socket callbacks that only subscribe once. Socket
+  // ids change on every reconnect; this doesn't, so it's what "is this me?" is answered with.
+  const myUidRef = useRef(null);
 
   // Shared 1Hz clock so every ghost's elapsed-time tag / projection decay
   // recomputes together instead of each running its own interval.
@@ -426,10 +428,6 @@ const App = () => {
     const id = setInterval(() => setGhostClockTick(Date.now()), 1000);
     return () => clearInterval(id);
   }, [hasGhosts]);
-
-  useEffect(() => {
-    offlineNodesRef.current = offlineNodes;
-  }, [offlineNodes]);
 
   const ghostMembers = useMemo(
     () => deriveGhostMembers(offlineNodes, ghostClockTick),
@@ -549,6 +547,12 @@ const App = () => {
     if (user) requestHeadingPermission();
   }, [user, requestHeadingPermission]);
 
+  // Own stable identity, mirrored into a ref so the socket listeners below — which
+  // subscribe once and close over their scope — always compare against the current value.
+  useEffect(() => {
+    myUidRef.current = user?.uid || null;
+  }, [user]);
+
   const handleJoinSquad = (e) => {
     // Prevent the page from refreshing if this is inside a form
     if (e && e.preventDefault) e.preventDefault();
@@ -636,13 +640,16 @@ const App = () => {
   // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
-      const { targetId, name, photo, lastKnownLocation, timeDelta } = emergencyData;
+      const { targetId, uid, name, photo, lastKnownLocation, timeDelta } = emergencyData;
 
       if (typeof playSonarPing === 'function') {
         playSonarPing();
       }
 
-      setUsers(prev => prev.filter(u => u.id !== targetId));
+      // Match on uid as well as socket id. The socket that died may already have been
+      // superseded by the same person's newer one, in which case filtering by targetId
+      // alone removes nobody and leaves the roster carrying a node the server has dropped.
+      setUsers(prev => prev.filter(u => u.id !== targetId && !(uid && u.uid === uid)));
 
       // Store the raw last-known fix, undisturbed — GhostMemberMarker/
       // deriveGhostMembers re-projects from this every clock tick (up to the
@@ -651,6 +658,9 @@ const App = () => {
         ...prev,
         [targetId]: {
           id: targetId,
+          // Who this ghost actually is, independent of the socket that just died — this is
+          // what lets it be retired when they come back on a different socket id.
+          uid: uid || null,
           name,
           photo,
           lat: lastKnownLocation.latitude,
@@ -766,51 +776,56 @@ const App = () => {
     });
 
     socket.on('users-update', (activeUsers) => {
+      // Pure: builds the new roster and nothing else. Reconciling ghosts against it used
+      // to happen inline here, from inside the setUsers updater — but an updater has to be
+      // a pure function of the previous state (React is free to call it more than once),
+      // and firing another setState from within it also re-ran the Kalman filter below on
+      // the same coordinate. That reconciliation now lives in its own effect, keyed off
+      // the roster this produces.
       setUsers(() => {
         const formattedUsers = [];
         Object.entries(activeUsers).forEach(([id, data]) => {
           // Skip self, wrong room, and GHOST nodes (server still sends them so others
-          // can see their last position, but we hide them from our own map/list)
+          // can see their last position, but we hide them from our own map/list).
+          //
+          // Self is matched on socket id *and* on uid: a reconnect mints a new socket id,
+          // so for as long as the server still has the old one on file, `id === socket.id`
+          // alone left this client looking at a stale copy of itself listed as a squad
+          // member. Matching on uid (never on name, which isn't unique and isn't identity)
+          // catches that without touching anyone else.
           if (id === socket.id) return;
+          if (data.uid && myUidRef.current && data.uid === myUidRef.current) return;
           if (data.roomCode !== squadCode) return;
           if (data.status === 'GHOST') return;
-          if (!data.lat || !data.lng) return;
+
+          // A member with no fix yet (indoors, location permission denied, just approved)
+          // is still a member: they belong on the roster, just not on the map. Dropping
+          // them outright here is what made them vanish from both views at once.
+          const hasFix = Boolean(data.lat && data.lng);
 
           // Run Kalman smoothing on every incoming coordinate
-          if (!squadPrecognition.current[id]) {
-            squadPrecognition.current[id] = new PrecognitionFilter();
+          let smoothed = null;
+          if (hasFix) {
+            if (!squadPrecognition.current[id]) {
+              squadPrecognition.current[id] = new PrecognitionFilter();
+            }
+            smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
           }
-          const smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
 
           formattedUsers.push({
             id,
+            uid: data.uid || null,
             name: data.name || 'Squad Node',
             photo: data.photo,
             role: data.role || 'Campus Node',
-            lat: smoothed.lat,
-            lng: smoothed.lng,
+            hasFix,
+            lat: hasFix ? smoothed.lat : null,
+            lng: hasFix ? smoothed.lng : null,
             speed: data.speed || 0,
             heading: data.heading || 0,
             battery: data.battery || 0,
             status: data.status || 'ACTIVE',
-            permission: 'accepted',
           });
-
-          // Reconnect: this id just came back with a real position while still
-          // flagged dark. Fade the ghost out instead of snapping it away —
-          // offlineNodesRef (not the closed-over offlineNodes state) so this
-          // reads live even though the effect only subscribes once.
-          if (offlineNodesRef.current[id] && !ghostFadeTimersRef.current[id]) {
-            setOfflineNodes(prev => (prev[id] ? { ...prev, [id]: { ...prev[id], fading: true } } : prev));
-            ghostFadeTimersRef.current[id] = setTimeout(() => {
-              setOfflineNodes(prev => {
-                const next = { ...prev };
-                delete next[id];
-                return next;
-              });
-              delete ghostFadeTimersRef.current[id];
-            }, GHOST_FADE_MS);
-          }
         });
         return formattedUsers;
       });
@@ -851,6 +866,54 @@ const App = () => {
       setUsers([]);
     };
   }, [hasJoinedSquad, squadCode]);
+
+  // --- GHOST RECONCILIATION (the other half of the dead man's switch) ---
+  //
+  // A ghost is filed against the socket id that went dark. On mobile the same person is
+  // usually back seconds later on a brand-new socket id, so matching the returning node to
+  // its ghost by socket id never matched — the ghost stayed for the rest of the session.
+  // And since ghosts render after live members in both map engines, that stale grey
+  // "SIGNAL LOST" pin sat directly on top of the member's live marker a few metres away:
+  // the member was on the map, just buried under a ghost of themselves.
+  //
+  // Matching on uid — the stable identity the server now sends with both 'users-update'
+  // and 'member-signal-lost' — retires the ghost as soon as its owner is live again, on
+  // whatever socket they came back on. This is the same fade-out that was previously
+  // inlined in the users-update handler, not a second removal path: 'member-signal-lost'
+  // still solely owns creating ghosts, this solely owns retiring them.
+  useEffect(() => {
+    const liveIds = new Set(users.map(u => u.id));
+    const liveUids = new Set(users.map(u => u.uid).filter(Boolean));
+    // Own ghost too: this client can be ghosted by its own earlier socket, and it will
+    // never appear in `users` (self is filtered out of the roster).
+    if (myUidRef.current) liveUids.add(myUidRef.current);
+
+    Object.values(offlineNodes).forEach(ghost => {
+      const isBack = liveIds.has(ghost.id) || (ghost.uid && liveUids.has(ghost.uid));
+      if (!isBack || ghost.fading || ghostFadeTimersRef.current[ghost.id]) return;
+
+      // Fade out rather than snapping away, so a reconnect reads as a recovery instead of
+      // a marker blinking out of existence.
+      setOfflineNodes(prev => (prev[ghost.id] ? { ...prev, [ghost.id]: { ...prev[ghost.id], fading: true } } : prev));
+      ghostFadeTimersRef.current[ghost.id] = setTimeout(() => {
+        setOfflineNodes(prev => {
+          const next = { ...prev };
+          delete next[ghost.id];
+          return next;
+        });
+        delete ghostFadeTimersRef.current[ghost.id];
+      }, GHOST_FADE_MS);
+    });
+  }, [users, offlineNodes]);
+
+  // Retire the per-member Kalman filter of anyone off the roster. Keyed by socket id, so
+  // without this every reconnect strands the departed socket's filter for the session.
+  useEffect(() => {
+    const liveIds = new Set(users.map(u => u.id));
+    Object.keys(squadPrecognition.current).forEach(id => {
+      if (!liveIds.has(id)) delete squadPrecognition.current[id];
+    });
+  }, [users]);
 
   // --- GATEKEEPER PROTOCOL LISTENERS ---
   // --- GATEKEEPER PROTOCOL LISTENERS (FIXED & RECONNECT SAFE) ---
@@ -1229,11 +1292,6 @@ const App = () => {
     alert(`[SYSTEM] SOS Signal transmitted directly to node: ${targetNodeName}.`);
   };
 
-  const requestPermission = (userId) => {
-    if (blockedUserIds.includes(userId)) return;
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, permission: 'requested' } : u));
-  };
-
   const toggleBlock = (userId) => {
     setBlockedUserIds(prev => {
       if (prev.includes(userId)) return prev.filter(id => id !== userId);
@@ -1242,7 +1300,6 @@ const App = () => {
       if (squadRole === 'OWNER') {
         socket.emit('block-user', { roomCode: squadCode, targetId: userId });
       }
-      setUsers(uPrev => uPrev.map(u => u.id === userId ? { ...u, permission: 'none' } : u));
       return [...prev, userId];
     });
   };
@@ -1903,11 +1960,16 @@ const App = () => {
                 </motion.div>
               ))
             ) : (
-              <>
-                {/* Persistent per-row ghost badge — independent of the transient
+              // A flat array, not a <> fragment. AnimatePresence mode="popLayout" wraps
+              // each direct child in a ref-bearing element to measure it, and a Fragment
+              // cannot take a ref — React logged "Invalid prop `ref` supplied to
+              // React.Fragment" for every row on every re-render (485 in one session).
+              // An array of keyed children is what AnimatePresence wants anyway.
+              [
+                /* Persistent per-row ghost badge — independent of the transient
                     top-of-screen banner, so anyone opening the Squad panel later
-                    still sees who's dark, not just whoever was looking when it fired. */}
-                {ghostMembers.map(ghost => (
+                   still sees who's dark, not just whoever was looking when it fired. */
+                ...ghostMembers.map(ghost => (
                   <motion.div
                     layout
                     initial={{ opacity: 0 }}
@@ -1935,8 +1997,8 @@ const App = () => {
                       <WifiOff size={16} className="text-zinc-500 shrink-0" />
                     </div>
                   </motion.div>
-                ))}
-                {users.filter(u => !blockedUserIds.includes(u.id)).map(user => (
+                )),
+                ...users.filter(u => !blockedUserIds.includes(u.id)).map(user => (
                 <motion.div
                   layout
                   initial={{ opacity: 0 }}
@@ -1950,17 +2012,21 @@ const App = () => {
                   {/* ROW 1: HEADER & ICONS */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 flex items-center justify-center font-dot text-sm border overflow-hidden shrink-0 ${user.permission === 'accepted' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10' : 'border-white/20 text-zinc-500'}`}>
+                      <div className="w-10 h-10 flex items-center justify-center font-dot text-sm border overflow-hidden shrink-0 border-emerald-500 text-emerald-500 bg-emerald-500/10">
                         {user.photo ? <img src={user.photo} className="w-full h-full object-cover" alt="" /> : user.name.charAt(0)}
                       </div>
                       <div className="flex flex-col">
                         <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none mb-1">{user.name}</h4>
                         <div className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                           <span>[{user.role}]</span>
-                          {liveLocation && (
-                            <span className="text-emerald-400">
-                              {calculateDistance(liveLocation.lat, liveLocation.lng, user.lat, user.lng)}
-                            </span>
+                          {user.hasFix ? (
+                            liveLocation && (
+                              <span className="text-emerald-400">
+                                {calculateDistance(liveLocation.lat, liveLocation.lng, user.lat, user.lng)}
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-zinc-600">NO_FIX</span>
                           )}
                         </div>
                       </div>
@@ -1969,7 +2035,7 @@ const App = () => {
                       <button onClick={() => sendPing(user.id)} className="text-emerald-400 hover:text-white transition-colors p-1" title="Ping User">
                         <Radio size={16} className="animate-pulse" />
                       </button>
-                      {user.permission === 'accepted' ? <UserCheck size={16} className="text-zinc-500" /> : <Lock size={16} className="text-zinc-700" />}
+                      <UserCheck size={16} className="text-zinc-500" />
                       {squadRole === 'OWNER' && (
                         <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors p-1" title="Instant Ban">
                           <Ban size={16} />
@@ -2000,7 +2066,14 @@ const App = () => {
                     >
                       FIRE_SOS_BEACON
                     </button>
-                    {user.permission === 'accepted' ? (
+                    {!user.hasFix ? (
+                      // On the roster, but nothing to aim at yet — no coordinates have come
+                      // through for them. Says so instead of offering buttons that would
+                      // point the AR compass and the map at nothing.
+                      <div className="w-full py-3 border border-dashed border-white/20 text-zinc-500 font-dot text-xs uppercase tracking-widest text-center">
+                        AWAITING_GPS_FIX
+                      </div>
+                    ) : (
                       <div className="flex gap-2 w-full">
                         <button
                           onClick={(e) => { e.stopPropagation(); setArTarget({ lat: user.lat, lng: user.lng, name: user.name }); }}
@@ -2013,15 +2086,11 @@ const App = () => {
                           TRACK_TARGET
                         </button>
                       </div>
-                    ) : (
-                      <button onClick={() => requestPermission(user.id)} className="w-full py-3 bg-white text-black hover:bg-zinc-200 font-dot text-xs uppercase tracking-widest transition-colors">
-                        REQUEST_LINK
-                      </button>
                     )}
                   </div>
                 </motion.div>
-                ))}
-              </>
+                )),
+              ]
             )}
           </AnimatePresence>
 
@@ -2217,13 +2286,17 @@ const App = () => {
               onTrack={() => setArTarget({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })}
             />
           )}
-          {/* Filter out: blocked, ghost, and users with no coordinates yet. Deliberately
-              NOT gated on activeTab — squad members' live positions are core tactical
-              data, not something that should vanish just because the sidebar happens
-              to be showing the buildings list (which defaults to being the active tab
-              on load, so this used to hide every squad member until you flipped to
-              the SQUAD tab and back). */}
-          {users.filter(u => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng).map(u => (
+          {/* Same set the squad roster panel shows, minus the members who have no fix to
+              plot yet — those stay listed there rather than disappearing from the app
+              entirely. Nothing else narrows it: this and the roster panel render the same
+              set, deliberately, so the two views cannot drift apart again.
+
+              Deliberately NOT gated on activeTab either — squad members' live positions are
+              core tactical data, not something that should vanish just because the sidebar
+              happens to be showing the buildings list (which defaults to being the active
+              tab on load, so this used to hide every squad member until you flipped to the
+              SQUAD tab and back). */}
+          {users.filter(u => !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.hasFix).map(u => (
             <div
               key={u.id}
               lat={u.lat}
@@ -2595,7 +2668,7 @@ const App = () => {
                   </div>
 
                   {/* Table Body */}
-                  {users.filter(u => u.permission === 'accepted').map(userNode => {
+                  {users.map(userNode => {
                     const cacheData = rawTelemetryData?.[userNode.id];
                     const freshness = getSignalFreshness(cacheData?.timestamp);
                     const batteryColor = cacheData && parseInt(cacheData.batteryLevel) < 20 ? 'text-red-500' : 'text-emerald-500';
@@ -2896,8 +2969,12 @@ const App = () => {
             setMobileView('scan');
             // If we have a live location, open the AR scanner targeting the nearest squad member
             // If no squad members, scan toward campus center
-            const scanTarget = (users && users.length > 0 && users[0])
-              ? { lat: users[0].lat, lng: users[0].lng, name: users[0].name || 'SQUAD_NODE' }
+            // First member with an actual fix — users can now include members who are on
+            // the roster but haven't reported coordinates yet, and aiming the AR compass
+            // at a null coordinate just points it nowhere.
+            const scanNode = users.find(u => u.hasFix);
+            const scanTarget = scanNode
+              ? { lat: scanNode.lat, lng: scanNode.lng, name: scanNode.name || 'SQUAD_NODE' }
               : { lat: SRM_KTR_COORDS.lat, lng: SRM_KTR_COORDS.lng, name: 'SRM_HQ' };
             setArTarget(scanTarget);
           }}

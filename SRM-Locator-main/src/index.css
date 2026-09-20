@@ -150,3 +150,14 @@ body {
   50% { transform: translateX(-3px); }
 }
 
+/* Leaflet fallback basemap (TacticalLeafletMap): OpenStreetMap's standard tiles are the
+   only dark-capable raster source that still needs no API key, but they ship light. This
+   inverts them into the app's dark palette in the browser.
+
+   hue-rotate(180deg) after the invert puts blues and greens back near their true hue, so
+   water and parkland don't come out magenta; the rest just takes the glare off. Applied
+   to the tile layer's own container, which lives in .leaflet-tile-pane — markers sit in a
+   separate pane, so none of this touches the squad/building markers drawn on top. */
+.locus-dark-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(0.62) contrast(1.15) saturate(0.18);
+}

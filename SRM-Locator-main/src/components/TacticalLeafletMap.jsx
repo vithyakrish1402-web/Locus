@@ -9,14 +9,44 @@ import BuildingMarker from './BuildingMarker';
 import LeafletReactMarker from './LeafletReactMarker';
 import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
 
-const DARK_TILES = {
-  url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+// This engine exists precisely because there is no Google Maps key (see App.jsx's
+// mapEngineFailed / the "keyless Leaflet/OSM engine" warning), so its own basemap must
+// not need a key either. It used to pull CARTO's dark basemap from
+// basemaps.cartocdn.com, which CARTO now stamps with an "API KEY REQUIRED" watermark
+// diagonally across every tile served to an unregistered caller — so the fallback
+// advertised as keyless was quietly rendering a watermarked map.
+//
+// OpenStreetMap's standard raster tiles need no key and go to z19, but they're light.
+// The `locus-dark-tiles` filter in index.css inverts them into the dark tactical palette
+// client-side, so the look survives without a paid basemap account.
+const OSM_DARK_TILES = {
+  url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  attribution: '&copy; OpenStreetMap contributors',
+  className: 'locus-dark-tiles',
+  maxNativeZoom: 19,
 };
+
+// Escape hatch for a keyed provider (CARTO, Stadia, Mapbox, a self-hosted server…):
+// set VITE_MAP_TILE_URL to that provider's full {z}/{x}/{y} template, key and all. No
+// provider's key parameter is hardcoded here, because they all differ — paste whichever
+// URL your account gives you. A real dark basemap needs no inversion, so the filter
+// class is dropped automatically when an override is in play.
+const CUSTOM_TILE_URL = import.meta.env.VITE_MAP_TILE_URL || '';
+
+const DARK_TILES = CUSTOM_TILE_URL
+  ? {
+      url: CUSTOM_TILE_URL,
+      attribution: import.meta.env.VITE_MAP_TILE_ATTRIBUTION || '&copy; OpenStreetMap contributors',
+      className: undefined,
+      maxNativeZoom: undefined,
+    }
+  : OSM_DARK_TILES;
 
 const SATELLITE_TILES = {
   url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   attribution: 'Tiles &copy; Esri',
+  className: undefined,
+  maxNativeZoom: 19,
 };
 
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
@@ -95,7 +125,14 @@ const TacticalLeafletMap = ({
       zoomControl={false}
       className="w-full h-full bg-black"
     >
-      <TileLayer url={tiles.url} attribution={tiles.attribution} />
+      <TileLayer
+        key={tiles.url}
+        url={tiles.url}
+        attribution={tiles.attribution}
+        className={tiles.className}
+        maxNativeZoom={tiles.maxNativeZoom}
+        maxZoom={21}
+      />
       <ViewController center={center} zoom={zoom} />
       <ClickHandler onMapClick={onMapClick} />
       <ZoomTracker onZoomChange={onZoomChange} />
@@ -147,9 +184,10 @@ const TacticalLeafletMap = ({
         />
       )}
 
-      {/* Not gated on activeTab — see App.jsx's matching comment on the Google engine. */}
+      {/* Same filter as the Google engine — see App.jsx's matching comment for why
+          `permission` is not part of it and why this isn't gated on activeTab. */}
       {users
-        .filter((u) => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng)
+        .filter((u) => !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.hasFix)
         .map((u) => (
           <LeafletReactMarker key={u.id} lat={u.lat} lng={u.lng} onClick={() => onFocus({ lat: u.lat, lng: u.lng }, null)}>
             <div style={{ animation: 'locus-member-fade-in 0.6s ease' }}>
