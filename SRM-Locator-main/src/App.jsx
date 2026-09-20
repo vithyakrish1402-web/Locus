@@ -487,8 +487,6 @@ const App = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
 
-  const [isEditMode, setIsEditMode] = useState(false);
-
   const [users, setUsers] = useState([]);
   const [liveLocation, setLiveLocation] = useState(null);
   const [telemetryMode, setTelemetryMode] = useState('ACTIVE');
@@ -1301,14 +1299,6 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
       }
       return; // Stop normal click behavior
     }
-
-    // 2. Standard Edit Mode Logic
-    if (isEditMode && selectedItem && activeTab === 'buildings') {
-      setEditableBuildings(prev => prev.map(b =>
-        b.id === selectedItem.id ? { ...b, lat, lng } : b
-      ));
-      setSelectedItem(prev => ({ ...prev, lat, lng }));
-    }
   };
 
   // --- TACTICAL ROUTING ENGINE ---
@@ -1684,11 +1674,11 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
           const diff = startX - endX;
           if (diff > 60) {
             // Swiped LEFT → go to Squad
-            setActiveTab('users'); setSelectedItem(null); setIsEditMode(false);
+            setActiveTab('users'); setSelectedItem(null);
             if (window.innerWidth < 768) setMobileView('squad');
           } else if (diff < -60) {
             // Swiped RIGHT → go to Matrix
-            setActiveTab('buildings'); setSelectedItem(null); setIsEditMode(false);
+            setActiveTab('buildings'); setSelectedItem(null);
             if (window.innerWidth < 768) setMobileView('matrix');
           }
         }}
@@ -1706,14 +1696,14 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         {/* Desktop Tabs (hidden on mobile) */}
         <div className="hidden md:flex border-b border-white/20">
           <button
-            onClick={() => { setActiveTab('buildings'); setSelectedItem(null); setIsEditMode(false); }}
+            onClick={() => { setActiveTab('buildings'); setSelectedItem(null); }}
             className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors ${activeTab === 'buildings' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
               }`}
           >
             <Building2 size={16} /> MATRIX
           </button>
           <button
-            onClick={() => { setActiveTab('users'); setSelectedItem(null); setIsEditMode(false); }}
+            onClick={() => { setActiveTab('users'); setSelectedItem(null); }}
             className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors border-l border-white/20 ${activeTab === 'users' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
               }`}
           >
@@ -2032,7 +2022,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         <GoogleMapReact
           bootstrapURLKeys={{ key: 'AIzaSyD10sWfHpczEuvmvwBkqkPHOu-QXQr8uM0' }}
           center={mapProps.center}
-          options={{ ...createMapOptions(sysConfig.theme, isSatellite), draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : (isEditMode && selectedItem ? 'crosshair' : 'grab') }}
+          options={{ ...createMapOptions(sysConfig.theme, isSatellite), draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : 'grab' }}
 
           onClick={handleMapClick}
 
@@ -2193,13 +2183,6 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
         >
           <Settings size={20} />
         </button>
-
-        {isEditMode && selectedItem && (
-          <div className="absolute top-1/2 -translate-y-1/2 right-[120%] whitespace-nowrap px-4 py-3 bg-red-500 text-white font-dot text-xs tracking-widest uppercase flex items-center gap-3 rounded shadow-[0_0_10px_rgba(239,68,68,0.5)]">
-            <span className="w-2 h-2 bg-white animate-pulse rounded-full"></span>
-            AWAITING_COORDS // {selectedItem.name}
-          </div>
-        )}
       </div>
 
       {/* Selected Location Card */}
@@ -2867,7 +2850,7 @@ DIRECTIVE: Answer the user's query utilizing the data above. Keep answers strict
 
         {/* SQUAD — Opens the Squad Room */}
         <button
-          onClick={() => { setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); setIsEditMode(false); }}
+          onClick={() => { setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); }}
           className={`flex flex-col items-center transition-all duration-200 ${mobileView === 'squad' ? 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}
         >
           <Users className="w-5 h-5 mb-1" />
