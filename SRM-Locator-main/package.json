@@ -8,6 +8,8 @@
     "build": "vite build",
     "server": "node backend/server.js",
     "tunnel": "npx localtunnel --port 5181",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\" \"npm run tunnel\""
   },
   "dependencies": {
@@ -43,6 +45,7 @@
     "globals": "^16.5.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.1",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^4.1.10"
   }
 }

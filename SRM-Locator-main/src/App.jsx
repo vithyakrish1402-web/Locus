@@ -33,6 +33,9 @@ import SosTrigger from './components/SosTrigger';
 import SosOverlay from './components/SosOverlay';
 import { deriveMarkerStatus } from './utils/markerStatus';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
+import { generateRandomSquadCode } from './utils/squadCode';
+import { PrecognitionFilter } from './utils/precognition';
+import { formatTacticalDistanceBracketed as calculateDistance } from './utils/geoMath';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -126,16 +129,6 @@ const STEALTH_MAP_STYLES = [
   { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#111111" }] },
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] }
 ];
-
-// --- 🎲 AUTOMATIC SQUAD CODE RANDOMIZER (ALPHANUMERIC ONLY) ---
-const generateRandomSquadCode = () => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-};
 
 // --- THE NEW AUTH TERMINAL (Replaces CinematicLanding) ---
 const AuthTerminal = ({
@@ -345,47 +338,6 @@ const AuthTerminal = ({
     </div>
   );
 };
-// --- 🔮 THE PRECOGNITION ENGINE (KALMAN FILTER) ---
-class PrecognitionFilter {
-  constructor(q = 0.0001, r = 0.001) {
-    this.q = q; // Trajectory Variance (How fast the target can actually change direction)
-    this.r = r; // Sensor Distrust (How messy we assume the phone's GPS is)
-    this.latEstimate = null;
-    this.lngEstimate = null;
-    this.latError = 1;
-    this.lngError = 1;
-  }
-
-  filter(lat, lng) {
-    if (!this.latEstimate) {
-      this.latEstimate = lat;
-      this.lngEstimate = lng;
-      return { lat, lng };
-    }
-    // 1. Predict next state
-    let pLat = this.latError + this.q;
-    let pLng = this.lngError + this.q;
-
-    // 2. Calculate Precognition Gain (How much do we trust the new GPS point?)
-    let kLat = pLat / (pLat + this.r);
-    let kLng = pLng / (pLng + this.r);
-
-    // 3. Calculate final smoothed coordinates
-    this.latEstimate = this.latEstimate + kLat * (lat - this.latEstimate);
-    this.lngEstimate = this.lngEstimate + kLng * (lng - this.lngEstimate);
-
-    // 4. Update error margin for the next calculation
-    this.latError = (1 - kLat) * pLat;
-    this.lngError = (1 - kLng) * pLng;
-
-    return { lat: this.latEstimate, lng: this.lngEstimate };
-  }
-}
-// --- 🧭 DEAD RECKONING ENGINE ---
-// Moved to src/utils/ghostProjection.js — the ghost's position now needs
-// re-projecting every clock tick (up to the projection cap) rather than
-// once at disconnect time, so the math lives where App.jsx's live 1Hz
-// ghost clock and GhostMemberMarker can both reach it.
 
 const App = () => {
   const [isSatellite, setIsSatellite] = useState(false);
@@ -1220,29 +1172,6 @@ const App = () => {
     // Without this, a stale 'granted' (e.g. from owning the squad just left)
     // survives into the next join attempt — see handleJoinSquad's comment.
     setAccessStatus(null);
-  };
-
-  // --- TACTICAL DISTANCE ENGINE (HAVERSINE FORMULA) ---
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    if (!lat1 || !lon1 || !lat2 || !lon2) return '[ SIGNAL_LOST ]';
-
-    const R = 6371e3;
-    const rad = Math.PI / 180;
-    const phi1 = lat1 * rad;
-    const phi2 = lat2 * rad;
-    const deltaPhi = (lat2 - lat1) * rad;
-    const deltaLambda = (lon2 - lon1) * rad;
-
-    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-      Math.cos(phi1) * Math.cos(phi2) *
-      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
-
-    if (distance > 1000) {
-      return `[ ${(distance / 1000).toFixed(2)} KM ]`;
-    }
-    return `[ ${Math.floor(distance)} M ]`;
   };
 
   const sendPing = (targetId) => {

@@ -3,25 +3,7 @@ import { Navigation, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 // eslint-disable-next-line no-unused-vars -- used via <motion.div> (see App.jsx's import for why the linter can't see this)
 import { motion } from 'framer-motion';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
-import { calculateBearing } from './utils/bearing';
-
-// --- MATH HELPERS ---
-const toRad = (deg) => (deg * Math.PI) / 180;
-
-const calculateDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371e3; // Earth radius in meters
-  const phi1 = toRad(lat1);
-  const phi2 = toRad(lat2);
-  const deltaPhi = toRad(lat2 - lat1);
-  const deltaLambda = toRad(lon2 - lon1);
-
-  const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-    Math.cos(phi1) * Math.cos(phi2) *
-    Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return Math.round(R * c); // Distance in meters
-};
+import { calculateBearing, calculateDistanceMeters as calculateDistance, normalizeRotationDelta } from './utils/geoMath';
 
 const ARCompass = ({ target, liveLocation, onClose }) => {
   const videoRef = useRef(null);
@@ -79,12 +61,9 @@ const ARCompass = ({ target, liveLocation, onClose }) => {
   const [displayRotation, setDisplayRotation] = useState(0);
 
   useEffect(() => {
-    const targetAngle = ((bearing - heading) % 360 + 360) % 360;
+    const targetAngle = bearing - heading;
     const prev = rotationRef.current;
-    const prevMod = ((prev % 360) + 360) % 360;
-    let delta = targetAngle - prevMod;
-    if (delta > 180) delta -= 360;
-    if (delta < -180) delta += 360;
+    const delta = normalizeRotationDelta(targetAngle, prev);
     const next = prev + delta;
     rotationRef.current = next;
     setDisplayRotation(next);
