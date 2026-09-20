@@ -7,6 +7,7 @@ import {
   isUpdateAvailable,
   parseReleaseManifest,
   parseVersion,
+  selectLatestApkRelease,
 } from '../src/utils/updateManifest';
 
 const release = (overrides = {}) => ({
@@ -154,5 +155,80 @@ describe('parseReleaseManifest', () => {
   it('honours a custom asset name', () => {
     const custom = release({ assets: [{ name: 'other.apk', browser_download_url: 'https://x.test/o.apk' }] });
     expect(parseReleaseManifest(custom, { assetName: 'other.apk' }).ok).toBe(true);
+  });
+});
+
+/**
+ * Finding the latest NATIVE release in a repo that also carries JS bundle releases.
+ *
+ * Phase 1 used to read /releases/latest, which is whichever release was published most
+ * recently across every tag series. The moment a js-* release was cut, that endpoint
+ * started returning a tag parseVersion cannot read, the check failed closed, and an old
+ * shell silently stopped being told that a real APK update existed — precisely the device
+ * a [MANDATORY] release is aimed at. These pin the listing-and-filtering behaviour that
+ * replaced it.
+ */
+describe('selectLatestApkRelease', () => {
+  const bundleRelease = (overrides = {}) => ({
+    tag_name: 'js-1.0.1',
+    draft: false,
+    prerelease: false,
+    body: ['MIN_NATIVE: 1.0.0', 'SHA256: ' + 'b'.repeat(64)].join(String.fromCharCode(10)),
+    assets: [{ name: 'locus-bundle.zip', browser_download_url: 'https://example.test/bundle.zip', size: 300_000 }],
+    ...overrides,
+  });
+
+  it('ignores a newer js-* release and finds the v* one beneath it', () => {
+    // The exact shape of the bug: GitHub lists newest-first, so the JS bundle comes
+    // first and the real APK release sits behind it.
+    const listing = [bundleRelease(), release({ tag_name: 'v1.2.0' })];
+    expect(selectLatestApkRelease(listing)?.tag).toBe('v1.2.0');
+  });
+
+  it('still finds the APK release however many js-* releases are stacked on top', () => {
+    const listing = [
+      bundleRelease({ tag_name: 'js-1.2.4' }),
+      bundleRelease({ tag_name: 'js-1.2.3' }),
+      bundleRelease({ tag_name: 'js-1.2.2' }),
+      release({ tag_name: 'v1.2.0' }),
+    ];
+    expect(selectLatestApkRelease(listing)?.version).toBe('1.2.0');
+  });
+
+  it('takes the highest version, not whatever GitHub listed first', () => {
+    // Listing order follows publish date, so a republished or back-dated release would
+    // otherwise be able to offer every device an older APK than it already runs.
+    const listing = [release({ tag_name: 'v1.1.0' }), release({ tag_name: 'v1.10.0' })];
+    expect(selectLatestApkRelease(listing)?.version).toBe('1.10.0');
+  });
+
+  it('skips drafts and prereleases, which /releases/latest used to exclude server-side', () => {
+    expect(
+      selectLatestApkRelease([release({ tag_name: 'v2.0.0', draft: true }), release({ tag_name: 'v1.2.0' })])?.tag,
+    ).toBe('v1.2.0');
+    expect(
+      selectLatestApkRelease([release({ tag_name: 'v2.0.0', prerelease: true }), release({ tag_name: 'v1.2.0' })])?.tag,
+    ).toBe('v1.2.0');
+  });
+
+  it('skips a v* release that would be rejected on its own merits', () => {
+    const listing = [
+      release({ tag_name: 'v2.0.0', body: 'no checksum here' }),
+      release({ tag_name: 'v1.9.0', assets: [] }),
+      release({ tag_name: 'v1.2.0' }),
+    ];
+    expect(selectLatestApkRelease(listing)?.tag).toBe('v1.2.0');
+  });
+
+  it('fails closed rather than throwing when nothing usable is there', () => {
+    expect(selectLatestApkRelease([])).toBeNull();
+    expect(selectLatestApkRelease([bundleRelease()])).toBeNull();
+    expect(selectLatestApkRelease(null)).toBeNull();
+    expect(selectLatestApkRelease([null, undefined, 42, {}])).toBeNull();
+  });
+
+  it('does not mistake a js- tag for a v* one on prefix alone', () => {
+    // 'js-1.0.1' must not slip through any case-insensitive or substring matching.
+    expect(selectLatestApkRelease([bundleRelease({ tag_name: 'JS-9.9.9' })])).toBeNull();
   });
 });

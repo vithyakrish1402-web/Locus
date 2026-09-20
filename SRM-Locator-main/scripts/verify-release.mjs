@@ -17,7 +17,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { APK_ASSET_NAME, parseReleaseManifest } from '../src/utils/updateManifest.js';
+import { APK_ASSET_NAME, selectLatestApkRelease } from '../src/utils/updateManifest.js';
 import { BUNDLE_ASSET_NAME, selectLatestBundleRelease } from '../src/utils/liveUpdateManifest.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -134,12 +134,14 @@ async function main() {
     console.log(`\n  Verifying the latest ${bundleMode ? 'JS bundle (js-*)' : 'APK (v*)'} release of ${REPO}\n`);
 
     // ---------------------------------------------------------- fetch the release
-    const api = bundleMode
-      ? `https://api.github.com/repos/${REPO}/releases?per_page=30`
-      : `https://api.github.com/repos/${REPO}/releases/latest`;
+    // Both tiers list and filter client-side now. /releases/latest is whichever release
+    // is newest across every tag series, so once js-* releases existed it started handing
+    // the APK check a tag it cannot parse — and the verifier has to look for a release
+    // the same way the app does, or "the verifier passed" stops meaning anything.
+    const api = `https://api.github.com/repos/${REPO}/releases?per_page=30`;
 
     const response = await fetch(api, { headers: { Accept: 'application/vnd.github+json' } });
-    if (response.status === 404) die('no release published yet - cut one first');
+    if (response.status === 404) die('repository or releases not visible - check VITE_UPDATE_REPO');
     if (response.status === 403 || response.status === 429) die('GitHub rate limit reached; try again shortly');
     if (!response.ok) die(`GitHub returned HTTP ${response.status}`);
     const payload = await response.json();
@@ -152,11 +154,12 @@ async function main() {
       }
       pass(`parsed as a bundle release: ${manifest.tag}`);
     } else {
-      const parsed = parseReleaseManifest(payload);
-      // Reporting the app's own verdict: if the client would refuse this release, there
+      // Reporting the app's own verdict: if the client would find no release here, there
       // is nothing further worth checking against a manifest it will never read.
-      if (!parsed.ok) die(`the app would REJECT this release: ${parsed.reason}`);
-      manifest = parsed.manifest;
+      manifest = selectLatestApkRelease(payload);
+      if (!manifest) {
+        die(`no usable v* release found (needs a ${APK_ASSET_NAME} asset plus a SHA256 line, and must not be a draft or prerelease)`);
+      }
       pass(`parsed as an APK release: ${manifest.tag}`);
     }
 
