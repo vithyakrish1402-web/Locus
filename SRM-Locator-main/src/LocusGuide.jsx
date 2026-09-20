@@ -51,7 +51,29 @@ const SectionHeader = ({ n, title }) => (
   </div>
 );
 
-const LocusGuide = ({ onInitialize }) => {
+// Copy for the manual update check in the BUILD CHANNEL panel. The modal itself
+// (UpdateModal) owns the "an update exists" story; this line only needs to explain the
+// outcomes the modal never shows — scanning, already current, and check failures.
+const UPDATE_STATUS_COPY = {
+  idle: 'UPDATE CHANNEL: GITHUB RELEASES',
+  checking: 'SCANNING RELEASE CHANNEL…',
+  'up-to-date': 'NO NEWER BUILD PUBLISHED',
+  available: 'NEW BUILD AVAILABLE — SEE PROMPT',
+  'permission-required': 'AWAITING INSTALL PERMISSION',
+  downloading: 'DOWNLOADING UPDATE…',
+  ready: 'INTEGRITY VERIFIED',
+  error: 'CHECK FAILED — SEE PROMPT',
+};
+
+const LocusGuide = ({
+  onInitialize,
+  onCheckForUpdates,
+  updateStatus = 'idle',
+  updateSupported = false,
+  installedVersion = null,
+}) => {
+  const checkingUpdate = updateStatus === 'checking';
+  const updateMessage = UPDATE_STATUS_COPY[updateStatus] || UPDATE_STATUS_COPY.idle;
   const [booting, setBooting] = useState(true);
   const [bootLines, setBootLines] = useState([]);
   const [stealthMode, setStealthMode] = useState(false);
@@ -360,6 +382,28 @@ const LocusGuide = ({ onInitialize }) => {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* BUILD / UPDATE CHANNEL */}
+      <section id="build" className="relative z-[1] max-w-5xl mx-auto px-6 pb-8">
+        <div className="reveal flex flex-wrap items-center justify-between gap-4 border border-white/10 bg-black px-6 py-5">
+          <div>
+            <div className="font-dot text-[11px] uppercase tracking-widest text-white">Build Channel</div>
+            <div className="font-dot text-[9px] uppercase tracking-widest text-zinc-600 mt-1.5">
+              {updateSupported
+                ? `INSTALLED ${installedVersion || '—'} · ${updateMessage}`
+                : 'WEB SESSION // UPDATES APPLY TO THE ANDROID BUILD ONLY'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onCheckForUpdates}
+            disabled={!updateSupported || !onCheckForUpdates || checkingUpdate}
+            className="font-dot text-[10px] uppercase tracking-widest px-5 py-3 border border-white/20 text-zinc-400 hover:border-white/40 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {checkingUpdate ? 'Scanning…' : 'Check for updates'}
+          </button>
         </div>
       </section>
 

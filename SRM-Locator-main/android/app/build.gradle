@@ -16,8 +16,10 @@ android {
         applicationId "com.locus.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        // Bumped by scripts/release.mjs - do not hand-edit. versionName must stay valid
+        // semver: the in-app updater compares it against the GitHub release tag.
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Empty string (not null) so a missing key fails obviously inside Google Maps
         // (invalid key error) instead of Gradle throwing over an unresolved placeholder.
@@ -28,8 +30,29 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing for the self-updater. Android refuses an update whose signature
+    // differs from the installed app, so every release APK must be signed with the SAME
+    // key - see UPDATER.md for generating it. Credentials live in android/local.properties
+    // (gitignored); when they are absent the block is simply skipped and Gradle emits an
+    // unsigned APK, which scripts/release.mjs detects and refuses to publish rather than
+    // silently shipping something nobody can install over.
+    def hasReleaseSigning = localProperties.getProperty('LOCUS_KEYSTORE_FILE') != null
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile rootProject.file(localProperties.getProperty('LOCUS_KEYSTORE_FILE'))
+                storePassword localProperties.getProperty('LOCUS_KEYSTORE_PASSWORD')
+                keyAlias localProperties.getProperty('LOCUS_KEY_ALIAS')
+                keyPassword localProperties.getProperty('LOCUS_KEY_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }

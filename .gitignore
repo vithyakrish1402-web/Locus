@@ -1,3 +1,6 @@
 node_modules
 .env
 dist
+
+# Staged APK + notes produced by SRM-Locator-main/scripts/release.mjs
+dist-release

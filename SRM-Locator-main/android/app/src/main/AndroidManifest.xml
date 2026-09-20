@@ -10,6 +10,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- In-app self-updater (see src/hooks/useAppUpdate.js + LocusUpdaterPlugin.java).
+         LOCUS is distributed as a sideloaded APK, not via Play, so the app downloads its
+         own replacement and hands it to the system installer. Android still shows the
+         per-app "install unknown apps" consent the first time; this only allows asking. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
