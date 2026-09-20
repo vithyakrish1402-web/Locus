@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\" \"npm run tunnel\"",
     "release": "node scripts/release.mjs",
-    "release:bundle": "node scripts/release-bundle.mjs"
+    "release:bundle": "node scripts/release-bundle.mjs",
+    "release:verify": "node scripts/verify-release.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",

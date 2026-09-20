@@ -38,6 +38,7 @@ npm run test:watch  # Vitest in watch mode
 
 npm run release -- 1.1.0          # cut a full-APK release (Phase 1 updater)
 npm run release:bundle -- 1.0.1   # ship a JS-only live update (Phase 2 updater)
+npm run release:verify            # check a published release the way a device would
 ```
 
 Both release commands need the `gh` CLI authenticated; `npm run release` also needs the

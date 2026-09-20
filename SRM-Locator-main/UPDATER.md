@@ -166,6 +166,50 @@ Requires the `gh` CLI, authenticated (`gh auth login`).
 > Hand-editing `versionCode`/`versionName`, or attaching an APK to a release by hand, is
 > how a published checksum stops matching its binary. Let the script do it.
 
+### The first release is a special case
+
+`build.gradle` ships at `1.0.0`, and normally the script refuses a version that is not
+strictly newer than what is already there. For the **baseline** release that rule would
+make `v1.0.0` impossible to cut at all, so the script detects it: when no `v*` tag exists
+yet, publishing the current `versionName` as-is is allowed, and `versionCode` is left
+alone rather than bumped.
+
+```bash
+npm run release -- 1.0.0     # the baseline; nothing is bumped
+```
+
+Once that first tag exists the strict check resumes, because from then on there are
+installs in the field that need to see a higher version.
+
+## Verifying a release before handing it out
+
+```bash
+npm run release:verify              # the latest v* APK release
+npm run release:verify -- --bundle  # the latest js-* bundle release
+```
+
+Run this **after every publish, before telling anyone to install it**. It downloads the
+published asset and checks it the way a device would — importing the very same parsing
+modules the app uses, so "the verifier passed" means the client parses it identically.
+
+For an APK it checks:
+
+- the app would **accept** the release at all (same `parseReleaseManifest` the client runs)
+- the downloaded bytes match the published `SHA256:` line
+- the APK's own `versionName` matches the tag — if the tag says `1.1.0` but the binary
+  says `1.0.0`, devices install it and are then re-offered the same update *forever*,
+  because `App.getInfo()` keeps reporting the old version
+- the APK is signed, and prints the certificate's SHA-256 fingerprint so you can confirm
+  it matches every previous release (a mismatch means Android refuses the install)
+- whether `[MANDATORY]` is set — worth seeing before it locks everyone out
+
+For a bundle it checks the checksum, that `index.html` is at the zip root, that no entry
+uses backslash separators, and that `MIN_NATIVE` is not gated above the shell it was
+built from.
+
+Almost all of these are failures that otherwise surface only on a phone, usually after
+the release has already gone out.
+
 ---
 
 ## Verifying on a real device
@@ -183,6 +227,9 @@ verify on real hardware.
 > Use **Settings → Apps → LOCUS → Force stop** between every attempt below. Every "cold
 > start" in this document means that, not a swipe.
 
+0. **Verify the release first** — `npm run release:verify`. It catches a bad checksum, an
+   unsigned or mis-signed APK, and a tag/versionName mismatch from your desk, before you
+   burn a device cycle on it.
 1. **Clean slate.** Uninstall any existing LOCUS, install the v1.0.0 release APK by hand.
 2. **Publish a newer release** (`npm run release -- 1.0.1`).
 3. **Cold start the app.** The modal should appear with the release notes.
@@ -309,6 +356,7 @@ Same rule as Phase 1: **"cold start" means Force stop**, not a swipe — see
 [How to actually cold start](#how-to-actually-cold-start) above. Phase 2 also checks once
 per process, so a swiped-away app will not pick up a new bundle.
 
+0. **Verify the bundle first** — `npm run release:verify -- --bundle`.
 1. Install a Phase 1 release APK (say native `1.0.0`) and open it once.
 2. Make a visible JS-only change (a label, a colour) and
    `npm run release:bundle -- 1.0.1`.

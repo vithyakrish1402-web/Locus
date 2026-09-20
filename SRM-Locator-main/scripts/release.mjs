@@ -84,7 +84,6 @@ if (!currentCodeMatch || !currentNameMatch) die('could not read versionCode/vers
 
 const currentCode = Number(currentCodeMatch[1]);
 const currentName = currentNameMatch[1];
-const nextCode = currentCode + 1;
 
 // Tolerates the pre-updater "1.0" style as well as proper semver; missing parts are 0.
 const asTuple = (v) => {
@@ -94,12 +93,38 @@ const asTuple = (v) => {
 const [cMaj, cMin, cPatch] = asTuple(currentName);
 const [nMaj, nMin, nPatch] = asTuple(version);
 const isNewer = nMaj > cMaj || (nMaj === cMaj && (nMin > cMin || (nMin === cMin && nPatch > cPatch)));
-if (!isNewer) die(`${version} is not newer than the current versionName ${currentName}`);
+const isSameAsCurrent = nMaj === cMaj && nMin === cMin && nPatch === cPatch;
+
+// The very first release is a special case. build.gradle ships at 1.0.0, so requiring
+// "strictly newer" would make the baseline release impossible to cut without
+// hand-editing the file this script tells you not to hand-edit. When no v* tag exists
+// yet there is nothing installed for a client to compare against, so publishing the
+// current versionName as-is is correct - and the strict check resumes once that first
+// tag exists, because from then on there ARE installs in the field.
+const isFirstRelease = capture('git', ['tag', '--list', 'v*']).stdout === '';
+const isBaseline = isFirstRelease && isSameAsCurrent;
+
+if (!isNewer && !isBaseline) {
+  die(
+    isSameAsCurrent
+      ? `${version} matches the current versionName and v-tags already exist - pick a newer version`
+      : `${version} is not newer than the current versionName ${currentName}`
+  );
+}
+
+// Don't bump the code for a baseline that reuses the current versionName: publish
+// exactly what build.gradle already describes.
+const nextCode = isBaseline ? currentCode : currentCode + 1;
 
 const existingTag = capture('git', ['tag', '--list', `v${version}`]);
 if (existingTag.stdout) die(`tag v${version} already exists`);
 
-console.log(`\n  LOCUS release ${currentName} (code ${currentCode})  ->  ${version} (code ${nextCode})`);
+if (isBaseline) {
+  console.log(`\n  LOCUS BASELINE release ${version} (code ${currentCode}) - first release, nothing bumped`);
+  console.log('  Everyone must uninstall any existing LOCUS and install this one by hand.');
+} else {
+  console.log(`\n  LOCUS release ${currentName} (code ${currentCode})  ->  ${version} (code ${nextCode})`);
+}
 if (mandatory) console.log('  Marked [MANDATORY]: clients will be locked until they install it.');
 if (dryRun) console.log('  DRY RUN: builds and hashes, but publishes nothing.');
 
@@ -108,15 +133,23 @@ if (dryRun) console.log('  DRY RUN: builds and hashes, but publishes nothing.');
 const bumped = gradle
   .replace(/versionCode\s+\d+/, `versionCode ${nextCode}`)
   .replace(/versionName\s+"[^"]+"/, `versionName "${version}"`);
-writeFileSync(GRADLE_FILE, bumped);
-console.log(`\n  Bumped android/app/build.gradle`);
+const gradleChanged = bumped !== gradle;
+if (gradleChanged) {
+  writeFileSync(GRADLE_FILE, bumped);
+  console.log(`\n  Bumped android/app/build.gradle`);
+} else {
+  console.log(`\n  android/app/build.gradle already at ${version} (code ${nextCode}) - nothing to bump`);
+}
 
 // ---------------------------------------------------------------- build
 
 run('npm', ['run', 'build']);
 run('npx', ['cap', 'sync', 'android']);
 
-const gradlew = IS_WINDOWS ? 'gradlew.bat' : './gradlew';
+// The ".\" is load-bearing on Windows. A .bat can only be spawned through a shell, and
+// cmd.exe does not search the current directory for executables - so a bare
+// "gradlew.bat" fails with "not recognized" even though cwd is the android/ folder.
+const gradlew = IS_WINDOWS ? '.\\gradlew.bat' : './gradlew';
 run(gradlew, ['assembleRelease'], { cwd: join(ROOT, 'android') });
 
 const outDir = join(ROOT, 'android', 'app', 'build', 'outputs', 'apk', 'release');
@@ -176,8 +209,12 @@ if (dryRun) {
 
 // ---------------------------------------------------------------- publish
 
-run('git', ['add', GRADLE_FILE]);
-run('git', ['commit', '-m', `chore(release): v${version}`]);
+// A baseline release can leave build.gradle untouched, and `git commit` with nothing
+// staged exits non-zero - which would abort the run after the APK was already built.
+if (gradleChanged) {
+  run('git', ['add', GRADLE_FILE]);
+  run('git', ['commit', '-m', `chore(release): v${version}`]);
+}
 run('git', ['push']);
 
 run('gh', [
@@ -191,4 +228,12 @@ run('gh', [
   bodyFile,
 ]);
 
-console.log(`\n  Published v${version}. Existing installs will be offered it on their next cold start.\n`);
+if (isBaseline) {
+  console.log(`\n  Published the v${version} baseline.`);
+  console.log('  Testers must uninstall any existing LOCUS and install this APK by hand -');
+  console.log('  it is signed with a different key than the debug builds they have now.');
+  console.log(`  Verify it first:  npm run release:verify\n`);
+} else {
+  console.log(`\n  Published v${version}. Existing installs will be offered it on their next cold start.`);
+  console.log(`  Verify it first:  npm run release:verify\n`);
+}

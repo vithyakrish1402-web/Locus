@@ -18,7 +18,10 @@
 // out the app with no way back except a manual reinstall. Anything touching native code
 // must ship as a Phase 1 APK release and raise MIN_NATIVE accordingly.
 
-import { compareVersions, parseVersion } from './updateManifest';
+// Explicit .js extension, unlike most imports in this codebase: scripts/verify-release.mjs
+// imports this module directly under plain Node, which resolves ESM strictly and will not
+// guess the extension the way Vite does. Vite is happy either way.
+import { compareVersions, parseVersion } from './updateManifest.js';
 
 /** Release asset holding the zipped `dist/` output. */
 export const BUNDLE_ASSET_NAME = 'locus-bundle.zip';
