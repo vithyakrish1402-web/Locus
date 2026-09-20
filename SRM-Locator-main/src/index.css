@@ -40,12 +40,6 @@ body {
 
 .leaflet-div-icon { background: transparent !important; border: none !important; }
 
-/* LocationMarker signal-lost bracket pulse (src/components/LocationMarker.jsx) */
-@keyframes locus-marker-bracket-pulse {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(1.4); opacity: 0; }
-}
-
 /* SosTrigger ARMED-state pulse (src/components/SosTrigger.jsx) */
 @keyframes locus-sos-pulse {
   0%, 100% { opacity: 1; }
