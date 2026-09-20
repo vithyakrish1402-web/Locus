@@ -46,9 +46,28 @@ const die = (msg) => {
   throw new Abort(msg);
 };
 
+// Windows refuses to spawn a .bat/.cmd without a shell (apksigner ships as apksigner.bat),
+// but a shell also re-splits on spaces - and an SDK under "C:\Program Files" would hand
+// every argument back in pieces. So: shell only for the shims that need it, and quote the
+// arguments when we do.
 const capture = (command, args) => {
-  const r = spawnSync(command, args, { cwd: ROOT, encoding: 'utf8', shell: false });
-  return { status: r.status, stdout: (r.stdout || '').trim(), stderr: (r.stderr || '').trim() };
+  const useShell = IS_WINDOWS && /\.(bat|cmd)$/i.test(command);
+  // One pre-quoted command line rather than command + args: Node deprecates passing an
+  // args array alongside shell:true, since it concatenates without escaping.
+  const r = useShell
+    ? spawnSync([command, ...args].map((a) => `"${a}"`).join(' '), {
+        cwd: ROOT,
+        encoding: 'utf8',
+        shell: true,
+      })
+    : spawnSync(command, args, { cwd: ROOT, encoding: 'utf8', shell: false });
+  return {
+    status: r.status,
+    stdout: (r.stdout || '').trim(),
+    // spawn errors (ENOENT, EINVAL) surface on r.error, not stderr - without this a
+    // tool that never ran looks identical to a tool that ran and rejected the APK.
+    stderr: (r.stderr || '').trim() || (r.error ? `${r.error.code || ''} ${r.error.message}`.trim() : ''),
+  };
 };
 
 /** Read zip entry names straight out of the central directory - no dependency needed. */
@@ -64,99 +83,132 @@ const zipEntryNames = (buffer) => {
   return names;
 };
 
-/** Newest aapt2 in the local SDK, or null. Used for the APK-vs-tag version check. */
-const findAapt2 = () => {
+/**
+ * Locate a tool in the newest Android SDK build-tools, or null.
+ *
+ * local.properties is a Java properties file, so sdk.dir arrives escaped:
+ *   sdk.dir=C\:\\Users\\me\\AppData\\Local\\Android\\Sdk
+ * Every backslash escapes the next character - including the one before the drive
+ * colon - so the unescape has to strip the backslash from ANY escaped pair, not just
+ * from doubled backslashes. Getting that wrong yields "C\:\Users\..." which exists
+ * nowhere, and every SDK-backed check silently downgrades to "tool not found".
+ */
+const findBuildTool = (name) => {
   const localProps = join(ROOT, 'android', 'local.properties');
   if (!existsSync(localProps)) return null;
-  const sdkDir = /^sdk\.dir=(.*)$/m.exec(readFileSync(localProps, 'utf8'))?.[1]?.replace(/\\\\/g, '\\');
+  const sdkDir = /^sdk\.dir=(.*)$/m.exec(readFileSync(localProps, 'utf8'))?.[1]?.replace(/\\(.)/g, '$1');
   if (!sdkDir) return null;
   const buildTools = join(sdkDir, 'build-tools');
   if (!existsSync(buildTools)) return null;
-  for (const v of readdirSync(buildTools).sort().reverse()) {
-    const candidate = join(buildTools, v, IS_WINDOWS ? 'aapt2.exe' : 'aapt2');
-    if (existsSync(candidate)) return candidate;
+  for (const version of readdirSync(buildTools).sort().reverse()) {
+    for (const file of IS_WINDOWS ? [`${name}.exe`, `${name}.bat`] : [name]) {
+      const candidate = join(buildTools, version, file);
+      if (existsSync(candidate)) return candidate;
+    }
   }
   return null;
 };
 
 async function main() {
   const bundleMode = process.argv.includes('--bundle');
+  // --file checks a LOCAL artifact, so a staged build can be vetted before it is
+  // published rather than only after. Skips the release-manifest checks (there is no
+  // release yet) and runs every binary check against the file itself.
+  const fileIndex = process.argv.indexOf('--file');
+  const localFile = fileIndex === -1 ? null : process.argv[fileIndex + 1];
 
-  console.log(`\n  Verifying the latest ${bundleMode ? 'JS bundle (js-*)' : 'APK (v*)'} release of ${REPO}\n`);
+  let manifest = null;
+  let assetPath;
+  let bytes;
 
-  // ------------------------------------------------------------ fetch the release
-  const api = bundleMode
-    ? `https://api.github.com/repos/${REPO}/releases?per_page=30`
-    : `https://api.github.com/repos/${REPO}/releases/latest`;
+  if (localFile) {
+    const abs = resolve(ROOT, localFile);
+    if (!existsSync(abs)) die(`no such file: ${abs}`);
+    console.log(`\n  Verifying the local ${bundleMode ? 'bundle' : 'APK'}: ${localFile}\n`);
+    assetPath = abs;
+    bytes = readFileSync(abs);
+    pass(`read ${(bytes.length / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`  sha256      ${createHash('sha256').update(bytes).digest('hex')}`);
+    console.log('');
+  } else {
+    console.log(`\n  Verifying the latest ${bundleMode ? 'JS bundle (js-*)' : 'APK (v*)'} release of ${REPO}\n`);
 
-  const response = await fetch(api, { headers: { Accept: 'application/vnd.github+json' } });
-  if (response.status === 404) die('no release published yet - cut one first');
-  if (response.status === 403 || response.status === 429) die('GitHub rate limit reached; try again shortly');
-  if (!response.ok) die(`GitHub returned HTTP ${response.status}`);
-  const payload = await response.json();
+    // ---------------------------------------------------------- fetch the release
+    const api = bundleMode
+      ? `https://api.github.com/repos/${REPO}/releases?per_page=30`
+      : `https://api.github.com/repos/${REPO}/releases/latest`;
 
-  // ------------------------------------------------------------ parse it as the app does
-  let manifest;
-  if (bundleMode) {
-    manifest = selectLatestBundleRelease(payload);
-    if (!manifest) {
-      die(`no usable js-* release found (needs a ${BUNDLE_ASSET_NAME} asset plus SHA256 and MIN_NATIVE lines)`);
+    const response = await fetch(api, { headers: { Accept: 'application/vnd.github+json' } });
+    if (response.status === 404) die('no release published yet - cut one first');
+    if (response.status === 403 || response.status === 429) die('GitHub rate limit reached; try again shortly');
+    if (!response.ok) die(`GitHub returned HTTP ${response.status}`);
+    const payload = await response.json();
+
+    // ---------------------------------------------------------- parse it as the app does
+    if (bundleMode) {
+      manifest = selectLatestBundleRelease(payload);
+      if (!manifest) {
+        die(`no usable js-* release found (needs a ${BUNDLE_ASSET_NAME} asset plus SHA256 and MIN_NATIVE lines)`);
+      }
+      pass(`parsed as a bundle release: ${manifest.tag}`);
+    } else {
+      const parsed = parseReleaseManifest(payload);
+      // Reporting the app's own verdict: if the client would refuse this release, there
+      // is nothing further worth checking against a manifest it will never read.
+      if (!parsed.ok) die(`the app would REJECT this release: ${parsed.reason}`);
+      manifest = parsed.manifest;
+      pass(`parsed as an APK release: ${manifest.tag}`);
     }
-    pass(`parsed as a bundle release: ${manifest.tag}`);
-  } else {
-    const parsed = parseReleaseManifest(payload);
-    // Reporting the app's own verdict: if the client would refuse this release, there is
-    // nothing further worth checking against a manifest it will never read.
-    if (!parsed.ok) die(`the app would REJECT this release: ${parsed.reason}`);
-    manifest = parsed.manifest;
-    pass(`parsed as an APK release: ${manifest.tag}`);
-  }
 
-  console.log('');
-  console.log(`  version     ${manifest.version}`);
-  console.log(`  asset       ${bundleMode ? manifest.zipUrl : manifest.apkUrl}`);
-  console.log(`  sha256      ${manifest.sha256}`);
-  console.log(
-    bundleMode
-      ? `  minNative   ${manifest.minNative}`
-      : `  mandatory   ${manifest.mandatory ? 'YES - clients will be locked until they install it' : 'no'}`
-  );
-  console.log('');
+    console.log('');
+    console.log(`  version     ${manifest.version}`);
+    console.log(`  asset       ${bundleMode ? manifest.zipUrl : manifest.apkUrl}`);
+    console.log(`  sha256      ${manifest.sha256}`);
+    console.log(
+      bundleMode
+        ? `  minNative   ${manifest.minNative}`
+        : `  mandatory   ${manifest.mandatory ? 'YES - clients will be locked until they install it' : 'no'}`
+    );
+    console.log('');
 
-  // ------------------------------------------------------------ download + checksum
-  rmSync(SCRATCH, { recursive: true, force: true });
-  mkdirSync(SCRATCH, { recursive: true });
-  const assetName = bundleMode ? BUNDLE_ASSET_NAME : APK_ASSET_NAME;
-  const assetPath = join(SCRATCH, assetName);
+    // ---------------------------------------------------------- download + checksum
+    rmSync(SCRATCH, { recursive: true, force: true });
+    mkdirSync(SCRATCH, { recursive: true });
+    const assetName = bundleMode ? BUNDLE_ASSET_NAME : APK_ASSET_NAME;
+    assetPath = join(SCRATCH, assetName);
 
-  const assetResponse = await fetch(bundleMode ? manifest.zipUrl : manifest.apkUrl, {
-    headers: { Accept: 'application/octet-stream' },
-  });
-  if (!assetResponse.ok) die(`could not download ${assetName}: HTTP ${assetResponse.status}`);
-  const bytes = Buffer.from(await assetResponse.arrayBuffer());
-  writeFileSync(assetPath, bytes);
-  pass(`downloaded ${assetName} (${(bytes.length / 1024 / 1024).toFixed(2)} MB)`);
+    const assetResponse = await fetch(bundleMode ? manifest.zipUrl : manifest.apkUrl, {
+      headers: { Accept: 'application/octet-stream' },
+    });
+    if (!assetResponse.ok) die(`could not download ${assetName}: HTTP ${assetResponse.status}`);
+    bytes = Buffer.from(await assetResponse.arrayBuffer());
+    writeFileSync(assetPath, bytes);
+    pass(`downloaded ${assetName} (${(bytes.length / 1024 / 1024).toFixed(2)} MB)`);
 
-  const actual = createHash('sha256').update(bytes).digest('hex');
-  if (actual === manifest.sha256) {
-    pass('SHA-256 matches the published checksum');
-  } else {
-    // The most important check here: a mismatch means every device rejects the install
-    // after spending the entire download, and the only symptom is the integrity error.
-    fail(`SHA-256 MISMATCH - published ${manifest.sha256}, actual ${actual}`);
+    const actual = createHash('sha256').update(bytes).digest('hex');
+    if (actual === manifest.sha256) {
+      pass('SHA-256 matches the published checksum');
+    } else {
+      // The most important check here: a mismatch means every device rejects the install
+      // after spending the entire download, and the only symptom is the integrity error.
+      fail(`SHA-256 MISMATCH - published ${manifest.sha256}, actual ${actual}`);
+    }
   }
 
   if (!bundleMode) {
     // Does the APK's own versionName agree with the tag? If the tag says 1.1.0 but the
     // binary says 1.0.0, App.getInfo() keeps reporting the old version after install and
     // the updater re-offers the same release forever. Silent, and awful to debug.
-    const aapt2 = findAapt2();
+    const aapt2 = findBuildTool('aapt2');
     if (aapt2) {
       const badging = capture(aapt2, ['dump', 'badging', assetPath]);
       const versionName = /versionName='([^']*)'/.exec(badging.stdout)?.[1];
       const versionCode = /versionCode='([^']*)'/.exec(badging.stdout)?.[1];
       if (!versionName) warn('could not read versionName out of the APK');
-      else if (versionName === manifest.version) {
+      else if (!manifest) {
+        // --file mode: no tag to compare against, so just report what the binary claims.
+        pass(`APK reports versionName ${versionName}, versionCode ${versionCode}`);
+      } else if (versionName === manifest.version) {
         pass(`APK versionName (${versionName}, code ${versionCode}) matches the tag`);
       } else {
         fail(
@@ -169,19 +221,38 @@ async function main() {
     }
 
     // Signing certificate. Android refuses an update whose signature differs from the
-    // installed app, so this fingerprint must match every previous release's.
-    const cert = capture('keytool', ['-printcert', '-jarfile', assetPath]);
-    const fingerprint = cert.status === 0 ? /SHA256:\s*([0-9A-F:]+)/i.exec(cert.stdout)?.[1] : null;
-    if (cert.status !== 0) {
-      warn('keytool unavailable - could not read the signing certificate');
-    } else if (fingerprint) {
-      pass('signed; certificate SHA-256 fingerprint:');
-      console.log(`        ${fingerprint}`);
-      const owner = /Owner:\s*(.*)/.exec(cert.stdout)?.[1];
-      if (owner) console.log(`        owner: ${owner}`);
-      console.log('        ^ must match every other release, or installs are refused');
+    // installed app, so this digest must match every previous release's.
+    //
+    // apksigner, NOT keytool. minSdkVersion is 24, so AGP signs with APK Signature
+    // Scheme v2/v3 and skips legacy v1 JAR signing entirely - and `keytool -printcert
+    // -jarfile` only understands v1. Pointed at a correctly signed modern APK it reports
+    // "Not a signed jar file" and exits 0, which reads as unsigned and would block a
+    // perfectly good release.
+    const apksigner = findBuildTool('apksigner');
+    if (!apksigner) {
+      warn('apksigner not found in the Android SDK - skipped the signature check');
     } else {
-      fail('APK appears UNSIGNED - Android will refuse to install it as an update');
+      const signed = capture(apksigner, ['verify', '--print-certs', '-v', assetPath]);
+      const schemes = ['v1', 'v2', 'v3', 'v3.1', 'v4']
+        .filter((s) => new RegExp(`Verified using ${s.replace('.', '\\.')} scheme[^:]*:\\s*true`).test(signed.stdout))
+        .join(', ');
+      const digest = /certificate SHA-256 digest:\s*([0-9a-f]+)/i.exec(signed.stdout)?.[1];
+      const dn = /certificate DN:\s*(.*)/.exec(signed.stdout)?.[1];
+
+      if (signed.status !== 0 || !digest) {
+        // apksigner writes JVM "restricted method" warnings to stderr on modern JDKs;
+        // quoting those instead of the actual verification error sends you chasing the
+        // wrong thing entirely.
+        const reason = [...signed.stderr.split('\n'), ...signed.stdout.split('\n')]
+          .map((line) => line.trim())
+          .find((line) => line && !/^WARNING:/i.test(line));
+        fail(`APK signature did not verify - Android will refuse to install it${reason ? `: ${reason}` : ''}`);
+      } else {
+        pass(`signature verifies (${schemes || 'unknown scheme'})`);
+        console.log(`        certificate SHA-256: ${digest}`);
+        if (dn) console.log(`        DN: ${dn}`);
+        console.log('        ^ must match every other release, or installs are refused');
+      }
     }
   }
 
@@ -197,7 +268,9 @@ async function main() {
     else fail(`${backslashed.length} zip entries use backslash separators - Android unzips them flat`);
 
     // A bundle gated above the shell it was built from can never be applied by anyone.
-    const nativeName = /versionName\s+"([^"]+)"/.exec(readFileSync(GRADLE_FILE, 'utf8'))?.[1];
+    // Skipped under --file: MIN_NATIVE lives in the release body, which a local zip
+    // does not carry.
+    const nativeName = manifest ? /versionName\s+"([^"]+)"/.exec(readFileSync(GRADLE_FILE, 'utf8'))?.[1] : null;
     if (nativeName) {
       const t = (v) => v.split('.').map(Number);
       const [a1, a2, a3] = t(manifest.minNative);
