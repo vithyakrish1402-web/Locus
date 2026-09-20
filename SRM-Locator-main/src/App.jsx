@@ -10,7 +10,7 @@ import GoogleMapReact from 'google-map-react';
 import {
   MapPin, Users, Search, Settings, Navigation, ShieldCheck,
   Building2, Sparkles, MessageSquare, Send, Loader2,
-  BrainCircuit, Lock, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
+  BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
   Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
 } from 'lucide-react';
@@ -825,7 +825,6 @@ const App = () => {
             heading: data.heading || 0,
             battery: data.battery || 0,
             status: data.status || 'ACTIVE',
-            permission: 'accepted',
           });
         });
         return formattedUsers;
@@ -1293,11 +1292,6 @@ const App = () => {
     alert(`[SYSTEM] SOS Signal transmitted directly to node: ${targetNodeName}.`);
   };
 
-  const requestPermission = (userId) => {
-    if (blockedUserIds.includes(userId)) return;
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, permission: 'requested' } : u));
-  };
-
   const toggleBlock = (userId) => {
     setBlockedUserIds(prev => {
       if (prev.includes(userId)) return prev.filter(id => id !== userId);
@@ -1306,7 +1300,6 @@ const App = () => {
       if (squadRole === 'OWNER') {
         socket.emit('block-user', { roomCode: squadCode, targetId: userId });
       }
-      setUsers(uPrev => uPrev.map(u => u.id === userId ? { ...u, permission: 'none' } : u));
       return [...prev, userId];
     });
   };
@@ -1967,11 +1960,16 @@ const App = () => {
                 </motion.div>
               ))
             ) : (
-              <>
-                {/* Persistent per-row ghost badge — independent of the transient
+              // A flat array, not a <> fragment. AnimatePresence mode="popLayout" wraps
+              // each direct child in a ref-bearing element to measure it, and a Fragment
+              // cannot take a ref — React logged "Invalid prop `ref` supplied to
+              // React.Fragment" for every row on every re-render (485 in one session).
+              // An array of keyed children is what AnimatePresence wants anyway.
+              [
+                /* Persistent per-row ghost badge — independent of the transient
                     top-of-screen banner, so anyone opening the Squad panel later
-                    still sees who's dark, not just whoever was looking when it fired. */}
-                {ghostMembers.map(ghost => (
+                   still sees who's dark, not just whoever was looking when it fired. */
+                ...ghostMembers.map(ghost => (
                   <motion.div
                     layout
                     initial={{ opacity: 0 }}
@@ -1999,8 +1997,8 @@ const App = () => {
                       <WifiOff size={16} className="text-zinc-500 shrink-0" />
                     </div>
                   </motion.div>
-                ))}
-                {users.filter(u => !blockedUserIds.includes(u.id)).map(user => (
+                )),
+                ...users.filter(u => !blockedUserIds.includes(u.id)).map(user => (
                 <motion.div
                   layout
                   initial={{ opacity: 0 }}
@@ -2014,7 +2012,7 @@ const App = () => {
                   {/* ROW 1: HEADER & ICONS */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 flex items-center justify-center font-dot text-sm border overflow-hidden shrink-0 ${user.permission === 'accepted' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10' : 'border-white/20 text-zinc-500'}`}>
+                      <div className="w-10 h-10 flex items-center justify-center font-dot text-sm border overflow-hidden shrink-0 border-emerald-500 text-emerald-500 bg-emerald-500/10">
                         {user.photo ? <img src={user.photo} className="w-full h-full object-cover" alt="" /> : user.name.charAt(0)}
                       </div>
                       <div className="flex flex-col">
@@ -2037,7 +2035,7 @@ const App = () => {
                       <button onClick={() => sendPing(user.id)} className="text-emerald-400 hover:text-white transition-colors p-1" title="Ping User">
                         <Radio size={16} className="animate-pulse" />
                       </button>
-                      {user.permission === 'accepted' ? <UserCheck size={16} className="text-zinc-500" /> : <Lock size={16} className="text-zinc-700" />}
+                      <UserCheck size={16} className="text-zinc-500" />
                       {squadRole === 'OWNER' && (
                         <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors p-1" title="Instant Ban">
                           <Ban size={16} />
@@ -2068,11 +2066,7 @@ const App = () => {
                     >
                       FIRE_SOS_BEACON
                     </button>
-                    {user.permission !== 'accepted' ? (
-                      <button onClick={() => requestPermission(user.id)} className="w-full py-3 bg-white text-black hover:bg-zinc-200 font-dot text-xs uppercase tracking-widest transition-colors">
-                        REQUEST_LINK
-                      </button>
-                    ) : !user.hasFix ? (
+                    {!user.hasFix ? (
                       // On the roster, but nothing to aim at yet — no coordinates have come
                       // through for them. Says so instead of offering buttons that would
                       // point the AR compass and the map at nothing.
@@ -2095,8 +2089,8 @@ const App = () => {
                     )}
                   </div>
                 </motion.div>
-                ))}
-              </>
+                )),
+              ]
             )}
           </AnimatePresence>
 
@@ -2294,10 +2288,8 @@ const App = () => {
           )}
           {/* Same set the squad roster panel shows, minus the members who have no fix to
               plot yet — those stay listed there rather than disappearing from the app
-              entirely. `permission` is deliberately NOT part of this filter: it's local-only
-              UI state with no server counterpart (see requestPermission), and the roster
-              never filtered on it, so having the map do so meant a member could sit in the
-              list and be absent from the map at the same time.
+              entirely. Nothing else narrows it: this and the roster panel render the same
+              set, deliberately, so the two views cannot drift apart again.
 
               Deliberately NOT gated on activeTab either — squad members' live positions are
               core tactical data, not something that should vanish just because the sidebar
@@ -2676,7 +2668,7 @@ const App = () => {
                   </div>
 
                   {/* Table Body */}
-                  {users.filter(u => u.permission === 'accepted').map(userNode => {
+                  {users.map(userNode => {
                     const cacheData = rawTelemetryData?.[userNode.id];
                     const freshness = getSignalFreshness(cacheData?.timestamp);
                     const batteryColor = cacheData && parseInt(cacheData.batteryLevel) < 20 ? 'text-red-500' : 'text-emerald-500';
