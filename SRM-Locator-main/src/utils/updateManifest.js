@@ -19,6 +19,13 @@ export const APK_ASSET_NAME = 'locus-latest.apk';
 /** Literal marker in the release body that makes an update non-dismissable. */
 export const MANDATORY_MARKER = '[MANDATORY]';
 
+/**
+ * Tag prefix that marks a native APK release, mirroring liveUpdateManifest's
+ * BUNDLE_TAG_PREFIX. The two tag series share a repo, so neither tier can assume a
+ * listing holds only its own releases.
+ */
+export const APK_TAG_PREFIX = 'v';
+
 // "SHA256: abc..." / "sha-256 = ABC..." — tolerant of separator and case, but the
 // digest itself must be exactly 64 hex chars so a truncated paste can't pass.
 const SHA256_LINE = /^[ \t]*SHA-?256[ \t]*[:=][ \t]*([0-9a-fA-F]{64})[ \t]*$/m;
@@ -121,4 +128,46 @@ export function parseReleaseManifest(release, options = {}) {
       notes: extractNotes(body),
     },
   };
+}
+
+/**
+ * Pick the latest native APK release out of a `/releases` listing.
+ *
+ * Phase 1 used to read `/releases/latest`, which is whichever release was published most
+ * recently across *every* tag series — it knows nothing about `v*` versus `js-*`. Once
+ * both series existed, publishing a JS bundle made this check return a `js-` tag that
+ * parseVersion cannot read, and the whole check failed closed. Failing closed is right
+ * (better than nagging over a typo'd tag) but the consequence is severe: a device on an
+ * old shell silently never learns a real APK update exists, which is exactly the device
+ * a [MANDATORY] release is meant to reach.
+ *
+ * Excludes drafts and prereleases explicitly. `/releases/latest` did that server-side for
+ * free; the list endpoint returns everything, so dropping the old endpoint means taking
+ * that filtering over by hand.
+ *
+ * Scans for the highest version rather than taking the first survivor, the same as
+ * selectLatestBundleRelease: GitHub's listing order follows publish date, so a
+ * republished or back-dated release could otherwise offer every device an older APK.
+ *
+ * @param {object[]} releases  Parsed JSON from /repos/:owner/:repo/releases
+ * @param {{assetName?: string}} [options]
+ * @returns {object|null} the manifest, or null when no usable v* release exists
+ */
+export function selectLatestApkRelease(releases, options = {}) {
+  if (!Array.isArray(releases)) return null;
+  let best = null;
+  for (const release of releases) {
+    if (!release || typeof release !== 'object') continue;
+    if (release.draft || release.prerelease) continue;
+
+    const tag = typeof release.tag_name === 'string' ? release.tag_name : '';
+    if (!tag.toLowerCase().startsWith(APK_TAG_PREFIX)) continue;
+
+    const parsed = parseReleaseManifest(release, options);
+    if (!parsed.ok) continue;
+    if (!best || compareVersions(parsed.manifest.version, best.version) === 1) {
+      best = parsed.manifest;
+    }
+  }
+  return best;
 }

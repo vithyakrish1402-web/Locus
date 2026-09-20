@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { LocusUpdater, isUpdaterAvailable } from '../utils/locusUpdater';
-import { APK_ASSET_NAME, isUpdateAvailable, parseReleaseManifest } from '../utils/updateManifest';
+import { APK_ASSET_NAME, isUpdateAvailable, selectLatestApkRelease } from '../utils/updateManifest';
 
 // GitHub repo the updater reads releases from. Overridable at build time so a fork or a
 // test repo can be pointed at without touching source.
 const REPO = import.meta.env?.VITE_UPDATE_REPO || 'vithyakrish1402-web/Locus';
-const RELEASES_API = `https://api.github.com/repos/${REPO}/releases/latest`;
+// Listing rather than /releases/latest, for the same reason Phase 2 does it: "latest" is
+// whichever release is newest overall, and the v* and js-* series share a repo — so a JS
+// bundle release would hand this check a tag it cannot parse and hide every APK update
+// behind it. selectLatestApkRelease filters to v* and drops drafts/prereleases, which
+// /releases/latest used to exclude server-side.
+const RELEASES_API = `https://api.github.com/repos/${REPO}/releases?per_page=30`;
 const CHECK_TIMEOUT_MS = 15000;
 
 /**
@@ -119,7 +124,9 @@ export function useAppUpdate() {
         }
 
         if (response.status === 404) {
-          // No release published yet - not an error state for the user.
+          // No repo/releases visible - not an error state for the user. The listing
+          // endpoint answers 200 with [] rather than 404 for a repo with no releases,
+          // which the empty-manifest branch below handles.
           setStatus(manual ? UpdateStatus.UP_TO_DATE : UpdateStatus.IDLE);
           return null;
         }
@@ -132,12 +139,15 @@ export function useAppUpdate() {
           });
         }
 
-        const parsed = parseReleaseManifest(await response.json());
-        if (!parsed.ok) {
-          // A malformed release is a publishing mistake, not something the user can act
-          // on - stay quiet on the automatic check, explain it on a manual one.
+        const manifest = selectLatestApkRelease(await response.json());
+        if (!manifest) {
+          // No usable v* release in the listing: none published yet, or every candidate
+          // was a draft, a prerelease, or malformed. Fail closed — offer nothing — the
+          // same as an unparseable release did before. A publishing mistake is not
+          // something the user can act on, so stay quiet on the automatic check and
+          // explain it only when they asked.
           if (manual) {
-            setError({ code: parsed.reason, message: describe(parsed.reason) });
+            setError({ code: 'NO_RELEASES', message: describe('NO_RELEASES') });
             setStatus(UpdateStatus.ERROR);
           } else {
             setStatus(UpdateStatus.IDLE);
@@ -145,16 +155,16 @@ export function useAppUpdate() {
           return null;
         }
 
-        if (!isUpdateAvailable(current, parsed.manifest.version)) {
+        if (!isUpdateAvailable(current, manifest.version)) {
           setStatus(manual ? UpdateStatus.UP_TO_DATE : UpdateStatus.IDLE);
           return null;
         }
 
-        setManifest(parsed.manifest);
+        setManifest(manifest);
         // A mandatory release re-arms the gate even if the user dismissed an earlier one.
-        if (parsed.manifest.mandatory) setDismissed(false);
+        if (manifest.mandatory) setDismissed(false);
         setStatus(UpdateStatus.AVAILABLE);
-        return parsed.manifest;
+        return manifest;
       } catch (e) {
         const code = e?.code || (e?.name === 'AbortError' ? 'NETWORK' : 'NETWORK');
         if (manual) {

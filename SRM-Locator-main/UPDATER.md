@@ -24,10 +24,27 @@ sync. On each cold start (and from the **CHECK FOR UPDATES** button in the LOCUS
 the app calls:
 
 ```
-GET https://api.github.com/repos/vithyakrish1402-web/Locus/releases/latest
+GET https://api.github.com/repos/vithyakrish1402-web/Locus/releases?per_page=30
 ```
 
-and reads three things out of the response:
+then keeps only `v*` tags and picks the **highest version** among them.
+
+This used to read `/releases/latest`, which is wrong once both tag series exist: "latest"
+means whichever release was published most recently across *every* tag, so cutting a
+`js-*` bundle handed this check a tag it cannot parse. It failed closed, as designed — but
+the consequence was that an old native shell silently stopped being told a real APK update
+existed, which is exactly the device a `[MANDATORY]` release is meant to reach. Phase 2
+already listed and filtered for the same reason; Phase 1 now does too.
+
+Two things that came free with `/releases/latest` are now done by hand, in
+`selectLatestApkRelease`:
+
+- **Drafts and prereleases are excluded.** The `latest` endpoint skipped them server-side;
+  the list endpoint returns everything.
+- **Highest version wins, not first in the list.** Listing order follows publish date, so a
+  republished or back-dated release could otherwise offer every device an older APK.
+
+From the selected release it reads three things:
 
 | From | Meaning |
 |---|---|
@@ -37,7 +54,8 @@ and reads three things out of the response:
 
 A release missing the APK asset or the `SHA256:` line is **rejected** rather than offered —
 nothing unverified is ever handed to the installer. Version comparison also fails closed:
-an unparseable tag means "no update", not "update every launch".
+an unparseable tag means "no update", not "update every launch". A listing with no usable
+`v*` release at all is treated the same way: no update offered.
 
 Then: download to the app cache with a progress bar → verify SHA-256 → `FileProvider` URI
 + `ACTION_VIEW` → Android's own installer UI takes over.
