@@ -4,3 +4,15 @@ dist
 
 # Staged APK + notes produced by SRM-Locator-main/scripts/release.mjs
 dist-release
+
+# Claude Code per-project tooling state (dev-server launch config etc.)
+.claude/
+
+# Stray coursework files that live in the repo directory but are not part of LOCUS.
+# Listed explicitly rather than by extension so a real .java/.c source added later
+# is still picked up by git rather than silently ignored.
+SRM-Locator-main/Tutorial 2.java
+SRM-Locator-main/tutorial 2 2.java
+SRM-Locator-main/student.java
+SRM-Locator-main/Untitled-1.c
+SRM-Locator-main/Untitled-1.exe
