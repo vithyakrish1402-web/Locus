@@ -93,8 +93,12 @@ socket.on('check-ping', (clientTimestamp) => {
       delete squad.kickVotes[targetId];
       if (users[targetId]) {
         delete users[targetId];
-        delete locationCache[targetId]; 
+        delete locationCache[targetId];
       }
+      // Off the roster isn't enough: take the socket out of the room too, so it stops
+      // receiving the squad's traffic whether or not the removed client cooperates.
+      // (The 'exiled' notice above goes to the socket's own room, so it still arrives.)
+      io.sockets.sockets.get(targetId)?.leave(roomCode);
       handleSquadSuccession(targetId);
       broadcastSquadUpdate(roomCode);
     }
@@ -268,6 +272,10 @@ socket.on('check-ping', (clientTimestamp) => {
 
     console.log(`[🚫 BLOCK] Commander banned node ${targetId} from ${roomCode}`);
     io.to(targetId).emit('exiled', { reason: 'blocked' });
+    // Same as a mutiny exile: off the roster AND out of the room, without relying on the
+    // blocked client to leave when told. Otherwise a modified client stays subscribed to
+    // the squad it was banned from, and keeps receiving its locations and SOS alerts.
+    io.sockets.sockets.get(targetId)?.leave(roomCode);
     broadcastSquadUpdate(roomCode);
   });
 
@@ -424,9 +432,9 @@ socket.on('check-ping', (clientTimestamp) => {
   // connected after leaving (and after logging out), so a former member stayed
   // subscribed to the squad's locations, SOS and Rally Points.
   //
-  // Rooms are taken from the socket itself (socket.rooms), not just the roster, so this
-  // also works for someone a mutiny vote or a block already removed from the roster —
-  // the app answers 'exiled' by leaving, and those rooms still have to be shed.
+  // Rooms are taken from the socket itself (socket.rooms), not just the roster, so
+  // nothing it is still subscribed to can be missed even if the two have drifted apart.
+  // (Mutiny exiles and blocks now detach the socket themselves; this is the backstop.)
   socket.on('leave-squad', () => {
     const rooms = new Set([...socket.rooms].filter(room => room !== socket.id));
     for (const roomCode in activeSquads) {

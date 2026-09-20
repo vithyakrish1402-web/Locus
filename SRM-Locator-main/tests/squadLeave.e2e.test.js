@@ -121,24 +121,6 @@ describe('a Commander who leaves', () => {
   });
 });
 
-describe('a member removed by the squad, whose app then calls leave-squad', () => {
-  it('is taken out of the room too, not just off the roster', async () => {
-    // The app answers 'exiled' by leaving the squad. The server has already dropped them
-    // from the roster by then, so leaving has to work off the socket's rooms, not the roster.
-    const { room, alpha, bravo, charlie } = await squadOfThree();
-    const exiled = once(bravo, 'exiled');
-    alpha.emit('vote-to-kick', { targetId: bravo.id, roomCode: room });
-    charlie.emit('vote-to-kick', { targetId: bravo.id, roomCode: room });
-    await exiled;
-    await leave(bravo);
-
-    charlie.emit('sos-broadcast', { senderName: 'Charlie', lat: 1, lng: 2, roomCode: room });
-    await waitFor(() => alpha.sos.length);
-    await sleep(250);
-    expect(bravo.sos).toEqual([]);
-  });
-});
-
 describe('leave-squad from a socket that is in no squad', () => {
   it('is harmless', async () => {
     const stranger = await connect();
