@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { useAlertAudio } from '../hooks/useAlertAudio';
 
 // Full-viewport takeover for an incoming squad-wide SOS. Deliberately NOT a
@@ -21,20 +21,18 @@ const HEX_PATTERN_ID = 'sos-hex-pattern';
 
 const SosOverlay = ({ senderName, lat, lng, onAcknowledge }) => {
   const { start, stop } = useAlertAudio();
-  const startedRef = useRef(false);
 
+  // No "already started" guard on purpose: start() is idempotent and stop() fully
+  // tears down, so mount -> cleanup -> mount (what <StrictMode> does in dev) ends
+  // with the klaxon running. A ref guard here skipped the second start() while the
+  // cleanup had already stopped the first, leaving the klaxon silent in dev.
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
     start();
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([300, 150, 300, 150, 300]);
     }
     return () => stop();
-    // start/stop are stable (useCallback with empty deps in the hook) — this must
-    // run exactly once on mount, not re-fire if the hook identity ever changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [start, stop]);
 
   const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
 
@@ -46,19 +44,16 @@ const SosOverlay = ({ senderName, lat, lng, onAcknowledge }) => {
   return (
     <div
       className="fixed inset-0 z-[10001] flex items-center justify-center pointer-events-auto"
-      style={{ background: 'rgba(60,10,10,0.92)' }}
+      // #4A0A0A, opaque: a deep maroon that reads as "emergency" without being
+      // mistaken for the tactical-red (#EF4444) UI chrome, and hides the map fully.
+      style={{ background: '#4A0A0A' }}
     >
-      {/* Border frame + glow, separate layer from the content box so the hex
-          pattern can sit between the wash and the frame without being clipped
-          by the frame's own border-radius rounding at the pixel edge. */}
+      {/* Hex grid layer: clipped to the rounded frame, static. Kept separate from
+          the border below so the strobe (opacity) only touches the border and not
+          the pattern or the text. */}
       <div
-        className="absolute inset-4 sm:inset-8"
-        style={{
-          border: '2px solid #EF4444',
-          borderRadius: '20px',
-          boxShadow: '0 0 60px rgba(239,68,68,0.45), inset 0 0 60px rgba(239,68,68,0.08)',
-          overflow: 'hidden',
-        }}
+        className="absolute inset-4 sm:inset-8 overflow-hidden"
+        style={{ borderRadius: '20px' }}
       >
         <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.12 }}>
           <defs>
@@ -87,6 +82,17 @@ const SosOverlay = ({ senderName, lat, lng, onAcknowledge }) => {
           Tactical Grid
         </span>
       </div>
+
+      {/* Strobing border + glow (see .locus-sos-strobe in index.css). Its own
+          layer so the animation is opacity-only and the glow isn't repainted. */}
+      <div
+        className="locus-sos-strobe absolute inset-4 sm:inset-8 pointer-events-none"
+        style={{
+          border: '2px solid #EF4444',
+          borderRadius: '20px',
+          boxShadow: '0 0 60px rgba(239,68,68,0.45), inset 0 0 60px rgba(239,68,68,0.08)',
+        }}
+      />
 
       {/* Center content */}
       <div className="relative z-10 flex flex-col items-center text-center px-6">

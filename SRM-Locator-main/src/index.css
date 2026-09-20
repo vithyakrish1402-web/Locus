@@ -52,6 +52,22 @@ body {
   50% { opacity: 0.6; }
 }
 
+/* SosOverlay border strobe (src/components/SosOverlay.jsx): 500ms bright / 500ms
+   dim, hard-stepped rather than eased. Opacity-only on the border's own layer so
+   it stays on the compositor (no repaint per frame) on low-end Android. Dims
+   instead of hiding fully so the frame's outline never vanishes. */
+@keyframes locus-sos-strobe {
+  0% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+.locus-sos-strobe {
+  animation: locus-sos-strobe 1s steps(1, end) infinite;
+  will-change: opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .locus-sos-strobe { animation: none; }
+}
+
 /* Squad member marker fade-in on (re)appearance — App.jsx/TacticalLeafletMap.jsx.
    Runs on every genuine mount (first join or reconnect after signal-lost), so a
    member coming back online eases in instead of snapping into place. */

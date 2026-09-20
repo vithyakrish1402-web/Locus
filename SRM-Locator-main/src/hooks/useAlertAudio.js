@@ -1,13 +1,13 @@
 import { useRef, useCallback, useEffect } from 'react';
 
-// Two-tone alternating klaxon, ~420ms per full cycle (two ~210ms tones). One
+// Two-tone alternating klaxon, ~1s per full cycle (two 500ms tones). One
 // persistent sawtooth oscillator with its frequency stepped on an interval,
 // rather than starting/stopping a fresh oscillator every tone — that clicks/pops
 // audibly on every transition; a single continuously-running oscillator with
 // discrete frequency steps doesn't.
 const TONE_LOW_HZ = 440;
 const TONE_HIGH_HZ = 880;
-const TONE_INTERVAL_MS = 210; // half of the ~420ms full cycle
+const TONE_INTERVAL_MS = 500; // half of the ~1s full cycle
 
 export function useAlertAudio() {
   const ctxRef = useRef(null);
@@ -41,6 +41,11 @@ export function useAlertAudio() {
     if (!AudioContext) return;
 
     const ctx = new AudioContext();
+    // This is started by an incoming socket event, not a tap, so browser autoplay
+    // policy can bring the context up 'suspended' — and a suspended context is
+    // silent. Nudge it awake; if the policy still refuses, the rejection is
+    // swallowed (nothing else we can do without a gesture).
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 

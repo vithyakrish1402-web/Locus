@@ -3,6 +3,7 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import { resolveSosRoom } from './sosRelay.js';
 
 const app = express();
 app.use(cors());
@@ -322,9 +323,12 @@ socket.on('check-ping', (clientTimestamp) => {
   });
 
   // Squad-wide distress beacon (the "SOS" promised in onboarding) — broadcasts
-  // to every other member of the sender's own squad, trusting the server-side
-  // roomCode recorded on join rather than whatever the client claims, same
-  // gatekeeper reasoning as the telemetry handler above.
+  // to every other member of the sender's own squad. The room is resolved from the
+  // squad roster (see sosRelay.js), not from `users`, which only exists once the
+  // sender has a GPS fix — a member with no fix used to have their SOS dropped here
+  // with no sign of it on their end. The client's claimed roomCode is only honoured
+  // if the roster confirms they're in it, same gatekeeper reasoning as the
+  // telemetry handler above.
   //
   // Emits its own 'sos-received' event rather than reusing 'receive-ping' — that
   // event belongs to the separate single-target 'ping-user' feature (Commander
@@ -332,9 +336,12 @@ socket.on('check-ping', (clientTimestamp) => {
   // indistinguishable from a single ping on the client, plus lat/lng/timestamp
   // from the sender's payload were being silently discarded (only senderName was
   // ever destructured), so nothing downstream could show the sender's location.
-  socket.on('sos-broadcast', ({ senderName, lat, lng, timestamp }) => {
-    const roomCode = users[socket.id]?.roomCode;
-    if (!roomCode) return;
+  socket.on('sos-broadcast', ({ senderName, lat, lng, roomCode: claimedRoomCode, timestamp } = {}) => {
+    const roomCode = resolveSosRoom(activeSquads, users, socket.id, claimedRoomCode);
+    if (!roomCode) {
+      console.warn(`[🚨 SOS] Dropped: ${socket.id} (${senderName}) is not a member of any squad`);
+      return;
+    }
     console.log(`[🚨 SOS] ${senderName} triggered a distress beacon in ${roomCode}`);
     socket.to(roomCode).emit('sos-received', {
       senderId: socket.id,
