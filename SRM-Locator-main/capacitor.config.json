@@ -1,5 +1,9 @@
 {
   "appId": "com.locus.app",
   "appName": "LOCUS",
-  "webDir": "dist"
+  "webDir": "dist",
+  "backgroundColor": "#170D0E",
+  "android": {
+    "backgroundColor": "#170D0E"
+  }
 }
