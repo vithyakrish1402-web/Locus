@@ -4,6 +4,7 @@ import {
   rememberMember,
   forgetMember,
   rebindReturningMember,
+  collectStaleSocketIds,
 } from '../backend/squadRoster.js';
 
 // Alpha owns the squad; Bravo and Charlie were approved onto it.
@@ -158,5 +159,41 @@ describe('rebindReturningMember', () => {
       expect(result.role).toBe('MEMBER');
       expect(s.ownerId).toBe('sock-b');
     });
+  });
+});
+
+// Every connection a person has been seen on except the one they are arriving on now.
+// Callers tear these down; miss one and that dead socket stays on everyone's map as a
+// second, frozen copy of a member who is in fact right here.
+describe('superseded connections', () => {
+  it("finds the same person's earlier sockets, and only theirs", () => {
+    const s = squad();
+    expect(collectStaleSocketIds(s, 'uB', 'sock-b2')).toEqual(['sock-b']);
+  });
+
+  it('never reports the socket they are arriving on', () => {
+    const s = squad();
+    expect(collectStaleSocketIds(s, 'uB', 'sock-b')).toEqual([]);
+  });
+
+  it('collects several, for someone who reconnected more than once', () => {
+    const s = squad();
+    s.memberUids['sock-b-old'] = 'uB';
+    expect(collectStaleSocketIds(s, 'uB', 'sock-b2').sort()).toEqual(['sock-b', 'sock-b-old']);
+  });
+
+  it("picks up the owner's previous socket even when memberUids has lost track of it", () => {
+    // The owner-reconnect path relies on this: an older squad, or one whose ownership
+    // changed hands, can carry an ownerId that memberUids no longer maps.
+    const s = squad();
+    delete s.memberUids['sock-a'];
+    expect(collectStaleSocketIds(s, 'uA', 'sock-a2')).toEqual(['sock-a']);
+  });
+
+  it('returns nothing without a uid, rather than matching every anonymous socket', () => {
+    const s = squad();
+    s.memberUids['sock-anon'] = null;
+    expect(collectStaleSocketIds(s, null, 'sock-x')).toEqual([]);
+    expect(collectStaleSocketIds(s, undefined, 'sock-x')).toEqual([]);
   });
 });

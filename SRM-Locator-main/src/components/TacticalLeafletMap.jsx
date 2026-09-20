@@ -147,9 +147,10 @@ const TacticalLeafletMap = ({
         />
       )}
 
-      {/* Not gated on activeTab — see App.jsx's matching comment on the Google engine. */}
+      {/* Same filter as the Google engine — see App.jsx's matching comment for why
+          `permission` is not part of it and why this isn't gated on activeTab. */}
       {users
-        .filter((u) => u.permission === 'accepted' && !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.lat && u.lng)
+        .filter((u) => !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.hasFix)
         .map((u) => (
           <LeafletReactMarker key={u.id} lat={u.lat} lng={u.lng} onClick={() => onFocus({ lat: u.lat, lng: u.lng }, null)}>
             <div style={{ animation: 'locus-member-fade-in 0.6s ease' }}>
