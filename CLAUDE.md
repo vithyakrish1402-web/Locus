@@ -13,6 +13,7 @@ SRM-Locator-main/
 │   ├── App.jsx              # ~145KB monolithic component: nearly all app state, UI, and logic live here
 │   ├── ARCompass.jsx        # AR camera viewfinder, bearing/heading math
 │   ├── LocusGuide.jsx       # Onboarding/help modal
+│   ├── utils/               # Pure helpers: geoMath, precognition (GPS Kalman filter), squadCode, ghostProjection, markerStatus
 │   ├── srmDatabase.js       # SRM_MASTER_DATABASE — static campus building coordinates
 │   ├── firebase.js          # Firebase SDK init (Auth + Firestore)
 │   └── main.jsx             # Entry point
@@ -32,9 +33,11 @@ npm run server     # start backend (Express + Socket.IO)
 npm run dev:all     # frontend + backend + localtunnel concurrently
 npm run build       # production build (outputs to dist/)
 npx cap sync         # sync web build into the Capacitor Android project
+npm test            # run the Vitest suite once (tests/)
+npm run test:watch  # Vitest in watch mode
 ```
 
-There is no test suite and no lint script wired into `package.json` (ESLint config exists at `eslint.config.js`; run it directly with `npx eslint .` if needed).
+Tests use Vitest and live in `tests/` (geoMath, precognition, squadCode, markerStatus, serverLogic); they cover the pure helpers in `src/utils/` and server logic, not the UI. There is no lint script wired into `package.json` (ESLint config exists at `eslint.config.js`; run it directly with `npx eslint .` if needed).
 
 The backend does not currently require any `.env` variables — the `GEMINI_API_KEY`-backed `/api/oracle` proxy it once used was deliberately removed (see the architecture-doc note above). `npm run server` still loads `.env` via `--env-file` if one exists, but nothing in the server reads from it today.
 
