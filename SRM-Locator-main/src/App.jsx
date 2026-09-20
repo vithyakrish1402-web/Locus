@@ -31,6 +31,8 @@ import WaypointMarker from './components/WaypointMarker';
 import BuildingMarker from './components/BuildingMarker';
 import SosTrigger from './components/SosTrigger';
 import SosOverlay from './components/SosOverlay';
+import { useIncomingSos } from './hooks/useIncomingSos';
+import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { deriveMarkerStatus } from './utils/markerStatus';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
@@ -349,11 +351,18 @@ const App = () => {
   // --- TACTICAL WAYPOINT STATE ---
   const [isDroppingWaypoint, setIsDroppingWaypoint] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
-  // Holds the most recent squad-wide SOS this client hasn't acknowledged yet.
-  // Deliberately a single slot, not a queue: only one SosOverlay can be on screen
-  // at a time, and a second beacon while one is still up should replace it (same
-  // squadmate holding again, or a different one) rather than stack behind it.
-  const [incomingSos, setIncomingSos] = useState(null);
+  // Squad-wide SOS beacons this client hasn't acknowledged yet: a queue, one overlay
+  // on screen at a time (see useIncomingSos). Live beacons arrive as 'sos-received';
+  // ones missed while offline/reconnecting are replayed after requestSosSync().
+  const {
+    current: incomingSos,
+    pendingCount: pendingSosCount,
+    acknowledge: acknowledgeSos,
+    requestSync: requestSosSync,
+  } = useIncomingSos(socket);
+  // While an SOS is up, Android's Back button/gesture does nothing (ACKNOWLEDGE is the
+  // only way out); otherwise it behaves normally. See useBackButtonGuard.
+  useBackButtonGuard(Boolean(incomingSos));
   const [arTarget, setArTarget] = useState(null);
   // --- TARGETING MODE (Two-step Rally Point) ---
   const [isTargetingMode, setIsTargetingMode] = useState(false);
@@ -809,19 +818,14 @@ const App = () => {
       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
     });
 
-    // Squad-wide SOS (see SosTrigger.jsx / backend's sos-broadcast handler).
-    // Distinct from 'receive-ping' above, which is the single-target Commander
-    // ping — conflating the two meant an actual emergency looked identical to a
-    // routine ping-check on the receiving end.
-    // SosOverlay is the entire UI response to this event — it owns its own
-    // klaxon (useAlertAudio) and vibrate() call once mounted, so nothing else
-    // fires here. A native OS Notification would still be the only way to catch
-    // this while the app is backgrounded/screen-off, since in-app audio and
-    // vibrate need the tab actually running; that tradeoff is intentional here,
-    // not an oversight — flag it if background delivery turns out to matter.
-    socket.on('sos-received', (data) => {
-      setIncomingSos(data);
-    });
+    // Squad-wide SOS ('sos-received') is NOT handled here — useIncomingSos owns that
+    // listener (see the hook call near the top of App). Kept separate from
+    // 'receive-ping' above, the single-target Commander ping: conflating the two
+    // made an actual emergency look like a routine ping-check. SosOverlay is the
+    // entire UI response, and owns its own klaxon and vibrate() once mounted. A
+    // native OS Notification would still be the only way to catch an SOS while the
+    // app is backgrounded/screen-off, since in-app audio and vibrate need the app
+    // running; that tradeoff is intentional, not an oversight.
 
     return () => {
       socket.off('users-update');
@@ -829,7 +833,6 @@ const App = () => {
       socket.off('new-custom-route');
       socket.off('new-waypoint');
       socket.off('remove-waypoint');
-      socket.off('sos-received');
       setUsers([]);
     };
   }, [hasJoinedSquad, squadCode]);
@@ -840,6 +843,11 @@ const App = () => {
     socket.on('access-granted', ({ role }) => {
       setAccessStatus('granted');
       setSquadRole(role);
+      // Now (back) in the squad's room: catch up on any SOS fired while this client
+      // was offline, reconnecting or awaiting approval. Asked for here, not pushed by
+      // the server right after 'access-granted', which could arrive before this
+      // client has finished re-rendering and be dropped on the floor.
+      requestSosSync();
     });
 
     socket.on('access-pending', () => setAccessStatus('pending'));
@@ -876,7 +884,7 @@ const App = () => {
       socket.off('promoted-to-owner');
       socket.off('connect', onConnect);
     };
-  }, [hasJoinedSquad, squadCode, user]);
+  }, [hasJoinedSquad, squadCode, user, requestSosSync]);
 
   /// 2. Broadcast your live GPS data to the network
   // 2. Broadcast your live GPS data to the network
@@ -2871,10 +2879,15 @@ const App = () => {
       {/* ========== INCOMING SOS (stays up until acknowledged) ========== */}
       {incomingSos && (
         <SosOverlay
+          // Keyed by beacon so moving to the next queued SOS (or a re-trigger from the
+          // same sender) remounts it: fresh klaxon, vibration and focus for each alert.
+          key={incomingSos.id}
           senderName={incomingSos.senderName}
           lat={incomingSos.lat}
           lng={incomingSos.lng}
-          onAcknowledge={() => setIncomingSos(null)}
+          ageMs={incomingSos.ageMs}
+          pendingCount={pendingSosCount}
+          onAcknowledge={acknowledgeSos}
         />
       )}
     </div>

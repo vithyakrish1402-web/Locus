@@ -3,7 +3,7 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { resolveSosRoom } from './sosRelay.js';
+import { resolveSosRoom, recordSos, toSosPayload, pendingSosFor, ackSos, memberKey } from './sosRelay.js';
 
 const app = express();
 app.use(cors());
@@ -343,13 +343,42 @@ socket.on('check-ping', (clientTimestamp) => {
       return;
     }
     console.log(`[🚨 SOS] ${senderName} triggered a distress beacon in ${roomCode}`);
-    socket.to(roomCode).emit('sos-received', {
+    // One clock reading for both, so a live broadcast is reliably age 0 rather than
+    // occasionally 1ms if the second Date.now() ticks over.
+    const now = Date.now();
+    const sos = recordSos(activeSquads[roomCode], {
+      senderKey: memberKey(socket.data?.uid, socket.id),
       senderId: socket.id,
       senderName,
-      lat: lat ?? null,
-      lng: lng ?? null,
-      timestamp: timestamp || Date.now(),
-    });
+      lat,
+      lng,
+      timestamp,
+    }, now);
+    socket.to(roomCode).emit('sos-received', toSosPayload(sos, now));
+  });
+
+  // Catch-up for a member who wasn't (fully) in the room when an SOS fired — offline,
+  // reconnecting, or approved afterwards. The client asks once it has (re)entered the
+  // squad, rather than the server pushing right after 'access-granted': that push
+  // could beat the client's own React re-render and arrive with nobody listening.
+  // Only SOS this member hasn't acknowledged, and hasn't sent themselves, come back.
+  socket.on('sos-sync', () => {
+    const roomCode = resolveSosRoom(activeSquads, users, socket.id, null);
+    if (!roomCode) return;
+    const now = Date.now();
+    const key = memberKey(socket.data?.uid, socket.id);
+    for (const sos of pendingSosFor(activeSquads[roomCode], key, now)) {
+      socket.emit('sos-received', toSosPayload(sos, now));
+    }
+  });
+
+  // Acknowledgement is per member and stored by stable identity (uid), so it survives
+  // a reconnect: without it every reconnect would re-raise an SOS the member had
+  // already dealt with.
+  socket.on('sos-ack', ({ id } = {}) => {
+    const roomCode = resolveSosRoom(activeSquads, users, socket.id, null);
+    if (!roomCode) return;
+    ackSos(activeSquads[roomCode], id, memberKey(socket.data?.uid, socket.id));
   });
 
   socket.on('leave-squad', () => {

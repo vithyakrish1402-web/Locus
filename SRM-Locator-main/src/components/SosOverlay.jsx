@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { useAlertAudio } from '../hooks/useAlertAudio';
 
 // Full-viewport takeover for an incoming squad-wide SOS. Deliberately NOT a
 // toast/modal: no click-outside dismiss, no Escape dismiss, no auto-timeout.
 // ACKNOWLEDGE is the only way out, on purpose — a distress beacon that can be
 // missed by glancing away, or dismissed by an accidental tap, defeats the point.
+// (Android's Back button is held off separately, in useBackButtonGuard.)
 //
 // z-[10001]: one above every other z-index in the app (ARCompass's 9999 is the
 // next highest actual-runtime value; LocusGuide's 10000 never coexists with this
@@ -19,8 +20,14 @@ import { useAlertAudio } from '../hooks/useAlertAudio';
 // SVG tile, not a resurrection of that file.
 const HEX_PATTERN_ID = 'sos-hex-pattern';
 
-const SosOverlay = ({ senderName, lat, lng, onAcknowledge }) => {
+const minutesAgo = (ageMs) => Math.floor((ageMs || 0) / 60000);
+
+const SosOverlay = ({ senderName, lat, lng, ageMs = 0, pendingCount = 0, onAcknowledge }) => {
   const { start, stop } = useAlertAudio();
+  const overlayRef = useRef(null);
+  const acknowledgeRef = useRef(null);
+  const titleId = useId();
+  const descriptionId = useId();
 
   // No "already started" guard on purpose: start() is idempotent and stop() fully
   // tears down, so mount -> cleanup -> mount (what <StrictMode> does in dev) ends
@@ -34,24 +41,80 @@ const SosOverlay = ({ senderName, lat, lng, onAcknowledge }) => {
     return () => stop();
   }, [start, stop]);
 
+  // Modal focus handling. The page underneath stays mounted and focusable, so without
+  // this a keyboard or screen-reader user could Tab straight out of the alert into the
+  // map. ACKNOWLEDGE is the only control, so "trapping" focus means keeping it there:
+  // take focus on open, pull it back if it strays, and hand it back when we close.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
+    acknowledgeRef.current?.focus();
+
+    const pullFocusBack = (event) => {
+      if (!overlayRef.current?.contains(event.target)) acknowledgeRef.current?.focus();
+    };
+    document.addEventListener('focusin', pullFocusBack);
+
+    return () => {
+      document.removeEventListener('focusin', pullFocusBack);
+      if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) {
+        previouslyFocused.focus();
+      }
+    };
+  }, []);
+
   const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
+  const minutes = minutesAgo(ageMs);
+  const displayName = (senderName || 'UNKNOWN NODE').toUpperCase();
+
+  const statusLine = minutes >= 1
+    ? `Sent ${minutes} min ago // Unacknowledged`
+    : 'Transmitting // Unacknowledged';
+
+  // What a screen reader announces on open (role="alertdialog" is announced
+  // assertively) — the visible layout is terse and all-caps, so say it in words.
+  const spokenDescription = [
+    `${senderName || 'An unknown squad member'} has triggered an SOS beacon.`,
+    hasLocation ? `Last known position ${lat.toFixed(4)}, ${lng.toFixed(4)}.` : 'Position unavailable.',
+    minutes >= 1 ? `Sent ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago.` : null,
+    pendingCount > 0
+      ? `${pendingCount} more SOS ${pendingCount === 1 ? 'alert is' : 'alerts are'} waiting after this one.`
+      : null,
+    'Activate Acknowledge to dismiss.',
+  ].filter(Boolean).join(' ');
 
   const handleAcknowledge = () => {
     stop();
     onAcknowledge();
   };
 
+  // The only focusable thing here is ACKNOWLEDGE, so Tab has nowhere legitimate to go.
+  const handleKeyDown = (event) => {
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      acknowledgeRef.current?.focus();
+    }
+  };
+
   return (
     <div
+      ref={overlayRef}
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onKeyDown={handleKeyDown}
       className="fixed inset-0 z-[10001] flex items-center justify-center pointer-events-auto"
       // #4A0A0A, opaque: a deep maroon that reads as "emergency" without being
       // mistaken for the tactical-red (#EF4444) UI chrome, and hides the map fully.
       style={{ background: '#4A0A0A' }}
     >
+      <p id={descriptionId} className="sr-only">{spokenDescription}</p>
+
       {/* Hex grid layer: clipped to the rounded frame, static. Kept separate from
           the border below so the strobe (opacity) only touches the border and not
           the pattern or the text. */}
       <div
+        aria-hidden="true"
         className="absolute inset-4 sm:inset-8 overflow-hidden"
         style={{ borderRadius: '20px' }}
       >
@@ -86,6 +149,7 @@ const SosOverlay = ({ senderName, lat, lng, onAcknowledge }) => {
       {/* Strobing border + glow (see .locus-sos-strobe in index.css). Its own
           layer so the animation is opacity-only and the glow isn't repainted. */}
       <div
+        aria-hidden="true"
         className="locus-sos-strobe absolute inset-4 sm:inset-8 pointer-events-none"
         style={{
           border: '2px solid #EF4444',
@@ -97,6 +161,7 @@ const SosOverlay = ({ senderName, lat, lng, onAcknowledge }) => {
       {/* Center content */}
       <div className="relative z-10 flex flex-col items-center text-center px-6">
         <h1
+          id={titleId}
           className="font-dot font-bold text-white leading-none"
           style={{ fontSize: 'clamp(52px, 12vw, 72px)', letterSpacing: '0.15em' }}
         >
@@ -104,7 +169,7 @@ const SosOverlay = ({ senderName, lat, lng, onAcknowledge }) => {
         </h1>
 
         <div className="mt-6 font-mono text-white" style={{ fontSize: '20px', lineHeight: 1.5 }}>
-          <div>{(senderName || 'UNKNOWN NODE').toUpperCase()}</div>
+          <div>{displayName}</div>
           <div>{hasLocation ? `${lat.toFixed(4)}, ${lng.toFixed(4)}` : 'COORDINATES UNAVAILABLE'}</div>
         </div>
 
@@ -112,16 +177,26 @@ const SosOverlay = ({ senderName, lat, lng, onAcknowledge }) => {
           className="font-mono uppercase tracking-widest mt-4"
           style={{ fontSize: '14px', color: '#F0997B' }}
         >
-          Transmitting // Unacknowledged
+          {statusLine}
         </p>
 
         <button
+          ref={acknowledgeRef}
           onClick={handleAcknowledge}
-          className="mt-8 bg-white text-black font-mono font-bold uppercase tracking-widest"
+          className="mt-8 bg-white text-black font-mono font-bold uppercase tracking-widest focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-white"
           style={{ fontSize: '16px', padding: '16px 40px', borderRadius: '20px' }}
         >
           Acknowledge
         </button>
+
+        {pendingCount > 0 && (
+          <p
+            className="font-mono uppercase tracking-widest mt-4"
+            style={{ fontSize: '12px', color: '#F0997B' }}
+          >
+            +{pendingCount} more waiting
+          </p>
+        )}
       </div>
     </div>
   );
