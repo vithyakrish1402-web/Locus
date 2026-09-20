@@ -4,6 +4,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { resolveSosRoom, recordSos, toSosPayload, pendingSosFor, ackSos, memberKey } from './sosRelay.js';
+import { rememberMember, forgetMember, rebindReturningMember } from './squadRoster.js';
 
 const app = express();
 app.use(cors());
@@ -141,6 +142,7 @@ socket.on('check-ping', (clientTimestamp) => {
         ownerUid: requesterUid,
         members: [socket.id],
         memberUids: requesterUid ? { [socket.id]: requesterUid } : {},
+        knownUids: requesterUid ? [requesterUid] : [],
         blockedUids: existing?.blockedUids || [],
         activeWaypoint: null,
         lastActivity: Date.now()
@@ -165,6 +167,7 @@ socket.on('check-ping', (clientTimestamp) => {
       existing.ownerId = socket.id;
       existing.memberUids = existing.memberUids || {};
       existing.memberUids[socket.id] = requesterUid;
+      rememberMember(existing, requesterUid);
       existing.lastActivity = Date.now();
       socket.join(roomCode);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
@@ -181,9 +184,35 @@ socket.on('check-ping', (clientTimestamp) => {
       if (!existing.members.includes(socket.id)) existing.members.push(socket.id);
       existing.memberUids = existing.memberUids || {};
       existing.memberUids[socket.id] = requesterUid;
+      rememberMember(existing, requesterUid);
       existing.lastActivity = Date.now();
       socket.join(roomCode);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
+      return;
+    }
+
+    // Case 4b: a member the Commander already approved, back on a new socket (signal
+    // blip, backgrounded app, relaunch). Approval was never revoked — they didn't
+    // leave, and weren't kicked or blocked — so don't make the Commander re-approve
+    // them on every reconnect, and don't drop them into the waiting room in the
+    // meantime (which also cut them off from live alerts, SOS included). Recognised by
+    // uid, not socket id: see squadRoster.js. Sits after Cases 3/4 so an owner (or a
+    // squad whose owner has vanished) is still handled the way it always was.
+    const returning = rebindReturningMember(existing, { uid: requesterUid, socketId: socket.id });
+    if (returning) {
+      for (const staleId of returning.staleIds) {
+        // The same person's previous connection: it's superseded. Detach it from the
+        // room and drop its per-socket state so it can't show as a duplicate marker, or
+        // later raise a false "signal lost" for someone who is in fact back.
+        io.sockets.sockets.get(staleId)?.leave(roomCode);
+        delete users[staleId];
+        delete locationCache[staleId];
+      }
+      existing.lastActivity = Date.now();
+      socket.join(roomCode);
+      socket.emit('access-granted', { role: returning.role, roomCode });
+      if (existing.activeWaypoint) socket.emit('new-waypoint', existing.activeWaypoint);
+      broadcastSquadUpdate(roomCode);
       return;
     }
 
@@ -209,6 +238,8 @@ socket.on('check-ping', (clientTimestamp) => {
           targetSocket.emit('access-granted', { role: 'MEMBER', roomCode });
           activeSquads[roomCode].memberUids = activeSquads[roomCode].memberUids || {};
           activeSquads[roomCode].memberUids[targetId] = targetSocket.data?.uid || null;
+          // Approved once; remembered by uid so a reconnect isn't a fresh request.
+          rememberMember(activeSquads[roomCode], targetSocket.data?.uid);
 
           if (activeSquads[roomCode].activeWaypoint) {
             targetSocket.emit('new-waypoint', activeSquads[roomCode].activeWaypoint);
@@ -228,6 +259,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const targetUid = squad.memberUids?.[targetId] || io.sockets.sockets.get(targetId)?.data?.uid;
     squad.blockedUids = squad.blockedUids || [];
     if (targetUid && !squad.blockedUids.includes(targetUid)) squad.blockedUids.push(targetUid);
+    forgetMember(squad, targetUid);
 
     squad.members = squad.members.filter(id => id !== targetId);
     if (squad.memberUids) delete squad.memberUids[targetId];
@@ -451,6 +483,15 @@ socket.on('check-ping', (clientTimestamp) => {
   function handleSquadSuccession(disconnectedId) {
     for (const roomCode in activeSquads) {
       const squad = activeSquads[roomCode];
+
+      // Only reached on a deliberate exit (leave-squad, mutiny exile) — never on a raw
+      // disconnect. Forget them, so coming back means asking the Commander again.
+      const departingUid = squad.memberUids?.[disconnectedId];
+      if (departingUid) {
+        forgetMember(squad, departingUid);
+        delete squad.memberUids[disconnectedId];
+      }
+
       squad.members = squad.members.filter(id => id !== disconnectedId);
 
       if (squad.members.length === 0) {

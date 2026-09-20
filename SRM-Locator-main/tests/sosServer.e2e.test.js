@@ -1,9 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { spawn } from 'node:child_process';
-import net from 'node:net';
-import process from 'node:process';
-import { fileURLToPath } from 'node:url';
-import { io } from 'socket.io-client';
+import { describe, it, expect } from 'vitest';
+import { e2eServer, sleep, waitFor } from './helpers/e2eServer.js';
 
 /**
  * End-to-end SOS relay: the real backend/server.js in a child process, driven by
@@ -11,106 +7,10 @@ import { io } from 'socket.io-client';
  * so this covers routing, replay and acknowledgement exactly as a phone would hit them.
  */
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const once = (socket, event) => new Promise((resolve) => socket.once(event, resolve));
-
-const waitFor = async (predicate, { timeout = 3000, interval = 20 } = {}) => {
-  const start = Date.now();
-  for (;;) {
-    const value = predicate();
-    if (value) return value;
-    if (Date.now() - start > timeout) throw new Error('waitFor timed out');
-    await sleep(interval);
-  }
-};
-
-const freePort = () =>
-  new Promise((resolve, reject) => {
-    const probe = net.createServer();
-    probe.once('error', reject);
-    probe.listen(0, () => {
-      const { port } = probe.address();
-      probe.close(() => resolve(port));
-    });
-  });
-
-let server;
-let url;
-const clients = [];
-let roomSeq = 0;
-const newRoom = () => `E2E${++roomSeq}`;
-
-beforeAll(async () => {
-  const port = await freePort();
-  url = `http://localhost:${port}`;
-  server = spawn(process.execPath, ['backend/server.js'], {
-    cwd: ROOT,
-    env: { ...process.env, PORT: String(port) },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('server did not start')), 10000);
-    server.once('exit', (code) => reject(new Error(`server exited early (${code})`)));
-    server.stdout.on('data', (chunk) => {
-      if (String(chunk).includes('running on port')) {
-        clearTimeout(timer);
-        resolve();
-      }
-    });
-  });
-}, 15000);
-
-afterEach(() => {
-  clients.splice(0).forEach((s) => s.disconnect());
-});
-
-afterAll(() => {
-  server?.kill();
-});
-
-const connect = async () => {
-  const socket = io(url, { transports: ['websocket'], forceNew: true, reconnection: false });
-  socket.sos = [];
-  socket.on('sos-received', (payload) => socket.sos.push(payload));
-  await new Promise((resolve, reject) => {
-    socket.once('connect', resolve);
-    socket.once('connect_error', reject);
-  });
-  clients.push(socket);
-  return socket;
-};
-
-const createSquad = async (socket, room, uid) => {
-  const granted = once(socket, 'access-granted');
-  socket.emit('request-join', { roomCode: room, user: { uid, name: uid } });
-  await granted;
-};
-
-// A genuine joiner: knocks, the Commander approves, and — like the app — asks the
-// server to catch it up on any SOS it missed as soon as it's let in.
-const admit = async (owner, socket, room, uid) => {
-  const request = once(owner, 'access-request');
-  const granted = once(socket, 'access-granted');
-  socket.emit('request-join', { roomCode: room, user: { uid, name: uid } });
-  const { targetId } = await request;
-  owner.emit('resolve-access', { targetId, roomCode: room, approved: true });
-  await granted;
-  socket.emit('sos-sync');
-};
+const { connect, createSquad, admit, returnToSquad, squadOfThree, newRoom, serverIsAlive } = e2eServer();
 
 const fireSos = (socket, room, extra = {}) =>
   socket.emit('sos-broadcast', { senderName: 'Bravo', lat: 12.8231, lng: 80.0442, roomCode: room, timestamp: Date.now(), ...extra });
-
-// A three-person squad: Alpha (Commander), Bravo and Charlie.
-const squadOfThree = async () => {
-  const room = newRoom();
-  const [alpha, bravo, charlie] = [await connect(), await connect(), await connect()];
-  await createSquad(alpha, room, 'uA');
-  await admit(alpha, bravo, room, 'uB');
-  await admit(alpha, charlie, room, 'uC');
-  return { room, alpha, bravo, charlie };
-};
 
 describe('SOS routing', () => {
   it('reaches every other member, not the sender and not another squad', async () => {
@@ -164,7 +64,7 @@ describe('SOS routing', () => {
     const { room, alpha, bravo } = await squadOfThree();
     bravo.emit('sos-broadcast'); // no payload at all
     await sleep(150);
-    expect(server.exitCode).toBeNull();
+    expect(serverIsAlive()).toBe(true);
     alpha.sos.length = 0;
     fireSos(bravo, room);
     await waitFor(() => alpha.sos.some((s) => s.senderName === 'Bravo'));
@@ -180,9 +80,10 @@ describe('SOS replay for members who missed it', () => {
     await waitFor(() => alpha.sos.length);
     await sleep(100);
 
-    // Charlie comes back on a new socket (new socket id, same person) and is re-approved.
+    // Charlie comes back on a new socket (new socket id, same person). Already approved,
+    // so no Commander involved.
     const charlie2 = await connect();
-    await admit(alpha, charlie2, room, 'uC');
+    await returnToSquad(charlie2, room, 'uC');
 
     await waitFor(() => charlie2.sos.length);
     expect(charlie2.sos[0].id).toBe(alpha.sos[0].id);
@@ -209,7 +110,7 @@ describe('SOS replay for members who missed it', () => {
     bravo.emit('sos-sync');
     bravo.disconnect();
     const bravo2 = await connect();
-    await admit(alpha, bravo2, room, 'uB');
+    await returnToSquad(bravo2, room, 'uB');
     await sleep(300);
     expect(bravo.sos).toEqual([]);
     expect(bravo2.sos).toEqual([]);
@@ -235,7 +136,7 @@ describe('SOS replay for members who missed it', () => {
 
 describe('SOS acknowledgement', () => {
   it('stops replaying once a member acknowledges — and that survives a reconnect', async () => {
-    const { room, alpha, bravo, charlie } = await squadOfThree();
+    const { room, bravo, charlie } = await squadOfThree();
     fireSos(bravo, room);
     await waitFor(() => charlie.sos.length);
 
@@ -243,7 +144,7 @@ describe('SOS acknowledgement', () => {
     charlie.disconnect();
 
     const charlie2 = await connect();
-    await admit(alpha, charlie2, room, 'uC');
+    await returnToSquad(charlie2, room, 'uC');
     await sleep(300);
     expect(charlie2.sos).toEqual([]);
   });
@@ -288,7 +189,7 @@ describe('SOS acknowledgement', () => {
     charlie.emit('sos-ack', { id: 'not-a-real-id' });
     charlie.emit('sos-ack'); // no payload
     await sleep(150);
-    expect(server.exitCode).toBeNull();
+    expect(serverIsAlive()).toBe(true);
 
     // None of that acknowledged anything: Charlie still gets it on sync.
     charlie.sos.length = 0;
