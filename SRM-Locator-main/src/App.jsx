@@ -79,6 +79,32 @@ const socket = io(BACKEND_URL, {
 // android/local.properties (see AndroidManifest.xml's MAPS_API_KEY meta-data placeholder).
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
+// --- DEV-ONLY IDENTITY OVERRIDE ---
+//
+// Exercising squad coordination needs several distinct signed-in identities at once, and
+// the real email/password flow can't provide that without real accounts. `?devUser=alpha`
+// stands in for one: open the app at /?devUser=alpha, /?devUser=bravo, /?devUser=charlie
+// in separate browsers and each behaves as its own operative.
+//
+// Gated on import.meta.env.DEV, which Vite substitutes with the literal `false` in every
+// production build — the whole branch then folds to `null` and is dropped by the bundler,
+// so no shipped APK or deployed site can reach it. It is deliberately NOT keyed off an
+// env var or a runtime flag, because either of those could be switched on in a real build.
+const DEV_IDENTITY = import.meta.env.DEV
+  ? (() => {
+      const handle = new URLSearchParams(window.location.search).get('devUser');
+      if (!handle) return null;
+      const safe = handle.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24);
+      if (!safe) return null;
+      return {
+        uid: `dev-${safe}`,
+        displayName: safe.toUpperCase(),
+        photoURL: null,
+        email: `${safe}@dev.invalid`,
+      };
+    })()
+  : null;
+
 if (!GOOGLE_MAPS_API_KEY) {
   // Say this out loud. Without a key Google would still "work" — it just renders a
   // watermarked "For development purposes only" map — which looks like an app bug
@@ -723,6 +749,16 @@ const App = () => {
   }, []);
   // --- FIREBASE AUTH LISTENER ---
   useEffect(() => {
+    // Dev identity short-circuits Firebase entirely — no network, no listener, so a
+    // half-configured dev environment can't bounce the tab back to the login screen
+    // mid-test. Dead code outside `npm run dev` (see DEV_IDENTITY).
+    if (DEV_IDENTITY) {
+      setUser(DEV_IDENTITY);
+      setAuthLoading(false);
+      setLoginMethod(null);
+      return undefined;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
@@ -1283,7 +1319,7 @@ const App = () => {
 
   // --- SOS TRANSMITTER ---
   const fireSOSBeacon = (targetNodeId, targetNodeName) => {
-    const myName = auth.currentUser?.displayName || "A Squad Member";
+    const myName = DEV_IDENTITY?.displayName || auth.currentUser?.displayName || "A Squad Member";
 
     socket.emit('ping-user', {
       targetId: targetNodeId,
