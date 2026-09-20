@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { calculateBearing } from '../utils/bearing';
+import { calculateBearing } from '../utils/geoMath';
 import { GPS_HEADING_SPEED_MPS } from '../LiveLocationMarker';
 
 // Blends two heading sources for the live location marker, mirroring how
