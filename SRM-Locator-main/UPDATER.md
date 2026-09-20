@@ -91,10 +91,36 @@ self-served.
 keytool -genkeypair -v -keystore android/locus-release.jks -alias locus -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-`android/*.jks` and `android/*.keystore` are gitignored. **Back this file up somewhere
-outside the repo** — a password manager attachment or an encrypted drive.
+`android/*.jks` and `android/*.keystore` are gitignored (the stock Android template ships
+those two rules commented out; they were uncommented for exactly this reason).
 
-### 2. Point Gradle at it
+### 2. Back it up — properly, before you ship anything
+
+This keystore is now the single most important file in the project. Losing it re-triggers
+the forced manual reinstall this updater exists to avoid, permanently, for everyone
+already on a signed build.
+
+- **Store it outside the repo and outside your dev machine's disk** — a password manager
+  attachment or an encrypted drive. Back up the *passwords* with it: a keystore whose
+  password is gone is as lost as one that was deleted.
+- **If more than one person might ever cut a release**, make sure they can reach that
+  backup without going through you.
+- **Restore it once and prove it works.** A backup nobody has restored is not a backup.
+  Pull the file back down to a scratch path, point `LOCUS_KEYSTORE_FILE` at that copy, and
+  run `gradlew assembleRelease`. If the output is `app-release.apk` rather than
+  `app-release-unsigned.apk`, both the file and the passwords are good. This is cheap now
+  and impossible once you actually need it.
+- **Record the certificate fingerprint** somewhere durable:
+
+  ```bash
+  keytool -list -v -keystore android/locus-release.jks
+  ```
+
+  With the SHA-256 fingerprint saved, you can later check any APK with
+  `keytool -printcert -jarfile locus-latest.apk` and know it will install over what
+  testers already have. Without it, the only way to find out is to try and watch it fail.
+
+### 3. Point Gradle at it
 
 Add to `android/local.properties` (gitignored, never committed):
 
@@ -145,18 +171,29 @@ Requires the `gh` CLI, authenticated (`gh auth login`).
 ## Verifying on a real device
 
 The `FileProvider` + install-intent path does not meaningfully exercise on an emulator —
-verify on real hardware:
+verify on real hardware.
+
+> ### How to actually cold start
+>
+> Both tiers check **once per process**, not per foreground. Swiping the app out of the
+> recents list does *not* reliably kill the process on Android — relaunching often drops
+> you back into the same JS context, no check runs, and a perfectly working updater looks
+> broken.
+>
+> Use **Settings → Apps → LOCUS → Force stop** between every attempt below. Every "cold
+> start" in this document means that, not a swipe.
 
 1. **Clean slate.** Uninstall any existing LOCUS, install the v1.0.0 release APK by hand.
 2. **Publish a newer release** (`npm run release -- 1.0.1`).
-3. **Cold start the app** — fully swipe it away first; the check is once per *process*,
-   not per foreground. The modal should appear with the release notes.
-4. **UPDATE NOW** → on the first ever update Android shows the "install unknown apps"
+3. **Cold start the app.** The modal should appear with the release notes.
+4. **Checksum rejection — do this one first.** Edit the published release body's `SHA256:`
+   line to a wrong 64-hex digest, cold start, and tap UPDATE NOW. The download must
+   complete and then be rejected with the integrity error — **no installer UI at all**.
+   Put the real digest back afterwards. Confirming it fails safe matters more than
+   confirming it succeeds, so it is worth proving before anything installs cleanly.
+5. **UPDATE NOW** → on the first ever update Android shows the "install unknown apps"
    consent. Grant it; returning to LOCUS should resume the download automatically with no
    second tap. On the *next* update that prompt must not reappear.
-5. **Checksum rejection.** Edit the published release body's `SHA256:` line to a wrong
-   64-hex digest, cold start, and tap UPDATE NOW. The download must complete and then be
-   rejected with the integrity error — no installer UI at all. Put the real digest back.
 6. **Mandatory gate.** Publish with `--mandatory` and confirm the app is unusable until
    installed: no LATER, Back does nothing, and it shows before the login screen.
 
@@ -268,6 +305,10 @@ which a JS bundle does not change.
 
 ## Verifying Phase 2 on a real device
 
+Same rule as Phase 1: **"cold start" means Force stop**, not a swipe — see
+[How to actually cold start](#how-to-actually-cold-start) above. Phase 2 also checks once
+per process, so a swiped-away app will not pick up a new bundle.
+
 1. Install a Phase 1 release APK (say native `1.0.0`) and open it once.
 2. Make a visible JS-only change (a label, a colour) and
    `npm run release:bundle -- 1.0.1`.
@@ -278,6 +319,10 @@ which a JS bundle does not change.
    that release's body by hand to `MIN_NATIVE: 9.9.9`. Cold start on the `1.0.0` device:
    the bundle must be **refused** with "install the full update first", and the app must
    keep running the bundle it already had — not apply it and break.
+
+   Unlike Phase 1's checksum test, this one has to come *after* a successful swap. A
+   refusal here looks like "nothing happened", which is indistinguishable from "the check
+   never ran" — so you need steps 3–4 to have proved the pipeline works first.
 6. **Rollback.** Publish a bundle that throws before `notifyAppReady()` runs, apply it,
    then relaunch: the app must come back on the previous bundle by itself.
 
