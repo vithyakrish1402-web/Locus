@@ -32,8 +32,10 @@ import BuildingMarker from './components/BuildingMarker';
 import SosTrigger from './components/SosTrigger';
 import SosOverlay from './components/SosOverlay';
 import UpdateModal from './components/UpdateModal';
+import LiveUpdateToast from './components/LiveUpdateToast';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
+import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { deriveMarkerStatus } from './utils/markerStatus';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
@@ -368,6 +370,10 @@ const App = () => {
   // render branch below, including the auth screen, and because the Back-button
   // guard is a single app-wide listener.
   const appUpdate = useAppUpdate();
+  // JS-only live updates (Phase 2). Independent of appUpdate above: this swaps the web
+  // bundle inside the installed shell, never the APK. Its MIN_NATIVE gate is what keeps
+  // a bundle off a shell too old to run it — see src/utils/liveUpdateManifest.js.
+  const liveUpdate = useLiveUpdate();
   // While an SOS is up — or a mandatory update is gating the app — Android's Back
   // button/gesture does nothing (ACKNOWLEDGE / UPDATE NOW is the only way out);
   // otherwise it behaves normally. See useBackButtonGuard.
@@ -2916,6 +2922,9 @@ const App = () => {
 
       {/* ========== IN-APP UPDATE (optional; mandatory is gated far above) ========== */}
       {updateOverlay}
+
+      {/* ========== JS-ONLY LIVE UPDATE (staged, awaiting a restart tap) ========== */}
+      <LiveUpdateToast live={liveUpdate} />
 
       {/* ========== INCOMING SOS (stays up until acknowledged) ========== */}
       {incomingSos && (

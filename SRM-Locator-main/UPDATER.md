@@ -1,9 +1,21 @@
 # LOCUS in-app updater
 
 LOCUS is sideloaded, not distributed through Play, so the app ships its own update
-mechanism. **Phase 1** (this document) replaces the whole APK and can carry any change —
-native permissions, new Capacitor plugins, manifest edits, icons. A second tier for
-JS-only live updates would sit on top of it for day-to-day logic/UI fixes.
+mechanism, in two tiers:
+
+| | **Phase 1** — full APK | **Phase 2** — JS-only bundle |
+|---|---|---|
+| Carries | anything: native permissions, plugins, manifest, icons | web bundle only: logic, UI, CSS |
+| User sees | Android's installer, a reinstall prompt | a "restart to apply" strip |
+| Release tag | `v1.2.0` | `js-1.2.1` |
+| Command | `npm run release -- 1.2.0` | `npm run release:bundle -- 1.2.1` |
+| Dependencies | **none** | `@capgo/capacitor-updater` |
+
+**Rule of thumb: if the change touches anything under `android/`, or adds a Capacitor
+plugin, it is a Phase 1 release.** Everything else — the overwhelming majority of
+day-to-day fixes — can go out as a Phase 2 bundle with no reinstall at all.
+
+# Phase 1 — full APK self-updater
 
 ## How it works
 
@@ -158,3 +170,122 @@ verify on real hardware:
   app is killed and replaced when the user accepts, so there is no post-install callback.
 - **Private repos won't work** without an access token in the client, which is exactly the
   kind of secret that should not ship in an APK. The repo must stay public.
+
+---
+
+# Phase 2 — JS-only live updates
+
+For anything that does not touch `android/`: ship the new web bundle straight into the
+installed shell, no APK download and no installer prompt at all.
+
+## How it works
+
+Same manifest-is-the-release idea as Phase 1, on its own tag series so the two never
+collide. The client lists `/releases`, keeps only `js-*` tags, and picks the **highest
+version** (not whatever GitHub listed first — a republished release must not be able to
+hand every device an older bundle).
+
+| From | Meaning |
+|---|---|
+| `tag_name` (`js-1.2.1`) | the bundle version |
+| asset named `locus-bundle.zip` | the zipped `dist/` output |
+| `SHA256:` in the body | verified natively before the bundle is ever activated |
+| `MIN_NATIVE:` in the body | the oldest native shell allowed to run this bundle |
+
+Then: download + verify → stage → show a "restart to apply" strip. The swap is **never**
+applied mid-session: `CapacitorUpdater.set()` reloads the WebView immediately, and pulling
+the map out from under someone mid-navigation is exactly the wrong moment. The user taps
+RESTART when they are ready.
+
+### The `MIN_NATIVE` compatibility gate
+
+**This is the part that matters.** A JS bundle cannot add a native permission or plugin.
+A bundle that calls an API the installed shell lacks would white-screen the app with no
+way back except a manual reinstall — so it must never be applied there in the first place.
+
+- `MIN_NATIVE` defaults to the `versionName` currently in `build.gradle`, which is right
+  whenever the bundle was built against the shell you have.
+- A device whose native version is **below** `MIN_NATIVE` refuses the bundle and shows
+  "install the full update first" instead — it is routed to Phase 1, not broken.
+- The gate **fails closed**: an unreadable version on either side blocks the swap. A
+  refused good update costs a delay; an applied bad one costs a reinstall on every device.
+- `release-bundle.mjs` refuses to publish a `--min-native` newer than the current native
+  `versionName`, which would gate the bundle off every device in existence.
+
+### Rollback safety net
+
+The plugin arms a rollback timer on every bundle it activates. `notifyAppReady()` runs at
+app start ([src/utils/liveUpdater.js](src/utils/liveUpdater.js)); a bundle that never gets
+there is reverted to the previous one on next launch. A JS release that crashes on boot
+therefore un-ships itself — but it also means removing that call would silently roll back
+every *good* update too.
+
+`resetWhenUpdate: true` (the plugin default) also drops all downloaded bundles whenever
+the native shell is updated, so a Phase 1 install always lands on its own bundled JS
+rather than an older downloaded one.
+
+### Where the code lives
+
+| File | Role |
+|---|---|
+| [src/utils/liveUpdateManifest.js](src/utils/liveUpdateManifest.js) | Pure parsing, version selection and the MIN_NATIVE gate. Unit tested. |
+| [src/utils/liveUpdater.js](src/utils/liveUpdater.js) | Plugin bridge + `notifyAppReady` |
+| [src/hooks/useLiveUpdate.js](src/hooks/useLiveUpdate.js) | Check, gate, download, stage |
+| [src/components/LiveUpdateToast.jsx](src/components/LiveUpdateToast.jsx) | The restart strip |
+| [scripts/release-bundle.mjs](scripts/release-bundle.mjs) | Publishes a `js-*` release |
+| [scripts/lib/zip.mjs](scripts/lib/zip.mjs) | Dependency-free ZIP writer |
+
+Phase 2 is **separable**: delete those six files, the `@capgo/capacitor-updater`
+dependency, the `plugins.CapacitorUpdater` block in `capacitor.config.json` and the two
+`liveUpdate` lines in `App.jsx`, and Phase 1 is untouched.
+
+> The bundle zip is written in-process rather than by `Compress-Archive` or `zip`.
+> PowerShell writes entry names with **backslash** separators, which Android's unzip reads
+> as flat filenames rather than paths — the bundle would unpack with no `assets/` folder
+> and `index.html` would 404 its own scripts. A device-only white screen. `scripts/lib/zip.mjs`
+> writes spec-correct forward slashes on every platform.
+
+## Shipping a JS-only fix
+
+```bash
+npm run release:bundle -- 1.0.1
+```
+
+1. Refuses an already-used `js-*` tag, or a `--min-native` newer than the native shell
+2. `npm run build`
+3. Zips `dist/` with `index.html` at the archive root
+4. Computes the SHA-256
+5. Publishes a `js-1.0.1` release with the zip attached and both markers in the body
+
+```bash
+npm run release:bundle -- 1.0.1 --dry-run                 # build + hash, publish nothing
+npm run release:bundle -- 1.0.1 --min-native 1.1.0        # require a newer shell
+npm run release:bundle -- 1.0.1 --notes NOTES.md          # hand-written notes
+```
+
+Note this does **not** bump `versionCode`/`versionName` — those describe the native shell,
+which a JS bundle does not change.
+
+## Verifying Phase 2 on a real device
+
+1. Install a Phase 1 release APK (say native `1.0.0`) and open it once.
+2. Make a visible JS-only change (a label, a colour) and
+   `npm run release:bundle -- 1.0.1`.
+3. Cold start. The restart strip should appear; tap RESTART and confirm the change is live
+   **with no installer prompt and no download of an APK at all**.
+4. Cold start again and confirm the change persisted and the strip does not reappear.
+5. **The gate.** Publish `npm run release:bundle -- 1.0.2 --min-native 1.0.0`, then edit
+   that release's body by hand to `MIN_NATIVE: 9.9.9`. Cold start on the `1.0.0` device:
+   the bundle must be **refused** with "install the full update first", and the app must
+   keep running the bundle it already had — not apply it and break.
+6. **Rollback.** Publish a bundle that throws before `notifyAppReady()` runs, apply it,
+   then relaunch: the app must come back on the previous bundle by itself.
+
+## Limits worth knowing
+
+- **Only the web bundle changes.** Native permissions, plugins, the manifest and icons all
+  require Phase 1.
+- **Not instant.** The check is once per cold start, same as Phase 1 — a fix ships the next
+  time someone fully relaunches, not while they are using the app.
+- The Render backend is **not** in this path. Bundles come from GitHub's CDN, so a sleeping
+  free-tier service can never stall or break an update check.
