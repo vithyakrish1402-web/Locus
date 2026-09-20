@@ -35,7 +35,13 @@ npm run build       # production build (outputs to dist/)
 npx cap sync         # sync web build into the Capacitor Android project
 npm test            # run the Vitest suite once (tests/)
 npm run test:watch  # Vitest in watch mode
+
+npm run release -- 1.1.0   # cut a full-APK release, which the in-app updater consumes
 ```
+
+`npm run release` needs the `gh` CLI authenticated and the signing keystore configured in
+`android/local.properties`. See **`UPDATER.md`** — it is the reference for the whole update
+system, including the one-time keystore setup and the real-device verification steps.
 
 Tests use Vitest and live in `tests/` (geoMath, precognition, squadCode, markerStatus, serverLogic); they cover the pure helpers in `src/utils/` and server logic, not the UI. There is no lint script wired into `package.json` (ESLint config exists at `eslint.config.js`; run it directly with `npx eslint .` if needed).
 
@@ -52,3 +58,7 @@ The backend does not currently require any `.env` variables — the `GEMINI_API_
 **Firebase**: Used client-side only, for Auth (email/password — no OAuth redirect flow, deliberately, to stay stable inside the Capacitor WebView) and Firestore (tactical zone persistence). Config in `src/firebase.js` is a public client config, not a secret.
 
 **Mobile**: Wrapped via Capacitor (`android/` is the generated native project). After any frontend change intended for the mobile build, run `npm run build` then `npx cap sync`.
+
+**Updates**: The app updates itself rather than being hand-distributed — see `UPDATER.md`. It downloads the new APK, verifies its SHA-256 and hands it to Android's installer. Built on a locally-defined native plugin (`android/app/src/main/java/com/locus/app/LocusUpdaterPlugin.java`, registered by hand in `MainActivity`) with no npm dependencies. A `[MANDATORY]` marker in the release body turns the update modal into a gate that pre-empts every render branch in `App.jsx`.
+
+The GitHub release *is* the manifest; there is no separate JSON file. Don't hand-edit `versionCode`/`versionName` or attach release assets by hand — `scripts/release.mjs` keeps the published checksum and the binary in sync.

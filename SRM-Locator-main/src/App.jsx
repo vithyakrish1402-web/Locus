@@ -31,7 +31,9 @@ import WaypointMarker from './components/WaypointMarker';
 import BuildingMarker from './components/BuildingMarker';
 import SosTrigger from './components/SosTrigger';
 import SosOverlay from './components/SosOverlay';
+import UpdateModal from './components/UpdateModal';
 import { useIncomingSos } from './hooks/useIncomingSos';
+import { useAppUpdate } from './hooks/useAppUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { deriveMarkerStatus } from './utils/markerStatus';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
@@ -360,9 +362,16 @@ const App = () => {
     acknowledge: acknowledgeSos,
     requestSync: requestSosSync,
   } = useIncomingSos(socket);
-  // While an SOS is up, Android's Back button/gesture does nothing (ACKNOWLEDGE is the
-  // only way out); otherwise it behaves normally. See useBackButtonGuard.
-  useBackButtonGuard(Boolean(incomingSos));
+  // --- IN-APP UPDATER (full-APK self-update; see src/hooks/useAppUpdate.js) ---
+  // Checks GitHub Releases once per cold start. Held here rather than in a leaf
+  // component because the mandatory-update gate has to be able to pre-empt every
+  // render branch below, including the auth screen, and because the Back-button
+  // guard is a single app-wide listener.
+  const appUpdate = useAppUpdate();
+  // While an SOS is up — or a mandatory update is gating the app — Android's Back
+  // button/gesture does nothing (ACKNOWLEDGE / UPDATE NOW is the only way out);
+  // otherwise it behaves normally. See useBackButtonGuard.
+  useBackButtonGuard(Boolean(incomingSos) || appUpdate.mandatory);
   const [arTarget, setArTarget] = useState(null);
   // --- TARGETING MODE (Two-step Rally Point) ---
   const [isTargetingMode, setIsTargetingMode] = useState(false);
@@ -1389,13 +1398,40 @@ const App = () => {
     draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : 'grab',
   }), [isSatellite, sysConfig.theme, isAdmin, isRecordingPath]);
 
-  if (authLoading) return <div className="h-screen bg-black text-white flex justify-center items-center font-dot">INITIALIZING_SECURE_LINK...</div>;
+  // A [MANDATORY] release pre-empts every branch below — auth, squad join, the map.
+  // Returned before authLoading so a required update still lands on a cold boot that
+  // has no network for Firebase, which is exactly when a broken build gets stuck.
+  if (appUpdate.mandatory) return <UpdateModal update={appUpdate} />;
+
+  // Optional update: an overlay rendered alongside whichever screen is up. `fixed`
+  // inset-0, so it composes with any branch without restructuring the tree.
+  const updateOverlay = <UpdateModal update={appUpdate} />;
+
+  if (authLoading) return (
+    <>
+      {updateOverlay}
+      <div className="h-screen bg-black text-white flex justify-center items-center font-dot">INITIALIZING_SECURE_LINK...</div>
+    </>
+  );
 
   if (!user) {
     if (!hasSeenGuide) {
-      return <LocusGuide onInitialize={() => setHasSeenGuide(true)} />;
+      return (
+        <>
+          {updateOverlay}
+          <LocusGuide
+            onInitialize={() => setHasSeenGuide(true)}
+            onCheckForUpdates={() => appUpdate.check({ manual: true })}
+            updateStatus={appUpdate.status}
+            updateSupported={appUpdate.supported}
+            installedVersion={appUpdate.installedVersion}
+          />
+        </>
+      );
     }
     return (
+      <>
+      {updateOverlay}
       <AuthTerminal
         email={email}
         setEmail={setEmail}
@@ -1409,12 +1445,14 @@ const App = () => {
         loginMethod={loginMethod}
         latency={latency}
       />
+      </>
     );
   }
 
   if (user && !hasJoinedSquad) {
     return (
       <div className="h-screen w-full bg-black flex flex-col items-center justify-center text-white p-6 bg-dots">
+        {updateOverlay}
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -2875,6 +2913,9 @@ const App = () => {
         roomCode={squadCode}
         senderName={user.displayName}
       />
+
+      {/* ========== IN-APP UPDATE (optional; mandatory is gated far above) ========== */}
+      {updateOverlay}
 
       {/* ========== INCOMING SOS (stays up until acknowledged) ========== */}
       {incomingSos && (
