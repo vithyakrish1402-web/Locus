@@ -50,6 +50,14 @@ export function extractBundleNotes(body) {
 export function parseBundleRelease(release) {
   if (!release || typeof release !== 'object') return { ok: false, reason: 'MALFORMED_RELEASE' };
   if (release.draft) return { ok: false, reason: 'DRAFT_RELEASE' };
+  // Prereleases are excluded for the same reason drafts are: marking a release as one is
+  // how you say "not for everybody yet". Phase 1 got this free from /releases/latest,
+  // which filters both server-side; Phase 2 has always read the list endpoint, which
+  // returns everything, so without this a release flagged prerelease for internal testing
+  // would have gone straight to every device on its next cold start. release-bundle.mjs
+  // never publishes one, so any prerelease js-* tag was created by hand — which makes the
+  // intent behind it explicit rather than accidental.
+  if (release.prerelease) return { ok: false, reason: 'PRERELEASE' };
 
   const tag = typeof release.tag_name === 'string' ? release.tag_name : '';
   if (!tag.startsWith(BUNDLE_TAG_PREFIX)) return { ok: false, reason: 'NOT_A_BUNDLE_RELEASE' };

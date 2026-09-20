@@ -292,6 +292,12 @@ collide. The client lists `/releases`, keeps only `js-*` tags, and picks the **h
 version** (not whatever GitHub listed first — a republished release must not be able to
 hand every device an older bundle).
 
+**Drafts and prereleases are skipped.** Both tiers read the list endpoint, which returns
+everything; only `/releases/latest` filtered them server-side, and neither tier uses it
+any more. Marking a release either way is how you say "not for everybody yet", and
+`release-bundle.mjs` never publishes a prerelease — so a prerelease `js-*` tag was made by
+hand, deliberately, and is honoured as such.
+
 | From | Meaning |
 |---|---|
 | `tag_name` (`js-1.2.1`) | the bundle version |

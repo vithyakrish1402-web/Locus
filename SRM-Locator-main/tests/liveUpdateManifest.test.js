@@ -11,6 +11,7 @@ import {
 const bundleRelease = (overrides = {}) => ({
   tag_name: 'js-1.0.1',
   draft: false,
+  prerelease: false,
   body: `Tightened the marker status math.\n\nMIN_NATIVE: 1.0.0\nSHA256: ${'a'.repeat(64)}`,
   assets: [{ name: BUNDLE_ASSET_NAME, browser_download_url: 'https://example.test/bundle.zip', size: 310_000 }],
   ...overrides,
@@ -60,6 +61,13 @@ describe('parseBundleRelease', () => {
     expect(parseBundleRelease(bundleRelease({ draft: true }))).toEqual({ ok: false, reason: 'DRAFT_RELEASE' });
   });
 
+  it('refuses a prerelease, which marks a bundle as not-for-everybody-yet', () => {
+    // Phase 2 reads the /releases listing, which returns prereleases (unlike
+    // /releases/latest, which filters them server-side). Without this gate a js-* release
+    // flagged for internal testing shipped to every device on its next cold start.
+    expect(parseBundleRelease(bundleRelease({ prerelease: true }))).toEqual({ ok: false, reason: 'PRERELEASE' });
+  });
+
   it('normalises a partial MIN_NATIVE to three parts', () => {
     const result = parseBundleRelease(bundleRelease({ body: `MIN_NATIVE: v2\nSHA256: ${'c'.repeat(64)}` }));
     expect(result.manifest.minNative).toBe('2.0.0');
@@ -90,6 +98,34 @@ describe('selectLatestBundleRelease', () => {
       bundleRelease({ tag_name: 'js-1.0.1' }),
     ]);
     expect(latest.version).toBe('1.0.1');
+  });
+
+  it('leaves a prerelease alone and ships the newest public bundle beneath it', () => {
+    // The shape that actually bites: a prerelease cut for internal testing sits at the
+    // top of the listing, higher-versioned than anything public. It must not be chosen,
+    // and it must not stop the real bundle below it being found either.
+    const latest = selectLatestBundleRelease([
+      bundleRelease({ tag_name: 'js-2.0.0', prerelease: true }),
+      bundleRelease({ tag_name: 'js-1.2.0' }),
+    ]);
+    expect(latest.version).toBe('1.2.0');
+  });
+
+  it('skips a draft sitting above the newest public bundle, the same way', () => {
+    const latest = selectLatestBundleRelease([
+      bundleRelease({ tag_name: 'js-2.0.0', draft: true }),
+      bundleRelease({ tag_name: 'js-1.2.0' }),
+    ]);
+    expect(latest.version).toBe('1.2.0');
+  });
+
+  it('returns null when every candidate is a prerelease, rather than shipping one', () => {
+    expect(
+      selectLatestBundleRelease([
+        bundleRelease({ tag_name: 'js-2.0.0', prerelease: true }),
+        bundleRelease({ tag_name: 'js-1.9.0', prerelease: true }),
+      ]),
+    ).toBeNull();
   });
 
   it('returns null when there is nothing usable', () => {
