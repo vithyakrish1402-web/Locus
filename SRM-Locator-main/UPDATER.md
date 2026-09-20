@@ -184,8 +184,9 @@ installs in the field that need to see a higher version.
 ## Verifying a release before handing it out
 
 ```bash
-npm run release:verify              # the latest v* APK release
-npm run release:verify -- --bundle  # the latest js-* bundle release
+npm run release:verify                                      # the latest v* APK release
+npm run release:verify -- --bundle                          # the latest js-* bundle release
+npm run release:verify -- --file dist-release/locus-latest.apk   # a local build, before publishing
 ```
 
 Run this **after every publish, before telling anyone to install it**. It downloads the
@@ -199,8 +200,12 @@ For an APK it checks:
 - the APK's own `versionName` matches the tag — if the tag says `1.1.0` but the binary
   says `1.0.0`, devices install it and are then re-offered the same update *forever*,
   because `App.getInfo()` keeps reporting the old version
-- the APK is signed, and prints the certificate's SHA-256 fingerprint so you can confirm
-  it matches every previous release (a mismatch means Android refuses the install)
+- the APK signature verifies, printing the scheme and the certificate's SHA-256 digest so
+  you can confirm it matches every previous release (a mismatch means Android refuses the
+  install). This uses **apksigner**, not `keytool` — `minSdkVersion` is 24, so the build
+  signs with APK Signature Scheme v2/v3 and skips legacy v1 JAR signing, and
+  `keytool -printcert -jarfile` only understands v1. Pointed at a correctly signed modern
+  APK, keytool reports "Not a signed jar file" and exits 0, which reads as unsigned.
 - whether `[MANDATORY]` is set — worth seeing before it locks everyone out
 
 For a bundle it checks the checksum, that `index.html` is at the zip root, that no entry
