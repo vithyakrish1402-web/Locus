@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { e2eServer, sleep, waitFor } from './helpers/e2eServer.js';
+import { e2eServer, sleep, waitFor, settle } from './helpers/e2eServer.js';
 
 /**
  * End-to-end SOS relay: the real backend/server.js in a child process, driven by
@@ -141,6 +141,7 @@ describe('SOS acknowledgement', () => {
     await waitFor(() => charlie.sos.length);
 
     charlie.emit('sos-ack', { id: charlie.sos[0].id });
+    await settle(charlie); // the ack is processed before the next connection asks for a replay
     charlie.disconnect();
 
     const charlie2 = await connect();

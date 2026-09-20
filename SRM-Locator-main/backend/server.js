@@ -413,13 +413,32 @@ socket.on('check-ping', (clientTimestamp) => {
     ackSos(activeSquads[roomCode], id, memberKey(socket.data?.uid, socket.id));
   });
 
+  // Leaving means leaving: off every roster the socket is on, out of every room it is
+  // subscribed to, and clear of its per-socket state.
+  //
+  // This used to be wrapped in `if (users[socket.id])`, but `users` only fills in once a
+  // GPS fix arrives via update-location — so a member with no fix (permission denied,
+  // indoors, just joined) pressing "leave" did nothing at all: still on the roster,
+  // and, since a returning uid is now readmitted without approval, free to walk
+  // straight back in. It also never called socket.leave(): the app keeps the socket
+  // connected after leaving (and after logging out), so a former member stayed
+  // subscribed to the squad's locations, SOS and Rally Points.
+  //
+  // Rooms are taken from the socket itself (socket.rooms), not just the roster, so this
+  // also works for someone a mutiny vote or a block already removed from the roster —
+  // the app answers 'exiled' by leaving, and those rooms still have to be shed.
   socket.on('leave-squad', () => {
-    if (users[socket.id]) {
-      const room = users[socket.id].roomCode;
-      delete users[socket.id]; 
-      broadcastSquadUpdate(room);
-      handleSquadSuccession(socket.id);
+    const rooms = new Set([...socket.rooms].filter(room => room !== socket.id));
+    for (const roomCode in activeSquads) {
+      if (activeSquads[roomCode].members.includes(socket.id)) rooms.add(roomCode);
     }
+
+    delete users[socket.id];
+    delete locationCache[socket.id];
+    rooms.forEach(roomCode => socket.leave(roomCode));
+
+    handleSquadSuccession(socket.id);
+    rooms.forEach(roomCode => broadcastSquadUpdate(roomCode));
   });
 
   socket.on('disconnect', () => {

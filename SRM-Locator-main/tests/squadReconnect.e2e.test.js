@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { e2eServer, sleep, waitFor, once } from './helpers/e2eServer.js';
+import { e2eServer, sleep, waitFor, once, settle } from './helpers/e2eServer.js';
 
 /**
  * Reconnecting members, end to end: the real server, real sockets, the real join flow.
@@ -171,11 +171,9 @@ describe('everyone else still goes through the Commander', () => {
     const { room, alpha, bravo } = await squadOfThree();
     const knocks = watchKnocks(alpha);
 
-    // leave-squad only acts on a member the server has a live position for.
-    bravo.emit('update-location', { name: 'Bravo', lat: 12.8, lng: 80.0, speed: 0, battery: 90, heading: 0, roomCode: room });
-    await once(bravo, 'users-update');
+    // (Leaving with and without a GPS fix is covered in depth in squadLeave.e2e.test.js.)
     bravo.emit('leave-squad');
-    await sleep(150);
+    await settle(bravo);
     bravo.disconnect();
 
     const bravo2 = await connect();

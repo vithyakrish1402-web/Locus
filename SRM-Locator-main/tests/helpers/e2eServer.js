@@ -18,6 +18,17 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const once = (socket, event) => new Promise((resolve) => socket.once(event, resolve));
 
+// A round trip on this connection. The server handles one socket's events strictly in
+// order, so once the reply is back, everything this socket sent before it has been
+// processed. Use it instead of sleeping and hoping — in particular before disconnecting,
+// so a just-sent event can't be overtaken by the same person's next connection (separate
+// connections have no ordering guarantee between them).
+export const settle = (socket) =>
+  new Promise((resolve) => {
+    socket.once('pong-bounce', resolve);
+    socket.emit('check-ping', Date.now());
+  });
+
 export const waitFor = async (predicate, { timeout = 3000, interval = 20 } = {}) => {
   const start = Date.now();
   for (;;) {
