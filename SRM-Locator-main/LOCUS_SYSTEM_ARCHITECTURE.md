@@ -158,7 +158,132 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
 
 ---
 
-## 9. DATABASE SCHEMA (SRM MASTER DATABASE)
+## 9. AUTO-UPDATE SYSTEM
+
+LOCUS is distributed as a sideloaded APK rather than through Google Play. The application therefore ships its own update mechanism, in two tiers. In both tiers the GitHub Release **is** the update manifest — there is no separate manifest file, and no client change is required per release.
+
+- **Phase 1 (Native Full-APK):** Replaces the entire APK. Carries any change — native permissions, Capacitor plugins, manifest edits, icons. Tag series `v1.2.0`, asset `locus-latest.apk`, cut via `npm run release -- <version>`. No dependencies.
+- **Phase 2 (JS-Only Bundle):** Replaces the web bundle inside the installed native shell. Carries JS, UI and CSS only. Tag series `js-1.2.1`, asset `locus-bundle.zip`, cut via `npm run release:bundle -- <version>`. One dependency (`@capgo/capacitor-updater`).
+
+Tier selection is determined by a single condition: any change touching `android/` or adding a Capacitor plugin requires Phase 1.
+
+### 9.1 Module Responsibilities
+
+```
+LOCUS/
+├── android/app/src/main/java/com/locus/app/
+│   ├── LocusUpdaterPlugin.java   # Native: streamed download, SHA-256, FileProvider install intent
+│   └── MainActivity.java         # Registers LocusUpdaterPlugin (local plugin, not auto-discovered)
+├── src/
+│   ├── utils/
+│   │   ├── updateManifest.js     # Phase 1 release-body parsing + semver comparison (pure)
+│   │   ├── locusUpdater.js       # registerPlugin bridge to LocusUpdater, rejecting web stub
+│   │   ├── liveUpdateManifest.js # Phase 2 parsing, bundle selection, MIN_NATIVE gate (pure)
+│   │   └── liveUpdater.js        # CapacitorUpdater bridge, notifyAppReady
+│   ├── hooks/
+│   │   ├── useAppUpdate.js       # Phase 1 policy: throttle, check, permission flow, download
+│   │   └── useLiveUpdate.js      # Phase 2 policy: throttle, compatibility gate, stage bundle
+│   └── components/
+│       ├── UpdateModal.jsx       # HUD update modal and mandatory-update gate
+│       └── LiveUpdateToast.jsx   # Bundle-staged restart prompt
+├── scripts/
+│   ├── release.mjs               # Phase 1: bump, build, sign, tag, publish
+│   ├── release-bundle.mjs        # Phase 2: build, zip, publish to the js-* tag series
+│   ├── verify-release.mjs        # Post-publish verification of either tier
+│   └── lib/zip.mjs               # Dependency-free ZIP writer (spec-correct entry names)
+└── UPDATER.md                    # Operator reference: keystore setup, release and device procedures
+```
+
+### 9.2 Phase 1 — Native Full-APK Updater
+
+- **`LocusUpdaterPlugin.java`:** Capacitor plugin registered as `LocusUpdater`. Streams the APK into `cacheDir/updates`, computing SHA-256 concurrently with the write so verification costs no second pass. Emits throttled `downloadProgress` events. Exposes install-permission status, a deep link to Android's per-app consent screen, and the install trigger.
+- **`updateManifest.js`:** Parses the GitHub `releases/latest` payload. Extracts version from `tag_name`, download URL from the `locus-latest.apk` asset, and `SHA256:` / `[MANDATORY]` markers from the release body. Pure; no network or Capacitor dependency.
+- **`useAppUpdate.js`:** Owns all policy — cold-start throttle, version comparison, permission sequencing, download orchestration and error mapping. The native layer holds no policy.
+- **`UpdateModal.jsx`:** HUD-styled modal. Renders version transition, release notes, package size and download progress. Under `[MANDATORY]` it becomes a full-viewport gate with no dismissal path.
+- **`release.mjs`:** Single-command release. Refuses a dirty tree, a reused tag, or a non-newer version; bumps `versionCode`/`versionName`, builds, syncs Capacitor, assembles a signed release APK, computes the SHA-256, and publishes the tagged GitHub Release with the checksum written into the body.
+
+**Release Flow**
+
+```bash
+npm run release -- 1.1.0     # bump -> build -> sign -> tag -> publish
+npm run release:verify       # verify the PUBLISHED artifact, not the local build
+```
+
+`verify-release.mjs` re-downloads the published asset and re-checks it using the same parsing modules the client runs: release parses, checksum matches the published body, APK `versionName` matches the tag, and the signature verifies with its certificate digest printed for comparison against prior releases.
+
+**Device Flow**
+
+1. Check on cold start, throttled to once per process (module-scope flag), plus a manual trigger in `LocusGuide.jsx`. No periodic background polling.
+2. Compare the release version against the installed version via `App.getInfo()`.
+3. Parse the release body. Any unparseable field aborts the check.
+4. Present the HUD modal — `UPDATE NOW` / `LATER`; `LATER` is not rendered when `[MANDATORY]` is set.
+5. Query install permission. If ungranted, present an in-app consent explanation, deep-link to Android's "install unknown apps" screen, and auto-resume the download on app resume once granted.
+6. Stream the download to `cacheDir/updates`, computing SHA-256 during transfer.
+7. Compare against the published checksum. On mismatch, purge the file and surface a visible integrity error.
+8. Validate that the install path resolves inside the app's own cache directory.
+9. Hand off via `FileProvider` URI + `ACTION_VIEW` to the Android system installer.
+10. Android performs its own signature check against the currently-installed application.
+
+**Failure Semantics**
+
+Every failure mode resolves to either "no update" or a visible abort. No path produces a silent bad install.
+
+- Unparseable `tag_name` → no update
+- Missing `SHA256:` line → release rejected, install never offered
+- Missing `locus-latest.apk` asset → release rejected
+- Checksum mismatch → download purged, visible integrity error, no installer invocation
+- Install path outside `cacheDir/updates` → rejected by the native layer
+
+**Signing Constraint**
+
+Android refuses to install an update whose signing certificate differs from the installed application. Every release must therefore be signed with the same keystore, permanently. If that keystore is lost, a resigned APK is rejected as an update by every device already running a build signed with the prior key; recovery requires every user to uninstall and reinstall by hand — precisely the distribution step this system exists to eliminate. Keystore generation, backup and restore-verification procedures are specified in `UPDATER.md`.
+
+### 9.3 Phase 2 — JS-Only Live Updates
+
+`@capgo/capacitor-updater` in manual mode (`autoUpdate: "off"`) is the **sole dependency in the update system**, and the only exception to the project's otherwise dependency-free approach. It is required because swapping the web bundle inside a running native shell has no native equivalent that can be invoked from JavaScript; the alternative is reimplementing that bridge from scratch. The plugin performs the unzip-and-swap only. Manifest fetching, version selection and the compatibility gate remain in application code.
+
+**Release Flow**
+
+```bash
+npm run release:bundle -- 1.0.1        # build -> zip -> publish to the js-* series
+npm run release:verify -- --bundle     # verify the published bundle
+```
+
+Bundles are published to GitHub Releases under a `js-*` tag series, kept separate from the native `v*` series so the two never collide. The archive is produced by `lib/zip.mjs`, a dependency-free writer that emits `index.html` at the archive root with forward-slash entry names. The Render backend is deliberately excluded from the update-check path; bundles are served from GitHub, so backend availability cannot stall or block an update check.
+
+**Manifest Fields**
+
+Carried in the release body alongside the `locus-bundle.zip` asset:
+
+```
+SHA256: <64 hex>        # verified natively before the bundle is activated
+MIN_NATIVE: <version>   # oldest native shell permitted to run this bundle
+```
+
+**Device Flow**
+
+1. `notifyAppReady()` on launch, disarming the plugin's rollback timer. A bundle that fails to reach this call is reverted to the previous bundle on next launch.
+2. Check on cold start, throttled once per process, matching Phase 1.
+3. List releases, retain `js-*` tags, and select the **highest version** rather than the most recently created.
+4. Evaluate `MIN_NATIVE` against the installed native version. The gate fails closed: an unreadable version on either side blocks the swap.
+5. If the installed shell is below `MIN_NATIVE`, refuse the bundle and defer to Phase 1. A JS bundle cannot add a native permission or plugin, so a bundle requiring a capability the shell lacks is never applied.
+6. Download and verify, then stage the bundle.
+7. Present a restart prompt. `set()` reloads the WebView immediately, so activation is deferred to explicit user action rather than performed mid-session.
+
+`resetWhenUpdate` is enabled, so a Phase 1 install discards downloaded bundles and lands on the JS compiled into that APK.
+
+### 9.4 Phase Failure-Visibility Asymmetry
+
+The two tiers fail with different visibility, and their verification procedures are structured differently as a direct consequence:
+
+- **Phase 1 failures are visible.** A corrupt download, a mis-signed APK or a rejected install surfaces through an OS-level dialog or an explicit in-app integrity error. The operator sees the failure.
+- **Phase 2 failures are silent.** No operating-system dialog exists for a bundle swap. A bundle that is incompatible, malformed or non-booting produces no notification — the failure mode is a white screen or a silent rollback on next launch.
+
+This asymmetry is why Phase 1 verification leads with a deliberately corrupted checksum (confirming the abort path fires) while Phase 2 verification requires a successful swap to be demonstrated **before** the compatibility gate is tested — a Phase 2 refusal is indistinguishable from a check that never ran, so the pipeline must be proven working first. The procedures are intentionally not symmetric and should not be normalised into matching shapes.
+
+---
+
+## 10. DATABASE SCHEMA (SRM MASTER DATABASE)
 
 The system relies on calibrated GPS center points for all major SRM KTR campus sectors in `srmDatabase.js`:
 - **Categories:** `ACADEMIC`, `ENGINEERING`, `MEDICAL`, `RESIDENTIAL`, `HUB`
@@ -181,7 +306,7 @@ The system relies on calibrated GPS center points for all major SRM KTR campus s
 
 ---
 
-## 10. BUILD & DEPLOYMENT PIPELINE
+## 11. BUILD & DEPLOYMENT PIPELINE
 
 ### 1. Web Local Development:
 ```bash
