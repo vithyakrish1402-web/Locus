@@ -1508,10 +1508,37 @@ const App = () => {
     draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : 'grab',
   }), [isSatellite, sysConfig.theme, isAdmin, isRecordingPath]);
 
-  // A [MANDATORY] release pre-empts every branch below — auth, squad join, the map.
-  // Returned before authLoading so a required update still lands on a cold boot that
-  // has no network for Firebase, which is exactly when a broken build gets stuck.
-  if (appUpdate.mandatory) return <UpdateModal update={appUpdate} />;
+  // Incoming SOS (stays up until acknowledged). Built once here because two branches
+  // render it: the map below, and the mandatory-update gate. It used to live only in
+  // the map branch, so an SOS arriving while the gate was up was queued but never drawn
+  // and its klaxon never sounded — even though the z-order (10002 over the gate's
+  // 10000) already said a distress beacon outranks a version bump.
+  const sosOverlay = incomingSos && (
+    <SosOverlay
+      // Keyed by beacon so moving to the next queued SOS (or a re-trigger from the
+      // same sender) remounts it: fresh klaxon, vibration and focus for each alert.
+      key={incomingSos.id}
+      senderName={incomingSos.senderName}
+      lat={incomingSos.lat}
+      lng={incomingSos.lng}
+      ageMs={incomingSos.ageMs}
+      pendingCount={pendingSosCount}
+      onAcknowledge={acknowledgeSos}
+    />
+  );
+
+  // A [MANDATORY] release pre-empts every branch below — auth, squad join, the map —
+  // but not an incoming SOS, which draws over it. Returned before authLoading so a
+  // required update still lands on a cold boot that has no network for Firebase, which
+  // is exactly when a broken build gets stuck.
+  if (appUpdate.mandatory) {
+    return (
+      <>
+        <UpdateModal update={appUpdate} />
+        {sosOverlay}
+      </>
+    );
+  }
 
   // Optional update: an overlay rendered alongside whichever screen is up. `fixed`
   // inset-0, so it composes with any branch without restructuring the tree.
@@ -3053,19 +3080,7 @@ const App = () => {
       <LiveUpdateToast live={liveUpdate} />
 
       {/* ========== INCOMING SOS (stays up until acknowledged) ========== */}
-      {incomingSos && (
-        <SosOverlay
-          // Keyed by beacon so moving to the next queued SOS (or a re-trigger from the
-          // same sender) remounts it: fresh klaxon, vibration and focus for each alert.
-          key={incomingSos.id}
-          senderName={incomingSos.senderName}
-          lat={incomingSos.lat}
-          lng={incomingSos.lng}
-          ageMs={incomingSos.ageMs}
-          pendingCount={pendingSosCount}
-          onAcknowledge={acknowledgeSos}
-        />
-      )}
+      {sosOverlay}
     </div>
   );
 };
