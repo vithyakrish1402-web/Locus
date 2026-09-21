@@ -143,6 +143,13 @@ socket.on('check-ping', (clientTimestamp) => {
   // --- GATEKEEPER ENTRY PROTOCOL ---
   socket.on('request-join', (data) => {
     const { roomCode, user } = data ?? {};
+    // The code becomes an object key, so anything else was coerced into one: no code at
+    // all created a squad called "undefined" with the sender as its Commander, and
+    // whoever typed that code for real was queued behind them.
+    if (typeof roomCode !== 'string' || !roomCode) {
+      console.warn(`[GATE] Dropped join from ${socket.id}: invalid room code`);
+      return;
+    }
     const existing = activeSquads[roomCode];
     // Ownership used to be tracked purely by ephemeral socket.id. Any reconnect
     // (backgrounding the app, a signal blip — routine on mobile) killed the old
