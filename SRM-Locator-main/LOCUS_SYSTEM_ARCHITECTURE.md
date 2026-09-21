@@ -92,7 +92,7 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
 ### 4.4 Geofence & Emergency Alerts
 - `geofence-alert` (`{ roomCode, userName, type: 'ENTER'|'EXIT', zoneName }`): Broadcasts perimeter breach alerts across the squad.
 - `publish-zone` / `new-zone`: Distributes custom tactical polygon zones drawn by Commander.
-- `ping-user` / `receive-ping`: Haptic/visual ping trigger sent between squad members.
+- `ping-user` / `receive-ping`: Single-target member ping (sonar blip + short HUD notice), relayed only between members of the same squad. Not an SOS — see `sos-broadcast`.
 
 ### 4.5 Governance & Mutiny Protocol
 - `vote-to-kick` (`{ targetId, roomCode }`): Operatives cast votes to exile rogue squad members.

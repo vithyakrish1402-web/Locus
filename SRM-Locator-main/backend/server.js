@@ -3,7 +3,7 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { resolveSosRoom, recordSos, toSosPayload, pendingSosFor, ackSos, memberKey } from './sosRelay.js';
+import { resolveSosRoom, recordSos, toSosPayload, pendingSosFor, ackSos, memberKey, sharedSquad } from './sosRelay.js';
 import { rememberMember, forgetMember, rebindReturningMember, collectStaleSocketIds } from './squadRoster.js';
 
 const app = express();
@@ -16,7 +16,11 @@ const io = new Server(server, {
 });
 
 // --- STATE MANAGERS ---
-const activeSquads = {};
+// Keyed by client-chosen room codes, so no prototype: on a plain {} a code like
+// 'constructor' or '__proto__' already "exists" (as Object / Object.prototype), with
+// no members list, and the first handler to read squad.members threw and took the
+// whole server down.
+const activeSquads = Object.create(null);
 const users = {};
 const locationCache = {};
 
@@ -54,8 +58,19 @@ setInterval(() => {
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
 
+  // A note on payloads: a handler that throws is an uncaught exception, which kills the
+  // whole process (and every squad with it, since nothing is persisted). A client can
+  // send no payload, or null, so every handler reads its payload through `?? {}` — a
+  // `= {}` parameter default only covers the first of those.
+
+  // Whether this socket is on the roster of `roomCode`. The relays below fan out to a
+  // room the client names; they used to take that name on trust, so any socket — in no
+  // squad, or in another one — could push alerts, zones and routes into any squad.
+  const isMemberOf = (roomCode) => Boolean(activeSquads[roomCode]?.members.includes(socket.id));
+
   // --- GEOFENCE ALARM RELAY ---
   socket.on('geofence-alert', (data) => {
+    if (!isMemberOf(data?.roomCode)) return;
     console.log(`[🚨 BREACH] ${data.userName} ${data.type === 'ENTER' ? 'entered' : 'left'} ${data.zoneName}`);
     // Broadcast the alarm to everyone else in the squad
     socket.to(data.roomCode).emit('geofence-alert', data);
@@ -63,8 +78,9 @@ io.on('connection', (socket) => {
 
   // --- TACTICAL ZONE RELAY ---
     socket.on('publish-zone', (data) => {
+      if (!isMemberOf(data?.roomCode)) return;
       console.log(`[SYS] Relaying new Tactical Zone to squad: ${data.roomCode}`);
-      
+
       // Broadcasts the zone to everyone in the room EXCEPT the person who drew it
       socket.to(data.roomCode).emit('new-zone', data.zone);
     });
@@ -75,7 +91,8 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.emit('pong-bounce', clientTimestamp);
 });
   // --- ⚖️ THE MUTINY PROTOCOL ---
-  socket.on('vote-to-kick', ({ targetId, roomCode }) => {
+  socket.on('vote-to-kick', (payload) => {
+    const { targetId, roomCode } = payload ?? {};
     const squad = activeSquads[roomCode];
     if (!squad || !squad.members.includes(socket.id) || !squad.members.includes(targetId)) return;
 
@@ -106,7 +123,7 @@ socket.on('check-ping', (clientTimestamp) => {
 
   // --- SAFETY PING ENGINE (LKL) ---
   socket.on('safety-ping', (data) => {
-    const { latitude, longitude, timestamp, batteryLevel } = data;
+    const { latitude, longitude, timestamp, batteryLevel } = data ?? {};
     // Merge rather than overwrite: 'update-location' writes speed/heading/lastSeen
     // into this same cache entry, and clobbering it here would erase that trajectory data.
     locationCache[socket.id] = { ...locationCache[socket.id], latitude, longitude, timestamp, batteryLevel: batteryLevel || 'Unknown' };
@@ -125,7 +142,7 @@ socket.on('check-ping', (clientTimestamp) => {
 
   // --- GATEKEEPER ENTRY PROTOCOL ---
   socket.on('request-join', (data) => {
-    const { roomCode, user } = data;
+    const { roomCode, user } = data ?? {};
     const existing = activeSquads[roomCode];
     // Ownership used to be tracked purely by ephemeral socket.id. Any reconnect
     // (backgrounding the app, a signal blip — routine on mobile) killed the old
@@ -243,12 +260,13 @@ socket.on('check-ping', (clientTimestamp) => {
     // Case 5: normal gatekeeper flow — a genuine new joiner needs the live owner's approval.
     const commanderId = existing.ownerId;
     io.to(commanderId).emit('access-request', {
-      targetId: socket.id, name: user.name, photo: user.photo, roomCode: roomCode
+      targetId: socket.id, name: user?.name, photo: user?.photo, roomCode: roomCode
     });
     socket.emit('access-pending');
   });
 
-  socket.on('resolve-access', ({ targetId, roomCode, approved }) => {
+  socket.on('resolve-access', (payload) => {
+    const { targetId, roomCode, approved } = payload ?? {};
     if (activeSquads[roomCode] && activeSquads[roomCode].ownerId === socket.id) {
       if (approved) {
         const targetSocket = io.sockets.sockets.get(targetId);
@@ -281,7 +299,8 @@ socket.on('check-ping', (clientTimestamp) => {
   });
 
   // --- 🚫 COMMANDER BLOCK (durable — survives the target's reconnects) ---
-  socket.on('block-user', ({ roomCode, targetId }) => {
+  socket.on('block-user', (payload) => {
+    const { roomCode, targetId } = payload ?? {};
     const squad = activeSquads[roomCode];
     if (!squad || squad.ownerId !== socket.id || targetId === socket.id) return;
 
@@ -307,8 +326,9 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.on('publish-custom-route', (payload) => {
     // Scoped to the sender's own squad — this used to be socket.broadcast.emit,
     // which leaked every squad's secret tactical routes to every other squad
-    // connected to the server, regardless of room membership.
-    if (payload?.roomCode) socket.to(payload.roomCode).emit('new-custom-route', payload);
+    // connected to the server, regardless of room membership. And only from a member
+    // of it: the room is the client's claim, so it's checked against the roster.
+    if (isMemberOf(payload?.roomCode)) socket.to(payload.roomCode).emit('new-custom-route', payload);
   });
 
   // --- 🎯 RALLY POINT WAYPOINTS ---
@@ -321,8 +341,8 @@ socket.on('check-ping', (clientTimestamp) => {
   // Clearing stays Commander-only, matching the client UI (WaypointMarker's clear
   // button is gated by canClear={squadRole === 'OWNER'}).
   socket.on('publish-waypoint', (data) => {
-    const { roomCode, waypoint } = data;
-    if (activeSquads[roomCode] && activeSquads[roomCode].members.includes(socket.id)) {
+    const { roomCode, waypoint } = data ?? {};
+    if (waypoint && activeSquads[roomCode] && activeSquads[roomCode].members.includes(socket.id)) {
       console.log(`[🎯 TACTICAL] New Rally Point designated in ${roomCode} at ${waypoint.lat}, ${waypoint.lng}`);
       activeSquads[roomCode].activeWaypoint = waypoint;
       socket.to(roomCode).emit('new-waypoint', waypoint);
@@ -341,6 +361,7 @@ socket.on('check-ping', (clientTimestamp) => {
 
   // --- 🌐 LOCATION & ROOM ENGINE (CENTRALIZED) ---
   socket.on('update-location', (data) => {
+    if (!data) return;
     const { lat, lng, speed, battery, heading } = data;
     const newRoom = data.roomCode || 'GLOBAL';
 
@@ -383,7 +404,18 @@ socket.on('check-ping', (clientTimestamp) => {
     broadcastSquadUpdate(newRoom);
   });
 
-  socket.on('ping-user', ({ targetId, senderName }) => {
+  // Single-target member ping: a sonar blip and a short notice on one squadmate's
+  // screen. Not an emergency — that is 'sos-broadcast' below. Relayed only between
+  // members of the same squad; see sharedSquad in sosRelay.js for what it used to allow.
+  // Reads its payload through `?? {}` because a bare emit (no payload) used to throw
+  // here and take the whole server down — and so did a null one, after the fix for that
+  // was a `= {}` default, which null skips.
+  socket.on('ping-user', (payload) => {
+    const { targetId, senderName } = payload ?? {};
+    if (!sharedSquad(activeSquads, socket.id, targetId)) {
+      console.warn(`[PING] Dropped: ${socket.id} is not in a squad with ${targetId}`);
+      return;
+    }
     io.to(targetId).emit('receive-ping', { senderName });
   });
 
@@ -401,7 +433,8 @@ socket.on('check-ping', (clientTimestamp) => {
   // indistinguishable from a single ping on the client, plus lat/lng/timestamp
   // from the sender's payload were being silently discarded (only senderName was
   // ever destructured), so nothing downstream could show the sender's location.
-  socket.on('sos-broadcast', ({ senderName, lat, lng, roomCode: claimedRoomCode, timestamp } = {}) => {
+  socket.on('sos-broadcast', (payload) => {
+    const { senderName, lat, lng, roomCode: claimedRoomCode, timestamp } = payload ?? {};
     const roomCode = resolveSosRoom(activeSquads, users, socket.id, claimedRoomCode);
     if (!roomCode) {
       console.warn(`[🚨 SOS] Dropped: ${socket.id} (${senderName}) is not a member of any squad`);
@@ -440,7 +473,8 @@ socket.on('check-ping', (clientTimestamp) => {
   // Acknowledgement is per member and stored by stable identity (uid), so it survives
   // a reconnect: without it every reconnect would re-raise an SOS the member had
   // already dealt with.
-  socket.on('sos-ack', ({ id } = {}) => {
+  socket.on('sos-ack', (payload) => {
+    const { id } = payload ?? {};
     const roomCode = resolveSosRoom(activeSquads, users, socket.id, null);
     if (!roomCode) return;
     ackSos(activeSquads[roomCode], id, memberKey(socket.data?.uid, socket.id));
