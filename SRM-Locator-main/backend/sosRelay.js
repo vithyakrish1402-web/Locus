@@ -52,8 +52,12 @@ export const memberKey = (uid, socketId) => uid || socketId;
 
 // Record a new SOS from `senderKey`. A sender re-triggering replaces their previous
 // SOS (fresh id, acknowledgements reset) — the newest beacon is the one that matters.
+//
+// The store has no prototype because senderKey is the client-sent uid: on a plain {},
+// a uid of '__proto__' replaced the prototype instead of adding an entry, so the SOS
+// went out live but was never replayed or acknowledgeable.
 export function recordSos(squad, { senderKey, senderId, senderName, lat, lng, timestamp }, now = Date.now()) {
-  squad.sos = squad.sos || {};
+  squad.sos = squad.sos || Object.create(null);
   const sos = {
     id: randomUUID(),
     senderKey,

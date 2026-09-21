@@ -200,3 +200,33 @@ describe('SOS acknowledgement', () => {
     expect(alpha.sos[0].id).toBe(id);
   });
 });
+
+// An SOS is stored on its squad keyed by the sender's uid — a value the client sends.
+// With a uid of '__proto__', that assignment replaced the store's prototype instead of
+// adding an entry, so the SOS still went out live but was invisible to replay and
+// acknowledgement: anyone who missed the moment never heard about it.
+describe('SOS from a member whose uid names a built-in object key', () => {
+  for (const uid of ['__proto__', 'constructor', 'hasOwnProperty']) {
+    it(`is replayed and acknowledged normally for uid '${uid}'`, async () => {
+      const room = newRoom();
+      const [alpha, sender] = [await connect(), await connect()];
+      await createSquad(alpha, room, 'uA');
+      await admit(alpha, sender, room, uid);
+
+      fireSos(sender, room);
+      await waitFor(() => alpha.sos.length);
+
+      const newcomer = await connect();
+      await admit(alpha, newcomer, room, 'uN');
+      await waitFor(() => newcomer.sos.length);
+      expect(newcomer.sos[0].id).toBe(alpha.sos[0].id);
+
+      newcomer.emit('sos-ack', { id: newcomer.sos[0].id });
+      newcomer.sos.length = 0;
+      newcomer.emit('sos-sync');
+      await settle(newcomer);
+      await sleep(100);
+      expect(newcomer.sos).toEqual([]);
+    });
+  }
+});
