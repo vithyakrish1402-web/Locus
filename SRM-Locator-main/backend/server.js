@@ -3,7 +3,7 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { resolveSosRoom, recordSos, toSosPayload, pendingSosFor, ackSos, memberKey } from './sosRelay.js';
+import { resolveSosRoom, recordSos, toSosPayload, pendingSosFor, ackSos, memberKey, sharedSquad } from './sosRelay.js';
 import { rememberMember, forgetMember, rebindReturningMember, collectStaleSocketIds } from './squadRoster.js';
 
 const app = express();
@@ -383,7 +383,16 @@ socket.on('check-ping', (clientTimestamp) => {
     broadcastSquadUpdate(newRoom);
   });
 
-  socket.on('ping-user', ({ targetId, senderName }) => {
+  // Single-target member ping: a sonar blip and a short notice on one squadmate's
+  // screen. Not an emergency — that is 'sos-broadcast' below. Relayed only between
+  // members of the same squad; see sharedSquad in sosRelay.js for what it used to allow.
+  // Defaults to {} because a bare emit (no payload) used to throw here and take the
+  // whole server down.
+  socket.on('ping-user', ({ targetId, senderName } = {}) => {
+    if (!sharedSquad(activeSquads, socket.id, targetId)) {
+      console.warn(`[PING] Dropped: ${socket.id} is not in a squad with ${targetId}`);
+      return;
+    }
     io.to(targetId).emit('receive-ping', { senderName });
   });
 

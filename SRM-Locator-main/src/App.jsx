@@ -831,18 +831,23 @@ const App = () => {
       });
     });
 
-    socket.on('receive-ping', ({ senderName }) => {
-      // 1. Play the sonar audio
+    // A squadmate pinged this member: "look at me / check in", not an emergency. It used
+    // to be worded as an SOS and end in a blocking alert(), which froze the whole app
+    // (klaxon, sockets, map) until dismissed. Now a sonar blip plus a short notice in the
+    // HUD; the OS notification only when the app isn't in view to show that notice.
+    socket.on('receive-ping', ({ senderName } = {}) => {
+      const name = (senderName || 'A squad member').toUpperCase();
       playSonarPing();
 
-      // 2. Fire the native OS push notification
-      triggerSystemNotification(
-        "🚨 CRITICAL SOS BEACON",
-        `Node '${senderName.toUpperCase()}' requires immediate assistance at their coordinates!`
-      );
+      if (document.hidden) {
+        triggerSystemNotification('📡 PING', `${name} is pinging you.`);
+      }
 
-      // 3. Keep the in-app alert as a fallback
-      alert(`🚨 SOS BEACON DETECTED 🚨\n\n${senderName.toUpperCase()} requires immediate assistance!`);
+      const notice = { id: `ping-${Date.now()}-${Math.random()}`, type: 'PING', userName: name };
+      setZoneAlerts(prev => [...prev, notice]);
+      setTimeout(() => {
+        setZoneAlerts(prev => prev.filter(a => a.id !== notice.id));
+      }, 6000);
     });
     socket.on('new-custom-route', ({ key, data }) => {
       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
@@ -850,7 +855,7 @@ const App = () => {
 
     // Squad-wide SOS ('sos-received') is NOT handled here — useIncomingSos owns that
     // listener (see the hook call near the top of App). Kept separate from
-    // 'receive-ping' above, the single-target Commander ping: conflating the two
+    // 'receive-ping' above, the single-target member ping: conflating the two
     // made an actual emergency look like a routine ping-check. SosOverlay is the
     // entire UI response, and owns its own klaxon and vibrate() once mounted. A
     // native OS Notification would still be the only way to catch an SOS while the
@@ -1278,18 +1283,6 @@ const App = () => {
       setBuildingIntel(building.tacticalIntel || "[SYS_WARN] No tactical intel available.");
       setAiLoading(false);
     }, 600);
-  };
-
-  // --- SOS TRANSMITTER ---
-  const fireSOSBeacon = (targetNodeId, targetNodeName) => {
-    const myName = auth.currentUser?.displayName || "A Squad Member";
-
-    socket.emit('ping-user', {
-      targetId: targetNodeId,
-      senderName: myName
-    });
-
-    alert(`[SYSTEM] SOS Signal transmitted directly to node: ${targetNodeName}.`);
   };
 
   const toggleBlock = (userId) => {
@@ -2087,11 +2080,13 @@ const App = () => {
 
                   {/* ROW 3: ACTIONS */}
                   <div className="flex flex-col gap-2">
+                    {/* A ping, not an emergency: the squad-wide SOS is the SosTrigger
+                        button. Styled neutral so it can't be mistaken for one. */}
                     <button
-                      onClick={() => fireSOSBeacon(user.id, user.name)}
-                      className="w-full py-2 bg-red-950/30 border border-red-900 text-red-500 font-dot text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+                      onClick={() => sendPing(user.id)}
+                      className="w-full py-2 bg-white/5 border border-white/20 text-zinc-300 font-dot text-[10px] uppercase tracking-widest hover:bg-white hover:text-black transition-all"
                     >
-                      FIRE_SOS_BEACON
+                      PING
                     </button>
                     {!user.hasFix ? (
                       // On the roster, but nothing to aim at yet — no coordinates have come
@@ -2151,7 +2146,24 @@ const App = () => {
       {/* --- 🌐 TACTICAL GEOFENCE HUD --- */}
       <div className="absolute top-24 right-6 z-[1000] flex flex-col gap-2 w-72 pointer-events-none">
         <AnimatePresence>
-          {zoneAlerts.map(alert => (
+          {zoneAlerts.map(alert => alert.type === 'PING' ? (
+            <motion.div
+              key={alert.id}
+              role="status"
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.9 }}
+              className="p-3 border backdrop-blur-md flex flex-col gap-1 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-zinc-900/80 border-blue-500"
+            >
+              <div className="flex items-center gap-2">
+                <Radio size={14} className="text-blue-400" />
+                <span className="text-[10px] font-dot tracking-widest uppercase text-blue-400">PING</span>
+              </div>
+              <p className="font-dot text-sm text-white uppercase tracking-widest leading-tight">
+                <span className="text-blue-400">{alert.userName}</span> is pinging you
+              </p>
+            </motion.div>
+          ) : (
             <motion.div
               key={alert.id}
               initial={{ opacity: 0, x: 50, scale: 0.9 }}

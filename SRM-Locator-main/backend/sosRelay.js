@@ -28,6 +28,18 @@ export function resolveSosRoom(activeSquads, users, socketId, claimedRoomCode) {
   return Object.keys(activeSquads).find(isMemberOf) ?? null;
 }
 
+// The squad room two sockets are both on the roster of, or null if there is none.
+// Gates the single-target member ping, which carries no room of its own: without it
+// the server relayed to any socket id it was handed, from anyone — and io.to() also
+// accepts a room code, so a "target" could be an entire squad.
+export function sharedSquad(activeSquads, socketIdA, socketIdB) {
+  if (typeof socketIdA !== 'string' || typeof socketIdB !== 'string') return null;
+  return Object.keys(activeSquads).find((room) => {
+    const members = activeSquads[room]?.members;
+    return Boolean(members?.includes(socketIdA) && members.includes(socketIdB));
+  }) ?? null;
+}
+
 // Identity used to track who sent / acknowledged an SOS. The Firebase uid when we
 // have one, because it survives a reconnect (which mints a new socket id) — that's
 // what lets an acknowledgement stick across reconnects. Socket id is the fallback.
