@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>WiFi Survey</title>
+  </head>
+  <body>
+    <main class="app">
+      <header class="top">
+        <h1>WiFi Survey</h1>
+        <p class="tag">LOCUS field tool · separate from the app</p>
+      </header>
+
+      <p id="sim-banner" class="sim-banner" hidden>Browser simulator. All data is fake.</p>
+
+      <section id="blockers" class="blockers" aria-live="polite"></section>
+
+      <section class="panel" aria-label="Live status">
+        <div class="row"><span class="label">GPS</span><span id="gps" class="value">Waiting for a fix</span></div>
+        <div class="row"><span class="label">Accuracy</span><span id="accuracy" class="value">-</span></div>
+        <div class="row"><span class="label">Last scan</span><span id="last-scan" class="value">No successful scan yet</span></div>
+        <div class="row"><span class="label">Points this session</span><span id="session" class="value">0</span></div>
+        <div class="row"><span class="label">Points in log file</span><span id="file" class="value">-</span></div>
+        <div class="row"><span class="label">Android scan limit</span><span id="budget" class="value">0 of 4 used per 2 min</span></div>
+      </section>
+      <p id="throttle-tip" class="tip">
+        No limit on points. Android only allows 4 WiFi scans per 2 minutes, which caps how fast you
+        can log. To remove it: Settings &gt; Developer options &gt; Wi-Fi scan throttling &gt; off.
+      </p>
+
+      <button id="share" class="secondary share" type="button">Share log</button>
+
+      <section id="result" class="result" hidden aria-live="assertive">
+        <strong id="result-title"></strong>
+        <p id="result-detail"></p>
+      </section>
+
+      <section id="last-point" class="last-point" hidden>
+        <h2 id="last-point-title"></h2>
+        <table>
+          <thead>
+            <tr><th>RSSI</th><th>SSID / BSSID</th><th>MHz</th></tr>
+          </thead>
+          <tbody id="ap-rows"></tbody>
+        </table>
+      </section>
+
+      <footer class="actions">
+        <!-- Where this point is. Building and floor stay set between taps; spot clears. -->
+        <select id="building" aria-label="Building"></select>
+        <div class="tag-row">
+          <select id="floor" aria-label="Floor"></select>
+          <input id="spot" type="text" maxlength="80" autocomplete="off" enterkeyhint="done"
+            placeholder="Spot, e.g. corridor by lift" aria-label="Spot" />
+        </div>
+        <button id="log-point" class="primary" type="button">LOG POINT</button>
+      </footer>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

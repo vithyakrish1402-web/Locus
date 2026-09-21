@@ -1,0 +1,309 @@
+/* Used outdoors in daylight: high contrast, big touch targets, nothing decorative. */
+:root {
+  --bg: #ffffff;
+  --fg: #111418;
+  --muted: #5b6470;
+  --panel: #f2f4f7;
+  --line: #d5dae1;
+  --accent: #0b57d0;
+  --accent-fg: #ffffff;
+  --ok-bg: #e3f5e8;
+  --ok-fg: #0f5a26;
+  --warn-bg: #fff1d6;
+  --warn-fg: #7a4a00;
+  --bad-bg: #fde4e2;
+  --bad-fg: #8c1d18;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1116;
+    --fg: #eef1f5;
+    --muted: #9aa4b1;
+    --panel: #1a1f27;
+    --line: #2c333e;
+    --accent: #8ab4f8;
+    --accent-fg: #0e1116;
+    --ok-bg: #11301c;
+    --ok-fg: #9ee2b0;
+    --warn-bg: #3a2a07;
+    --warn-fg: #ffd58a;
+    --bad-bg: #3d1513;
+    --bad-fg: #ffb4ab;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.app {
+  max-width: 560px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 240px);
+}
+
+.top h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.tag {
+  margin: 2px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sim-banner {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  font-weight: 600;
+}
+
+.blockers {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.blocker {
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bad-bg);
+  color: var(--bad-fg);
+}
+
+.blocker strong {
+  display: block;
+  font-size: 17px;
+}
+
+.blocker p {
+  margin: 4px 0 10px;
+}
+
+.blocker .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.blocker button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+
+.panel {
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 4px 12px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.label {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.value {
+  text-align: right;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.mono,
+td.mono {
+  font-family: ui-monospace, 'Cascadia Mono', 'Roboto Mono', monospace;
+  font-size: 14px;
+}
+
+.result {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.result p {
+  margin: 4px 0 0;
+}
+
+.result.fresh {
+  background: var(--ok-bg);
+  color: var(--ok-fg);
+}
+
+.result.stale,
+.result.timeout,
+.result.empty {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+
+.result.error {
+  background: var(--bad-bg);
+  color: var(--bad-fg);
+}
+
+.result.stale strong {
+  font-size: 18px;
+}
+
+.last-point h2 {
+  margin: 16px 0 6px;
+  font-size: 16px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  table-layout: fixed;
+}
+
+th,
+td {
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+th:nth-child(1),
+td:nth-child(1) {
+  width: 52px;
+}
+
+th:nth-child(3),
+td:nth-child(3) {
+  width: 56px;
+  text-align: right;
+}
+
+.ssid,
+.bssid {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bssid {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  gap: 8px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px);
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+
+.actions button {
+  width: 100%;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 700;
+}
+
+/* 16px text so the WebView doesn't zoom in on focus. */
+.actions select,
+.actions input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--fg);
+  font: inherit;
+  font-size: 16px;
+}
+
+.actions select#building {
+  font-weight: 600;
+}
+
+.tag-row {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 8px;
+}
+
+.tip {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.share {
+  width: 100%;
+  margin-top: 12px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 700;
+}
+
+.primary {
+  min-height: 72px;
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 22px !important;
+  letter-spacing: 0.04em;
+}
+
+.secondary {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--fg);
+}
+
+button:disabled {
+  opacity: 0.45;
+}
