@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Timestamped CSV snapshots handed to the share sheet; see WifiSurveyPlugin.shareLog().
+         Nothing else in the app is exposed. -->
+    <cache-path name="survey_share" path="share/" />
+</paths>

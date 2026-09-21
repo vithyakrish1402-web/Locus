@@ -1,0 +1,5 @@
+{
+  "appId": "com.locus.wifisurvey",
+  "appName": "WiFi Survey",
+  "webDir": "dist"
+}

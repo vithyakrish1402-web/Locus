@@ -1,0 +1,24 @@
+{
+  "name": "locus-wifi-survey",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Throwaway field tool: log GPS + visible WiFi access points per point to CSV. Not part of LOCUS and never shipped with it.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run",
+    "apk": "node scripts/build-apk.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/geolocation": "^8.2.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
+    "vite": "^7.3.1",
+    "vitest": "^4.1.10"
+  }
+}
