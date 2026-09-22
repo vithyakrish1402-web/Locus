@@ -93,6 +93,17 @@ if (!GOOGLE_MAPS_API_KEY) {
 
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
 
+// --- COMMANDER TELEMETRY SYNC ---
+// How long SYNC_TELEMETRY waits for the server before saying it got no answer.
+const TELEMETRY_SYNC_TIMEOUT_MS = 8000;
+// What the server's refusals ('request-telemetry' in backend/server.js) mean to the Commander.
+const TELEMETRY_SYNC_REFUSALS = {
+  'not-owner': 'ONLY THE SQUAD COMMANDER CAN SYNC TELEMETRY.',
+  'not-in-squad': 'THE SERVER HAS NO RECORD OF THIS SQUAD FOR THIS DEVICE. DISCONNECT AND REJOIN IT.',
+};
+// A telemetry value that is a real number, or null (never something toFixed() throws on).
+const finiteOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+
 // --- MAP STYLE / OPTION CONSTANTS ---
 // Deliberately module-scope: google-map-react shallow-compares the `options` prop,
 // so these must keep a stable identity across renders. Rebuilding them inside the
@@ -398,6 +409,12 @@ const App = () => {
   // --- COMMANDER TELEMETRY STATE ---
   const [showTelemetryModal, setShowTelemetryModal] = useState(false);
   const [rawTelemetryData, setRawTelemetryData] = useState(null);
+  // SYNC_TELEMETRY's own state: 'idle' | 'pending' | 'error', with the reason on error. The
+  // button used to be a bare emit, so when no answer came it simply did nothing.
+  const [telemetrySync, setTelemetrySync] = useState({ status: 'idle', message: null });
+  // The sync attempt still waiting to be settled (by its telemetry, its acknowledgement or
+  // its timeout, whichever comes first), or null.
+  const pendingSyncRef = useRef(null);
 
   // Calculates exactly how stale a node's GPS signal is
   const getSignalFreshness = (isoString) => {
@@ -487,10 +504,13 @@ const App = () => {
   // broadcast over the wire — drives this device's own LiveLocationMarker isNavigating state.
   const [liveSpeed, setLiveSpeed] = useState(0);
   const [telemetryMode, setTelemetryMode] = useState('ACTIVE');
-  // Set on any geolocation error (denied/timeout/unavailable), cleared the moment a
-  // real fix comes through — so a friend testing this actually finds out they're
-  // invisible to the squad instead of just seeing no marker with no explanation.
-  const [locationAccessDenied, setLocationAccessDenied] = useState(false);
+  // Set on any geolocation error, cleared the moment a real fix comes through, so a
+  // friend testing this actually finds out they're invisible to the squad instead of just
+  // seeing no marker with no explanation. 'denied' when permission was refused, 'no-fix'
+  // for anything else (a timeout indoors, no position available): the banner used to say
+  // ACCESS DENIED for both, which sent people hunting for a permission that was granted.
+  const [locationError, setLocationError] = useState(null);
+  const onGeolocationError = (err) => setLocationError(err?.code === 1 ? 'denied' : 'no-fix');
 
   const [squadCode, setSquadCode] = useState('');
   const [squadMode, setSquadMode] = useState('create'); // 'create' or 'join'
@@ -613,6 +633,53 @@ const App = () => {
     }
   };
 
+  // SYNC_TELEMETRY / FORCE_SYNC. Always ends visibly: the matrix opens, or the button says
+  // what went wrong and offers a retry. It used to be a bare emit: no timeout, and the
+  // server said nothing when it wouldn't answer, so a tap could simply do nothing.
+  //  - Offline, it says so at once rather than queueing the request: socket.io would
+  //    replay it on the new connection ahead of the rejoin, where it is refused anyway.
+  //  - The server acknowledges with { ok } or { ok: false, reason }; a server that
+  //    predates that sends only the telemetry, which settles the attempt by itself.
+  const requestTelemetrySync = useCallback(() => {
+    if (!socket.connected) {
+      pendingSyncRef.current = null;
+      setTelemetrySync({ status: 'error', message: 'NOT CONNECTED TO THE SERVER. RECONNECTING — TRY AGAIN IN A MOMENT.' });
+      return;
+    }
+    const attempt = {};
+    pendingSyncRef.current = attempt;
+    setTelemetrySync({ status: 'pending', message: null });
+    socket.timeout(TELEMETRY_SYNC_TIMEOUT_MS).emit('request-telemetry', squadCode, (err, reply) => {
+      if (pendingSyncRef.current !== attempt) return; // already settled by the telemetry itself
+      pendingSyncRef.current = null;
+      if (err) {
+        setTelemetrySync({ status: 'error', message: 'NO RESPONSE FROM THE SERVER. CHECK YOUR CONNECTION AND TRY AGAIN.' });
+      } else if (reply?.ok) {
+        setTelemetrySync({ status: 'idle', message: null });
+      } else {
+        setTelemetrySync({ status: 'error', message: TELEMETRY_SYNC_REFUSALS[reply?.reason] || 'THE SERVER REFUSED THE SYNC.' });
+      }
+    });
+  }, [squadCode]);
+
+  // The matrix's footer has always said it refreshes every 5 seconds; nothing did.
+  useEffect(() => {
+    if (!showTelemetryModal) return;
+    const id = setInterval(() => {
+      if (!pendingSyncRef.current) requestTelemetrySync();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [showTelemetryModal, requestTelemetrySync]);
+
+  // Out of the squad: the matrix, and any sync still in flight, belong to the squad left.
+  // (The matrix used to stay open and reappear, with the old squad's data, in the next.)
+  useEffect(() => {
+    if (hasJoinedSquad) return;
+    pendingSyncRef.current = null;
+    setTelemetrySync({ status: 'idle', message: null });
+    setShowTelemetryModal(false);
+  }, [hasJoinedSquad]);
+
   // --- 📡 NETWORK LATENCY TRACKER ---
   useEffect(() => {
     if (!hasJoinedSquad) return;
@@ -708,6 +775,10 @@ const App = () => {
   useEffect(() => {
     socket.on('telemetry-sync-complete', (data) => {
       console.log("📊 [SYS_SYNC] Raw Telemetry Matrix Acquired:", data);
+      // The telemetry settles the sync on its own: a server that predates acknowledgements
+      // sends only this, and the timeout that follows must not then report a failure.
+      pendingSyncRef.current = null;
+      setTelemetrySync({ status: 'idle', message: null });
       setRawTelemetryData(data);
       setShowTelemetryModal(true); // Pop the Commander's Dashboard
     });
@@ -1090,7 +1161,7 @@ const App = () => {
         const smoothed = localPrecognition.current.filter(latitude, longitude);
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
-        setLocationAccessDenied(false);
+        setLocationError(null);
 
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
@@ -1103,7 +1174,7 @@ const App = () => {
       },
       (err) => {
         console.log('[SYS] Initial GPS lock delayed:', err.message);
-        setLocationAccessDenied(true);
+        onGeolocationError(err);
       },
       { enableHighAccuracy: true }
     );
@@ -1150,7 +1221,7 @@ const App = () => {
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
         setLiveSpeed(speed || 0);
-        setLocationAccessDenied(false);
+        setLocationError(null);
 
         let batteryLevel = 100;
         try {
@@ -1179,7 +1250,7 @@ const App = () => {
       },
       (error) => {
         console.error('🚨 [SYS_ERROR] Geolocation lost:', error.message);
-        setLocationAccessDenied(true);
+        onGeolocationError(error);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: currentPollingRate } // <-- AND WIRED HERE
     );
@@ -1335,7 +1406,7 @@ const App = () => {
     endSquadSession();
     setLiveLocation(null);
     signOut(auth);
-    setLocationAccessDenied(false);
+    setLocationError(null);
   };
 
   // endSquadSession also resets accessStatus: without that, a stale 'granted' (e.g. from
@@ -1856,7 +1927,7 @@ const App = () => {
             initial={{ y: -50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -50, opacity: 0 }}
-            className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-md bg-black border border-red-500 pointer-events-auto shadow-[0_0_30px_rgba(239,68,68,0.2)]"
+            className="absolute top-24 left-1/2 -translate-x-1/2 z-[850] md:z-[1000] w-[90%] max-w-md bg-black border border-red-500 pointer-events-auto shadow-[0_0_30px_rgba(239,68,68,0.2)]"
           >
             <div className="p-4 flex flex-col gap-2 relative">
               <button onClick={closeWaypointTrackingPanel} className="absolute top-2 right-2 text-zinc-500 hover:text-white">
@@ -1957,12 +2028,28 @@ const App = () => {
               </button>
 
               {/* --- NEW: TELEMETRY SYNC BUTTON --- */}
+              {/* Always answers the tap: SYNCING while it waits, then the matrix, or what went
+                  wrong and a retry (see requestTelemetrySync). */}
               <button
-                onClick={() => socket.emit('request-telemetry', squadCode)}
-                className="w-full px-4 py-3 border border-yellow-500 text-sm font-dot uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-yellow-500 hover:text-black transition-colors text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]"
+                onClick={requestTelemetrySync}
+                disabled={telemetrySync.status === 'pending'}
+                className={`w-full px-4 py-3 border text-sm font-dot uppercase tracking-widest flex items-center justify-center gap-2 transition-colors disabled:cursor-wait disabled:opacity-70 ${telemetrySync.status === 'error'
+                  ? 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'
+                  : 'border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black shadow-[0_0_15px_rgba(234,179,8,0.2)]'}`}
               >
-                <Activity size={18} /> SYNC_TELEMETRY
+                {telemetrySync.status === 'pending' ? (
+                  <><Loader2 size={18} className="animate-spin" /> SYNCING...</>
+                ) : telemetrySync.status === 'error' ? (
+                  <><RefreshCw size={18} /> RETRY SYNC</>
+                ) : (
+                  <><Activity size={18} /> SYNC_TELEMETRY</>
+                )}
               </button>
+              {telemetrySync.status === 'error' && (
+                <p role="alert" className="px-3 py-2 border border-red-500/50 bg-red-500/10 font-dot text-[10px] text-red-400 uppercase tracking-widest leading-relaxed">
+                  {telemetrySync.message}
+                </p>
+              )}
 
               <div className="flex gap-2 w-full">
                 <button
@@ -2259,7 +2346,15 @@ const App = () => {
         </div>
       )}
       {/* --- 🌐 TACTICAL GEOFENCE HUD --- */}
-      <div className="absolute top-24 right-6 z-[1000] flex flex-col gap-2 w-72 pointer-events-none">
+      {/* This HUD, the banners below and the route panel all hang at top-24, which on a
+          phone is right where the open SQUAD sheet (z-[900]) keeps the Commander's
+          NODE_ACCESS and SYNC_TELEMETRY. They used to sit above it and take the taps meant
+          for those buttons (the location banner, whenever GPS had failed, covered the top
+          third of SYNC_TELEMETRY at 412 px, and all of it with a second banner up). So on a
+          phone they sit under the sheet (z-[850]); on a wider screen the sheet is a side
+          column and they stay on top. And they let taps through (pointer-events-none): only
+          a banner's own dismiss button takes them. */}
+      <div className="absolute top-24 right-6 z-[850] md:z-[1000] flex flex-col gap-2 w-72 pointer-events-none">
         <AnimatePresence>
           {zoneAlerts.map(alert => alert.type === 'PING' ? (
             <motion.div
@@ -2268,7 +2363,7 @@ const App = () => {
               initial={{ opacity: 0, x: 50, scale: 0.9 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 50, scale: 0.9 }}
-              className="p-3 border backdrop-blur-md flex flex-col gap-1 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-zinc-900/80 border-blue-500"
+              className="p-3 border backdrop-blur-md flex flex-col gap-1 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-zinc-900/80 border-blue-500"
             >
               <div className="flex items-center gap-2">
                 <Radio size={14} className="text-blue-400" />
@@ -2284,7 +2379,7 @@ const App = () => {
               initial={{ opacity: 0, x: 50, scale: 0.9 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 50, scale: 0.9 }}
-              className={`p-3 border backdrop-blur-md flex flex-col gap-1 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] ${alert.type === 'ENTER'
+              className={`p-3 border backdrop-blur-md flex flex-col gap-1 shadow-[0_0_15px_rgba(0,0,0,0.5)] ${alert.type === 'ENTER'
                 ? 'bg-emerald-950/80 border-emerald-500'
                 : 'bg-zinc-900/80 border-zinc-500'
                 }`}
@@ -2303,26 +2398,28 @@ const App = () => {
         </AnimatePresence>
       </div>
       {/* --- 👻 SIGNAL LOST BANNER (one-time, auto-dismissing) --- */}
-      <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-md pointer-events-none flex flex-col gap-2">
+      <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[850] md:z-[1000] w-[90%] max-w-md pointer-events-none flex flex-col gap-2">
         <AnimatePresence>
           {/* Persistent (not auto-dismissing) — the underlying problem doesn't go away
               on its own, so this stays until either a real GPS fix clears it or the
               operative dismisses it themselves. Without this, a friend testing LOCUS
               with location denied just sees no marker anywhere, with zero indication
               of why — the exact silent failure this is meant to replace. */}
-          {locationAccessDenied && (
+          {locationError && (
             <motion.div
               key="location-access-denied"
               initial={{ opacity: 0, y: -30, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -30, scale: 0.95 }}
-              className="p-3 border border-red-500 bg-red-950/90 backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-[0_0_15px_rgba(239,68,68,0.4)]"
+              className="p-3 border border-red-500 bg-red-950/90 backdrop-blur-md flex items-center gap-2 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
             >
               <ShieldAlert size={16} className="text-red-500 shrink-0" />
               <p className="font-dot text-xs text-white uppercase tracking-widest leading-tight flex-1">
-                ⚠ LOCATION ACCESS DENIED — SQUAD CANNOT SEE YOU
+                {locationError === 'denied'
+                  ? '⚠ LOCATION ACCESS DENIED — SQUAD CANNOT SEE YOU'
+                  : '⚠ NO GPS FIX — SQUAD CANNOT SEE YOU'}
               </p>
-              <button onClick={() => setLocationAccessDenied(false)} className="text-red-400 hover:text-white shrink-0" title="Dismiss">
+              <button onClick={() => setLocationError(null)} className="text-red-400 hover:text-white shrink-0 pointer-events-auto" title="Dismiss">
                 <X size={14} />
               </button>
             </motion.div>
@@ -2333,7 +2430,7 @@ const App = () => {
               initial={{ opacity: 0, y: -30, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -30, scale: 0.95 }}
-              className="p-3 border border-zinc-500 bg-zinc-900/90 backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+              className="p-3 border border-zinc-500 bg-zinc-900/90 backdrop-blur-md flex items-center gap-2 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
             >
               <WifiOff size={16} className="text-zinc-400 shrink-0" />
               <p className="font-dot text-xs text-white uppercase tracking-widest leading-tight">
@@ -2823,10 +2920,24 @@ const App = () => {
                   </div>
 
                   {/* Table Body */}
+                  {users.length === 0 && (
+                    <div className="p-6 font-dot text-xs uppercase tracking-widest text-zinc-500 text-center">
+                      NO OTHER OPERATIVES IN THE SQUAD YET.
+                    </div>
+                  )}
                   {users.map(userNode => {
                     const cacheData = rawTelemetryData?.[userNode.id];
-                    const freshness = getSignalFreshness(cacheData?.timestamp);
-                    const batteryColor = cacheData && parseInt(cacheData.batteryLevel) < 20 ? 'text-red-500' : 'text-emerald-500';
+                    // Read defensively: a server that predates normalised records sends a
+                    // member's raw cache entry, which has lat/lng/lastSeen/battery until their
+                    // first heartbeat adds latitude/longitude/timestamp/batteryLevel. The
+                    // bare `latitude.toFixed()` this used took the whole app down on one.
+                    const latitude = finiteOrNull(cacheData?.latitude) ?? finiteOrNull(cacheData?.lat);
+                    const longitude = finiteOrNull(cacheData?.longitude) ?? finiteOrNull(cacheData?.lng);
+                    const hasPosition = latitude !== null && longitude !== null;
+                    const batteryLevel = cacheData?.batteryLevel
+                      ?? (finiteOrNull(cacheData?.battery) !== null ? `${cacheData.battery}%` : null);
+                    const freshness = getSignalFreshness(cacheData?.timestamp ?? cacheData?.lastSeen);
+                    const batteryColor = batteryLevel && parseInt(batteryLevel) < 20 ? 'text-red-500' : 'text-emerald-500';
 
                     return (
                       <div key={userNode.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-0 border-b border-white/10 p-4 font-dot text-xs tracking-widest uppercase text-white hover:bg-white/5 transition-colors items-start md:items-center">
@@ -2841,10 +2952,10 @@ const App = () => {
                         <div className="text-zinc-400 font-mono text-[10px] flex md:block justify-between items-center border-t border-white/5 md:border-transparent pt-2 md:pt-0 mt-2 md:mt-0">
                           <span className="md:hidden text-zinc-600 font-dot uppercase tracking-widest">COORDS:</span>
                           <div className="text-right md:text-left">
-                            {cacheData ? (
+                            {hasPosition ? (
                               <>
-                                LAT: {cacheData.latitude.toFixed(5)}<br />
-                                LNG: {cacheData.longitude.toFixed(5)}
+                                LAT: {latitude.toFixed(5)}<br />
+                                LNG: {longitude.toFixed(5)}
                               </>
                             ) : "NO_CACHE_DATA"}
                           </div>
@@ -2853,7 +2964,7 @@ const App = () => {
                         {/* 3. BATTERY */}
                         <div className={`font-bold flex md:block justify-between items-center ${batteryColor}`}>
                           <span className="md:hidden text-zinc-600 font-normal text-[10px] font-dot uppercase tracking-widest">POWER:</span>
-                          {cacheData ? cacheData.batteryLevel : "UNKNOWN"}
+                          {batteryLevel || "UNKNOWN"}
                         </div>
 
                         {/* 4. SIGNAL FRESHNESS */}
@@ -2870,12 +2981,19 @@ const App = () => {
 
               {/* Footer */}
               <div className="p-4 border-t border-yellow-500/30 flex justify-between items-center bg-black">
-                <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">AUTO-REFRESHING EVERY 5 SECONDS</span>
+                {telemetrySync.status === 'error' ? (
+                  <span className="font-dot text-[10px] text-red-400 uppercase tracking-widest pr-4">{telemetrySync.message}</span>
+                ) : (
+                  <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">AUTO-REFRESHING EVERY 5 SECONDS</span>
+                )}
                 <button
-                  onClick={() => socket.emit('request-telemetry', squadCode)}
-                  className="px-6 py-2 border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2"
+                  onClick={requestTelemetrySync}
+                  disabled={telemetrySync.status === 'pending'}
+                  className="px-6 py-2 border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2 shrink-0 disabled:cursor-wait disabled:opacity-70"
                 >
-                  <Activity size={14} /> FORCE_SYNC
+                  {telemetrySync.status === 'pending'
+                    ? <><Loader2 size={14} className="animate-spin" /> SYNCING...</>
+                    : <><Activity size={14} /> FORCE_SYNC</>}
                 </button>
               </div>
             </motion.div>
