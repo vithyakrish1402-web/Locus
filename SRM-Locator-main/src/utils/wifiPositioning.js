@@ -4,7 +4,7 @@
 // Stage 6.
 //
 //   const estimate = await estimateWifiPosition([scanA.aps, scanB.aps]);
-//   // { lat, lng, floor, confidence, matchedApCount, totalApsSeen }
+//   // { lat, lng, building, floor, confidence, matchedApCount, totalApsSeen }
 //
 // This is a proximity-weighted centroid, not trilateration. Each surveyed AP sits at the
 // survey point where it was heard strongest, so the estimate can only be as fine as the
@@ -48,6 +48,7 @@ export const FULL_CONFIDENCE_AP_COUNT = 5;
 const noEstimate = (totalApsSeen) => ({
   lat: null,
   lng: null,
+  building: null,
   floor: null,
   confidence: 0,
   matchedApCount: 0,
@@ -85,13 +86,15 @@ export function mergeScans(scans) {
  * and yields confidence 0.
  *
  * - lat/lng: weighted centroid of the matched APs, every AP at full weight.
- * - floor: categorical vote. Each distinct floor sums its APs' weights (ambiguousFloor
- *   APs at AMBIGUOUS_FLOOR_WEIGHT) and the heaviest floor wins. `null` - an AP heard
- *   strongest outdoors - is a floor value like any other, so it can win too. An exact tie
- *   goes to the lowest floor, `null` last. With more than one surveyed building this
- *   should vote on (building, floor) pairs; today every AP is TECH PARK.
+ * - building + floor: categorical vote on (building, floor) PAIRS - floor 1 of one
+ *   building is no evidence for floor 1 of another, so floor numbers are never pooled
+ *   across buildings. Each pair sums its APs' weights (ambiguousFloor APs at
+ *   AMBIGUOUS_FLOOR_WEIGHT) and the heaviest wins. An AP heard strongest outdoors has a
+ *   null building and floor, and that pair can win too. An exact tie goes to the lower
+ *   building name, then the lower floor, nulls last. One limit the data imposes: every
+ *   survey building not in SRM_MASTER_DATABASE is tagged "OTHER", so those share a pair.
  * - confidence, 0..1: (matched APs, capped at FULL_CONFIDENCE_AP_COUNT, as a fraction of
- *   it) x (the winning floor's share of the vote). The share is measured against every
+ *   it) x (the winning pair's share of the vote). The share is measured against every
  *   matched AP at FULL weight, so the half an ambiguous AP holds back counts as doubt:
  *   a unanimous vote from ambiguous APs alone scores 0.5, a two-floor near-tie about 0.5,
  *   and a single AP at most 0.2.
@@ -100,10 +103,10 @@ export function mergeScans(scans) {
  * merge will happily keep a strong reading from a room the phone has since left.
  *
  * @param {Array} scans see mergeScans
- * @param {Map<string, {lat:number, lng:number, floor:number|null, ambiguousFloor:boolean}>} aps
- *   surveyed APs by lowercase BSSID
- * @returns {{lat:number|null, lng:number|null, floor:number|null, confidence:number,
- *   matchedApCount:number, totalApsSeen:number}}
+ * @param {Map<string, {lat:number, lng:number, building:string|null, floor:number|null,
+ *   ambiguousFloor:boolean}>} aps surveyed APs by lowercase BSSID
+ * @returns {{lat:number|null, lng:number|null, building:string|null, floor:number|null,
+ *   confidence:number, matchedApCount:number, totalApsSeen:number}}
  */
 export function estimatePosition(scans, aps) {
   const readings = mergeScans(scans);
@@ -118,24 +121,34 @@ export function estimatePosition(scans, aps) {
   let totalWeight = 0;
   let latSum = 0;
   let lngSum = 0;
-  const floorVotes = new Map();
+  const votes = new Map(); // JSON of [building, floor] -> { building, floor, weight }
   for (const { ap, weight } of matched) {
     totalWeight += weight;
     latSum += ap.lat * weight;
     lngSum += ap.lng * weight;
-    const vote = ap.ambiguousFloor ? weight * AMBIGUOUS_FLOOR_WEIGHT : weight;
-    floorVotes.set(ap.floor, (floorVotes.get(ap.floor) ?? 0) + vote);
+    const key = JSON.stringify([ap.building, ap.floor]);
+    let vote = votes.get(key);
+    if (!vote) votes.set(key, (vote = { building: ap.building, floor: ap.floor, weight: 0 }));
+    vote.weight += ap.ambiguousFloor ? weight * AMBIGUOUS_FLOOR_WEIGHT : weight;
   }
 
-  const byFloor = (a, b) => (a === null) - (b === null) || a - b;
-  const [floor, floorWeight] = [...floorVotes].sort(([fa, wa], [fb, wb]) => wb - wa || byFloor(fa, fb))[0];
+  const nullsLast = (a, b) => (a === null) - (b === null);
+  const winner = [...votes.values()].sort(
+    (a, b) =>
+      b.weight - a.weight ||
+      nullsLast(a.building, b.building) ||
+      (a.building ?? '').localeCompare(b.building ?? '', 'en') ||
+      nullsLast(a.floor, b.floor) ||
+      a.floor - b.floor
+  )[0];
 
   const countFactor = Math.min(matched.length, FULL_CONFIDENCE_AP_COUNT) / FULL_CONFIDENCE_AP_COUNT;
   return {
     lat: latSum / totalWeight,
     lng: lngSum / totalWeight,
-    floor,
-    confidence: countFactor * (floorWeight / totalWeight),
+    building: winner.building,
+    floor: winner.floor,
+    confidence: countFactor * (winner.weight / totalWeight),
     matchedApCount: matched.length,
     totalApsSeen: readings.size,
   };
@@ -169,7 +182,9 @@ function toAccessPoint(data) {
   if (!Number.isFinite(data?.lat) || !Number.isFinite(data?.lng)) return null;
   const floor = data.floor ?? null;
   if (floor !== null && !Number.isInteger(floor)) return null;
-  return { lat: data.lat, lng: data.lng, floor, ambiguousFloor: data.ambiguousFloor !== false };
+  const building = data.building ?? null;
+  if (building !== null && typeof building !== 'string') return null;
+  return { lat: data.lat, lng: data.lng, building, floor, ambiguousFloor: data.ambiguousFloor !== false };
 }
 
 async function fetchAccessPoints() {
@@ -201,7 +216,8 @@ async function fetchAccessPoints() {
  * error's own code ('unavailable' offline, 'permission-denied' if the rules refuse).
  *
  * @param {{force?: boolean}} [options] force re-reads even when a table is cached
- * @returns {Promise<Map<string, {lat:number, lng:number, floor:number|null, ambiguousFloor:boolean}>>}
+ * @returns {Promise<Map<string, {lat:number, lng:number, building:string|null, floor:number|null,
+ *   ambiguousFloor:boolean}>>}
  */
 export function loadAccessPoints({ force = false } = {}) {
   if (cachedAps && !force) return Promise.resolve(cachedAps);
