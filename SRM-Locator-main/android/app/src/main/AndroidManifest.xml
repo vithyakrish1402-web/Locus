@@ -5,6 +5,16 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
+    <!-- WiFi positioning (WifiScanPlugin.java). Both are install-time permissions with no
+         prompt. Scanning also needs ACCESS_FINE_LOCATION above: startScan() and
+         getScanResults() stay gated on it at every SDK level, and NEARBY_WIFI_DEVICES
+         (Android 13+) doesn't cover them, so it is deliberately absent. -->
+    <!-- getScanResults() -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- startScan() -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
