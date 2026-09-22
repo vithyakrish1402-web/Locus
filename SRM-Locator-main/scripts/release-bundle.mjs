@@ -110,8 +110,17 @@ const zipPath = join(STAGING_DIR, BUNDLE_ASSET_NAME);
 // Written in-process rather than shelling out to Compress-Archive/zip: the plugin needs
 // index.html at the ZIP ROOT with forward-slash entry names, and PowerShell produces
 // backslashes that Android's unzip reads as flat filenames. See scripts/lib/zip.mjs.
+//
+// Every entry gets the same fixed timestamp so the archive is byte-reproducible: the
+// same dist/ always hashes to the same SHA256, whether it is a dry run, the real publish
+// or a rebuild on another machine. Nothing on device reads it - the plugin extracts
+// files with their own mtimes. Built with the LOCAL-time constructor because zip.mjs
+// reads it back with local getters (DOS time has no zone), which makes the stored fields
+// 1980-02-01 00:00 in every timezone. Feb, not Jan 1, so that no zone conversion can
+// push it before the 1980 DOS epoch - the same constant Gradle uses for reproducible zips.
+const ZIP_MTIME = new Date(1980, 1, 1);
 console.log(`\n  Zipping dist/ -> ${BUNDLE_ASSET_NAME}`);
-const bytes = zipDirectory(DIST_DIR);
+const bytes = zipDirectory(DIST_DIR, ZIP_MTIME);
 writeFileSync(zipPath, bytes);
 
 const sha256 = createHash('sha256').update(bytes).digest('hex');
