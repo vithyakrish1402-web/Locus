@@ -92,9 +92,9 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
 - `member-signal-lost`: Fired by server when an operative disconnects unexpectedly, packaging trajectory vector (`lastKnownLocation`, `heading`, `speed`, `timeDelta`) for Pre-Cog tracking.
 
 ### 4.3 Tactical Targeting & Waypoints
-- `publish-waypoint` (`{ roomCode, waypoint: { lat, lng, name } }`): Commander/Operative deploys a persistent rally point.
-- `clear-waypoint` (`roomCode`): Removes active rally point for the squad.
-- `new-waypoint` / `remove-waypoint`: Server broadcast to room members.
+- `publish-waypoint` (`{ roomCode, waypoint: { lat, lng, name } }`): Any squad member deploys a persistent rally point (the targeting FAB, the Commander's RALLY POINT button, or choosing a building destination). The server records who dropped it as `setBy` (their uid, or socket id without one), never taken from the payload.
+- `clear-waypoint` (`roomCode`): Removes the squad's rally point. Allowed for the Commander (any rally point) and for the member who dropped it (the ✕ on the marker, or closing the route panel that published it).
+- `new-waypoint` (`{ lat, lng, name, setBy }`) / `remove-waypoint`: Server broadcast to room members. Every (re)admitted member is also sent the current state, as `remove-waypoint` when there is none, so one who missed a clear while offline doesn't keep a rally point nobody else has.
 
 ### 4.4 Geofence & Emergency Alerts
 - `geofence-alert` (`{ roomCode, userName, type: 'ENTER'|'EXIT', zoneName }`): Broadcasts perimeter breach alerts across the squad.

@@ -886,6 +886,9 @@ const App = () => {
       socket.off('new-waypoint');
       socket.off('remove-waypoint');
       setUsers([]);
+      // The squad's Rally Point goes with it. It used to stay on the map after leaving,
+      // and ride along into the next squad, which had no record of it.
+      setActiveWaypoint(null);
     };
   }, [hasJoinedSquad, squadCode]);
 
@@ -1394,8 +1397,10 @@ const App = () => {
       return;
     }
 
-    // 1. COMMANDER RALLY POINT OVERRIDE (Admin sidebar button)
-    if (isAdmin && isDroppingWaypoint) {
+    // 1. COMMANDER RALLY POINT OVERRIDE (the squad panel's RALLY POINT button). Shown to
+    // every Commander, so it isn't gated on isAdmin here: it was, so for any Commander but
+    // the admin account the button switched to "SELECT MAP..." and the tap did nothing.
+    if (isDroppingWaypoint) {
       const waypoint = { lat, lng, name: "RALLY POINT" };
       setActiveWaypoint(waypoint);
       socket.emit('publish-waypoint', { roomCode: squadCode, waypoint });
@@ -1555,6 +1560,26 @@ const App = () => {
   // only actually honest once it's real. Falls back to routeData's haversine
   // number otherwise (also what still drives building-to-building personal
   // routing, which never touches activeWaypoint at all).
+  // Who may clear the Rally Point, mirroring the server's rule (clear-waypoint in
+  // backend/server.js): the Commander, any of them; a member, the one they dropped. It was
+  // the Commander alone, while any member can drop one.
+  const canClearWaypoint = squadRole === 'OWNER'
+    || Boolean(activeWaypoint?.setBy && activeWaypoint.setBy === (user?.uid || socket.id));
+
+  // The route panel opened by choosing a destination is what published that Rally Point,
+  // and it tracks it: when the Rally Point is cleared (by anyone), the panel closes with it
+  // rather than staying up, still pointing the way to a Rally Point that no longer exists.
+  const trackedWaypointRef = useRef(null);
+  useEffect(() => {
+    const tracked = trackedWaypointRef.current;
+    trackedWaypointRef.current = activeWaypoint;
+    if (tracked && !activeWaypoint && routeEnd?.lat === tracked.lat && routeEnd?.lng === tracked.lng) {
+      setRouteStart(null);
+      setRouteEnd(null);
+      setRouteData(null);
+    }
+  }, [activeWaypoint, routeEnd]);
+
   const isTrackingSquadWaypoint = Boolean(
     routeEnd && activeWaypoint && routeEnd.lat === activeWaypoint.lat && routeEnd.lng === activeWaypoint.lng
   );
@@ -2344,7 +2369,7 @@ const App = () => {
               activeTab={activeTab}
               activeWaypoint={activeWaypoint}
               walkingRoute={walkingRoute}
-              squadRole={squadRole}
+              canClearWaypoint={canClearWaypoint}
               highlightBuildingId={(activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null}
               onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}
               onArTrack={setArTarget}
@@ -2410,7 +2435,7 @@ const App = () => {
               lng={activeWaypoint.lng}
               name={activeWaypoint.name}
               onClick={() => handleFocus(activeWaypoint, null)}
-              canClear={squadRole === 'OWNER'}
+              canClear={canClearWaypoint}
               onClear={() => socket.emit('clear-waypoint', squadCode)}
               onTrack={() => setArTarget({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })}
             />

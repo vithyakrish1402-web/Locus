@@ -233,6 +233,7 @@ socket.on('check-ping', (clientTimestamp) => {
       };
       socket.join(roomCode);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
+      sendRallyPoint(socket, activeSquads[roomCode]);
       return;
     }
 
@@ -266,7 +267,7 @@ socket.on('check-ping', (clientTimestamp) => {
       purgeStaleSockets(roomCode, staleIds);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
       sendJoinQueue(existing, roomCode, socket.id);
-      if (existing.activeWaypoint) socket.emit('new-waypoint', existing.activeWaypoint);
+      sendRallyPoint(socket, existing);
       broadcastSquadUpdate(roomCode);
       return;
     }
@@ -292,6 +293,7 @@ socket.on('check-ping', (clientTimestamp) => {
       purgeStaleSockets(roomCode, staleIds);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
       sendJoinQueue(existing, roomCode, socket.id);
+      sendRallyPoint(socket, existing);
       broadcastSquadUpdate(roomCode);
       return;
     }
@@ -313,7 +315,7 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.join(roomCode);
       socket.emit('access-granted', { role: returning.role, roomCode });
       if (returning.role === 'OWNER') sendJoinQueue(existing, roomCode, socket.id);
-      if (existing.activeWaypoint) socket.emit('new-waypoint', existing.activeWaypoint);
+      sendRallyPoint(socket, existing);
       broadcastSquadUpdate(roomCode);
       return;
     }
@@ -364,10 +366,7 @@ socket.on('check-ping', (clientTimestamp) => {
         squad.memberUids[targetId] = targetSocket.data?.uid || null;
         // Approved once; remembered by uid so a reconnect isn't a fresh request.
         rememberMember(squad, targetSocket.data?.uid);
-
-        if (squad.activeWaypoint) {
-          targetSocket.emit('new-waypoint', squad.activeWaypoint);
-        }
+        sendRallyPoint(targetSocket, squad);
         // Put them on everyone's roster now. Previously the squad only learned of a new
         // member when that member's first telemetry arrived, so a mid-session joiner was
         // missing from the list for a polling interval (up to 15s in eco mode) — and
@@ -419,25 +418,41 @@ socket.on('check-ping', (clientTimestamp) => {
   // the presser's own client had already optimistically shown it to themselves
   // (setActiveWaypoint runs before the emit), so only they ever saw it — nobody else
   // in the squad did, without so much as a console warning that anything failed.
-  // Clearing stays Commander-only, matching the client UI (WaypointMarker's clear
-  // button is gated by canClear={squadRole === 'OWNER'}).
+  //
+  // Who dropped it is recorded (`setBy`: their uid, or socket id without one) and sent
+  // with it, so the client knows whether to offer its own user the clear control. Taken
+  // from the server's own record of the socket, never from the payload, and only
+  // position and name are copied from the client's waypoint.
   socket.on('publish-waypoint', (data) => {
     const { roomCode, waypoint } = data ?? {};
     if (waypoint && activeSquads[roomCode] && activeSquads[roomCode].members.includes(socket.id)) {
       console.log(`[🎯 TACTICAL] New Rally Point designated in ${roomCode} at ${waypoint.lat}, ${waypoint.lng}`);
-      activeSquads[roomCode].activeWaypoint = waypoint;
-      socket.to(roomCode).emit('new-waypoint', waypoint);
+      const rallyPoint = {
+        lat: waypoint.lat,
+        lng: waypoint.lng,
+        name: waypoint.name,
+        setBy: memberKey(socket.data?.uid, socket.id),
+      };
+      activeSquads[roomCode].activeWaypoint = rallyPoint;
+      socket.to(roomCode).emit('new-waypoint', rallyPoint);
       // Also emit back to the sender just in case they need to update state without trusting the client UI
-      socket.emit('new-waypoint', waypoint);
+      socket.emit('new-waypoint', rallyPoint);
     }
   });
 
+  // The Commander can clear any Rally Point, and a member the one they dropped. This used
+  // to be Commander-only while any member could drop one, so an operative's own Rally
+  // Point (FAB, or a building chosen as a destination) stayed on everyone's map with no
+  // way for them to take it back: their clear was refused without a word.
   socket.on('clear-waypoint', (roomCode) => {
-    if (activeSquads[roomCode] && activeSquads[roomCode].ownerId === socket.id) {
-      console.log(`[🚫 TACTICAL] Rally Point cleared in ${roomCode}`);
-      activeSquads[roomCode].activeWaypoint = null;
-      io.to(roomCode).emit('remove-waypoint');
-    }
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return;
+    const isCommander = squad.ownerId === socket.id;
+    const droppedIt = Boolean(squad.activeWaypoint) && squad.activeWaypoint.setBy === memberKey(socket.data?.uid, socket.id);
+    if (!isCommander && !droppedIt) return;
+    console.log(`[🚫 TACTICAL] Rally Point cleared in ${roomCode}`);
+    squad.activeWaypoint = null;
+    io.to(roomCode).emit('remove-waypoint');
   });
 
   // --- 🌐 LOCATION & ROOM ENGINE (CENTRALIZED) ---
@@ -666,6 +681,16 @@ socket.on('check-ping', (clientTimestamp) => {
     for (const request of pendingRequestsOf(squad, roomCode)) {
       io.to(ownerId).emit('access-request', request);
     }
+  }
+
+  // Tell a socket just let into a squad what its Rally Point is, including that there is
+  // none. Only one that existed used to be sent, so a member who was offline when it was
+  // cleared came back to it still on their map (as did a client carrying one over from a
+  // previous squad), and no clear control was left anywhere that could remove it: the
+  // Commander's only appear while their own map has a Rally Point.
+  function sendRallyPoint(target, squad) {
+    if (squad.activeWaypoint) target.emit('new-waypoint', squad.activeWaypoint);
+    else target.emit('remove-waypoint');
   }
 
   // Tear down a person's superseded connection(s) after they've been rebound onto a new
