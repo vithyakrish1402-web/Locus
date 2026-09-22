@@ -366,8 +366,12 @@ npm run release:bundle -- 1.0.1
 
 1. Refuses an already-used `js-*` tag, or a `--min-native` newer than the native shell
 2. `npm run build`
-3. Zips `dist/` with `index.html` at the archive root
-4. Computes the SHA-256
+3. Zips `dist/` with `index.html` at the archive root, every entry stamped with the same
+   fixed timestamp
+4. Computes the SHA-256 — reproducible, so the same source always gives the same digest:
+   a dry run's hash is the one that will publish, and a rebuild can be checked against a
+   live release by comparing hashes (from `js-1.0.4` on; `js-1.0.3` and earlier were
+   stamped with the wall-clock time and cannot be reproduced)
 5. Publishes a `js-1.0.1` release with the zip attached and both markers in the body
 
 ```bash
