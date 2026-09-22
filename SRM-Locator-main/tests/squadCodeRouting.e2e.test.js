@@ -174,6 +174,7 @@ describe('an approval for a request that is no longer open', () => {
     await requestJoin(x, roomA, 'uX'); // waiting on A
     await waitFor(() => door.knocks.length);
     expect(await requestJoin(x, roomB, 'uX')).toMatchObject({ outcome: 'granted', role: 'OWNER', roomCode: roomB });
+    await settle(x); // anything else B's founding sends x arrives before listening starts
 
     const xHears = record(x);
     commanderA.emit('resolve-access', { targetId: door.knocks[0].targetId, roomCode: roomA, approved: true });
