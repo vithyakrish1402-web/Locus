@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
         // from node_modules the way it does for @capacitor/app - register it by hand,
         // before super.onCreate() wires up the bridge.
         registerPlugin(LocusUpdaterPlugin.class);
+        registerPlugin(WifiScanPlugin.class);
         SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
     }

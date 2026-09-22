@@ -1,0 +1,11 @@
+node_modules
+
+# Admin credentials must never be committed. Keep the key outside the repo; these catch
+# the usual names if one lands here anyway.
+*firebase-adminsdk*.json
+service-account*.json
+serviceAccount*.json
+credentials*.json
+
+# Survey data stays out of git too; pass its path on the command line.
+*.csv

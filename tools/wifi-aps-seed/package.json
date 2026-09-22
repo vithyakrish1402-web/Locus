@@ -1,0 +1,14 @@
+{
+  "name": "locus-wifi-aps-seed",
+  "private": true,
+  "version": "0.0.0",
+  "description": "One-time import of the aggregated WiFi survey CSV into Firestore wifi_aps. Run by hand; not part of the LOCUS build, release or runtime.",
+  "type": "module",
+  "scripts": {
+    "seed": "node seed.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.4.0"
+  }
+}
