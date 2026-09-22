@@ -13,7 +13,8 @@
     "dev:all": "concurrently \"npm run dev\" \"npm run server\" \"npm run tunnel\"",
     "release": "node scripts/release.mjs",
     "release:bundle": "node scripts/release-bundle.mjs",
-    "release:verify": "node scripts/verify-release.mjs"
+    "release:verify": "node scripts/verify-release.mjs",
+    "device-check:wifi": "node scripts/device-check-wifi.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",

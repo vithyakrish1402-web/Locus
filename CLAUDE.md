@@ -39,7 +39,11 @@ npm run test:watch  # Vitest in watch mode
 npm run release -- 1.1.0          # cut a full-APK release (Phase 1 updater)
 npm run release:bundle -- 1.0.1   # ship a JS-only live update (Phase 2 updater)
 npm run release:verify            # check a published release the way a device would
+
+npm run device-check:wifi         # prove the wifi_aps Firestore read on a USB-connected phone
 ```
+
+`device-check:wifi` needs one phone on adb running a signed-in *debug* LOCUS. It builds in Vite's `device-check` mode, the only build that contains `src/devtools/` (the `MODE` check in `main.jsx` compiles it out of every other build, releases included). It then cold-starts the app three times, reads each run's report from logcat, and reinstalls the normal debug build (`--keep` skips that). It refuses to run if the phone is on a downloaded live-update bundle: capgo only resets to an APK's built-in JS when `versionCode` changes, and an in-place debug install keeps it.
 
 Both release commands need the `gh` CLI authenticated; `npm run release` also needs the
 signing keystore configured in `android/local.properties`. See **`UPDATER.md`** — it is the
