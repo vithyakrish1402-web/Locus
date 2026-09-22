@@ -28,7 +28,7 @@ const P1 = { lat: 12.824813, lng: 80.044965 };
 const P2 = { lat: 12.824954, lng: 80.04541 };
 const P3 = { lat: 12.82499, lng: 80.045143 };
 
-const ap = (at, floor, ambiguousFloor = false) => ({ ...at, floor, ambiguousFloor });
+const ap = (at, floor, ambiguousFloor = false, building = 'TECH PARK') => ({ ...at, building, floor, ambiguousFloor });
 const table = (entries) => new Map(Object.entries(entries));
 const scan = (readings) => Object.entries(readings).map(([bssid, rssi]) => ({ bssid, ssid: 'SRMIST', rssi, frequency: 2437 }));
 
@@ -83,6 +83,7 @@ describe('estimatePosition', () => {
       { ...P1, w: rssiWeight(-80) },
       { ...P2, w: rssiWeight(-90) },
     ]);
+    expect(result.building).toBe('TECH PARK');
     expect(result.floor).toBe(1);
     expect(result.lat).toBeCloseTo(expected.lat, 9);
     expect(result.lng).toBeCloseTo(expected.lng, 9);
@@ -177,8 +178,43 @@ describe('estimatePosition', () => {
     expect(result.lng).toBeCloseTo(expected.lng, 9);
   });
 
-  it('lets an outdoor AP (floor null) vote for "outdoors" and still place the centroid', () => {
-    const result = estimatePosition([scan({ out: -50, in: -80 })], table({ out: ap(P1, null), in: ap(P2, 0) }));
+  it('never pools the same floor number across buildings', () => {
+    // Heard from TECH PARK floor 2 most strongly. The two floor-1 APs are in DIFFERENT
+    // buildings: pooled by floor number alone they would outvote it (2 x 11.3 > 16).
+    const aps = table({
+      tp2: ap(P1, 2, false, 'TECH PARK'),
+      tp1: ap(P2, 1, false, 'TECH PARK'),
+      ub1: ap(P3, 1, false, 'UNIVERSITY BUILDING'),
+    });
+    const result = estimatePosition([scan({ tp2: -60, tp1: -65, ub1: -65 })], aps);
+
+    expect(result.building).toBe('TECH PARK');
+    expect(result.floor).toBe(2);
+    // The two buildings' floor 1 split the doubt between them: share 16 / 38.6.
+    const total = rssiWeight(-60) + 2 * rssiWeight(-65);
+    expect(result.confidence).toBeCloseTo((3 / FULL_CONFIDENCE_AP_COUNT) * (rssiWeight(-60) / total), 9);
+  });
+
+  it('still pools one building\'s floor across its APs', () => {
+    const aps = table({
+      tp2: ap(P1, 2, false, 'TECH PARK'),
+      tp1a: ap(P2, 1, false, 'TECH PARK'),
+      tp1b: ap(P3, 1, false, 'TECH PARK'),
+    });
+    expect(estimatePosition([scan({ tp2: -60, tp1a: -65, tp1b: -65 })], aps)).toMatchObject({ building: 'TECH PARK', floor: 1 });
+  });
+
+  it('settles an exact tie between buildings the same way every time', () => {
+    const aps = table({ a: ap(P1, 1, false, 'UNIVERSITY BUILDING'), b: ap(P2, 1, false, 'TECH PARK') });
+    const forward = estimatePosition([scan({ a: -60, b: -60 })], aps);
+    const reverse = estimatePosition([scan({ b: -60, a: -60 })], aps);
+    expect(forward).toMatchObject({ building: 'TECH PARK', floor: 1 });
+    expect(reverse).toMatchObject({ building: 'TECH PARK', floor: 1 });
+  });
+
+  it('lets an outdoor AP (no building or floor) vote for "outdoors" and still place the centroid', () => {
+    const result = estimatePosition([scan({ out: -50, in: -80 })], table({ out: ap(P1, null, false, null), in: ap(P2, 0) }));
+    expect(result.building).toBeNull();
     expect(result.floor).toBeNull();
     expect(result.lat).not.toBeNull();
     expect(result.confidence).toBeGreaterThan(0);
@@ -209,7 +245,7 @@ describe('estimatePosition', () => {
 
   it('no match at all is a clean zero-confidence result, never a throw', () => {
     const aps = table({ a: ap(P1, 1) });
-    const empty = { lat: null, lng: null, floor: null, confidence: 0, matchedApCount: 0 };
+    const empty = { lat: null, lng: null, building: null, floor: null, confidence: 0, matchedApCount: 0 };
 
     expect(estimatePosition([], aps)).toEqual({ ...empty, totalApsSeen: 0 });
     expect(estimatePosition([[]], aps)).toEqual({ ...empty, totalApsSeen: 0 });
@@ -224,8 +260,8 @@ describe('wifi_aps cache', () => {
   const doc = (id, data) => ({ id, data: () => data });
   const seeded = (docs) => ({ docs });
   const SEED = [
-    doc('aa:aa:aa:aa:aa:01', { bssid: 'aa:aa:aa:aa:aa:01', lat: P1.lat, lng: P1.lng, floor: 1, ambiguousFloor: false, rssi: -60 }),
-    doc('aa:aa:aa:aa:aa:02', { bssid: 'aa:aa:aa:aa:aa:02', lat: P2.lat, lng: P2.lng, floor: 2, ambiguousFloor: true, rssi: -70 }),
+    doc('aa:aa:aa:aa:aa:01', { bssid: 'aa:aa:aa:aa:aa:01', lat: P1.lat, lng: P1.lng, building: 'TECH PARK', floor: 1, ambiguousFloor: false, rssi: -60 }),
+    doc('aa:aa:aa:aa:aa:02', { bssid: 'aa:aa:aa:aa:aa:02', lat: P2.lat, lng: P2.lng, building: 'TECH PARK', floor: 2, ambiguousFloor: true, rssi: -70 }),
   ];
 
   beforeEach(() => {
@@ -244,7 +280,7 @@ describe('wifi_aps cache', () => {
 
     expect(firebase.getDocsFromServer).toHaveBeenCalledTimes(1);
     expect(firebase.getDocsFromServer.mock.calls[0][0]).toEqual({ path: 'wifi_aps' });
-    expect(first).toMatchObject({ floor: 1, matchedApCount: 1 });
+    expect(first).toMatchObject({ building: 'TECH PARK', floor: 1, matchedApCount: 1 });
   });
 
   it('shares one read between callers that arrive while it is in flight', async () => {
@@ -313,17 +349,18 @@ describe('wifi_aps cache', () => {
   it('skips malformed documents and reads a missing ambiguousFloor as ambiguous', async () => {
     firebase.getDocsFromServer.mockResolvedValue(
       seeded([
-        doc('AA:AA:AA:AA:AA:01', { lat: P1.lat, lng: P1.lng, floor: 1 }), // no ambiguousFloor
-        doc('bb:bb:bb:bb:bb:01', { lat: 'x', lng: P1.lng, floor: 1, ambiguousFloor: false }),
-        doc('bb:bb:bb:bb:bb:02', { lat: P1.lat, lng: P1.lng, floor: 1.5, ambiguousFloor: false }),
-        doc('bb:bb:bb:bb:bb:03', { floor: 1, ambiguousFloor: false }),
+        doc('AA:AA:AA:AA:AA:01', { lat: P1.lat, lng: P1.lng, building: 'TECH PARK', floor: 1 }), // no ambiguousFloor
+        doc('bb:bb:bb:bb:bb:01', { lat: 'x', lng: P1.lng, building: 'TECH PARK', floor: 1, ambiguousFloor: false }),
+        doc('bb:bb:bb:bb:bb:02', { lat: P1.lat, lng: P1.lng, building: 'TECH PARK', floor: 1.5, ambiguousFloor: false }),
+        doc('bb:bb:bb:bb:bb:03', { building: 'TECH PARK', floor: 1, ambiguousFloor: false }),
+        doc('bb:bb:bb:bb:bb:04', { lat: P1.lat, lng: P1.lng, building: 42, floor: 1, ambiguousFloor: false }),
         doc('cc:cc:cc:cc:cc:01', { lat: P2.lat, lng: P2.lng, ambiguousFloor: false }), // outdoors
       ])
     );
     const aps = await loadAccessPoints();
 
     expect([...aps.keys()].sort()).toEqual(['aa:aa:aa:aa:aa:01', 'cc:cc:cc:cc:cc:01']);
-    expect(aps.get('aa:aa:aa:aa:aa:01').ambiguousFloor).toBe(true);
-    expect(aps.get('cc:cc:cc:cc:cc:01').floor).toBeNull();
+    expect(aps.get('aa:aa:aa:aa:aa:01')).toMatchObject({ building: 'TECH PARK', floor: 1, ambiguousFloor: true });
+    expect(aps.get('cc:cc:cc:cc:cc:01')).toMatchObject({ building: null, floor: null });
   });
 });
