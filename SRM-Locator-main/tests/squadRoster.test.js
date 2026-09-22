@@ -5,6 +5,11 @@ import {
   forgetMember,
   rebindReturningMember,
   collectStaleSocketIds,
+  refuseJoin,
+  addPendingRequest,
+  takePendingRequest,
+  withdrawPendingRequests,
+  pendingRequestsOf,
 } from '../backend/squadRoster.js';
 
 // Alpha owns the squad; Bravo and Charlie were approved onto it.
@@ -195,5 +200,91 @@ describe('superseded connections', () => {
     s.memberUids['sock-anon'] = null;
     expect(collectStaleSocketIds(s, null, 'sock-x')).toEqual([]);
     expect(collectStaleSocketIds(s, undefined, 'sock-x')).toEqual([]);
+  });
+});
+
+describe('what a join request means', () => {
+  it('refuses a JOIN for a code with no live squad, instead of founding one', () => {
+    expect(refuseJoin(undefined, { intent: 'join', uid: 'uX' })).toBe('squad-not-found');
+    expect(refuseJoin({ ...squad(), members: [] }, { intent: 'join', uid: 'uX' })).toBe('squad-not-found');
+    expect(refuseJoin(squad(), { intent: 'join', uid: 'uX' })).toBeNull();
+  });
+
+  it("refuses a CREATE for a live code, unless it comes from that squad's own Commander", () => {
+    expect(refuseJoin(squad(), { intent: 'create', uid: 'uX' })).toBe('squad-code-taken');
+    expect(refuseJoin(squad(), { intent: 'create', uid: null })).toBe('squad-code-taken');
+    expect(refuseJoin(squad(), { intent: 'create', uid: 'uA' })).toBeNull();
+    expect(refuseJoin(undefined, { intent: 'create', uid: 'uX' })).toBeNull();
+  });
+
+  it('refuses a JOIN for a squad whose members have all dropped off, before the sweep reaches it', () => {
+    const allGone = () => false;
+    expect(refuseJoin(squad(), { intent: 'join', uid: 'uX', isSocketLive: allGone })).toBe('squad-not-found');
+    const onlyCharlie = (id) => id === 'sock-c';
+    expect(refuseJoin(squad(), { intent: 'join', uid: 'uX', isSocketLive: onlyCharlie })).toBeNull();
+    // A CREATE still counts it as taken: a new squad never inherits another's state.
+    expect(refuseJoin(squad(), { intent: 'create', uid: 'uX', isSocketLive: allGone })).toBe('squad-code-taken');
+    // And a Commander's resume is never refused.
+    expect(refuseJoin(squad(), { intent: 'resume', uid: 'uA', isSocketLive: allGone })).toBeNull();
+  });
+
+  it('refuses nothing without an intent, or on a resume: every installed build is create-or-join', () => {
+    for (const intent of [undefined, null, 'resume', 'something-else']) {
+      expect(refuseJoin(undefined, { intent, uid: 'uX' })).toBeNull();
+      expect(refuseJoin(squad(), { intent, uid: 'uX' })).toBeNull();
+    }
+  });
+});
+
+describe('join requests awaiting the Commander', () => {
+  it('can only be decided once', () => {
+    const s = squad();
+    addPendingRequest(s, 'sock-x', { uid: 'uX', name: 'X', photo: null });
+    expect(takePendingRequest(s, 'sock-x')).toEqual({ uid: 'uX', name: 'X', photo: null });
+    expect(takePendingRequest(s, 'sock-x')).toBeNull();
+  });
+
+  it('cannot be decided for a socket that never asked', () => {
+    const s = squad();
+    expect(takePendingRequest(s, 'sock-x')).toBeNull();
+    addPendingRequest(s, 'sock-x', { uid: 'uX' });
+    expect(takePendingRequest(s, 'sock-y')).toBeNull();
+    for (const bad of [undefined, null, 42, {}, '__proto__', 'constructor']) {
+      expect(takePendingRequest(s, bad)).toBeNull();
+    }
+  });
+
+  it('are withdrawn everywhere for a socket, and for the same person on an earlier socket', () => {
+    const squads = { AAA: squad(), BBB: squad() };
+    addPendingRequest(squads.AAA, 'sock-x', { uid: 'uX' });
+    addPendingRequest(squads.BBB, 'sock-x-old', { uid: 'uX' });
+    addPendingRequest(squads.BBB, 'sock-y', { uid: 'uY' });
+
+    expect(withdrawPendingRequests(squads, { socketId: 'sock-x', uid: 'uX' })).toEqual([
+      { roomCode: 'AAA', targetId: 'sock-x' },
+      { roomCode: 'BBB', targetId: 'sock-x-old' },
+    ]);
+    expect(pendingRequestsOf(squads.BBB, 'BBB')).toEqual([{ targetId: 'sock-y', name: null, photo: null, roomCode: 'BBB' }]);
+  });
+
+  it('are withdrawn by socket only when no uid is given (another device of the same person keeps its own)', () => {
+    const squads = { AAA: squad() };
+    addPendingRequest(squads.AAA, 'sock-x', { uid: 'uX' });
+    addPendingRequest(squads.AAA, 'sock-x-phone2', { uid: 'uX' });
+    expect(withdrawPendingRequests(squads, { socketId: 'sock-x' })).toEqual([{ roomCode: 'AAA', targetId: 'sock-x' }]);
+    expect(pendingRequestsOf(squads.AAA, 'AAA').map((r) => r.targetId)).toEqual(['sock-x-phone2']);
+  });
+
+  it('never match an anonymous joiner by a missing uid', () => {
+    const squads = { AAA: squad() };
+    addPendingRequest(squads.AAA, 'sock-anon', { uid: null });
+    expect(withdrawPendingRequests(squads, { socketId: 'sock-z', uid: null })).toEqual([]);
+  });
+
+  it("are read back as the Commander's access-request payloads", () => {
+    const s = squad();
+    expect(pendingRequestsOf(s, 'AAA')).toEqual([]);
+    addPendingRequest(s, 'sock-x', { uid: 'uX', name: 'X', photo: 'p.png' });
+    expect(pendingRequestsOf(s, 'AAA')).toEqual([{ targetId: 'sock-x', name: 'X', photo: 'p.png', roomCode: 'AAA' }]);
   });
 });

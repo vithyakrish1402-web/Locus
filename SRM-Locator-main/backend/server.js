@@ -4,7 +4,10 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { resolveSosRoom, recordSos, toSosPayload, pendingSosFor, ackSos, memberKey, sharedSquad } from './sosRelay.js';
-import { rememberMember, forgetMember, rebindReturningMember, collectStaleSocketIds } from './squadRoster.js';
+import {
+  rememberMember, forgetMember, rebindReturningMember, collectStaleSocketIds,
+  refuseJoin, addPendingRequest, takePendingRequest, withdrawPendingRequests, pendingRequestsOf,
+} from './squadRoster.js';
 
 const app = express();
 app.use(cors());
@@ -39,7 +42,17 @@ const locationCache = {};
 // is refreshed by any live member's traffic, not just the owner's, so an owner
 // who's genuinely gone for good still gets caught once nobody's been active for
 // the full TTL.
-const ROOM_TTL_MS = 5 * 60 * 1000;
+//
+// "Any live member's traffic" used to mean GPS reports ('update-location') and nothing
+// else, so a squad where nobody had a fix (indoors, location denied, GPS timing out) was
+// deleted with every member still connected. Their phones kept the code, and the next
+// reconnect re-created a different squad under it. The latency probe that every joined
+// client sends every 2 seconds ('check-ping') now counts too.
+//
+// Both timings can be shortened through the environment, which is only for the e2e tests
+// (tests/squadSweep.e2e.test.js): minutes are too long to wait for in a test run.
+const ROOM_TTL_MS = Number(process.env.LOCUS_ROOM_TTL_MS) || 5 * 60 * 1000;
+const SWEEP_INTERVAL_MS = Number(process.env.LOCUS_SWEEP_INTERVAL_MS) || 60 * 1000;
 setInterval(() => {
   const now = Date.now();
   for (const roomCode in activeSquads) {
@@ -50,10 +63,26 @@ setInterval(() => {
 
     if (squad.members.length === 0 || isStale) {
       console.log(`[🧹 SWEEP] Removing abandoned/stale squad: ${roomCode}`);
-      delete activeSquads[roomCode];
+      deleteSquad(roomCode);
     }
   }
-}, 60 * 1000);
+}, SWEEP_INTERVAL_MS);
+
+// Every deletion of a squad comes through here, so nothing it leaves behind outlives it.
+function deleteSquad(roomCode) {
+  const squad = activeSquads[roomCode];
+  if (!squad) return;
+  // Whoever is still waiting to be let in would otherwise sit in the waiting room forever,
+  // waiting on a Commander who no longer exists.
+  for (const targetId of Object.keys(squad.pending ?? {})) {
+    io.to(targetId).emit('squad-not-found', { roomCode });
+  }
+  // And no socket stays subscribed to the room. Deleting only the squad left its members
+  // listening, so a squad founded later under the same code broadcast its rally points
+  // and SOS to the old squad's phones.
+  io.in(roomCode).socketsLeave(roomCode);
+  delete activeSquads[roomCode];
+}
 
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
@@ -89,6 +118,13 @@ io.on('connection', (socket) => {
 socket.on('check-ping', (clientTimestamp) => {
   // Immediately bounce the exact same timestamp back to the client
   socket.emit('pong-bounce', clientTimestamp);
+  // And count it as activity for the stale-squad sweep: every joined client sends this
+  // every 2 seconds, with or without a GPS fix (see the sweep at the top of this file).
+  const now = Date.now();
+  for (const room of socket.rooms) {
+    const squad = activeSquads[room];
+    if (squad?.members.includes(socket.id)) squad.lastActivity = now;
+  }
 });
   // --- ⚖️ THE MUTINY PROTOCOL ---
   socket.on('vote-to-kick', (payload) => {
@@ -142,7 +178,7 @@ socket.on('check-ping', (clientTimestamp) => {
 
   // --- GATEKEEPER ENTRY PROTOCOL ---
   socket.on('request-join', (data) => {
-    const { roomCode, user } = data ?? {};
+    const { roomCode, user, intent } = data ?? {};
     // The code becomes an object key, so anything else was coerced into one: no code at
     // all created a squad called "undefined" with the sender as its Commander, and
     // whoever typed that code for real was queued behind them.
@@ -168,6 +204,21 @@ socket.on('check-ping', (clientTimestamp) => {
     // there, rather than being invisible until their first coordinate arrives.
     socket.data.profile = { name: user?.name || null, photo: user?.photo || null };
 
+    // Whatever this socket, or this person on an earlier connection, was still waiting on
+    // is superseded by this request, wherever it was (a request that ends up pending below
+    // is recorded afresh). Clients that don't send 'cancel-join' on ABORT HANDSHAKE rely on
+    // this: without it, a joiner who gave up on one squad and moved to another could still
+    // be approved into the first, and end up in both.
+    withdrawJoinRequests(requesterUid);
+
+    // A JOIN for a code no live squad has, or a CREATE for a code a live squad already
+    // has, is refused here rather than turned into the other (see refuseJoin).
+    const refusal = refuseJoin(existing, { intent, uid: requesterUid, isSocketLive: (id) => io.sockets.sockets.has(id) });
+    if (refusal) {
+      socket.emit(refusal, { roomCode });
+      return;
+    }
+
     // Case 1: brand-new or fully abandoned room -> requester becomes the owner.
     if (!existing || existing.members.length === 0) {
       activeSquads[roomCode] = {
@@ -187,7 +238,7 @@ socket.on('check-ping', (clientTimestamp) => {
 
     // Case 2: this identity was explicitly blocked by the commander -> hard deny.
     if (requesterUid && existing.blockedUids?.includes(requesterUid)) {
-      socket.emit('access-denied');
+      socket.emit('access-denied', { roomCode });
       return;
     }
 
@@ -214,6 +265,7 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.join(roomCode);
       purgeStaleSockets(roomCode, staleIds);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
+      sendJoinQueue(existing, roomCode, socket.id);
       if (existing.activeWaypoint) socket.emit('new-waypoint', existing.activeWaypoint);
       broadcastSquadUpdate(roomCode);
       return;
@@ -239,6 +291,7 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.join(roomCode);
       purgeStaleSockets(roomCode, staleIds);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
+      sendJoinQueue(existing, roomCode, socket.id);
       broadcastSquadUpdate(roomCode);
       return;
     }
@@ -259,49 +312,70 @@ socket.on('check-ping', (clientTimestamp) => {
       existing.lastActivity = Date.now();
       socket.join(roomCode);
       socket.emit('access-granted', { role: returning.role, roomCode });
+      if (returning.role === 'OWNER') sendJoinQueue(existing, roomCode, socket.id);
       if (existing.activeWaypoint) socket.emit('new-waypoint', existing.activeWaypoint);
       broadcastSquadUpdate(roomCode);
       return;
     }
 
     // Case 5: normal gatekeeper flow — a genuine new joiner needs the live owner's approval.
+    // Recorded, so that only a request still open can be approved (see resolve-access).
     const commanderId = existing.ownerId;
+    addPendingRequest(existing, socket.id, { uid: requesterUid, name: user?.name ?? null, photo: user?.photo ?? null });
     io.to(commanderId).emit('access-request', {
       targetId: socket.id, name: user?.name, photo: user?.photo, roomCode: roomCode
     });
-    socket.emit('access-pending');
+    // Every reply names its squad, so a client can ignore one about a squad it has left.
+    socket.emit('access-pending', { roomCode });
+  });
+
+  // ABORT HANDSHAKE: the joiner stops waiting. Withdrawn server-side, and the Commander
+  // told, so a GRANT tapped later on a stale screen can't pull them in after all.
+  socket.on('cancel-join', () => {
+    withdrawJoinRequests(null);
   });
 
   socket.on('resolve-access', (payload) => {
     const { targetId, roomCode, approved } = payload ?? {};
-    if (activeSquads[roomCode] && activeSquads[roomCode].ownerId === socket.id) {
-      if (approved) {
-        const targetSocket = io.sockets.sockets.get(targetId);
-        // Only add to the roster if the requester is still actually connected —
-        // pushing targetId unconditionally left a phantom member in squad.members
-        // (never cleaned up until the next 60s stale sweep) whenever someone
-        // disconnected while their join request was awaiting approval.
-        if (targetSocket) {
-          activeSquads[roomCode].members.push(targetId);
-          targetSocket.join(roomCode);
-          targetSocket.emit('access-granted', { role: 'MEMBER', roomCode });
-          activeSquads[roomCode].memberUids = activeSquads[roomCode].memberUids || {};
-          activeSquads[roomCode].memberUids[targetId] = targetSocket.data?.uid || null;
-          // Approved once; remembered by uid so a reconnect isn't a fresh request.
-          rememberMember(activeSquads[roomCode], targetSocket.data?.uid);
+    const squad = activeSquads[roomCode];
+    if (!squad || squad.ownerId !== socket.id) return;
 
-          if (activeSquads[roomCode].activeWaypoint) {
-            targetSocket.emit('new-waypoint', activeSquads[roomCode].activeWaypoint);
-          }
-          // Put them on everyone's roster now. Previously the squad only learned of a new
-          // member when that member's first telemetry arrived, so a mid-session joiner was
-          // missing from the list for a polling interval (up to 15s in eco mode) — and
-          // indefinitely if they never got a fix at all.
-          broadcastSquadUpdate(roomCode);
+    // Only a request that is still open. This used to accept any socket id at all: a
+    // joiner who had aborted, or had since created or joined another squad, was pulled in
+    // anyway (ending up in two squads), or bounced out of the one they'd moved to by a
+    // stale denial. The Commander is told the request is gone, so it leaves their queue.
+    const request = takePendingRequest(squad, targetId);
+    if (!request) {
+      socket.emit('access-request-withdrawn', { targetId, roomCode });
+      return;
+    }
+
+    if (approved) {
+      const targetSocket = io.sockets.sockets.get(targetId);
+      // Only add to the roster if the requester is still actually connected —
+      // pushing targetId unconditionally left a phantom member in squad.members
+      // (never cleaned up until the next 60s stale sweep) whenever someone
+      // disconnected while their join request was awaiting approval.
+      if (targetSocket) {
+        squad.members.push(targetId);
+        targetSocket.join(roomCode);
+        targetSocket.emit('access-granted', { role: 'MEMBER', roomCode });
+        squad.memberUids = squad.memberUids || {};
+        squad.memberUids[targetId] = targetSocket.data?.uid || null;
+        // Approved once; remembered by uid so a reconnect isn't a fresh request.
+        rememberMember(squad, targetSocket.data?.uid);
+
+        if (squad.activeWaypoint) {
+          targetSocket.emit('new-waypoint', squad.activeWaypoint);
         }
-      } else {
-        io.to(targetId).emit('access-denied');
+        // Put them on everyone's roster now. Previously the squad only learned of a new
+        // member when that member's first telemetry arrived, so a mid-session joiner was
+        // missing from the list for a polling interval (up to 15s in eco mode) — and
+        // indefinitely if they never got a fix at all.
+        broadcastSquadUpdate(roomCode);
       }
+    } else {
+      io.to(targetId).emit('access-denied', { roomCode });
     }
   });
 
@@ -502,6 +576,8 @@ socket.on('check-ping', (clientTimestamp) => {
   // nothing it is still subscribed to can be missed even if the two have drifted apart.
   // (Mutiny exiles and blocks now detach the socket themselves; this is the backstop.)
   socket.on('leave-squad', () => {
+    // Logging out from the waiting room is a leave too: nothing left to approve.
+    withdrawJoinRequests(null);
     const rooms = new Set([...socket.rooms].filter(room => room !== socket.id));
     for (const roomCode in activeSquads) {
       if (activeSquads[roomCode].members.includes(socket.id)) rooms.add(roomCode);
@@ -517,6 +593,9 @@ socket.on('check-ping', (clientTimestamp) => {
 
   socket.on('disconnect', () => {
     console.log(`🔴 Node Disconnected: ${socket.id}`);
+    // A joiner who drops off while waiting has nothing left to approve. (Back on a new
+    // socket, their client asks again, and that request is the one the Commander sees.)
+    withdrawJoinRequests(null);
     
     if (users[socket.id]) {
       const room = users[socket.id].roomCode;
@@ -568,6 +647,26 @@ socket.on('check-ping', (clientTimestamp) => {
     // time someone actually tries to join the room (see request-join's Case 4) or via
     // the periodic stale-squad sweep.
   });
+
+  // Withdraw every open join request made from this socket, and with a uid, that person's
+  // from earlier connections too. Each squad's Commander is told, so the request leaves
+  // their queue instead of waiting there for a GRANT that would pull in someone who left.
+  function withdrawJoinRequests(uid) {
+    for (const { roomCode, targetId } of withdrawPendingRequests(activeSquads, { socketId: socket.id, uid })) {
+      const ownerId = activeSquads[roomCode]?.ownerId;
+      if (ownerId) io.to(ownerId).emit('access-request-withdrawn', { targetId, roomCode });
+    }
+  }
+
+  // Send a squad's open join requests to whoever is now its Commander: back on a new
+  // socket (an app restart loses its own queue), a caretaker, or a member promoted when
+  // the Commander left. Requests used to be addressed only to the Commander at the time,
+  // so any change of hands left their joiners waiting on nobody.
+  function sendJoinQueue(squad, roomCode, ownerId) {
+    for (const request of pendingRequestsOf(squad, roomCode)) {
+      io.to(ownerId).emit('access-request', request);
+    }
+  }
 
   // Tear down a person's superseded connection(s) after they've been rebound onto a new
   // socket: out of the room, and clear of the per-socket state that would otherwise keep
@@ -641,10 +740,16 @@ socket.on('check-ping', (clientTimestamp) => {
       squad.members = squad.members.filter(id => id !== disconnectedId);
 
       if (squad.members.length === 0) {
-        delete activeSquads[roomCode];
+        deleteSquad(roomCode);
       } else if (squad.ownerId === disconnectedId) {
         squad.ownerId = squad.members[0];
+        // Ownership goes by uid too. The departing Commander's uid used to stay on as
+        // ownerUid, so they could walk back in later and be made owner again (request-join
+        // Case 3), silently taking the squad from the member promoted here, whose client
+        // still said OWNER while every Commander action they took was refused.
+        squad.ownerUid = squad.memberUids?.[squad.ownerId] || io.sockets.sockets.get(squad.ownerId)?.data?.uid || null;
         io.to(squad.ownerId).emit('promoted-to-owner', { roomCode });
+        sendJoinQueue(squad, roomCode, squad.ownerId);
       }
     }
   }

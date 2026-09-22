@@ -73,10 +73,17 @@ LOCUS/
 The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`roomCode`).
 
 ### 4.1 Gatekeeper & Squad Access Protocol
-- `request-join` (`{ roomCode, user }`): Sent by operative attempting to enter a squad. If room does not exist, operative becomes `OWNER`. If room exists, request is routed to Commander for approval.
-- `access-request` (`{ targetId, name, photo, roomCode }`): Emitted by server to Commander.
-- `resolve-access` (`{ targetId, roomCode, approved }`): Sent by Commander to grant or deny entrance.
-- `access-granted` / `access-denied`: Emitted to operative upon Commander decision.
+- `request-join` (`{ roomCode, user, intent }`): Sent to create or enter a squad. `intent` says which:
+  - `'create'` (INITIALIZE): founds the squad, requester becomes `OWNER`. Refused with `squad-code-taken` if a live squad already has the code, unless the requester is that squad's Commander (a retry).
+  - `'join'` (CONNECT, and a member's or waiting joiner's reconnect): refused with `squad-not-found` if no live squad has the code. It never founds one.
+  - none, or `'resume'`: create-or-join, the original behaviour. Every build without intents sends none; a Commander's reconnect sends `'resume'`, so a squad wiped by a server restart comes back under its code.
+  - For an existing squad, a known member or the Commander is let straight back in; anyone else is recorded as pending and routed to the Commander for approval.
+- `access-request` (`{ targetId, name, photo, roomCode }`): Emitted by server to Commander. The squad's open requests are re-sent to whoever takes over as Commander (a reconnect, a caretaker, a promotion).
+- `cancel-join` (`{ roomCode }`): Sent by a waiting joiner on ABORT HANDSHAKE. Withdraws their request.
+- `access-request-withdrawn` (`{ targetId, roomCode }`): Emitted to the Commander when a request is withdrawn, superseded (the joiner asked again, or asked another squad), or its socket disconnects, and in reply to a decision on a request that is no longer open.
+- `resolve-access` (`{ targetId, roomCode, approved }`): Sent by Commander to grant or deny entrance. Only decides a request still pending on that squad.
+- `access-granted` (`{ role, roomCode }`) / `access-pending` (`{ roomCode }`) / `access-denied` (`{ roomCode }`): Emitted to operative. Each names its squad; the client ignores one about any other squad.
+- `squad-not-found` / `squad-code-taken` (`{ roomCode }`): A refused `request-join` (see above). `squad-not-found` is also sent to joiners still waiting on a squad when it is deleted.
 
 ### 4.2 Telemetry & Position Engine
 - `update-location` (`{ roomCode, lat, lng, speed, battery, status, name, photo, heading }`): Operative position ping broadcasted every 1s-15s (based on telemetry mode).
@@ -98,7 +105,7 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
 - `vote-to-kick` (`{ targetId, roomCode }`): Operatives cast votes to exile rogue squad members.
 - `mutiny-status` (`{ targetId, votes, required }`): Broadcasts live vote progress.
 - `exiled`: Emitted to targeted user when majority vote threshold is reached.
-- `promoted-to-owner`: Automatic succession transfer if Commander disconnects.
+- `promoted-to-owner` (`{ roomCode }`): Succession when the Commander leaves the squad (or is voted out); not on a mere disconnect, which could be a signal blip.
 
 ---
 

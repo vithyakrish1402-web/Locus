@@ -10,7 +10,8 @@ import { io } from 'socket.io-client';
  * process on a free port, driven by real Socket.IO clients. Nothing is mocked.
  *
  * Call e2eServer() at the top level of a test file; it registers its own
- * beforeAll/afterEach/afterAll and returns the helpers.
+ * beforeAll/afterEach/afterAll and returns the helpers. `env` is added to the server's
+ * environment (e.g. the stale-squad sweep's timings, which default to minutes).
  */
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -49,7 +50,7 @@ const freePort = () =>
     });
   });
 
-export function e2eServer() {
+export function e2eServer({ env = {} } = {}) {
   let server;
   let url;
   const clients = [];
@@ -60,7 +61,7 @@ export function e2eServer() {
     url = `http://localhost:${port}`;
     server = spawn(process.execPath, ['backend/server.js'], {
       cwd: ROOT,
-      env: { ...process.env, PORT: String(port) },
+      env: { ...process.env, PORT: String(port), ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     await new Promise((resolve, reject) => {

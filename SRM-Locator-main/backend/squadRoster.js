@@ -88,3 +88,85 @@ export function rebindReturningMember(squad, { uid, socketId }) {
 
   return { role: wasOwner ? 'OWNER' : 'MEMBER', staleIds };
 }
+
+// --- What a join request means ----------------------------------------------
+//
+// INITIALIZE and CONNECT used to send the same 'request-join', and the server answered
+// every one as "create the squad if the code is free, otherwise join it". So a code
+// could reach the wrong squad without two codes ever colliding: a JOIN for a code with no
+// live squad (the creator hadn't tapped INITIALIZE yet, or the server had restarted or
+// swept it) made the joiner Commander of a new, empty squad, and a CREATE for a live code
+// queued the creator for a stranger's approval, or made them its Commander if that
+// squad's own Commander was briefly offline.
+//
+// Requests now carry an intent:
+//   'create'  a brand-new squad. Refused if the code is live, unless the requester is
+//             already its Commander (their own retry or a duplicate).
+//   'join'    an existing squad. Refused if no live squad has the code.
+//   anything else (no intent; 'resume')
+//             create-or-join, as before. Every build already installed sends no intent,
+//             and a Commander's reconnect sends 'resume' so a squad wiped by a server
+//             restart comes back under its code.
+//
+// `isSocketLive` says whether a member's socket is still connected: a squad whose members
+// have all dropped off stays on file until the sweep reaches it (up to a minute), and a
+// JOIN must not be handed that squad as its caretaker Commander, which is founding a new
+// squad by another name. A CREATE is stricter: any squad still on file under the code,
+// live or not, counts as taken, so a new squad never inherits another's state.
+//
+// Returns the event to refuse with ('squad-not-found' | 'squad-code-taken'), or null to
+// carry on through the usual cases.
+export function refuseJoin(squad, { intent, uid, isSocketLive = () => true }) {
+  const members = squad?.members ?? [];
+  if (intent === 'join' && !members.some(isSocketLive)) return 'squad-not-found';
+  if (intent === 'create' && members.length > 0 && !(uid && squad.ownerUid === uid)) return 'squad-code-taken';
+  return null;
+}
+
+// --- Join requests awaiting the Commander -------------------------------------
+//
+// The server used to keep no record of these: a request existed only as an
+// 'access-request' on the Commander's screen, and 'resolve-access' admitted whatever
+// socket id it was handed as long as that socket was still connected. That included a
+// joiner who had tapped ABORT HANDSHAKE (which told the server nothing) and gone on to
+// create or join another squad. They were pulled into both.
+//
+// Each squad now keeps `pending`, keyed by socket id. Only a pending request can be
+// decided, and a request stops being pending when it is decided, withdrawn
+// ('cancel-join'), superseded by the same socket or person asking again anywhere, or
+// when its socket disconnects. The store has no prototype: socket ids are the keys.
+
+export function addPendingRequest(squad, socketId, { uid = null, name = null, photo = null } = {}) {
+  squad.pending = squad.pending || Object.create(null);
+  squad.pending[socketId] = { uid, name, photo };
+}
+
+// Remove and return `socketId`'s pending request on `squad`, or null if it has none.
+export function takePendingRequest(squad, socketId) {
+  if (!squad?.pending || typeof socketId !== 'string' || !Object.hasOwn(squad.pending, socketId)) return null;
+  const request = squad.pending[socketId];
+  delete squad.pending[socketId];
+  return request;
+}
+
+// Withdraw every request, in any squad, made from `socketId` or by `uid` (the same person
+// on an earlier connection). Returns [{ roomCode, targetId }] so the caller can tell each
+// squad's Commander.
+export function withdrawPendingRequests(activeSquads, { socketId, uid = null }) {
+  const withdrawn = [];
+  for (const roomCode of Object.keys(activeSquads)) {
+    const pending = activeSquads[roomCode].pending;
+    if (!pending) continue;
+    for (const targetId of Object.keys(pending)) {
+      if (targetId === socketId || (uid && pending[targetId].uid === uid)) {
+        delete pending[targetId];
+        withdrawn.push({ roomCode, targetId });
+      }
+    }
+  }
+  return withdrawn;
+}
+
+// `squad`'s pending requests, as the 'access-request' payloads its Commander is sent.
+export const pendingRequestsOf = (squad, roomCode) =>
+  Object.entries(squad?.pending ?? {}).map(([targetId, { name, photo }]) => ({ targetId, name, photo, roomCode }));
