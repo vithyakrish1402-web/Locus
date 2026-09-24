@@ -8,7 +8,10 @@ import { LiveUpdateStatus } from '../hooks/useLiveUpdate';
 // z-[6500]: above every in-app panel (App.jsx tops out at 6000) but far below
 // UpdateModal (10000) and SosOverlay (10002), both of which must win over it.
 
-const LiveUpdateToast = ({ live }) => {
+// aboveTabBar: on the phone's map screen the strip sits above the bottom tab bar AND the
+// floating SOS and targeting buttons over it (10.5rem clears all three). It used to be drawn
+// over the bar, hiding GRID/SCAN/SQUAD until it was dismissed, and must never cover SOS.
+const LiveUpdateToast = ({ live, aboveTabBar = false }) => {
   if (!live?.visible) return null;
 
   const blocked = live.status === LiveUpdateStatus.BLOCKED;
@@ -17,7 +20,9 @@ const LiveUpdateToast = ({ live }) => {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 bottom-0 z-[6500] flex justify-center px-4 pb-6 pointer-events-none"
+      className={`fixed inset-x-0 z-[6500] flex justify-center px-4 pb-6 pointer-events-none ${
+        aboveTabBar ? 'bottom-[calc(10.5rem+env(safe-area-inset-bottom))] md:bottom-0' : 'bottom-0'
+      }`}
     >
       <div className="pointer-events-auto flex w-full max-w-md flex-wrap items-center gap-3 border border-white/20 bg-black px-5 py-4">
         <div className="min-w-0 flex-1">

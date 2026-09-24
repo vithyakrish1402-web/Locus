@@ -1,5 +1,114 @@
-@import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap');
+/* Fonts ship inside the bundle (Latin subset, only the weights in use). They used to come
+   from Google Fonts at runtime, so the phone app drew every screen in a fallback font and
+   then swapped it, and on a campus network that was slow or offline kept the wrong font. */
+@import "@fontsource/dotgothic16/latin-400.css";
+@import "@fontsource/space-mono/latin-400.css";
+@import "@fontsource/space-mono/latin-700.css";
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/inter/latin-600.css";
+@import "@fontsource/inter/latin-700.css";
 @import "tailwindcss";
+
+/* ---------------------------------------------------------------- touch feel */
+
+/* The browser's grey tap flash fights the app's own feedback below. */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Every control answers on press-down, not on release. The standalone `scale` property
+   composes with Tailwind v4's `translate` and with framer-motion's `transform`, so a
+   centred button (-translate-x-1/2) or an animated one keeps its position while pressed.
+   Quick in, slower out: the press is felt at once and the release settles.
+   Unlayered on purpose, so it beats Tailwind's layered transition-* utilities: the list
+   is the union of what those animated (colours, shadow, opacity, transforms, filter)
+   plus `scale`, so no control loses a transition it had. */
+button, [role="button"], a[href], summary, label[for] {
+  transition-property: scale, color, background-color, border-color, outline-color, box-shadow,
+    opacity, transform, translate, filter, text-shadow;
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  touch-action: manipulation; /* no 300 ms double-tap-zoom wait */
+}
+button:not(:disabled):active,
+[role="button"]:active,
+a[href]:active {
+  scale: 0.95;
+  transition-duration: 70ms;
+}
+/* Map markers and anything else that must not shrink under a finger opts out. */
+[data-no-press]:active,
+.leaflet-container .leaflet-marker-icon:active { scale: none !important; }
+
+/* Sonar ping: a ring that leaves the exact point you touched (src/utils/pressFeedback.js).
+   Drawn in a fixed overlay, never inside the control, so it can't disturb any layout. */
+.locus-ping {
+  position: fixed;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 9999px;
+  /* A light core with a red glow: readable on the red buttons as well as the black ones. */
+  border: 1.5px solid rgba(255, 235, 235, 0.95);
+  box-shadow: 0 0 12px 1px rgba(239, 68, 68, 0.75), inset 0 0 6px rgba(239, 68, 68, 0.5);
+  pointer-events: none;
+  z-index: 20000;
+  animation: locus-ping 520ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+.locus-ping::after { /* a faint second wave, a beat behind the first */
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  animation: locus-ping-echo 520ms cubic-bezier(0.16, 1, 0.3, 1) 90ms both;
+}
+@keyframes locus-ping {
+  from { transform: scale(0.4); opacity: 1; }
+  to { transform: scale(4.2); opacity: 0; }
+}
+@keyframes locus-ping-echo {
+  from { transform: scale(0.6); opacity: 0.9; }
+  to { transform: scale(1.9); opacity: 0; }
+}
+
+/* Boot screen radar (BootScreen in App.jsx): a wedge of light sweeping the rings. */
+.locus-radar-sweep {
+  background: conic-gradient(from 0deg, rgba(239, 68, 68, 0.55), rgba(239, 68, 68, 0) 70deg, transparent 360deg);
+  mask: radial-gradient(circle, transparent 0 18%, #000 19%);
+  animation: locus-radar-spin 1.6s linear infinite;
+}
+@keyframes locus-radar-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .locus-radar-sweep { animation: none; opacity: 0.5; }
+}
+
+/* Locate button: a ring breathes out from the button every few seconds, like a beacon. */
+.locus-soft-ring { animation: locus-soft-ring 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+@keyframes locus-soft-ring {
+  0% { transform: scale(1); opacity: 0.8; }
+  60%, 100% { transform: scale(1.55); opacity: 0; }
+}
+
+/* Targeting FAB: the dashed ring slowly orbits while a spot is being chosen. */
+.locus-orbit { animation: locus-radar-spin 6s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .locus-soft-ring { animation: none; opacity: 0; }
+  .locus-orbit { animation: none; }
+}
+
+/* Reduced motion: presses still answer (a dim, no shrink) and the ping becomes a brief
+   static glow instead of an expanding ring. */
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active, [role="button"]:active, a[href]:active { scale: none; opacity: 0.75; }
+  .locus-ping { animation: locus-ping-still 260ms ease-out forwards; transform: scale(1.6); }
+  .locus-ping::after { display: none; }
+}
+@keyframes locus-ping-still {
+  from { opacity: 0.8; }
+  to { opacity: 0; }
+}
 
 body {
   margin: 0;

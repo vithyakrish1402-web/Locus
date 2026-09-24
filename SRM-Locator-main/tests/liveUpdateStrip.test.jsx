@@ -94,7 +94,10 @@ const ready = () => ({
   dismiss: vi.fn(),
 });
 
-const strip = () => screen.queryByRole('status');
+// The strip is one of possibly several live regions (the boot screen's loader is one too),
+// so it is found by what it says rather than by being the only role="status".
+const strip = () =>
+  screen.queryAllByRole('status').find((el) => /UPDATE (READY|BLOCKED)/.test(el.textContent)) ?? null;
 
 // The guide opens on an animated intro; its skip button goes straight to the guide.
 const skipIntro = async () => {
@@ -166,6 +169,24 @@ describe('the JS update strip is offered on every screen', () => {
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     expect(screen.queryByText('SECURE_CHANNEL')).toBeNull(); // on the map now
     expect(screen.getAllByText('Version 1.0.5 is ready. Restart to use it.')).toHaveLength(1);
+  });
+});
+
+describe('where the strip sits', () => {
+  // On the phone's map it was drawn over the bottom tab bar and the SOS button (found on a
+  // device). There it now sits above both; elsewhere, at the bottom.
+  const raised = () => strip().className.includes('bottom-[calc(10.5rem');
+
+  it('sits at the very bottom in the lobby, where there is no tab bar', () => {
+    render(<App />);
+    expect(raised()).toBe(false);
+  });
+
+  it('sits above the tab bar on the map', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+    act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
+    expect(raised()).toBe(true);
   });
 });
 
