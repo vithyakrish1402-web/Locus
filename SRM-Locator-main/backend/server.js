@@ -8,6 +8,7 @@ import {
   rememberMember, forgetMember, rebindReturningMember, collectStaleSocketIds,
   refuseJoin, addPendingRequest, takePendingRequest, withdrawPendingRequests, pendingRequestsOf,
 } from './squadRoster.js';
+import { toTelemetryRecord } from './telemetry.js';
 
 const app = express();
 app.use(cors());
@@ -165,15 +166,26 @@ socket.on('check-ping', (clientTimestamp) => {
     locationCache[socket.id] = { ...locationCache[socket.id], latitude, longitude, timestamp, batteryLevel: batteryLevel || 'Unknown' };
   });
 
-  socket.on('request-telemetry', (roomCode) => {
+  // The Commander's telemetry matrix (SYNC_TELEMETRY). It used to answer only when the
+  // squad existed and the asker was its Commander, and to say nothing at all otherwise, so
+  // on the phone the button simply did nothing. A client that passes an acknowledgement
+  // now always gets one: { ok: true }, or { ok: false, reason } with 'not-in-squad' (the
+  // server has no record of this socket in that squad: a restart, a sweep, a reconnect
+  // not yet re-joined) or 'not-owner'. The data itself still comes as
+  // 'telemetry-sync-complete', which is all that installed builds listen for.
+  socket.on('request-telemetry', (roomCode, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
     const squad = activeSquads[roomCode];
-    if (squad && squad.ownerId === socket.id) {
-      const squadTelemetry = {};
-      squad.members.forEach(memberId => {
-        if (locationCache[memberId]) squadTelemetry[memberId] = locationCache[memberId];
-      });
-      socket.emit('telemetry-sync-complete', squadTelemetry);
-    }
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (squad.ownerId !== socket.id) return reply({ ok: false, reason: 'not-owner' });
+
+    const squadTelemetry = {};
+    squad.members.forEach(memberId => {
+      const record = toTelemetryRecord(locationCache[memberId]);
+      if (record) squadTelemetry[memberId] = record;
+    });
+    socket.emit('telemetry-sync-complete', squadTelemetry);
+    reply({ ok: true });
   });
 
   // --- GATEKEEPER ENTRY PROTOCOL ---
