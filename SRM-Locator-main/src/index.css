@@ -98,6 +98,19 @@ a[href]:active {
   .locus-orbit { animation: none; }
 }
 
+/* Join-code tiles (SquadCode.jsx): the blinking caret under the tile being typed into. */
+.locus-caret { animation: locus-guide-cursor-blink 1s steps(1, end) infinite; }
+@media (prefers-reduced-motion: reduce) { .locus-caret { animation: none; } }
+
+/* Squad roster (SquadMemberCard.jsx): the "LIVE" dot, and the dial's "with you" dot. */
+.locus-live-dot { animation: locus-sos-pulse 1.6s ease-in-out infinite; }
+.locus-soft-ring-dot { animation: locus-sos-pulse 2.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .locus-live-dot, .locus-soft-ring-dot { animation: none; } }
+
+/* Comms feed (CommsFeed.jsx): each notice's time left, as a line draining to nothing. */
+.locus-drain { animation: locus-drain linear forwards; }
+@keyframes locus-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
 /* Reduced motion: presses still answer (a dim, no shrink) and the ping becomes a brief
    static glow instead of an expanding ring. */
 @media (prefers-reduced-motion: reduce) {
