@@ -1707,9 +1707,17 @@ const App = () => {
     );
   }
 
-  // Optional update: an overlay rendered alongside whichever screen is up. `fixed`
-  // inset-0, so it composes with any branch without restructuring the tree.
-  const updateOverlay = <UpdateModal update={appUpdate} />;
+  // Optional updates: overlays rendered alongside whichever screen is up. Both are `fixed`,
+  // so they compose with any branch without restructuring the tree. The JS-only strip is
+  // here too: it used to be rendered by the map screen alone, so a phone in the lobby, on
+  // sign-in or on the guide never saw a downloaded, verified bundle offered to it - and the
+  // lobby is the best moment to restart, with no squad session to interrupt.
+  const updateOverlay = (
+    <>
+      <UpdateModal update={appUpdate} />
+      <LiveUpdateToast live={liveUpdate} />
+    </>
+  );
 
   if (authLoading) return (
     <>
@@ -3319,11 +3327,8 @@ const App = () => {
         senderName={user.displayName}
       />
 
-      {/* ========== IN-APP UPDATE (optional; mandatory is gated far above) ========== */}
+      {/* ========== UPDATES: APK modal + JS-only restart strip (mandatory is gated far above) ========== */}
       {updateOverlay}
-
-      {/* ========== JS-ONLY LIVE UPDATE (staged, awaiting a restart tap) ========== */}
-      <LiveUpdateToast live={liveUpdate} />
 
       {/* ========== INCOMING SOS (stays up until acknowledged) ========== */}
       {sosOverlay}

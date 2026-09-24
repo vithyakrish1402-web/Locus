@@ -22,7 +22,8 @@ const LiveUpdateToast = ({ live }) => {
       <div className="pointer-events-auto flex w-full max-w-md flex-wrap items-center gap-3 border border-white/20 bg-black px-5 py-4">
         <div className="min-w-0 flex-1">
           <div className="font-dot text-[10px] uppercase tracking-widest text-red-500">
-            {blocked ? 'UPDATE BLOCKED' : 'UPDATE APPLIED'}
+            {/* Nothing is applied until RESTART is tapped. */}
+            {blocked ? 'UPDATE BLOCKED' : 'UPDATE READY'}
           </div>
           <p className="mt-1 font-inter text-[12px] leading-snug text-zinc-400">
             {blocked ? (
