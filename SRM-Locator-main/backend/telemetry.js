@@ -24,9 +24,11 @@ export function toTelemetryRecord(entry) {
   const timestamp = heartbeat && entry.timestamp
     ? entry.timestamp
     : (Number.isFinite(entry.lastSeen) ? new Date(entry.lastSeen).toISOString() : null);
-  const batteryLevel = heartbeat && entry.batteryLevel
-    ? entry.batteryLevel
-    : (Number.isFinite(entry.battery) ? `${entry.battery}%` : null);
+  // The heartbeat's reading only if it is one: 'safety-ping' stores the placeholder
+  // 'Unknown' when a phone sends no battery, and that used to be sent on even when the
+  // member's update-location carried a real `battery` number.
+  const heartbeatLevel = heartbeat && Number.isFinite(parseInt(entry.batteryLevel, 10)) ? entry.batteryLevel : null;
+  const batteryLevel = heartbeatLevel ?? (Number.isFinite(entry.battery) ? `${entry.battery}%` : null);
 
   return { latitude, longitude, timestamp, batteryLevel };
 }

@@ -46,6 +46,13 @@ describe("a member's telemetry record", () => {
     expect(toTelemetryRecord({ battery: 50, lastSeen: 1 })).toBeNull();
   });
 
+  it("never sends the heartbeat's 'Unknown' placeholder over a real battery reading", () => {
+    // safety-ping stores batteryLevel 'Unknown' when a phone sends none.
+    expect(toTelemetryRecord({ ...GPS, ...HEARTBEAT, batteryLevel: 'Unknown' }).batteryLevel).toBe('90%');
+    const { battery: _battery, ...gpsWithoutBattery } = GPS;
+    expect(toTelemetryRecord({ ...gpsWithoutBattery, ...HEARTBEAT, batteryLevel: 'Unknown' }).batteryLevel).toBeNull();
+  });
+
   it('leaves out what it has no value for', () => {
     expect(toTelemetryRecord({ lat: 1, lng: 2 })).toEqual({ latitude: 1, longitude: 2, timestamp: null, batteryLevel: null });
   });

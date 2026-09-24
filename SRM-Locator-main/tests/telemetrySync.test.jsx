@@ -213,6 +213,37 @@ describe('the telemetry matrix', () => {
     expect(screen.getByText(/12\.82350/)).toBeTruthy();
   });
 
+  it('shows an unknown battery in grey, not the green of a healthy one', () => {
+    commanderOnSquadPanel();
+    withMember('sock-bravo');
+    act(() => fakeSocket.receive('users-update', {
+      'sock-bravo': { uid: 'u-bravo', name: 'Bravo', roomCode: squadCode, lat: 12.8235, lng: 80.0446, battery: 90 },
+      'sock-charlie': { uid: 'u-charlie', name: 'Charlie', roomCode: squadCode, lat: 12.8236, lng: 80.0447, battery: 50 },
+      'sock-delta': { uid: 'u-delta', name: 'Delta', roomCode: squadCode, lat: 12.8237, lng: 80.0448, battery: 50 },
+      'sock-echo': { uid: 'u-echo', name: 'Echo', roomCode: squadCode, lat: 12.8238, lng: 80.0449, battery: 50 },
+    }));
+    fireEvent.click(syncButton());
+    const at = { latitude: 12.9, longitude: 80.1, timestamp: new Date().toISOString() };
+    act(() => fakeSocket.receive('telemetry-sync-complete', {
+      'sock-bravo': { ...at, batteryLevel: null }, // no reading at all
+      'sock-charlie': { ...at, batteryLevel: 'Unknown' }, // an older server's placeholder
+      'sock-delta': { ...at, batteryLevel: '77%' },
+      'sock-echo': { ...at, batteryLevel: '15%' },
+    }));
+
+    // The matrix row for a member (their name also appears in the squad roster behind it).
+    const power = (name) => screen.getAllByText(name).map((el) => el.closest('[class*="md:grid-cols-4"]')).find(Boolean).children[2];
+    expect(power('Bravo').textContent).toMatch(/UNKNOWN$/);
+    expect(power('Bravo').className).toContain('text-zinc-500');
+    expect(power('Bravo').className).not.toContain('emerald');
+    expect(power('Charlie').textContent).toMatch(/UNKNOWN$/);
+    expect(power('Charlie').className).toContain('text-zinc-500');
+    expect(power('Delta').textContent).toMatch(/77%$/);
+    expect(power('Delta').className).toContain('text-emerald-500');
+    expect(power('Echo').textContent).toMatch(/15%$/);
+    expect(power('Echo').className).toContain('text-red-500');
+  });
+
   it('says so when nobody else is in the squad yet, rather than showing an empty table', () => {
     commanderOnSquadPanel();
     fireEvent.click(syncButton());
