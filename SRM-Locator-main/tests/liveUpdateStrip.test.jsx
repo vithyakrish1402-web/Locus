@@ -242,6 +242,31 @@ describe('when the strip steps aside', () => {
   });
 });
 
+describe('a building card on a phone', () => {
+  // Found on the map: the card started 96 px up, so the floating SOS button (80-160 px up,
+  // drawn on top) covered its first button. It now sits above SOS, and the update strip,
+  // which lives at that height, steps aside while the card is open.
+  it('sits above the SOS button, with the strip out of its way until it closes', () => {
+    const realMatchMedia = window.matchMedia;
+    window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
+    try {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+      act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
+      fireEvent.click(screen.getByRole('button', { name: /MATRIX/ }));
+      fireEvent.click(screen.getAllByText('NELSON MANDELA HOSTEL')[0]);
+      const card = screen.getByTestId('location-card');
+      expect(card.className).toContain('bottom-[calc(11rem');
+      expect(card.className).not.toMatch(/(^| )bottom-24( |$)/);
+      expect(strip()).toBeNull();
+      fireEvent.click(within(card).getAllByRole('button')[0]); // the card's close (X)
+      expect(strip()).toBeTruthy();
+    } finally {
+      window.matchMedia = realMatchMedia;
+    }
+  });
+});
+
 describe('the strip itself', () => {
   it('says READY, not APPLIED, and RESTART applies it', () => {
     render(<App />);
