@@ -38,6 +38,7 @@ import { useIncomingSos } from './hooks/useIncomingSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
+import { useWifiFusion } from './hooks/useWifiFusion';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { PrecognitionFilter } from './utils/precognition';
@@ -538,6 +539,12 @@ const App = () => {
   // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
   // always read the current value — they close over the ref, not the stale state.
   const telemetryModeRef = useRef('ACTIVE');
+  // WiFi Arc Stage 6: every update-location payload takes its lat/lng/positionSource from
+  // positionFor(gps). Off by default (src/utils/positionSource.js), and then it is always
+  // the GPS fix with positionSource 'gps'. Only the broadcast position changes: the local
+  // map, the Kalman filter and safety-ping stay on GPS. Stable identity, so listing it in
+  // the telemetry effect's dependencies below never re-runs that effect.
+  const positionFor = useWifiFusion(Boolean(user && hasJoinedSquad && accessStatus === 'granted'));
 
   // Start listening for compass heading as soon as we're signed in — on Android
   // this needs no user gesture. On iOS 13+ this call is a silent no-op (that
@@ -998,7 +1005,7 @@ const App = () => {
 
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
-          lat: smoothed.lat, lng: smoothed.lng,
+          ...positionFor(smoothed),
           speed: 0, battery: 100,
           status: telemetryModeRef.current,
           roomCode: squadCode,
@@ -1036,7 +1043,7 @@ const App = () => {
       if (telemetryModeRef.current !== 'GHOST') {
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
-          lat: currentLoc.lat, lng: currentLoc.lng,
+          ...positionFor(currentLoc),
           speed: 0, battery: currentBattery,
           status: telemetryModeRef.current,
           roomCode: squadCode,
@@ -1073,7 +1080,7 @@ const App = () => {
         // to override movement-based updates, you'd need to clear this watch and rely purely on the interval.
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
-          lat: smoothed.lat, lng: smoothed.lng,
+          ...positionFor(smoothed),
           speed: speed ? Math.round(speed * 3.6) : 0,
           battery: batteryLevel,
           status: telemetryModeRef.current,
@@ -1095,7 +1102,7 @@ const App = () => {
     // headingRef is a ref (stable identity, never triggers a re-run) — listed only
     // to satisfy exhaustive-deps now that it comes from useDeviceHeading rather
     // than a local useRef the lint rule can recognise on its own.
-  }, [user, hasJoinedSquad, squadCode, accessStatus, sysConfig.polling, headingRef]); // <-- CRITICAL: ADDED TO DEPENDENCIES
+  }, [user, hasJoinedSquad, squadCode, accessStatus, sysConfig.polling, headingRef, positionFor]); // <-- CRITICAL: ADDED TO DEPENDENCIES
   // --- ⚡ INSTANT MODE OVERRIDE ---
   // Fires the moment a telemetry button is clicked so the server gets the new
   // status immediately, without waiting for the next watchPosition tick.
@@ -1108,7 +1115,7 @@ const App = () => {
 
     socket.emit('update-location', {
       name: user.displayName, photo: user.photoURL,
-      lat: currentLoc.lat, lng: currentLoc.lng,
+      ...positionFor(currentLoc),
       speed: 0, battery: 100,
       status: telemetryMode, // use state here — this effect re-runs when it changes
       roomCode: squadCode,
