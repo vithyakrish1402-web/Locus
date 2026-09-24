@@ -103,6 +103,20 @@ const TELEMETRY_SYNC_REFUSALS = {
 };
 // A telemetry value that is a real number, or null (never something toFixed() throws on).
 const finiteOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+// A member's battery for the telemetry matrix: the first real reading of the heartbeat's
+// `batteryLevel` ("77%") or update-location's `battery` (77). With neither there is no
+// reading, and it is grey, not the green of a healthy battery: a member with no heartbeat
+// yet, and the server's own 'Unknown' placeholder (which also used to win over a real
+// `battery` number), both showed a green UNKNOWN.
+const batteryReading = (cacheData) => {
+  for (const raw of [cacheData?.batteryLevel, cacheData?.battery]) {
+    const percent = typeof raw === 'number' ? raw : parseInt(raw, 10);
+    if (Number.isFinite(percent)) {
+      return { text: `${percent}%`, color: percent < 20 ? 'text-red-500' : 'text-emerald-500' };
+    }
+  }
+  return { text: 'UNKNOWN', color: 'text-zinc-500' };
+};
 
 // --- MAP STYLE / OPTION CONSTANTS ---
 // Deliberately module-scope: google-map-react shallow-compares the `options` prop,
@@ -2942,10 +2956,8 @@ const App = () => {
                     const latitude = finiteOrNull(cacheData?.latitude) ?? finiteOrNull(cacheData?.lat);
                     const longitude = finiteOrNull(cacheData?.longitude) ?? finiteOrNull(cacheData?.lng);
                     const hasPosition = latitude !== null && longitude !== null;
-                    const batteryLevel = cacheData?.batteryLevel
-                      ?? (finiteOrNull(cacheData?.battery) !== null ? `${cacheData.battery}%` : null);
+                    const battery = batteryReading(cacheData);
                     const freshness = getSignalFreshness(cacheData?.timestamp ?? cacheData?.lastSeen);
-                    const batteryColor = batteryLevel && parseInt(batteryLevel) < 20 ? 'text-red-500' : 'text-emerald-500';
 
                     return (
                       <div key={userNode.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-0 border-b border-white/10 p-4 font-dot text-xs tracking-widest uppercase text-white hover:bg-white/5 transition-colors items-start md:items-center">
@@ -2970,9 +2982,9 @@ const App = () => {
                         </div>
 
                         {/* 3. BATTERY */}
-                        <div className={`font-bold flex md:block justify-between items-center ${batteryColor}`}>
+                        <div className={`font-bold flex md:block justify-between items-center ${battery.color}`}>
                           <span className="md:hidden text-zinc-600 font-normal text-[10px] font-dot uppercase tracking-widest">POWER:</span>
-                          {batteryLevel || "UNKNOWN"}
+                          {battery.text}
                         </div>
 
                         {/* 4. SIGNAL FRESHNESS */}
