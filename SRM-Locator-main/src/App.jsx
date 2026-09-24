@@ -1774,7 +1774,7 @@ const App = () => {
   const updateOverlay = (
     <>
       <UpdateModal update={appUpdate} />
-      <LiveUpdateToast live={liveUpdate} aboveTabBar={hasJoinedSquad} />
+      <LiveUpdateToast live={liveUpdate} aboveTabBar={hasJoinedSquad} hidden={hasJoinedSquad && isMobile && sheetOpen} />
       {/* Non-blocking notices (src/utils/notify.js) - what window.alert() used to be. */}
       <CommsFeed />
     </>

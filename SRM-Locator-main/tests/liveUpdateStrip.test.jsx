@@ -8,7 +8,7 @@
 // Renders the real App.jsx; only the socket, Firebase, native plugins, maps and the two
 // update hooks are stubbed. The live-update hook's state is set per test.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
   const handlers = new Map();
@@ -187,6 +187,58 @@ describe('where the strip sits', () => {
     fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     expect(raised()).toBe(true);
+  });
+});
+
+describe('when the strip steps aside', () => {
+  // Found on the phone: with the keyboard up the strip rode over CONNECT TO SQUAD, and on
+  // the map it covered the roster whenever the squad sheet was open.
+  it('hides while a text field has focus, and returns after', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
+    const input = screen.getByPlaceholderText('E.G. KTR7X9');
+    expect(strip()).toBeTruthy();
+    act(() => { input.focus(); });
+    expect(strip()).toBeNull();
+    await act(async () => { input.blur(); await new Promise((r) => setTimeout(r, 0)); });
+    expect(strip()).toBeTruthy();
+  });
+
+  it('comes back when the focused field is removed without a blur (Enter joining a squad)', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
+    const input = screen.getByPlaceholderText('E.G. KTR7X9');
+    act(() => { input.focus(); });
+    expect(strip()).toBeNull();
+    // What Chrome does when a focused element leaves the page: nothing. No blur, no focusout.
+    const ghost = document.createElement('input');
+    document.body.appendChild(ghost);
+    Object.defineProperty(document, 'activeElement', { configurable: true, get: () => ghost });
+    ghost.remove();
+    try {
+      await act(async () => { await new Promise((r) => setTimeout(r, 600)); });
+      expect(strip()).toBeTruthy();
+    } finally {
+      delete document.activeElement;
+    }
+  });
+
+  it('hides on a phone while the squad sheet is open, and returns on the map', () => {
+    const realMatchMedia = window.matchMedia;
+    window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
+    try {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+      act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
+      expect(strip()).toBeTruthy();
+      const bar = screen.getByRole('navigation', { name: 'Main' });
+      fireEvent.click(within(bar).getByRole('button', { name: /SQUAD/ }));
+      expect(strip()).toBeNull();
+      fireEvent.click(within(bar).getByRole('button', { name: /GRID/ }));
+      expect(strip()).toBeTruthy();
+    } finally {
+      window.matchMedia = realMatchMedia;
+    }
   });
 });
 
