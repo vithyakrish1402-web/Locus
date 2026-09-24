@@ -172,6 +172,24 @@ describe('the JS update strip is offered on every screen', () => {
   });
 });
 
+describe('where the strip sits', () => {
+  // On the phone's map it was drawn over the bottom tab bar and the SOS button (found on a
+  // device). There it now sits above both; elsewhere, at the bottom.
+  const raised = () => strip().className.includes('bottom-[calc(10.5rem');
+
+  it('sits at the very bottom in the lobby, where there is no tab bar', () => {
+    render(<App />);
+    expect(raised()).toBe(false);
+  });
+
+  it('sits above the tab bar on the map', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+    act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
+    expect(raised()).toBe(true);
+  });
+});
+
 describe('the strip itself', () => {
   it('says READY, not APPLIED, and RESTART applies it', () => {
     render(<App />);

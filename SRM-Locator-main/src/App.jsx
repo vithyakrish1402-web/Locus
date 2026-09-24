@@ -1757,7 +1757,7 @@ const App = () => {
   const updateOverlay = (
     <>
       <UpdateModal update={appUpdate} />
-      <LiveUpdateToast live={liveUpdate} />
+      <LiveUpdateToast live={liveUpdate} aboveTabBar={hasJoinedSquad} />
     </>
   );
 
