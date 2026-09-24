@@ -60,6 +60,15 @@ const NAME_MATCH = {
   28: null,       // SENBAGAM HOSTEL            -> not mapped; nearest is Adhyaman's own outline
   29: 1428764545, // KALPANA CHAWLA HOSTEL      -> "Kalpana Chawla Hostel"
   30: null,       // SISTER NIVEDITA HOSTEL     -> resolved by containment (rule 2)
+  31: 676318049,  // TECH PARK 2                -> "Tech Park 2"
+  32: 748948558,  // C V RAMAN BLOCK            -> "C V Raman Block"
+  33: 188582627,  // MBA BLOCK                  -> "MBA Block"
+  34: 1443234346, // OORI HOSTEL                -> "Oori Hostel"
+  35: 1443234348, // NELSON MANDELA HOSTEL      -> "Nelson Mandela Hostel"
+  36: 1443234349, // AGASTHAYAR HOSTEL          -> "Agasthayar Hostel"
+  37: 1447068325, // SANNASI C BLOCK            -> "Sannasi C Block, Hostel"
+  38: 1428764543, // N BLOCK                    -> "N Block Mens Hostel"
+  39: null,       // VALLIAMMAI ENGINEERING COL -> OSM has only a point node (7252536752), no outline
 };
 
 const fetchOsm = () => new Promise((resolve, reject) => {
