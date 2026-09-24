@@ -65,7 +65,7 @@ describe('the v1 switch', () => {
 
   it('ships the stated v1 constants', () => {
     expect(WIFI_CONFIDENCE_THRESHOLD).toBe(0.6);
-    expect(WIFI_SCAN_INTERVAL_MS).toBe(30_000);
+    expect(WIFI_SCAN_INTERVAL_MS).toBe(35_000);
     expect(WIFI_SCAN_BUFFER_SIZE).toBe(3);
   });
 });
@@ -201,7 +201,7 @@ describe('the fusion loop', () => {
   it('does not start a scan while the previous one is still running', async () => {
     const scan = vi.fn(() => new Promise((resolve) => setTimeout(() => resolve(fresh()), 45_000)));
     const fusion = await start({ scan, estimate: async () => estimateOf(0.9) });
-    await vi.advanceTimersByTimeAsync(40_000); // the 30 s tick lands mid-scan
+    await vi.advanceTimersByTimeAsync(40_000); // the first interval tick lands mid-scan
     expect(scan).toHaveBeenCalledTimes(1);
     fusion.stop();
   });
@@ -263,7 +263,8 @@ describe('the scan budget', () => {
 
     expect(os.refused()).toBe(0);
     expect(os.maxInAnyWindow()).toBeLessThanOrEqual(SCAN_LIMIT);
-    expect(os.calls.length).toBe(121); // one at start, then one per 30 s
+    // one at start, then one per interval (103 at 35 s)
+    expect(os.calls.length).toBe(Math.floor((60 * 60_000) / WIFI_SCAN_INTERVAL_MS) + 1);
   });
 
   it('holds to the budget even when the interval is far too fast', async () => {
