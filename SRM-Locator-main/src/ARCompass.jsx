@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { notify } from './utils/notify';
 import { Navigation, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 // eslint-disable-next-line no-unused-vars -- used via <motion.div> (see App.jsx's import for why the linter can't see this)
 import { motion } from 'framer-motion';
@@ -28,7 +29,7 @@ const ARCompass = ({ target, liveLocation, onClose }) => {
 
   const requestPermissions = async () => {
     const granted = await requestHeadingPermission();
-    if (!granted) alert("[SYS_ERROR] Compass access denied.");
+    if (!granted) notify.error("[SYS_ERROR] Compass access denied.");
     startCamera();
   };
 

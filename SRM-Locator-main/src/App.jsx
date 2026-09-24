@@ -35,6 +35,11 @@ import SosOverlay from './components/SosOverlay';
 import UpdateModal from './components/UpdateModal';
 import LiveUpdateToast from './components/LiveUpdateToast';
 import BottomTabBar from './components/BottomTabBar';
+import CommsFeed from './components/CommsFeed';
+import { CodeTiles, CodeInput } from './components/SquadCode';
+import SquadMemberCard from './components/SquadMemberCard';
+import { sortByDistance } from './utils/direction';
+import { notify } from './utils/notify';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
@@ -192,12 +197,12 @@ const AuthTerminal = ({
   // --- 🔑 FORGOT PASSWORD / KEY RECOVERY HANDLER ---
   const handleForgotPassword = async () => {
     if (!email || !email.trim()) {
-      alert("[SYS_ERROR] ID // EMAIL IS REQUIRED FOR KEY RECOVERY.");
+      notify.warning("[SYS_ERROR] ID // EMAIL IS REQUIRED FOR KEY RECOVERY.");
       return;
     }
     try {
       await sendPasswordResetEmail(auth, email.trim());
-      alert(`[RECOVERY_DISPATCHED] RESET SIGNAL TRANSMITTED TO ${email.trim().toUpperCase()}. CHECK YOUR INBOX.`);
+      notify.success(`[RECOVERY_DISPATCHED] RESET SIGNAL TRANSMITTED TO ${email.trim().toUpperCase()}. CHECK YOUR INBOX.`);
     } catch (error) {
       console.error("Password Reset Error:", error.code);
       let errorMessage = `[SYS_FAILURE] ${error.message}`;
@@ -206,7 +211,7 @@ const AuthTerminal = ({
         case 'auth/invalid-email': errorMessage = "[SYS_ERROR] MALFORMED ID // EMAIL SYNTAX."; break;
         case 'auth/too-many-requests': errorMessage = "[SEC_LOCKOUT] TOO MANY REQUESTS. STAND BY BEFORE RETRYING."; break;
       }
-      alert(errorMessage);
+      notify.error(errorMessage);
     }
   };
 
@@ -470,6 +475,7 @@ const App = () => {
   // --- PRECOGNITION TRACKERS ---
   const localPrecognition = useRef(new PrecognitionFilter());
   const squadPrecognition = useRef({}); // Tracks separate Kalman math for every squad member
+  const memberSeenRef = useRef({}); // id -> { server: lastSeen, local: when this phone saw it change }
 
   const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
@@ -601,7 +607,7 @@ const App = () => {
   // bearing. The GPS-tracking effect below intentionally does NOT list `heading` as
   // a dependency (that would tear down and re-register the geolocation watch on
   // every compass tick), so it reads the ref instead and still emits a current value.
-  const { heading, headingRef, requestHeadingPermission } = useDeviceHeading();
+  const { heading, headingRef, hasReading: hasHeadingReading, requestHeadingPermission } = useDeviceHeading();
   // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
   // always read the current value — they close over the ref, not the stale state.
   const telemetryModeRef = useRef('ACTIVE');
@@ -829,10 +835,9 @@ const App = () => {
   // --- 💀 ADDITION: MUTINY LISTENER ---
   useEffect(() => {
     socket.on('exiled', ({ reason } = {}) => {
-      // 1. Sound the alarm
-      alert(reason === 'blocked'
-        ? "🚫 [SYS_BANNED] The Squad Commander has blocked you from this channel."
-        : "💀 [SYS_MUTINY] You have been democratically exiled from the squad by majority vote.");
+      // 1. Tell them why (a comms-feed notice; this used to be a blocking alert())
+      if (reason === 'blocked') notify.error('The Squad Commander has blocked you from this channel.', { title: 'SYS_BANNED' });
+      else notify.error('You have been exiled from the squad by majority vote.', { title: 'SYS_MUTINY' });
 
       // 2. Trigger your existing leave function to wipe local state and return to the join screen
       handleLeaveSquad();
@@ -906,6 +911,17 @@ const App = () => {
     });
 
     socket.on('users-update', (activeUsers) => {
+      // When each member was last heard from, on THIS phone's clock: the moment their
+      // server-side lastSeen changed. Using the server's timestamp directly would carry any
+      // clock difference between the two into every "12s AGO" on the roster. Done here,
+      // outside the updater below, which has to stay pure.
+      const seenNow = Date.now();
+      Object.entries(activeUsers ?? {}).forEach(([id, data]) => {
+        if (!Number.isFinite(data?.lastSeen)) return;
+        const known = memberSeenRef.current[id];
+        if (!known || known.server !== data.lastSeen) memberSeenRef.current[id] = { server: data.lastSeen, local: seenNow };
+      });
+
       // Pure: builds the new roster and nothing else. Reconciling ghosts against it used
       // to happen inline here, from inside the setUsers updater — but an updater has to be
       // a pure function of the previous state (React is free to call it more than once),
@@ -955,6 +971,7 @@ const App = () => {
             heading: data.heading || 0,
             battery: data.battery || 0,
             status: data.status || 'ACTIVE',
+            lastSeen: memberSeenRef.current[id]?.local ?? null,
           });
         });
         return formattedUsers;
@@ -1110,7 +1127,7 @@ const App = () => {
       if (!isAboutThisSquad(payload)) return;
       setAccessStatus('denied');
       setHasJoinedSquad(false);
-      alert("[SYS_REJECTED] The Squad Commander denied your entry.");
+      notify.error("[SYS_REJECTED] The Squad Commander denied your entry.");
     });
 
     // A JOIN for a code no live squad has. Answered this way rather than by founding a new
@@ -1394,7 +1411,7 @@ const App = () => {
       else if (method === 'email') {
         // ✉️ SECURE ENCRYPTED CHANNEL
         if (!email || !password) {
-          alert("[SYS_ERROR] ID AND KEY ARE REQUIRED FOR LINK.");
+          notify.warning("[SYS_ERROR] ID AND KEY ARE REQUIRED FOR LINK.");
           setLoginMethod(null);
           return;
         }
@@ -1402,7 +1419,7 @@ const App = () => {
         if (isRegistering) {
           // 1. Enforce Username Requirement
           if (!username.trim()) {
-            alert("[SYS_ERROR] CODENAME REQUIRED FOR NEW RECRUITS.");
+            notify.warning("[SYS_ERROR] CODENAME REQUIRED FOR NEW RECRUITS.");
             setLoginMethod(null);
             return;
           }
@@ -1437,7 +1454,7 @@ const App = () => {
         case 'auth/weak-password': errorMessage = "[SEC_VIOLATION] KEY ENCRYPTION TOO WEAK. MINIMUM 6 CHARACTERS REQUIRED."; break;
         case 'auth/invalid-email': errorMessage = "[SYS_ERROR] MALFORMED ID SYNTAX."; break;
       }
-      alert(errorMessage);
+      notify.error(errorMessage);
       setLoginMethod(null);
     }
   };
@@ -1758,6 +1775,8 @@ const App = () => {
     <>
       <UpdateModal update={appUpdate} />
       <LiveUpdateToast live={liveUpdate} aboveTabBar={hasJoinedSquad} />
+      {/* Non-blocking notices (src/utils/notify.js) - what window.alert() used to be. */}
+      <CommsFeed />
     </>
   );
 
@@ -1857,22 +1876,22 @@ const App = () => {
             <div className="space-y-6">
               <div className="p-4 border border-red-500/40 bg-red-500/5 relative">
                 <p className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest mb-2">GENERATED SQUAD DESIGNATOR</p>
-                <div className="flex items-center justify-center gap-3">
-                  <span className="font-dot text-2xl text-red-500 tracking-[0.25em] font-bold">
-                    {squadCode || 'GENERATING...'}
-                  </span>
+                {/* Six tiles that decrypt into place, tap-to-copy and share (SquadCode.jsx).
+                    The caption always asked people to share the code; now they can. */}
+                <CodeTiles code={squadCode} />
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  <p className="text-[9px] font-dot text-zinc-500 uppercase tracking-widest">
+                    Share this code with your team to grant entry clearance.
+                  </p>
                   <button
                     type="button"
                     onClick={() => { setSquadCode(generateRandomSquadCode()); setLobbyNotice(null); }}
-                    className="p-2 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
+                    className="p-1.5 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white shrink-0"
                     title="Generate New Code"
                   >
-                    <RefreshCw size={16} />
+                    <RefreshCw size={12} />
                   </button>
                 </div>
-                <p className="text-[9px] font-dot text-zinc-500 uppercase tracking-widest mt-2">
-                  Share this code with your team to grant entry clearance.
-                </p>
               </div>
 
               <button
@@ -1885,14 +1904,13 @@ const App = () => {
           ) : (
             <div className="space-y-6">
               <div className="space-y-2 text-left">
-                <label className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ENTER SQUAD CODE (ALPHANUMERIC ONLY)</label>
-                <input
-                  type="text"
-                  placeholder="E.G. KTR7X9"
-                  className="w-full bg-black border border-white/30 py-4 text-center font-dot text-lg uppercase tracking-[0.2em] focus:outline-none focus:border-red-500 text-white transition-colors placeholder:text-zinc-700"
+                <p className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ENTER SQUAD CODE (ALPHANUMERIC ONLY)</p>
+                {/* Tiles over one real input (SquadCode.jsx): keyboard, paste and autofill as
+                    normal, and Enter now connects (it used to do nothing). */}
+                <CodeInput
                   value={squadCode}
-                  onChange={(e) => { setSquadCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')); setLobbyNotice(null); }}
-                  maxLength={8}
+                  onChange={(code) => { setSquadCode(code); setLobbyNotice(null); }}
+                  onSubmit={handleJoinSquad}
                 />
               </div>
 
@@ -2296,98 +2314,27 @@ const App = () => {
                     </div>
                   </motion.div>
                 )),
-                ...users.filter(u => !blockedUserIds.includes(u.id)).map(user => (
+                // Nearest first (by straight-line distance from this phone); members with no
+                // fix yet go last. See SquadMemberCard for the dial and freshness line.
+                ...sortByDistance(users.filter(u => !blockedUserIds.includes(u.id)), liveLocation).map(user => (
                 <motion.div
                   layout
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   key={user.id}
-                  className="p-4 mb-2 bg-gray-900 border border-gray-800 rounded-lg active:bg-gray-800 transition-colors relative group hover:border-white/40"
                 >
-                  <div className="absolute top-0 right-0 w-2 h-2 bg-white/20" />
-
-                  {/* ROW 1: HEADER & ICONS */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 flex items-center justify-center font-dot text-sm border overflow-hidden shrink-0 border-emerald-500 text-emerald-500 bg-emerald-500/10">
-                        {user.photo ? <img src={user.photo} className="w-full h-full object-cover" alt="" /> : user.name.charAt(0)}
-                      </div>
-                      <div className="flex flex-col">
-                        <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none mb-1">{user.name}</h4>
-                        <div className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                          <span>[{user.role}]</span>
-                          {user.hasFix ? (
-                            liveLocation && (
-                              <span className="text-emerald-400">
-                                {calculateDistance(liveLocation.lat, liveLocation.lng, user.lat, user.lng)}
-                              </span>
-                            )
-                          ) : (
-                            <span className="text-zinc-600">NO_FIX</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <button onClick={() => sendPing(user.id)} className="text-emerald-400 hover:text-white transition-colors p-1" title="Ping User">
-                        <Radio size={16} className="animate-pulse" />
-                      </button>
-                      <UserCheck size={16} className="text-zinc-500" />
-                      {squadRole === 'OWNER' && (
-                        <button onClick={() => toggleBlock(user.id)} className="text-zinc-600 hover:text-red-500 transition-colors p-1" title="Instant Ban">
-                          <Ban size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* ROW 2: TELEMETRY GRID */}
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div className="bg-white/5 border border-white/10 p-2 flex items-center gap-2">
-                      <div className="w-1.5 h-3 border border-zinc-500 rounded-[1px] relative flex items-end overflow-hidden">
-                        <div className={`w-full ${user.battery < 25 ? 'bg-red-500' : 'bg-emerald-500'} transition-all duration-500`} style={{ height: `${user.battery}%` }} />
-                      </div>
-                      <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">{user.battery || 0}% PWR</span>
-                    </div>
-                    <div className="bg-white/5 border border-white/10 p-2 flex items-center gap-2">
-                      <Activity size={12} className="text-blue-400" />
-                      <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">{user.speed || 0} KM/H</span>
-                    </div>
-                  </div>
-
-                  {/* ROW 3: ACTIONS */}
-                  <div className="flex flex-col gap-2">
-                    {/* A ping, not an emergency: the squad-wide SOS is the SosTrigger
-                        button. Styled neutral so it can't be mistaken for one. */}
-                    <button
-                      onClick={() => sendPing(user.id)}
-                      className="w-full py-2 bg-white/5 border border-white/20 text-zinc-300 font-dot text-[10px] uppercase tracking-widest hover:bg-white hover:text-black transition-all"
-                    >
-                      PING
-                    </button>
-                    {!user.hasFix ? (
-                      // On the roster, but nothing to aim at yet — no coordinates have come
-                      // through for them. Says so instead of offering buttons that would
-                      // point the AR compass and the map at nothing.
-                      <div className="w-full py-3 border border-dashed border-white/20 text-zinc-500 font-dot text-xs uppercase tracking-widest text-center">
-                        AWAITING_GPS_FIX
-                      </div>
-                    ) : (
-                      <div className="flex gap-2 w-full">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setArTarget({ lat: user.lat, lng: user.lng, name: user.name }); }}
-                          className="w-12 flex-shrink-0 py-3 flex items-center justify-center border border-white/30 hover:border-red-500 hover:text-red-500 transition-colors text-white bg-black"
-                          title="AR Tracking"
-                        >
-                          <Crosshair size={14} />
-                        </button>
-                        <button onClick={() => handleFocus({ lat: user.lat, lng: user.lng }, null)} className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white">
-                          TRACK_TARGET
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <SquadMemberCard
+                    member={user}
+                    me={liveLocation}
+                    heading={heading}
+                    headingLive={hasHeadingReading}
+                    isOwner={squadRole === 'OWNER'}
+                    onPing={sendPing}
+                    onBlock={toggleBlock}
+                    onAR={(m) => setArTarget({ lat: m.lat, lng: m.lng, name: m.name })}
+                    onTrack={(m) => handleFocus({ lat: m.lat, lng: m.lng }, null)}
+                  />
                 </motion.div>
                 )),
               ]
@@ -2705,7 +2652,7 @@ const App = () => {
                     setRecordedCoords([]);
                     if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
                     recordingPolylineRef.current = null;
-                    alert(`[SYS] Route ${startName} -> ${endName} published successfully.`);
+                    notify.success(`[SYS] Route ${startName} -> ${endName} published.`);
                   }
                 }}
                 className="flex-1 p-2 bg-yellow-500 text-black font-dot text-[10px] hover:bg-yellow-400 transition-colors"
@@ -3280,7 +3227,7 @@ const App = () => {
                               setRecordedCoords([]);
                               if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
                               recordingPolylineRef.current = null;
-                              alert(`[SYS] Route ${startName} → ${endName} published.`);
+                              notify.success(`[SYS] Route ${startName} → ${endName} published.`);
                             }
                           }}
                           className="flex-1 py-3 bg-yellow-500 text-black font-dot text-[10px] uppercase tracking-widest hover:bg-yellow-400 transition-colors flex items-center justify-center gap-2"

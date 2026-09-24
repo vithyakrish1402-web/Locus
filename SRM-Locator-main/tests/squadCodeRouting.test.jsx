@@ -86,6 +86,9 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 });
 
 const { default: App } = await import('../src/App.jsx');
+// The comms feed (notices that replaced alert()) is module-level; each test starts it empty,
+// so "the" role="alert" below is the lobby's own notice and not a leftover from a test before.
+const { __resetNotifications } = await import('../src/utils/notify.js');
 
 // --- walking the real UI ---------------------------------------------------------
 
@@ -123,6 +126,7 @@ const nodeAccessButton = () => screen.queryByRole('button', { name: /NODE_ACCESS
 let alertSpy;
 
 beforeEach(() => {
+  __resetNotifications();
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
   fakeSocket.handlers.clear();
   fakeSocket.emit.mockClear();

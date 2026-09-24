@@ -26,6 +26,10 @@ const angularDelta = (a, b) => {
 export function useDeviceHeading() {
   const [heading, setHeading] = useState(0);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
+  // True once a real absolute reading has arrived. permissionsGranted only means the
+  // listener is attached: on a device without a compass (or a desktop browser) no event
+  // ever comes and `heading` stays 0, which would pass for "facing north".
+  const [hasReading, setHasReading] = useState(false);
 
   // Always holds the newest raw bearing, untouched by the throttle above, so
   // telemetry emits report the true current heading rather than whatever value
@@ -53,6 +57,7 @@ export function useDeviceHeading() {
     if (next === null || Number.isNaN(next)) return;
 
     headingRef.current = next;
+    setHasReading(true); // a no-op re-render after the first
 
     const now = Date.now();
     if (now - lastEmitAtRef.current < MIN_INTERVAL_MS) return;
@@ -96,5 +101,5 @@ export function useDeviceHeading() {
     };
   }, [handleOrientation]);
 
-  return { heading, headingRef, permissionsGranted, requestHeadingPermission };
+  return { heading, headingRef, permissionsGranted, hasReading, requestHeadingPermission };
 }
