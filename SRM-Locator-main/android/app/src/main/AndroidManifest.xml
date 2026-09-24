@@ -20,6 +20,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- navigator.vibrate() in the WebView. Without it every call silently did nothing: the
+         SOS alarm's vibration (SosOverlay.jsx) never fired on a phone, and neither do the
+         press/tab haptic ticks (src/utils/haptics.js). Install-time, no prompt. Takes
+         effect from the next APK; a JS bundle can't add a permission. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- In-app self-updater (see src/hooks/useAppUpdate.js + LocusUpdaterPlugin.java).
          LOCUS is distributed as a sideloaded APK, not via Play, so the app downloads its
          own replacement and hands it to the system installer. Android still shows the

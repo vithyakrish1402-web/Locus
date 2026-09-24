@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } fr
 // This project's eslint config has no eslint-plugin-react (only react-hooks/react-refresh),
 // so core no-unused-vars can't see through JSXMemberExpression tag names — false positive.
 // eslint-disable-next-line no-unused-vars
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls, useReducedMotion } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
 import {
   MapPin, Users, Search, Settings, Navigation, ShieldCheck,
@@ -34,11 +34,15 @@ import SosTrigger from './components/SosTrigger';
 import SosOverlay from './components/SosOverlay';
 import UpdateModal from './components/UpdateModal';
 import LiveUpdateToast from './components/LiveUpdateToast';
+import BottomTabBar from './components/BottomTabBar';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { useWifiFusion } from './hooks/useWifiFusion';
+import { useIsMobile } from './hooks/useIsMobile';
+import { haptic } from './utils/haptics';
+import { shouldDismissSheet, SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard } from './utils/motion';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { PrecognitionFilter } from './utils/precognition';
@@ -102,6 +106,8 @@ const TELEMETRY_SYNC_REFUSALS = {
   'not-in-squad': 'THE SERVER HAS NO RECORD OF THIS SQUAD FOR THIS DEVICE. DISCONNECT AND REJOIN IT.',
 };
 // A telemetry value that is a real number, or null (never something toFixed() throws on).
+// The square glass buttons down the map's right edge (recenter, locate, satellite, settings).
+const MAP_CONTROL = 'p-3 bg-black/70 backdrop-blur-md border border-white/15 text-white shadow-[0_8px_24px_rgba(0,0,0,0.5)] hover:bg-white/10 hover:border-white/30';
 const finiteOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 // A member's battery for the telemetry matrix: the first real reading of the heartbeat's
 // `batteryLevel` ("77%") or update-location's `battery` (77). With neither there is no
@@ -163,6 +169,21 @@ const STEALTH_MAP_STYLES = [
 ];
 
 // --- THE NEW AUTH TERMINAL (Replaces CinematicLanding) ---
+// Shown while Firebase restores the saved session on a cold start. It used to be a single
+// line of plain text; now a radar ring sweeps around it so the wait reads as work in
+// progress, in the same visual language as the rest of the app. Reduced motion: no sweep.
+const BootScreen = () => (
+  <div className="h-screen bg-black text-white flex flex-col justify-center items-center gap-8 bg-dots" role="status" aria-live="polite">
+    <div className="relative w-28 h-28" aria-hidden="true">
+      <div className="absolute inset-0 rounded-full border border-white/15" />
+      <div className="absolute inset-5 rounded-full border border-red-500/30" />
+      <div className="absolute inset-[3.25rem] rounded-full bg-red-500 shadow-[0_0_14px_rgba(239,68,68,0.9)]" />
+      <div className="absolute inset-0 rounded-full locus-radar-sweep" />
+    </div>
+    <div className="font-dot text-xs tracking-[0.3em] text-zinc-300">INITIALIZING_SECURE_LINK...</div>
+  </div>
+);
+
 const AuthTerminal = ({
   email, setEmail, password, setPassword, showPassword, setShowPassword, executeAuthDirective, loginMethod, username, setUsername, latency
 }) => {
@@ -198,10 +219,10 @@ const AuthTerminal = ({
   };
 
   return (
-    <div className="relative w-full h-screen bg-black text-white font-inter selection:bg-red-500/30 flex items-center justify-center overflow-hidden bg-dots">
+    <div className="relative w-full h-screen bg-black text-white font-inter selection:bg-red-500/30 flex items-center justify-center overflow-hidden bg-dots px-4">
 
       {/* 📡 RESTORED PING HUD 📡 */}
-      <div className="absolute top-6 right-8 z-50 flex items-center gap-3 font-dot text-xs tracking-widest text-zinc-400">
+      <div className="absolute right-4 sm:right-8 z-50 flex items-center gap-3 font-dot text-xs tracking-widest text-zinc-400" style={{ top: 'max(1.5rem, calc(env(safe-area-inset-top) + 0.75rem))' }}>
         <span className="uppercase">SYS_PING</span>
         <div className="flex items-center gap-2 bg-zinc-900/50 border border-white/10 px-3 py-1">
           <div className={`w-2 h-2 rounded-full ${getPingColor(latency)}`} />
@@ -222,7 +243,7 @@ const AuthTerminal = ({
         initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
         animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="w-full max-w-md p-10 border border-white/20 bg-black relative pointer-events-auto z-10 shadow-[0_0_50px_rgba(255,255,255,0.05)]"
+        className="w-full max-w-md p-7 sm:p-10 border border-white/20 bg-black relative pointer-events-auto z-10 shadow-[0_0_50px_rgba(255,255,255,0.05)]"
       >
         <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
         <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
@@ -378,6 +399,13 @@ const App = () => {
   // --- MOBILE VIEW STATE ---
   // Controls which panel is active on mobile bottom HUD: 'grid' | 'matrix' | 'squad' | 'cmd'
   const [mobileView, setMobileView] = useState('grid');
+  // Phone layout and the squad/matrix sheet (see the Sidebar Panel below).
+  const isMobile = useIsMobile();
+  const reduceMotion = useReducedMotion();
+  const sheetOpen = mobileView === 'matrix' || mobileView === 'squad';
+  const sheetDragControls = useDragControls();
+  const sheetRef = useRef(null);
+  const sheetDraggedRef = useRef(false);
   // --- TACTICAL WAYPOINT STATE ---
   const [isDroppingWaypoint, setIsDroppingWaypoint] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
@@ -1736,7 +1764,7 @@ const App = () => {
   if (authLoading) return (
     <>
       {updateOverlay}
-      <div className="h-screen bg-black text-white flex justify-center items-center font-dot">INITIALIZING_SECURE_LINK...</div>
+      <BootScreen />
     </>
   );
 
@@ -1980,20 +2008,40 @@ const App = () => {
         )}
       </AnimatePresence>
 
-      {/* Sidebar Panel — visible on desktop always, on mobile when mobileView is 'matrix' or 'squad' */}
+      {/* Sidebar Panel — visible on desktop always; on a phone, a sheet that is open when
+          mobileView is 'matrix' or 'squad' and can be dragged down by its handle strip. */}
       <motion.div
         initial={false}
-        animate={{
-          y: window.innerWidth < 768 ? ((mobileView === 'matrix' || mobileView === 'squad') ? 0 : '100%') : 0,
-          x: 0,
-          opacity: 1
+        animate={{ y: isMobile ? (sheetOpen ? 0 : '100%') : 0, x: 0, opacity: 1 }}
+        transition={reduceMotion ? { duration: 0 } : SHEET_SPRING}
+        drag={isMobile ? 'y' : false}
+        dragListener={false}
+        dragControls={sheetDragControls}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        // Follows the finger almost 1:1 downwards, and rubber-bands upwards: the sheet is
+        // already fully open, so pulling it higher resists instead of moving.
+        dragElastic={{ top: 0.06, bottom: 0.95 }}
+        dragMomentum={false}
+        onDragStart={() => { sheetDraggedRef.current = true; }}
+        onDragEnd={(_event, info) => {
+          // Decide from where the throw is GOING, not where the finger let go: project the
+          // release velocity forward (Apple's scroll-deceleration projection), so a short
+          // quick flick closes the sheet and a slow long drag that stops early doesn't.
+          const height = sheetRef.current?.offsetHeight || window.innerHeight;
+          if (shouldDismissSheet(info.offset.y, info.velocity.y, height)) {
+            haptic('snap');
+            setMobileView('grid');
+          }
         }}
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        ref={sheetRef}
         className={`${
-          window.innerWidth < 768 
-            ? 'fixed inset-x-0 top-0 bottom-16 z-[900] flex flex-col bg-black/95 backdrop-blur-lg pointer-events-auto border-b border-red-900/50'
+          isMobile
+            ? 'fixed inset-x-0 bottom-16 z-[900] flex flex-col bg-black/95 backdrop-blur-lg pointer-events-auto border-t border-white/10 shadow-[0_-24px_48px_rgba(0,0,0,0.6)]'
             : 'hidden md:flex w-80 bg-black border-r border-red-900/50 fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
         }`}
+        // Starts under the header instead of behind it (it used to start at the very top, so
+        // its handle and MATRIX/SQUAD indicator were hidden under the header).
+        style={isMobile ? { top: 'calc(max(1rem, env(safe-area-inset-top)) + 3.2rem)' } : undefined}
         onTouchStart={(e) => { e.currentTarget._touchStartX = e.touches[0].clientX; }}
         onTouchEnd={(e) => {
           const startX = e.currentTarget._touchStartX;
@@ -2002,22 +2050,31 @@ const App = () => {
           if (diff > 60) {
             // Swiped LEFT → go to Squad
             setActiveTab('users'); setSelectedItem(null);
-            if (window.innerWidth < 768) setMobileView('squad');
+            if (isMobile) setMobileView('squad');
           } else if (diff < -60) {
             // Swiped RIGHT → go to Matrix
             setActiveTab('buildings'); setSelectedItem(null);
-            if (window.innerWidth < 768) setMobileView('matrix');
+            if (isMobile) setMobileView('matrix');
           }
         }}
       >
-        {/* Mobile drag-down handle */}
-        <div className="md:hidden w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-4 mb-2 shrink-0" onClick={() => setMobileView('grid')} />
+        {/* Mobile drag strip: the handle and the MATRIX/SQUAD indicator. Pressing anywhere
+            here starts the drag; a plain tap still closes the sheet, as the handle did. */}
+        <div
+          className="md:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
+          data-no-ping
+          onPointerDown={(e) => { sheetDraggedRef.current = false; sheetDragControls.start(e); }}
+          // A drag that snapped back still ends in a click; only a real tap closes.
+          onClick={() => { if (!sheetDraggedRef.current) setMobileView('grid'); }}
+        >
+        <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-3 mb-1" />
 
         {/* Gesture Dot Indicators (mobile) + Desktop Tabs */}
         <div className="md:hidden flex items-center justify-center gap-3 py-3">
           <div className={`w-2 h-2 rounded-full transition-all duration-300 ${activeTab === 'buildings' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-125' : 'bg-zinc-700'}`} />
           <span className="font-dot text-[9px] text-zinc-500 uppercase tracking-widest">{activeTab === 'buildings' ? 'MATRIX' : 'SQUAD'}</span>
           <div className={`w-2 h-2 rounded-full transition-all duration-300 ${activeTab === 'users' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-125' : 'bg-zinc-700'}`} />
+        </div>
         </div>
 
         {/* Desktop Tabs (hidden on mobile) */}
@@ -2148,7 +2205,8 @@ const App = () => {
           </div>
         </div>
         {/* List Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-black">
+        {/* pb-28 on a phone: room to scroll the last rows clear of the floating SOS and targeting buttons, which used to cover them. */}
+        <div className="flex-1 overflow-y-auto p-4 pb-28 md:pb-4 space-y-4 custom-scrollbar bg-black">
           <AnimatePresence mode="popLayout">
             {activeTab === 'buildings' ? (
               SRM_MASTER_DATABASE.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).map(building => (
@@ -2422,6 +2480,27 @@ const App = () => {
       {/* --- 👻 SIGNAL LOST BANNER (one-time, auto-dismissing) --- */}
       <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[850] md:z-[1000] w-[90%] max-w-md pointer-events-none flex flex-col gap-2">
         <AnimatePresence>
+          {/* Targeting mode. It used to be a separate fixed banner at nearly the same height
+              as this stack, so it landed on top of the location banner below and hid it. */}
+          {isTargetingMode && (
+            <motion.div
+              key="targeting-mode"
+              initial={{ y: -30, opacity: 0, scale: 0.97 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: -30, opacity: 0, scale: 0.97 }}
+              transition={reduceMotion ? { duration: 0 } : PANEL_SPRING}
+              className="md:hidden bg-yellow-500/10 border border-yellow-500/50 backdrop-blur-xl p-3 flex items-center gap-3 pointer-events-auto"
+            >
+              <Target size={18} className="text-yellow-500 flex-shrink-0" />
+              <div>
+                <p className="font-dot text-[10px] text-yellow-500 uppercase tracking-widest leading-tight">TARGETING MODE ACTIVE</p>
+                <p className="font-dot text-[9px] text-yellow-500/60 uppercase tracking-widest">TAP ANYWHERE ON MAP TO DEPLOY RALLY POINT</p>
+              </div>
+              <button onClick={() => setIsTargetingMode(false)} className="ml-auto text-yellow-500 hover:text-white p-1 flex-shrink-0">
+                <X size={16} />
+              </button>
+            </motion.div>
+          )}
           {/* Persistent (not auto-dismissing) — the underlying problem doesn't go away
               on its own, so this stays until either a real GPS fix clears it or the
               operative dismisses it themselves. Without this, a friend testing LOCUS
@@ -2651,11 +2730,11 @@ const App = () => {
 
       {/* Map Interactive Layers */}
       {/* Right-side Action Column */}
-      <div className="absolute right-4 top-1/3 flex flex-col gap-3 z-40 pointer-events-auto">
+      <div className="absolute right-4 top-1/3 flex flex-col gap-2.5 z-40 pointer-events-auto">
 
         <button
           onClick={() => handleFocus(SRM_KTR_COORDS, null)}
-          className="bg-black/80 border border-gray-700 p-3 rounded text-white shadow-lg transition-colors hover:bg-gray-900" 
+          className={MAP_CONTROL}
           title="Recenter Campus"
         >
           <MapPin size={20} />
@@ -2664,26 +2743,31 @@ const App = () => {
         {liveLocation && (
           <button
             onClick={() => handleFocus(liveLocation, null)}
-            className="bg-black/80 border border-red-900 p-3 rounded text-red-500 shadow-[0_0_10px_rgba(220,38,38,0.5)] transition-colors hover:bg-red-900/50"
+            className={`${MAP_CONTROL} relative !text-red-500 !border-red-500/50 shadow-[0_0_12px_rgba(239,68,68,0.35)]`}
             title="Locate Signal"
           >
-            <LocateFixed size={20} className="animate-pulse" />
+            {/* One soft radar ring, instead of the icon pulsing without end. */}
+            <span className="absolute inset-0 border border-red-500/60 locus-soft-ring" aria-hidden="true" />
+            <LocateFixed size={20} />
           </button>
         )}
 
         {/* Satellite Recon Toggle Button */}
         <button
           onClick={() => setIsSatellite(!isSatellite)}
-          className={`p-3 rounded border transition-colors shadow-lg ${isSatellite ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-black/80 text-white border-gray-700 hover:bg-gray-900'}`}
+          className={`${MAP_CONTROL} ${isSatellite ? '!bg-emerald-500/15 !text-emerald-400 !border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.35)]' : ''}`}
           title={isSatellite ? "Switch to Tactical Grid" : "Switch to Satellite Recon"}
         >
-          <Globe size={20} />
+          {/* The globe turns half a revolution each way as the map style flips. */}
+          <motion.span className="flex" animate={{ rotate: isSatellite ? 180 : 0 }} transition={reduceMotion ? { duration: 0 } : PANEL_SPRING}>
+            <Globe size={20} />
+          </motion.span>
         </button>
 
         {/* Gear icon opens SYS_CONFIG modal */}
         <button
           onClick={() => setShowSettingsModal(true)}
-          className="bg-black/80 border border-gray-700 p-3 rounded text-white shadow-lg transition-colors hover:bg-gray-900"
+          className={MAP_CONTROL}
           title="System Configuration (SYS_CONFIG)"
         >
           <Settings size={20} />
@@ -2765,15 +2849,12 @@ const App = () => {
       <AnimatePresence>
         {showRequestsModal && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            {...modalBackdrop()}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowRequestsModal(false); }}
             className="fixed inset-0 bg-black/90 backdrop-blur-md z-[2000] flex items-center justify-center p-4 pointer-events-auto"
           >
             <motion.div
-              initial={{ scale: 0.95, y: 20, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.95, y: 20, opacity: 0 }}
+              {...modalCard(reduceMotion)}
               className="bg-zinc-950 w-full max-w-lg border border-red-500/30 flex flex-col max-h-[85vh] overflow-hidden relative shadow-[0_0_50px_rgba(239,68,68,0.1)]"
             >
               {/* Tactical HUD Corners */}
@@ -2904,11 +2985,12 @@ const App = () => {
       <AnimatePresence>
         {showTelemetryModal && rawTelemetryData && (
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            {...modalBackdrop()}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowTelemetryModal(false); }}
             className="fixed inset-0 bg-black/95 backdrop-blur-md z-[4000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              {...modalCard(reduceMotion)}
               className="bg-black w-full max-w-4xl border border-yellow-500 flex flex-col h-[80vh] relative shadow-[0_0_30px_rgba(234,179,8,0.1)]"
             >
               {/* Corner Accents */}
@@ -3025,11 +3107,12 @@ const App = () => {
       <AnimatePresence>
         {showSettingsModal && (
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            {...modalBackdrop()}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowSettingsModal(false); }}
             className="fixed inset-0 bg-black/95 backdrop-blur-md z-[5000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
           >
             <motion.div
-              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              {...modalCard(reduceMotion)}
               className="bg-black w-full max-w-2xl border border-white/30 flex flex-col max-h-[85vh] relative shadow-[0_0_30px_rgba(255,255,255,0.05)]"
             >
               {/* Header */}
@@ -3114,15 +3197,11 @@ const App = () => {
       <AnimatePresence>
         {showAdminSettings && isAdmin && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            {...modalBackdrop()}
             className="fixed inset-0 bg-black/95 backdrop-blur-md z-[6000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
           >
             <motion.div
-              initial={{ scale: 0.95, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 20 }}
+              {...modalCard(reduceMotion)}
               className="bg-black w-full max-w-2xl border border-yellow-500/60 flex flex-col max-h-[88vh] relative shadow-[0_0_40px_rgba(234,179,8,0.15)]"
             >
               {/* Corner Accents */}
@@ -3243,89 +3322,64 @@ const App = () => {
         )}
       </AnimatePresence>
 
-      {/* ========== MOBILE BOTTOM HUD — REPROGRAMMED ========== */}
-      <div className="md:hidden fixed bottom-0 w-full bg-black/95 backdrop-blur-xl border-t border-red-600/30 flex justify-around items-center p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto">
-
-        {/* GRID — Toggles Satellite vs Dark Map */}
-        <button
-          onClick={() => { setIsSatellite(!isSatellite); setMobileView('grid'); }}
-          className={`flex flex-col items-center transition-all duration-200 ${mobileView === 'grid' && !isSatellite ? 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : isSatellite ? 'text-emerald-500 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'text-zinc-600 hover:text-zinc-400'}`}
-        >
-          <Map className="w-5 h-5 mb-1" />
-          <span className="text-[9px] tracking-widest font-dot uppercase">{isSatellite ? 'ORBITAL' : 'GRID'}</span>
-          <div className={`w-1 h-1 rounded-full mt-1 animate-pulse ${isSatellite ? 'bg-emerald-500' : 'bg-red-500'}`} />
-        </button>
-
-        {/* SCAN — Opens AR Compass / Friend Finder */}
-        <button
-          onClick={() => {
+      {/* ========== MOBILE BOTTOM BAR (src/components/BottomTabBar.jsx) ========== */}
+      <BottomTabBar
+        activeId={mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid'}
+        tabs={[
+          // GRID only navigates now. It used to toggle satellite on every tap as well, so
+          // coming back to the map from SQUAD or SCAN flipped the map style; satellite has
+          // its own globe button on the map.
+          { id: 'grid', label: isSatellite ? 'ORBITAL' : 'GRID', Icon: Map, flourish: 'lift' },
+          { id: 'scan', label: 'SCAN', Icon: Scan, flourish: 'turn' },
+          { id: 'squad', label: 'SQUAD', Icon: Users, flourish: 'pop' },
+        ]}
+        onSelect={(id) => {
+          const current = mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid';
+          if (id !== current) haptic('select');
+          if (id === 'grid') {
+            setMobileView('grid');
+          } else if (id === 'scan') {
             setMobileView('scan');
-            // If we have a live location, open the AR scanner targeting the nearest squad member
-            // If no squad members, scan toward campus center
-            // First member with an actual fix — users can now include members who are on
-            // the roster but haven't reported coordinates yet, and aiming the AR compass
-            // at a null coordinate just points it nowhere.
+            // First member with an actual fix — users can include members who are on the
+            // roster but haven't reported coordinates yet, and aiming the AR compass at a
+            // null coordinate points it nowhere. No one with a fix: scan toward campus.
             const scanNode = users.find(u => u.hasFix);
-            const scanTarget = scanNode
+            setArTarget(scanNode
               ? { lat: scanNode.lat, lng: scanNode.lng, name: scanNode.name || 'SQUAD_NODE' }
-              : { lat: SRM_KTR_COORDS.lat, lng: SRM_KTR_COORDS.lng, name: 'SRM_HQ' };
-            setArTarget(scanTarget);
-          }}
-          className={`flex flex-col items-center transition-all duration-200 ${mobileView === 'scan' ? 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}
-        >
-          <Scan className="w-5 h-5 mb-1" />
-          <span className="text-[9px] tracking-widest font-dot uppercase">SCAN</span>
-          {mobileView === 'scan' && <div className="w-1 h-1 rounded-full bg-red-500 mt-1 animate-pulse" />}
-        </button>
-
-        {/* SQUAD — Opens the Squad Room */}
-        <button
-          onClick={() => { setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); }}
-          className={`flex flex-col items-center transition-all duration-200 ${mobileView === 'squad' ? 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}
-        >
-          <Users className="w-5 h-5 mb-1" />
-          <span className="text-[9px] tracking-widest font-dot uppercase">SQUAD</span>
-          {mobileView === 'squad' && <div className="w-1 h-1 rounded-full bg-red-500 mt-1 animate-pulse" />}
-        </button>
-
-      </div>
-
-      {/* ========== TARGETING MODE BANNER ========== */}
-      <AnimatePresence>
-        {isTargetingMode && (
-          <motion.div
-            initial={{ y: -60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -60, opacity: 0 }}
-            transition={{ type: 'spring', damping: 25 }}
-            className="md:hidden fixed top-20 left-4 right-4 z-[1200] bg-yellow-500/10 border border-yellow-500/50 backdrop-blur-xl p-3 flex items-center gap-3 pointer-events-auto"
-            style={{ marginTop: 'env(safe-area-inset-top)' }}
-          >
-            <Target size={18} className="text-yellow-500 animate-pulse flex-shrink-0" />
-            <div>
-              <p className="font-dot text-[10px] text-yellow-500 uppercase tracking-widest leading-tight">TARGETING MODE ACTIVE</p>
-              <p className="font-dot text-[9px] text-yellow-500/60 uppercase tracking-widest">TAP ANYWHERE ON MAP TO DEPLOY RALLY POINT</p>
-            </div>
-            <button onClick={() => setIsTargetingMode(false)} className="ml-auto text-yellow-500 hover:text-white p-1 flex-shrink-0">
-              <X size={16} />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              : { lat: SRM_KTR_COORDS.lat, lng: SRM_KTR_COORDS.lng, name: 'SRM_HQ' });
+          } else {
+            setMobileView('squad'); setActiveTab('users'); setSelectedItem(null);
+          }
+        }}
+      />
 
       {/* ========== RALLY POINT FAB (Two-Step Targeting) ========== */}
       {!(selectedItem && activeTab === 'buildings') && (
         <button
           onClick={() => setIsTargetingMode(!isTargetingMode)}
-          className={`md:hidden fixed bottom-20 right-4 p-4 rounded-full z-[1050] pointer-events-auto active:scale-90 transition-all duration-300 ${
+          className={`md:hidden fixed bottom-20 right-4 p-4 rounded-full z-[1050] pointer-events-auto ${
             isTargetingMode
-              ? 'bg-yellow-500 text-black border-2 border-yellow-300 shadow-[0_0_25px_rgba(234,179,8,0.6)] animate-pulse'
+              ? 'bg-yellow-500 text-black border-2 border-yellow-300 shadow-[0_0_25px_rgba(234,179,8,0.6)]'
               : 'bg-red-600 text-black border-2 border-red-400 shadow-[0_0_20px_rgba(220,38,38,0.6)]'
           }`}
           style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
           title={isTargetingMode ? 'Cancel Targeting' : 'Deploy Rally Point'}
         >
-          {isTargetingMode ? <X className="w-6 h-6" /> : <Crosshair className="w-6 h-6" />}
+          {/* Targeting: a dashed ring orbits the button while a spot is being chosen, and the
+              crosshair spins into an X (and back), instead of the whole button blinking. */}
+          {isTargetingMode && <span className="absolute -inset-2 rounded-full border-2 border-dashed border-yellow-400/80 locus-orbit" aria-hidden="true" />}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={isTargetingMode ? 'cancel' : 'target'}
+              className="flex"
+              initial={reduceMotion ? { opacity: 0 } : { rotate: -90, scale: 0.6, opacity: 0 }}
+              animate={{ rotate: 0, scale: 1, opacity: 1 }}
+              exit={reduceMotion ? { opacity: 0 } : { rotate: 90, scale: 0.6, opacity: 0 }}
+              transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
+            >
+              {isTargetingMode ? <X className="w-6 h-6" /> : <Crosshair className="w-6 h-6" />}
+            </motion.span>
+          </AnimatePresence>
         </button>
       )}
 

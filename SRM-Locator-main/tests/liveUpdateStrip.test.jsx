@@ -94,7 +94,10 @@ const ready = () => ({
   dismiss: vi.fn(),
 });
 
-const strip = () => screen.queryByRole('status');
+// The strip is one of possibly several live regions (the boot screen's loader is one too),
+// so it is found by what it says rather than by being the only role="status".
+const strip = () =>
+  screen.queryAllByRole('status').find((el) => /UPDATE (READY|BLOCKED)/.test(el.textContent)) ?? null;
 
 // The guide opens on an animated intro; its skip button goes straight to the guide.
 const skipIntro = async () => {
