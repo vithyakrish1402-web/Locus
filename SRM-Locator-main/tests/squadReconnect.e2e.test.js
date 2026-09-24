@@ -61,7 +61,7 @@ describe('a previously approved member coming back skips re-approval', () => {
     const bravo2 = await connect();
     const waypoint = once(bravo2, 'new-waypoint');
     await requestJoin(bravo2, room, 'uB');
-    expect(await waypoint).toEqual({ lat: 12.9, lng: 80.1 });
+    expect(await waypoint).toEqual({ lat: 12.9, lng: 80.1, setBy: 'uA' });
   });
 
   it('gets the live roster again', async () => {
