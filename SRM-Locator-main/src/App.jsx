@@ -1774,7 +1774,13 @@ const App = () => {
   const updateOverlay = (
     <>
       <UpdateModal update={appUpdate} />
-      <LiveUpdateToast live={liveUpdate} aboveTabBar={hasJoinedSquad} hidden={hasJoinedSquad && isMobile && sheetOpen} />
+      <LiveUpdateToast
+        live={liveUpdate}
+        aboveTabBar={hasJoinedSquad}
+        // On a phone the strip steps aside while a panel occupies its spot: the squad sheet,
+        // or a building's card (which now sits at the strip's height, above SOS).
+        hidden={hasJoinedSquad && isMobile && (sheetOpen || Boolean(selectedItem && activeTab === 'buildings'))}
+      />
       {/* Non-blocking notices (src/utils/notify.js) - what window.alert() used to be. */}
       <CommsFeed />
     </>
@@ -2721,7 +2727,9 @@ const App = () => {
         </button>
       </div>
 
-      {/* Selected Location Card */}
+      {/* Selected Location Card. On a phone it sits above the floating SOS button (80 px
+          tall, 80 px up, plus the safe area): it used to start at 96 px, so SOS - drawn on
+          top - covered the card's first button. 11rem clears it with a gap. */}
       <AnimatePresence>
         {selectedItem && activeTab === 'buildings' && (
           <motion.div
@@ -2729,7 +2737,8 @@ const App = () => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 60 }}
             transition={{ duration: 0.4 }}
-            className="absolute inset-x-4 bottom-24 md:inset-x-auto md:bottom-6 md:right-6 z-[600] md:w-80 max-h-[60vh] md:max-h-none overflow-y-auto bg-black border border-white/20 pointer-events-auto flex flex-col pt-6 pb-2"
+            data-testid="location-card"
+            className="absolute inset-x-4 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 z-[600] md:w-80 max-h-[55vh] md:max-h-none overflow-y-auto bg-black border border-white/20 pointer-events-auto flex flex-col pt-6 pb-2"
           >
             <div className="px-6 pb-4 border-b border-white/20 flex justify-between items-start">
               <div className="flex-1 pr-4">
