@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 import { Capacitor } from '@capacitor/core';
-import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 // `motion` is used throughout via <motion.div>/<motion.nav> JSX member expressions.
 // This project's eslint config has no eslint-plugin-react (only react-hooks/react-refresh),
 // so core no-unused-vars can't see through JSXMemberExpression tag names — false positive.
@@ -495,6 +495,9 @@ const App = () => {
   const [squadCode, setSquadCode] = useState('');
   const [squadMode, setSquadMode] = useState('create'); // 'create' or 'join'
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
+  // Why the lobby is showing again, when the server turned a request down (no live squad
+  // under the code, the code already taken, the squad gone). Cleared by the next action.
+  const [lobbyNotice, setLobbyNotice] = useState(null);
 
   // --- MAP ENGINE FALLBACK WATCHDOG ---
   // Armed only once the map screen is actually about to render (past auth +
@@ -515,15 +518,16 @@ const App = () => {
     return () => clearTimeout(timeoutId);
   }, [user, hasJoinedSquad, isMapReady, mapEngineFailed]);
 
-  // Auto-generate squad code when in 'create' mode. Intentionally keyed only on
-  // squadMode: this should fire once per switch into 'create', not every time
-  // squadCode itself changes (which would include the very setSquadCode call below).
+  // Keep a code ready on the CREATE screen: on first load, on switching to CREATE, and on
+  // coming back to the lobby after leaving (which clears the code). This used to be keyed
+  // on squadMode alone, so leaving a squad you had created, which clears the code but
+  // doesn't change the mode, left the screen on "GENERATING..." with INITIALIZE doing
+  // nothing. Re-running when the code changes is harmless: it only fills an empty one.
   useEffect(() => {
     if (squadMode === 'create' && !squadCode) {
       setSquadCode(generateRandomSquadCode());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [squadMode]);
+  }, [squadMode, squadCode]);
   // --- SQUAD GATEKEEPER STATES ---
   const [accessStatus, setAccessStatus] = useState(null);
   const [squadRole, setSquadRole] = useState(null);
@@ -572,9 +576,15 @@ const App = () => {
     // 1. Send the knock to the server FIRST
     socket.emit('request-join', {
       roomCode: targetRoom,
-      user: { name: user.displayName, photo: user.photoURL, uid: user.uid }
+      user: { name: user.displayName, photo: user.photoURL, uid: user.uid },
+      // Which of the two this is. The server used to have to guess, and guessed "create if
+      // missing, join if present" for both: a JOIN for a code whose squad wasn't live yet
+      // (its creator hadn't tapped INITIALIZE) made the joiner its Commander, and a CREATE
+      // under a live code queued the creator for a stranger's approval.
+      intent: squadMode === 'create' ? 'create' : 'join',
     });
 
+    setLobbyNotice(null);
     setHasJoinedSquad(true);
 
     if (squadMode === 'create') {
@@ -927,12 +937,48 @@ const App = () => {
     });
   }, [users]);
 
+  // Everything a squad session leaves on this client, cleared on the way back to the
+  // lobby: by leaving, by logging out, or when the server turns the request down.
+  // `nextCode` is what the lobby's code box shows next. The Commander's queue goes too: it
+  // used to survive leaving, and GRANT on an old request then answered for whatever squad
+  // the Commander was in by then.
+  const endSquadSession = useCallback((nextCode = '') => {
+    setHasJoinedSquad(false);
+    setSquadCode(nextCode);
+    setUsers([]);
+    setOfflineNodes({});
+    // Cancel in-flight ghost fade-outs so a stray one can't fire after the squad's gone.
+    Object.values(ghostFadeTimersRef.current).forEach(clearTimeout);
+    ghostFadeTimersRef.current = {};
+    setAccessStatus(null);
+    setSquadRole(null);
+    setPendingRequests([]);
+  }, []);
+
   // --- GATEKEEPER PROTOCOL LISTENERS ---
   // --- GATEKEEPER PROTOCOL LISTENERS (FIXED & RECONNECT SAFE) ---
   useEffect(() => {
-    socket.on('access-granted', ({ role }) => {
+    // The squad this client is in, or asking to join. Replies name the squad they're about,
+    // and one about any other squad is stale (a request given up on, a squad left): it used
+    // to be acted on anyway, so an approval from an abandoned squad flipped the role in the
+    // current one, and a stale denial threw the user out of it. Replies with no roomCode
+    // come from a server that predates it, and are taken as they always were.
+    const currentRoom = squadCode.trim().toUpperCase();
+    const isAboutThisSquad = (payload) =>
+      hasJoinedSquad && (!payload?.roomCode || payload.roomCode === currentRoom);
+
+    // Back to the lobby with the reason on screen. The code stays in the box, so a JOIN
+    // can be retried as it is; a CREATE whose code was taken gets a fresh one instead.
+    const returnToLobby = (notice, nextCode = squadCode) => {
+      socket.emit('leave-squad');
+      endSquadSession(nextCode);
+      setLobbyNotice(notice);
+    };
+
+    socket.on('access-granted', (payload) => {
+      if (!isAboutThisSquad(payload)) return;
       setAccessStatus('granted');
-      setSquadRole(role);
+      setSquadRole(payload?.role);
       // Now (back) in the squad's room: catch up on any SOS fired while this client
       // was offline, reconnecting or awaiting approval. Asked for here, not pushed by
       // the server right after 'access-granted', which could arrive before this
@@ -940,26 +986,63 @@ const App = () => {
       requestSosSync();
     });
 
-    socket.on('access-pending', () => setAccessStatus('pending'));
+    socket.on('access-pending', (payload) => {
+      if (isAboutThisSquad(payload)) setAccessStatus('pending');
+    });
 
-    socket.on('access-denied', () => {
+    socket.on('access-denied', (payload) => {
+      if (!isAboutThisSquad(payload)) return;
       setAccessStatus('denied');
       setHasJoinedSquad(false);
       alert("[SYS_REJECTED] The Squad Commander denied your entry.");
     });
 
-    socket.on('access-request', (requestData) => {
-      setPendingRequests(prev => [...prev, requestData]);
+    // A JOIN for a code no live squad has. Answered this way rather than by founding a new
+    // squad with the joiner as its Commander. Also sent when the squad is deleted while
+    // this client is still waiting to be let in, or after a reconnect finds it gone.
+    socket.on('squad-not-found', (payload) => {
+      if (!isAboutThisSquad(payload)) return;
+      returnToLobby(accessStatus === 'granted'
+        ? `SQUAD ${currentRoom} NO LONGER EXISTS ON THE SERVER.`
+        : `NO ACTIVE SQUAD WITH CODE ${currentRoom}. CHECK THE CODE, OR ASK YOUR COMMANDER TO INITIALIZE IT FIRST.`);
     });
 
-    socket.on('promoted-to-owner', () => setSquadRole('OWNER'));
+    // A CREATE under a code a live squad already has. Answered this way rather than by
+    // queueing the creator for that stranger squad's approval.
+    socket.on('squad-code-taken', (payload) => {
+      if (!isAboutThisSquad(payload)) return;
+      returnToLobby(
+        `CODE ${currentRoom} IS ALREADY IN USE BY ANOTHER SQUAD. A NEW CODE HAS BEEN GENERATED: SHARE THIS ONE INSTEAD.`,
+        generateRandomSquadCode()
+      );
+    });
+
+    // One entry per request: the server re-sends a squad's queue to whoever takes over as
+    // its Commander (a reconnect, a promotion), which must not stack duplicates.
+    socket.on('access-request', (requestData) => {
+      if (!isAboutThisSquad(requestData)) return;
+      setPendingRequests(prev => [...prev.filter(p => p.targetId !== requestData.targetId), requestData]);
+    });
+
+    // The joiner aborted, asked another squad, or dropped off: nothing left to approve.
+    socket.on('access-request-withdrawn', (payload) => {
+      setPendingRequests(prev => prev.filter(p => p.targetId !== payload?.targetId));
+    });
+
+    socket.on('promoted-to-owner', (payload) => {
+      if (isAboutThisSquad(payload)) setSquadRole('OWNER');
+    });
 
     const onConnect = () => {
       console.log("[SYS_SOCKET] Reconnected to network mainframe.");
       if (hasJoinedSquad && squadCode && user) {
         socket.emit('request-join', {
           roomCode: squadCode,
-          user: { name: user.displayName, photo: user.photoURL, uid: user.uid }
+          user: { name: user.displayName, photo: user.photoURL, uid: user.uid },
+          // A Commander resumes their squad, which re-creates it under its code if the
+          // server lost it (a restart wipes every squad). Anyone else only ever re-joins —
+          // a member, or a joiner still waiting — and must never found a squad of their own.
+          intent: accessStatus === 'granted' && squadRole === 'OWNER' ? 'resume' : 'join',
         });
       }
     };
@@ -970,11 +1053,14 @@ const App = () => {
       socket.off('access-granted');
       socket.off('access-pending');
       socket.off('access-denied');
+      socket.off('squad-not-found');
+      socket.off('squad-code-taken');
       socket.off('access-request');
+      socket.off('access-request-withdrawn');
       socket.off('promoted-to-owner');
       socket.off('connect', onConnect);
     };
-  }, [hasJoinedSquad, squadCode, user, requestSosSync]);
+  }, [hasJoinedSquad, squadCode, user, requestSosSync, accessStatus, squadRole, endSquadSession]);
 
   /// 2. Broadcast your live GPS data to the network
   // 2. Broadcast your live GPS data to the network
@@ -1240,36 +1326,21 @@ const App = () => {
     }
   };
 
-  // Cancels any in-flight ghost fade-out timers so a stray one doesn't fire
-  // a no-op setOfflineNodes update after the squad's already been left.
-  const clearGhostFadeTimers = () => {
-    Object.values(ghostFadeTimersRef.current).forEach(clearTimeout);
-    ghostFadeTimersRef.current = {};
-  };
-
   // --- 🚨 KILL SWITCH LOGOUT HANDLER ---
   const handleLogout = () => {
     socket.emit('leave-squad');
-    setHasJoinedSquad(false);
-    setSquadCode('');
-    setUsers([]);
+    endSquadSession();
     setLiveLocation(null);
     signOut(auth);
-    setOfflineNodes({});
-    clearGhostFadeTimers();
     setLocationAccessDenied(false);
   };
 
+  // endSquadSession also resets accessStatus: without that, a stale 'granted' (e.g. from
+  // owning the squad just left) survives into the next join attempt — see
+  // handleJoinSquad's comment.
   const handleLeaveSquad = () => {
     socket.emit('leave-squad');
-    setHasJoinedSquad(false);
-    setSquadCode('');
-    setUsers([]);
-    setOfflineNodes({});
-    clearGhostFadeTimers();
-    // Without this, a stale 'granted' (e.g. from owning the squad just left)
-    // survives into the next join attempt — see handleJoinSquad's comment.
-    setAccessStatus(null);
+    endSquadSession();
   };
 
   const sendPing = (targetId) => {
@@ -1612,6 +1683,7 @@ const App = () => {
               onClick={() => {
                 setSquadMode('create');
                 setSquadCode(generateRandomSquadCode());
+                setLobbyNotice(null);
               }}
               className={`flex-1 py-3 transition-colors ${squadMode === 'create' ? 'bg-white text-black font-bold' : 'text-zinc-500 hover:text-white'}`}
             >
@@ -1621,12 +1693,19 @@ const App = () => {
               onClick={() => {
                 setSquadMode('join');
                 setSquadCode('');
+                setLobbyNotice(null);
               }}
               className={`flex-1 py-3 transition-colors border-l border-white/20 ${squadMode === 'join' ? 'bg-white text-black font-bold' : 'text-zinc-500 hover:text-white'}`}
             >
               JOIN SQUAD
             </button>
           </div>
+
+          {lobbyNotice && (
+            <p role="alert" className="mb-6 p-3 border border-red-500/50 bg-red-500/10 text-left font-dot text-[10px] text-red-400 uppercase tracking-widest leading-relaxed">
+              {lobbyNotice}
+            </p>
+          )}
 
           {squadMode === 'create' ? (
             <div className="space-y-6">
@@ -1638,7 +1717,7 @@ const App = () => {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setSquadCode(generateRandomSquadCode())}
+                    onClick={() => { setSquadCode(generateRandomSquadCode()); setLobbyNotice(null); }}
                     className="p-2 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
                     title="Generate New Code"
                   >
@@ -1666,7 +1745,7 @@ const App = () => {
                   placeholder="E.G. KTR7X9"
                   className="w-full bg-black border border-white/30 py-4 text-center font-dot text-lg uppercase tracking-[0.2em] focus:outline-none focus:border-red-500 text-white transition-colors placeholder:text-zinc-700"
                   value={squadCode}
-                  onChange={(e) => setSquadCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                  onChange={(e) => { setSquadCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')); setLobbyNotice(null); }}
                   maxLength={8}
                 />
               </div>
@@ -2141,6 +2220,10 @@ const App = () => {
 
           <button
             onClick={() => {
+              // Tell the server too. It used to go on holding the request, and a Commander
+              // who tapped GRANT later pulled this user into their squad, wherever they had
+              // gone since (see resolve-access in backend/server.js).
+              socket.emit('cancel-join', { roomCode: squadCode.trim().toUpperCase() });
               setHasJoinedSquad(false);
               setAccessStatus(null);
             }}
@@ -2626,7 +2709,8 @@ const App = () => {
                         <div className="flex gap-3 mt-2">
                           <button
                             onClick={() => {
-                              socket.emit('resolve-access', { targetId: node.targetId, roomCode: squadCode, approved: true });
+                              // The squad the request was made to, not merely the one on screen.
+                              socket.emit('resolve-access', { targetId: node.targetId, roomCode: node.roomCode || squadCode, approved: true });
                               setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
                             }}
                             className="flex-1 bg-white/10 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/20 hover:border-emerald-400 py-3 font-dot text-xs uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]"
@@ -2635,7 +2719,7 @@ const App = () => {
                           </button>
                           <button
                             onClick={() => {
-                              socket.emit('resolve-access', { targetId: node.targetId, roomCode: squadCode, approved: false });
+                              socket.emit('resolve-access', { targetId: node.targetId, roomCode: node.roomCode || squadCode, approved: false });
                               setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
                             }}
                             className="flex-1 bg-black text-red-500 py-3 border border-red-500/30 hover:bg-red-500/10 hover:border-red-500 font-dot text-xs uppercase tracking-widest transition-all"
