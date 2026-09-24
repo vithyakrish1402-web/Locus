@@ -28,11 +28,13 @@ import { estimateWifiPosition } from './wifiPositioning.js';
 export const WIFI_CONFIDENCE_THRESHOLD = 0.6;
 
 /**
- * Time between scans. Note that 30 s is exactly the OS budget (4 per 2 minutes), not
- * under it: every scan is spent. The budget check in runCycle skips a cycle rather than
- * let one be refused, so this is safe, but anything faster only produces skipped cycles.
+ * Time between scans. 35 s spends at most 4 scans in any 2 minutes only at the very edge
+ * (0, 35, 70, 105 s), and usually 3, so it stays under the OS budget (4 per 2 minutes)
+ * with margin for timer drift and for a scan the OS counts slightly differently. 30 s
+ * would be exactly the budget. The budget check in runCycle skips a cycle rather than let
+ * one be refused either way.
  */
-export const WIFI_SCAN_INTERVAL_MS = 30_000;
+export const WIFI_SCAN_INTERVAL_MS = 35_000;
 
 /** How many recent fresh scans are merged into one estimate. */
 export const WIFI_SCAN_BUFFER_SIZE = 3;
