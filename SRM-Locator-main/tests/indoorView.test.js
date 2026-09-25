@@ -27,8 +27,8 @@ const WIFI = { lat: 12.8248, lng: 80.0449 };
 const INDOOR = { ...WIFI, building: 'TECH PARK', floor: 2, confidence: 0.8, floors: [0, 1, 2, 7] };
 
 describe('shipped defaults', () => {
-  it('ships both flags off and the constants as specified', () => {
-    expect(WIFI_POSITIONING_ENABLED).toBe(false);
+  it('ships WiFi on (TECH PARK field test, js-1.1.3), squad sharing off, and the constants as specified', () => {
+    expect(WIFI_POSITIONING_ENABLED).toBe(true);
     expect(SHOW_INDOOR_POSITION_TO_SQUAD).toBe(false);
     expect([MIN_HALO_PX, MAX_HALO_PX, RETURN_CHIP_DELAY_MS]).toEqual([24, 60, 2000]);
   });

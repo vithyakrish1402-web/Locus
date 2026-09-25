@@ -395,3 +395,42 @@ describe('the controller, for the map UI', () => {
     expect(fusion.indoor()).toBeNull();
   });
 });
+
+describe('lastCycle (the owner field-test readout)', () => {
+  it('is null before any cycle, and "unavailable" when there is no scanner', () => {
+    const noScanner = startWifiFusion({ isAvailable: () => false });
+    expect(noScanner.lastCycle()).toMatchObject({ outcome: 'unavailable' });
+    noScanner.stop();
+  });
+
+  it('reports a trusted estimate as used, with the scan size and the raw estimate', async () => {
+    const fusion = await start({ scan: async () => fresh([AP, { ...AP, bssid: 'aa:bb:cc:dd:ee:02' }]), estimate: async () => estimateOf(0.8), floorsFor: async () => [1] });
+    expect(fusion.lastCycle()).toMatchObject({
+      outcome: 'estimate', apsInScan: 2, usedWifi: true, threshold: WIFI_CONFIDENCE_THRESHOLD,
+      estimate: { building: 'TECH PARK', floor: 1, confidence: 0.8, matchedApCount: 4, totalApsSeen: 6 },
+    });
+    fusion.stop();
+  });
+
+  it('reports a weak estimate as not used - the numbers the floor picker never shows', async () => {
+    const fusion = await start({ scan: async () => fresh(), estimate: async () => estimateOf(0.4) });
+    expect(fusion.lastCycle()).toMatchObject({ outcome: 'estimate', usedWifi: false, estimate: { confidence: 0.4 } });
+    fusion.stop();
+  });
+
+  it('carries the error code of a failed scan, and the OS outcome of an empty one', async () => {
+    const failed = await start({ scan: async () => { throw Object.assign(new Error('no'), { code: 'LOCATION_OFF' }); } });
+    expect(failed.lastCycle()).toMatchObject({ outcome: 'scan-error', error: 'LOCATION_OFF', usedWifi: false });
+    failed.stop();
+
+    const throttled = await start({ scan: async () => ({ outcome: 'throttled', accepted: false }) });
+    expect(throttled.lastCycle()).toMatchObject({ outcome: 'throttled', apsInScan: 0, usedWifi: false });
+    throttled.stop();
+  });
+
+  it('carries the reason the survey table failed to load', async () => {
+    const fusion = await start({ scan: async () => fresh(), estimate: async () => { throw Object.assign(new Error('x'), { code: 'unavailable' }); } });
+    expect(fusion.lastCycle()).toMatchObject({ outcome: 'estimate-error', error: 'unavailable', apsInScan: 1 });
+    fusion.stop();
+  });
+});

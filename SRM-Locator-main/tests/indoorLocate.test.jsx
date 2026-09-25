@@ -38,12 +38,14 @@ const fakeSocket = vi.hoisted(() => {
 
 // The fusion controller: its indoor reading is whatever the test sets.
 const fake = vi.hoisted(() => ({ indoor: null, listeners: new Set(), started: 0 }));
+// Who is signed in: the owner's email makes isAdmin true in App.jsx.
+const signedIn = vi.hoisted(() => ({ email: null }));
 
 vi.mock('socket.io-client', () => ({ io: () => fakeSocket }));
 vi.mock('../src/firebase.js', () => ({ auth: { currentUser: null }, googleProvider: {}, db: {} }));
 vi.mock('firebase/auth', () => ({
   onAuthStateChanged: (_auth, callback) => {
-    callback({ uid: 'u-self', displayName: 'Alpha', photoURL: null });
+    callback({ uid: 'u-self', displayName: 'Alpha', photoURL: null, email: signedIn.email });
     return () => {};
   },
   signInWithPopup: vi.fn(),
@@ -168,6 +170,7 @@ beforeEach(() => {
   fake.indoor = null;
   fake.listeners.clear();
   fake.started = 0;
+  signedIn.email = null;
   vi.spyOn(window, 'alert').mockImplementation(() => {});
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
@@ -303,6 +306,24 @@ describe.each(['google', 'leaflet'])('on the %s engine', (engine) => {
       const bravoCard = screen.getAllByText('Bravo').find((el) => el.tagName === 'H4').closest('.relative');
       expect(bravoCard.textContent).toMatch(/\bM\b|KM/);
     });
+  });
+});
+
+describe('the WiFi field-test readout', () => {
+  it('is shown to the owner', async () => {
+    signedIn.email = 'vithyakrish1402@gmail.com';
+    const App = await loadApp({ share: false, engine: 'leaflet' });
+    await joinSquad(App);
+    expect(await screen.findByTestId('wifi-readout')).toBeTruthy();
+  });
+
+  it('is never shown to anyone else', async () => {
+    signedIn.email = 'someone@example.com';
+    const App = await loadApp({ share: false, engine: 'leaflet' });
+    await joinSquad(App);
+    setIndoor(INDOOR);
+    await waitFor(() => expect(floorTabs()).not.toBeNull());
+    expect(screen.queryByTestId('wifi-readout')).toBeNull();
   });
 });
 
