@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { releaseVersionConflict } from '../src/utils/liveUpdateManifest.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
@@ -118,6 +119,17 @@ const nextCode = isBaseline ? currentCode : currentCode + 1;
 
 const existingTag = capture('git', ['tag', '--list', `v${version}`]);
 if (existingTag.stdout) die(`tag v${version} already exists`);
+
+// Every release tag on GitHub, in both series. Releases are made with `gh release create`,
+// which tags on GitHub only, so the local clone's tags can't be trusted to be complete.
+const publishedTags = () => {
+  const listed = capture('gh', ['release', 'list', '--limit', '500', '--json', 'tagName', '--jq', '.[].tagName']);
+  if (listed.status !== 0) die('could not list the published releases (gh release list)');
+  return listed.stdout.split(/\r?\n/).filter(Boolean);
+};
+// Above every JS bundle too: see releaseVersionConflict.
+const versionConflict = releaseVersionConflict(version, publishedTags());
+if (versionConflict) die(versionConflict);
 
 if (isBaseline) {
   console.log(`\n  LOCUS BASELINE release ${version} (code ${currentCode}) - first release, nothing bumped`);
