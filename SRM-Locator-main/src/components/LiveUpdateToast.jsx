@@ -45,11 +45,54 @@ function useTyping() {
   return typing;
 }
 
+/** Whole seconds since `startedAt`, ticking once a second while `running`. */
+function useElapsed(startedAt, running) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return undefined;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+  return startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+}
+
+/**
+ * The download's bar: filled to the plugin's percent once it reports one, and until then
+ * a sliding sweep, so a phone waiting on its first byte still visibly works.
+ */
+function DownloadBar({ percent }) {
+  const known = Number.isFinite(percent);
+  return (
+    <div
+      role="progressbar"
+      aria-label="Update download"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={known ? percent : undefined}
+      className="relative mt-3 h-1 w-full overflow-hidden bg-white/10"
+    >
+      {known ? (
+        <div className="h-full bg-red-500 transition-[width] duration-300 ease-out" style={{ width: `${percent}%` }} />
+      ) : (
+        <div data-testid="download-sweep" className="locus-download-sweep absolute inset-y-0 w-1/3 bg-red-500" />
+      )}
+    </div>
+  );
+}
+
 const LiveUpdateToast = ({ live, aboveTabBar = false, hidden = false }) => {
   const typing = useTyping();
+  const [restarting, setRestarting] = useState(false);
+  // Only read the status once the strip is showing at all, as before this existed.
+  const downloading = Boolean(live?.visible) && live.status === LiveUpdateStatus.DOWNLOADING;
+  const elapsed = useElapsed(live?.download?.startedAt, downloading);
   if (!live?.visible || hidden || typing) return null;
 
   const blocked = live.status === LiveUpdateStatus.BLOCKED;
+  const failed = live.status === LiveUpdateStatus.ERROR;
+  const version = live.manifest?.version;
+  const percent = live.download?.percent;
+  const title = downloading ? 'UPDATING' : failed ? 'UPDATE FAILED' : blocked ? 'UPDATE BLOCKED' : 'UPDATE READY';
 
   return (
     <div
@@ -63,10 +106,22 @@ const LiveUpdateToast = ({ live, aboveTabBar = false, hidden = false }) => {
         <div className="min-w-0 flex-1">
           <div className="font-dot text-[10px] uppercase tracking-widest text-red-500">
             {/* Nothing is applied until RESTART is tapped. */}
-            {blocked ? 'UPDATE BLOCKED' : 'UPDATE READY'}
+            {title}
+            {downloading && (
+              <span className="ml-2 text-zinc-500">
+                {Number.isFinite(percent) ? `${percent}%` : 'PREPARING'} · {elapsed}S
+              </span>
+            )}
           </div>
           <p className="mt-1 font-inter text-[12px] leading-snug text-zinc-400">
-            {blocked ? (
+            {downloading ? (
+              <>Downloading version {version}. Keep LOCUS open until it&apos;s ready - closing it stops the download.</>
+            ) : failed ? (
+              <>
+                Version {version} didn&apos;t install{live.error?.message ? ` (${live.error.message})` : ''}. LOCUS
+                will try again next time you open it.
+              </>
+            ) : blocked ? (
               <>
                 Bundle {live.manifest?.version} needs app version {live.manifest?.minNative} or newer. Install the
                 full update first.
@@ -75,14 +130,19 @@ const LiveUpdateToast = ({ live, aboveTabBar = false, hidden = false }) => {
               <>Version {live.manifest?.version} is ready. Restart to use it.</>
             )}
           </p>
+          {downloading && <DownloadBar percent={percent} />}
         </div>
-        {!blocked && (
+        {live.status === LiveUpdateStatus.READY && (
           <button
             type="button"
-            onClick={live.applyNow}
-            className="font-dot text-[10px] uppercase tracking-widest px-4 py-2.5 border border-red-500 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+            disabled={restarting}
+            onClick={() => {
+              setRestarting(true);
+              live.applyNow();
+            }}
+            className="font-dot text-[10px] uppercase tracking-widest px-4 py-2.5 border border-red-500 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-60"
           >
-            Restart
+            {restarting ? 'Restarting...' : 'Restart'}
           </button>
         )}
         <button
