@@ -123,17 +123,6 @@ export default function SquadMemberCard({ member, me, heading, headingLive, isOw
                 <span className="ml-1 text-xs text-zinc-400">{shownDistance.unit}</span>
               </p>
               <p className="mt-1.5 font-dot text-[10px] uppercase tracking-widest text-red-400">{direction}</p>
-              {/* WiFi Arc Stage 7: the floor they're on, while their telemetry says so. Only
-                  this chip depends on it - distance, direction and freshness above are GPS
-                  and carry on when they leave coverage. */}
-              {SHOW_INDOOR_POSITION_TO_SQUAD && hasIndoorFloor(member) && (
-                <span
-                  data-testid="member-floor-chip"
-                  className="mt-1.5 inline-block px-1.5 py-0.5 font-dot text-[9px] uppercase tracking-widest border border-white/20 text-zinc-300 whitespace-nowrap"
-                >
-                  {member.building} · {floorLabel(member.floor)}
-                </span>
-              )}
             </div>
             <div className="ml-auto flex flex-col items-end gap-1 font-dot text-[10px] uppercase tracking-widest text-zinc-400">
               <span className="flex items-center gap-1.5">
@@ -151,6 +140,18 @@ export default function SquadMemberCard({ member, me, heading, headingLive, isOw
           <div className="mt-4 w-full py-3 border border-dashed border-white/20 text-zinc-500 font-dot text-xs uppercase tracking-widest text-center">
             AWAITING_GPS_FIX
           </div>
+        )}
+
+        {/* WiFi Arc Stage 7: the floor they're on, while their telemetry says so. Only this
+            chip depends on it - the direction finder above is GPS and carries on when they
+            leave coverage. Outside that block, because it needs no fix of your own. */}
+        {SHOW_INDOOR_POSITION_TO_SQUAD && hasIndoorFloor(member) && (
+          <p
+            data-testid="member-floor-chip"
+            className="mt-3 inline-block px-1.5 py-0.5 font-dot text-[9px] uppercase tracking-widest border border-white/20 text-zinc-300 whitespace-nowrap"
+          >
+            {member.building} · {floorLabel(member.floor)}
+          </p>
         )}
 
         {/* What to do */}

@@ -306,6 +306,18 @@ describe.each(['google', 'leaflet'])('on the %s engine', (engine) => {
   });
 });
 
+describe("a squadmate's floor chip", () => {
+  it('shows even when you have no GPS fix of your own to aim the direction finder with', async () => {
+    navigator.geolocation.getCurrentPosition = vi.fn((_ok, fail) => fail({ code: 1, message: 'User denied Geolocation' }));
+    const App = await loadApp({ share: true, engine: 'leaflet' });
+    await joinSquad(App);
+    squadUpdate([BRAVO]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    await screen.findByText('AWAITING_GPS_FIX');
+    expect(screen.getByTestId('member-floor-chip').textContent).toBe('TECH PARK · F7');
+  });
+});
+
 describe('where your own dot is drawn (Google engine)', () => {
   it('at the WiFi position while indoors, back on GPS after', async () => {
     const App = await loadApp({ share: false, engine: 'google' });
