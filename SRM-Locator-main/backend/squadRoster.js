@@ -22,6 +22,11 @@
 export const isKnownMember = (squad, uid) =>
   Boolean(uid) && Boolean(squad?.knownUids?.includes(uid));
 
+// The uid of the squad's own Commander, whose squad it stays while they're away and whom
+// a stand-in (a caretaker, or a member promoted meanwhile) hands it back to. ownerUid is
+// whoever holds command right now. A squad made before commanderUid existed has only that.
+export const commanderOf = (squad) => squad?.commanderUid ?? squad?.ownerUid ?? null;
+
 // Record `uid` as an admitted member. No-op without a uid.
 export function rememberMember(squad, uid) {
   if (!uid) return;
@@ -119,7 +124,9 @@ export function rebindReturningMember(squad, { uid, socketId }) {
 export function refuseJoin(squad, { intent, uid, isSocketLive = () => true }) {
   const members = squad?.members ?? [];
   if (intent === 'join' && !members.some(isSocketLive)) return 'squad-not-found';
-  if (intent === 'create' && members.length > 0 && !(uid && squad.ownerUid === uid)) return 'squad-code-taken';
+  if (intent === 'create' && members.length > 0 && !(uid && (squad.ownerUid === uid || commanderOf(squad) === uid))) {
+    return 'squad-code-taken';
+  }
   return null;
 }
 

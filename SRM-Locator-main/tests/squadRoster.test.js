@@ -217,6 +217,15 @@ describe('what a join request means', () => {
     expect(refuseJoin(undefined, { intent: 'create', uid: 'uX' })).toBeNull();
   });
 
+  it('treats a CREATE from the Commander as theirs while a stand-in holds command', () => {
+    // Bravo stands in for Alpha. Alpha's retried CREATE is Alpha's squad coming back to
+    // them, not a stranger's code: refusing it sent them to the lobby with a new code.
+    const standIn = { ...squad(), ownerId: 'sock-b', ownerUid: 'uB', commanderUid: 'uA' };
+    expect(refuseJoin(standIn, { intent: 'create', uid: 'uA' })).toBeNull();
+    expect(refuseJoin(standIn, { intent: 'create', uid: 'uB' })).toBeNull();
+    expect(refuseJoin(standIn, { intent: 'create', uid: 'uC' })).toBe('squad-code-taken');
+  });
+
   it('refuses a JOIN for a squad whose members have all dropped off, before the sweep reaches it', () => {
     const allGone = () => false;
     expect(refuseJoin(squad(), { intent: 'join', uid: 'uX', isSocketLive: allGone })).toBe('squad-not-found');

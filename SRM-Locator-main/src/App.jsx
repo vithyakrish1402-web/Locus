@@ -35,7 +35,7 @@ import SosOverlay from './components/SosOverlay';
 import UpdateModal from './components/UpdateModal';
 import LiveUpdateToast from './components/LiveUpdateToast';
 import BottomTabBar from './components/BottomTabBar';
-import CommsFeed from './components/CommsFeed';
+import CommsFeed from './components/CommsFeed';
 import { CodeTiles, CodeInput } from './components/SquadCode';
 import SquadMemberCard from './components/SquadMemberCard';
 import { sortByDistance } from './utils/direction';
@@ -1166,6 +1166,16 @@ const App = () => {
       if (isAboutThisSquad(payload)) setSquadRole('OWNER');
     });
 
+    // This client stood in as Commander, and the Commander is back. The server no longer
+    // takes Commander decisions from here, so neither may the screen: the join queue goes
+    // to the Commander, and the controls with the role (see the effect on squadRole).
+    socket.on('demoted-to-member', (payload) => {
+      if (!isAboutThisSquad(payload)) return;
+      setSquadRole('MEMBER');
+      setPendingRequests([]);
+      notify.info('[SYS] THE SQUAD COMMANDER IS BACK. YOU ARE A SQUAD MEMBER AGAIN.');
+    });
+
     const onConnect = () => {
       console.log("[SYS_SOCKET] Reconnected to network mainframe.");
       if (hasJoinedSquad && squadCode && user) {
@@ -1191,6 +1201,7 @@ const App = () => {
       socket.off('access-request');
       socket.off('access-request-withdrawn');
       socket.off('promoted-to-owner');
+      socket.off('demoted-to-member');
       socket.off('connect', onConnect);
     };
   }, [hasJoinedSquad, squadCode, user, requestSosSync, accessStatus, squadRole, endSquadSession]);
@@ -1377,6 +1388,15 @@ const App = () => {
   const [blockedUserIds, setBlockedUserIds] = useState([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [modalTab, setModalTab] = useState('requests');
+
+  // Commander-only screens close when the role goes: a stand-in handing the squad back
+  // to its returning Commander could otherwise be left looking at the join queue, or the
+  // telemetry matrix, with every action on them refused.
+  useEffect(() => {
+    if (squadRole === 'OWNER') return;
+    setShowRequestsModal(false);
+    setShowTelemetryModal(false);
+  }, [squadRole]);
 
   const [mapProps, setMapProps] = useState({ center: SRM_KTR_COORDS, zoom: 17 });
   const mapRef = useRef(null);
