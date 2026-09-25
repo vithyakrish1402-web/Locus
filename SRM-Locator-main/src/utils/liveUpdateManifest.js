@@ -151,3 +151,31 @@ export function shouldApplyBundle({ nativeVersion, currentBundleVersion, manifes
 
   return { apply: true, reason: 'UPDATE_AVAILABLE' };
 }
+
+
+/**
+ * Release-time guard: why `version` can't be published, given every tag already
+ * published in either series (`v*` APKs, `js-*` bundles), or null if it can.
+ *
+ * Both series sit on one number line, because shouldApplyBundle counts a phone running
+ * the JS built into its APK ("builtin") as running the APK's version. So a bundle numbered
+ * at or below the newest APK is skipped by every fresh install of that APK as
+ * ALREADY_CURRENT, silently: js-1.0.9, cut after v1.1.0, never reached a phone. And an
+ * APK numbered at or below the newest bundle has its built-in JS replaced, on first
+ * launch, by that older bundle. Each release must be numbered above everything published.
+ *
+ * `extraVersions` are versions not (yet) tagged that count too, such as the versionName
+ * in build.gradle.
+ */
+export function releaseVersionConflict(version, publishedTags = [], extraVersions = []) {
+  if (!parseVersion(version)) return `"${version}" is not a version`;
+  const published = [
+    ...publishedTags.map((tag) => String(tag).replace(/^js-/, '').replace(/^[vV]/, '')),
+    ...extraVersions,
+  ].filter((v) => parseVersion(v));
+  const highest = published.reduce((best, v) => (!best || compareVersions(v, best) === 1 ? v : best), null);
+  if (highest && compareVersions(version, highest) !== 1) {
+    return `${version} is not above ${highest}, the highest version already published (APK and JS bundles share one number line; see releaseVersionConflict)`;
+  }
+  return null;
+}

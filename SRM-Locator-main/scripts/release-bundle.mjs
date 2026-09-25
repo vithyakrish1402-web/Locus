@@ -21,6 +21,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { zipDirectory } from './lib/zip.mjs';
+import { releaseVersionConflict } from '../src/utils/liveUpdateManifest.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
@@ -93,6 +94,18 @@ if (minMaj > natMaj || (minMaj === natMaj && (minMin > natMin || (minMin === nat
 }
 
 if (capture('git', ['tag', '--list', `js-${version}`]).stdout) die(`tag js-${version} already exists`);
+
+// Every release tag on GitHub, in both series. Releases are made with `gh release create`,
+// which tags on GitHub only, so the local clone's tags can't be trusted to be complete.
+const publishedTags = () => {
+  const listed = capture('gh', ['release', 'list', '--limit', '500', '--json', 'tagName', '--jq', '.[].tagName']);
+  if (listed.status !== 0) die('could not list the published releases (gh release list)');
+  return listed.stdout.split(/\r?\n/).filter(Boolean);
+};
+// Above the APK this build.gradle describes as well as every release: a phone running
+// that APK's own JS counts as running its versionName (see releaseVersionConflict).
+const versionConflict = releaseVersionConflict(version, publishedTags(), [nativeName]);
+if (versionConflict) die(versionConflict);
 
 console.log(`\n  LOCUS JS bundle js-${version}`);
 console.log(`  Requires native shell >= ${minNative} (current native versionName: ${nativeName})`);

@@ -15,6 +15,8 @@ mechanism, in two tiers:
 plugin, it is a Phase 1 release.** Everything else — the overwhelming majority of
 day-to-day fixes — can go out as a Phase 2 bundle with no reinstall at all.
 
+**Both tag series share one number line.** Number every release, APK or bundle, above everything already published in either series. A phone running the JS built into its APK counts as running the APK's version. So a bundle numbered at or below the newest APK is silently skipped by every fresh install of it: `js-1.0.9`, cut after `v1.1.0`, never reached a phone and was reissued as `js-1.1.1`. An APK numbered at or below the newest bundle is worse: on first launch, that older bundle replaces the APK's own JS. Both release scripts refuse such a version (`releaseVersionConflict` in `src/utils/liveUpdateManifest.js`).
+
 # Phase 1 — full APK self-updater
 
 ## How it works

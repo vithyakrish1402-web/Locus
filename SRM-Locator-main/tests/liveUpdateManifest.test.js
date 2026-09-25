@@ -4,6 +4,7 @@ import {
   extractBundleNotes,
   isBundleCompatible,
   parseBundleRelease,
+  releaseVersionConflict,
   selectLatestBundleRelease,
   shouldApplyBundle,
 } from '../src/utils/liveUpdateManifest';
@@ -216,5 +217,38 @@ describe('shouldApplyBundle', () => {
       apply: false,
       reason: 'NO_BUNDLE_PUBLISHED',
     });
+  });
+});
+
+describe('releaseVersionConflict (one number line for APKs and JS bundles)', () => {
+  const published = ['v1.0.0', 'js-1.0.5', 'js-1.0.8', 'v1.1.0', 'js-1.0.9'];
+
+  it('refuses a bundle a fresh install of the newest APK would skip, as js-1.0.9 was', () => {
+    // The phone on v1.1.0's own JS counts as running 1.1.0, so 1.0.9 is "already current".
+    expect(releaseVersionConflict('1.0.9', published.slice(0, 4), ['1.1.0'])).toMatch(/not above 1\.1\.0/);
+    expect(shouldApplyBundle({
+      nativeVersion: '1.1.0',
+      currentBundleVersion: 'builtin',
+      manifest: { version: '1.0.9', minNative: '1.1.0' },
+    })).toEqual({ apply: false, reason: 'ALREADY_CURRENT' });
+  });
+
+  it('refuses a bundle below the build.gradle versionName, even before that APK is tagged', () => {
+    expect(releaseVersionConflict('1.1.1', ['v1.1.0'], ['1.2.0'])).toMatch(/not above 1\.2\.0/);
+  });
+
+  it('refuses an APK at or below the newest bundle, whose JS would replace the APK\'s own', () => {
+    expect(releaseVersionConflict('1.1.1', [...published, 'js-1.1.1'])).toMatch(/not above 1\.1\.1/);
+    expect(releaseVersionConflict('1.1.0', ['v1.0.0', 'js-1.1.4'])).toMatch(/not above 1\.1\.4/);
+  });
+
+  it('allows the next version above everything published, in either series', () => {
+    expect(releaseVersionConflict('1.1.1', published, ['1.1.0'])).toBeNull();
+    expect(releaseVersionConflict('1.2.0', [...published, 'js-1.1.1'])).toBeNull();
+    expect(releaseVersionConflict('1.0.0', [])).toBeNull(); // the baseline release
+  });
+
+  it('ignores tags that are not versions', () => {
+    expect(releaseVersionConflict('1.0.1', ['nightly', 'js-latest', 'v1.0.0'])).toBeNull();
   });
 });
