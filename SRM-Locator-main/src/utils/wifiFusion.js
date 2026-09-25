@@ -109,8 +109,8 @@ export function indoorReading(estimate, threshold = WIFI_CONFIDENCE_THRESHOLD) {
  * touches is injectable so tests can drive it without a phone or Firestore.
  *
  * @returns {{resolve(gps): {lat:number, lng:number, positionSource:'gps'|'wifi'},
- *   indoor(): object|null, subscribe(listener): Function, runCycle(): Promise<void>,
- *   stop(): void}}
+ *   indoor(): object|null, lastCycle(): object|null, subscribe(listener): Function,
+ *   runCycle(): Promise<void>, stop(): void}}
  */
 export function startWifiFusion({
   scan = () => WifiScan.scan(),
@@ -131,13 +131,16 @@ export function startWifiFusion({
   let buffer = []; // [{ at, aps }], oldest first, fresh non-empty scans only
   let acceptedAt = []; // our request times of scans the OS accepted, for scanBudget
   const listeners = new Set();
+  // What the last cycle did, for the owner's field-test readout: never read by resolve().
+  let last = null;
 
   const freshEstimate = () => (current && now() - current.at <= maxEstimateAgeMs ? current : null);
 
   // Every exit path of a cycle goes through here, so none can leave an old estimate in
   // place: a cycle either sets a new one or clears it.
-  const finish = (estimateOrNull, outcome) => {
+  const finish = (estimateOrNull, outcome, detail = {}) => {
     current = estimateOrNull;
+    last = { outcome, at: now(), ...detail };
     onCycle(outcome);
     listeners.forEach((listener) => listener());
   };
@@ -153,9 +156,9 @@ export function startWifiFusion({
       let result;
       try {
         result = await scan();
-      } catch {
+      } catch (err) {
         // PERMISSION_DENIED, WIFI_OFF, LOCATION_OFF, SCAN_IN_PROGRESS...: no scan, so GPS.
-        return finish(null, 'scan-error');
+        return finish(null, 'scan-error', { error: err?.code || err?.message || 'unknown' });
       }
       if (stopped) return;
       // Counted unless the plugin says the OS refused it: over-counting only delays a
@@ -163,7 +166,7 @@ export function startWifiFusion({
       if (result?.accepted !== false) acceptedAt.push(requestedAt);
 
       const aps = result?.aps;
-      if (!Array.isArray(aps) || aps.length === 0) return finish(null, result?.outcome ?? 'no-aps');
+      if (!Array.isArray(aps) || aps.length === 0) return finish(null, result?.outcome ?? 'no-aps', { apsInScan: 0 });
 
       buffer.push({ at: requestedAt, aps });
       buffer = buffer.filter((s) => requestedAt - s.at <= maxScanAgeMs).slice(-bufferSize);
@@ -171,10 +174,10 @@ export function startWifiFusion({
       let next;
       try {
         next = await estimate(buffer.map((s) => s.aps));
-      } catch {
+      } catch (err) {
         // wifi_aps failed to load (offline, signed out). Stage 5 doesn't cache the failure,
         // so the next cycle tries the read again.
-        return finish(null, 'estimate-error');
+        return finish(null, 'estimate-error', { apsInScan: aps.length, error: err?.code || err?.message || 'unknown' });
       }
       if (stopped) return;
 
@@ -189,7 +192,7 @@ export function startWifiFusion({
         }
         if (stopped) return;
       }
-      finish({ ...next, floors, at: now() }, 'estimate');
+      finish({ ...next, floors, at: now() }, 'estimate', { apsInScan: aps.length, estimate: next });
     } finally {
       busy = false;
     }
@@ -199,6 +202,8 @@ export function startWifiFusion({
   if (isAvailable()) {
     runCycle();
     timer = setInterval(runCycle, intervalMs);
+  } else {
+    last = { outcome: 'unavailable', at: now() };
   }
 
   return {
@@ -214,6 +219,16 @@ export function startWifiFusion({
       const fresh = freshEstimate();
       const reading = indoorReading(fresh, threshold);
       return reading && { ...reading, expiresAt: fresh.at + maxEstimateAgeMs };
+    },
+    /**
+     * The last cycle, for the owner's field-test readout: { outcome, at, apsInScan?,
+     * error?, estimate? (Stage 5's raw result, trusted or not), usedWifi }, or null before
+     * the first cycle ends.
+     */
+    lastCycle() {
+      if (!last) return null;
+      const usedWifi = Boolean(last.estimate) && choosePosition({ lat: NaN, lng: NaN }, last.estimate, threshold).positionSource === 'wifi';
+      return { ...last, usedWifi, threshold };
     },
     /** Calls `listener` after every cycle and on stop(). Returns the unsubscribe. */
     subscribe(listener) {

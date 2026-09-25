@@ -5,7 +5,7 @@ import { renderHook, act, cleanup } from '@testing-library/react';
 // Each WiFi module counts its own loading. With the flag off, none may load at all: the
 // point is that no WiFi code runs, not merely that the answer comes back as GPS.
 const loads = vi.hoisted(() => ({ wifiFusion: 0, wifiScan: 0, wifiPositioning: 0 }));
-const fusion = vi.hoisted(() => ({ start: null, resolve: null, stop: null, indoor: null, listeners: null }));
+const fusion = vi.hoisted(() => ({ start: null, resolve: null, stop: null, indoor: null, listeners: null, lastCycle: null }));
 
 const GPS = { lat: 12.8231, lng: 80.0442 };
 
@@ -39,7 +39,9 @@ beforeEach(() => {
   fusion.stop = vi.fn();
   fusion.indoor = null;
   fusion.listeners = new Set();
+  fusion.lastCycle = null;
   fusion.start = vi.fn(() => ({
+    lastCycle: () => fusion.lastCycle,
     resolve: fusion.resolve,
     stop: fusion.stop,
     indoor: () => fusion.indoor,
@@ -55,12 +57,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('flag off (the shipped default)', () => {
-  it('is off in the source', async () => {
+describe('flag off', () => {
+  it('is ON in the source since js-1.1.3 (the TECH PARK field test)', async () => {
     vi.resetModules();
     vi.doUnmock('../src/utils/positionSource.js');
     const { WIFI_POSITIONING_ENABLED } = await import('../src/utils/positionSource.js');
-    expect(WIFI_POSITIONING_ENABLED).toBe(false);
+    expect(WIFI_POSITIONING_ENABLED).toBe(true);
   });
 
   it('loads no WiFi module, starts no timer, and answers GPS - even while active', async () => {
@@ -191,5 +193,24 @@ describe('flag on: the indoor reading (Stage 7)', () => {
     rerender({ active: false });
     expect(result.current.indoor).toBeNull();
     expect(fusion.listeners.size).toBe(0);
+  });
+});
+
+describe('flag on: the last cycle, for the owner readout', () => {
+  it('is read on start (so "unavailable" shows at once) and after every cycle, and cleared when inactive', async () => {
+    const useWifiFusion = await loadHook({ enabled: true });
+    fusion.lastCycle = { outcome: 'unavailable', at: 1 };
+    const { result, rerender } = renderHook(({ active }) => useWifiFusion(active), { initialProps: { active: true } });
+    await settle();
+    expect(result.current.lastCycle).toEqual({ outcome: 'unavailable', at: 1 });
+
+    act(() => {
+      fusion.lastCycle = { outcome: 'throttled', at: 2 };
+      fusion.listeners.forEach((listener) => listener());
+    });
+    expect(result.current.lastCycle.outcome).toBe('throttled');
+
+    rerender({ active: false });
+    expect(result.current.lastCycle).toBeNull();
   });
 });

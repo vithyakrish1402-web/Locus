@@ -12,7 +12,9 @@ import {
  *   `update-location` emits in App.jsx (building/floor only with
  *   SHOW_INDOOR_POSITION_TO_SQUAD on - see withIndoorFields);
  * - indoor: the fusion controller's current indoor reading ({ lat, lng, building, floor,
- *   confidence, floors, expiresAt }) for the map UI, or null.
+ *   confidence, floors, expiresAt }) for the map UI, or null;
+ * - lastCycle: what the last scan cycle did (see wifiFusion's lastCycle), for the owner's
+ *   field-test readout, or null.
  *
  * With WIFI_POSITIONING_ENABLED false (the default) this is the whole story: the effects
  * return before doing anything, wifiFusion.js is never imported (and, the flag being a
@@ -27,6 +29,7 @@ import {
 export function useWifiFusion(active) {
   const fusionRef = useRef(null);
   const [indoor, setIndoor] = useState(null);
+  const [lastCycle, setLastCycle] = useState(null);
 
   useEffect(() => {
     if (WIFI_POSITIONING_ENABLED && active) {
@@ -38,7 +41,12 @@ export function useWifiFusion(active) {
           if (cancelled) return;
           fusion = startWifiFusion();
           fusionRef.current = fusion;
-          unsubscribe = fusion.subscribe(() => setIndoor(fusion.indoor()));
+          const sync = () => {
+            setIndoor(fusion.indoor());
+            setLastCycle(fusion.lastCycle?.() ?? null);
+          };
+          unsubscribe = fusion.subscribe(sync);
+          sync(); // 'unavailable' is known before any cycle runs
         })
         .catch((err) => {
           // A failed chunk load leaves positionFor on GPS, which is today's behaviour.
@@ -50,6 +58,7 @@ export function useWifiFusion(active) {
         fusion?.stop();
         fusionRef.current = null;
         setIndoor(null);
+        setLastCycle(null);
       };
     }
   }, [active]);
@@ -71,5 +80,5 @@ export function useWifiFusion(active) {
     // A constant, so a squad-flag-off build keeps only the plain position.
     return SHOW_INDOOR_POSITION_TO_SQUAD ? withIndoorFields(position, fusionRef.current) : position;
   }, []);
-  return { positionFor, indoor };
+  return { positionFor, indoor, lastCycle };
 }

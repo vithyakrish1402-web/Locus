@@ -50,6 +50,7 @@ import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD } from './utils
 import { isOnOtherFloor, memberFloorTag } from './utils/indoorView';
 import { ConfidenceHalo, FloorTag } from './components/IndoorMarkers';
 import FloorPicker from './components/FloorPicker';
+import WifiReadout from './components/WifiReadout';
 import { useIsMobile } from './hooks/useIsMobile';
 import { haptic } from './utils/haptics';
 import { shouldDismissSheet, SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard } from './utils/motion';
@@ -626,7 +627,8 @@ const App = () => {
   // there is one, your own dot is drawn at the WiFi position - the one your squad is being
   // sent - with a confidence halo, and the floor picker appears. indoorView is the picker's
   // purely local state: nothing in it reaches positionFor.
-  const { positionFor, indoor } = useWifiFusion(Boolean(user && hasJoinedSquad && accessStatus === 'granted'));
+  const wifiActive = Boolean(user && hasJoinedSquad && accessStatus === 'granted');
+  const { positionFor, indoor, lastCycle } = useWifiFusion(wifiActive);
   const indoorView = useIndoorView(WIFI_POSITIONING_ENABLED ? indoor : null);
   // Where your own dot goes. With an indoor reading it is shown only on your real floor's
   // tab: browsing another floor, you aren't on it.
@@ -2736,6 +2738,8 @@ const App = () => {
       {/* Map Interactive Layers */}
       {/* WiFi Arc Stage 7: floor picker, only while you have an indoor reading. */}
       {WIFI_POSITIONING_ENABLED && indoorView && <FloorPicker view={indoorView} />}
+      {/* Owner-only field-test readout: every scan cycle's numbers, for judging the estimates. */}
+      {WIFI_POSITIONING_ENABLED && isAdmin && <WifiReadout lastCycle={lastCycle} active={wifiActive} />}
 
       {/* Right-side Action Column */}
       <div className="absolute right-4 top-1/3 flex flex-col gap-2.5 z-40 pointer-events-auto">

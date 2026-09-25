@@ -8,7 +8,7 @@
 //
 // Keep this false until the TECH PARK device check has shown Stage 5's estimates are good.
 // Turning it off again after a bad release needs only this line and a JS-only bundle.
-export const WIFI_POSITIONING_ENABLED = false;
+export const WIFI_POSITIONING_ENABLED = true;
 
 /**
  * Minimum Stage 5 confidence for WiFi to replace GPS. A guess, not a measurement: no
