@@ -3,6 +3,9 @@ import { MapContainer, TileLayer, Polyline, useMap, useMapEvents } from 'react-l
 import 'leaflet/dist/leaflet.css';
 import { SRM_MASTER_DATABASE } from '../srmDatabase';
 import LiveLocationMarker, { NAVIGATING_SPEED_MPS } from '../LiveLocationMarker';
+import { ConfidenceHalo, FloorTag } from './IndoorMarkers';
+import { SHOW_INDOOR_POSITION_TO_SQUAD, WIFI_POSITIONING_ENABLED } from '../utils/positionSource';
+import { isOnOtherFloor, memberFloorTag } from '../utils/indoorView';
 import GhostMemberMarker from '../GhostMemberMarker';
 import WaypointMarker from './WaypointMarker';
 import BuildingMarker from './BuildingMarker';
@@ -101,6 +104,8 @@ const TacticalLeafletMap = ({
   onMapClick,
   onFocus,
   liveLocation,
+  liveIndoor,
+  indoorView,
   liveIsNavigating,
   liveHeading,
   currentZoom,
@@ -143,7 +148,11 @@ const TacticalLeafletMap = ({
           lng={liveLocation.lng}
           onClick={() => onFocus(liveLocation, null)}
         >
-          <LiveLocationMarker zoom={currentZoom} isNavigating={liveIsNavigating} heading={liveHeading} color="#10B981" />
+          {/* The wrapper gives the halo a positioned parent at the anchor; see IndoorMarkers. */}
+          <div style={{ position: 'relative' }}>
+            {WIFI_POSITIONING_ENABLED && liveIndoor && <ConfidenceHalo confidence={liveIndoor.confidence} color="#10B981" />}
+            <LiveLocationMarker zoom={currentZoom} isNavigating={liveIsNavigating} heading={liveHeading} color="#10B981" />
+          </div>
         </LeafletReactMarker>
       )}
 
@@ -190,13 +199,20 @@ const TacticalLeafletMap = ({
         .filter((u) => !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.hasFix)
         .map((u) => (
           <LeafletReactMarker key={u.id} lat={u.lat} lng={u.lng} onClick={() => onFocus({ lat: u.lat, lng: u.lng }, null)}>
-            <div style={{ animation: 'locus-member-fade-in 0.6s ease' }}>
+            <div
+              style={{
+                position: 'relative',
+                animation: 'locus-member-fade-in 0.6s ease',
+                ...(SHOW_INDOOR_POSITION_TO_SQUAD && isOnOtherFloor(u, indoorView) ? { opacity: 0.35 } : {}),
+              }}
+            >
               <LiveLocationMarker
                 zoom={currentZoom}
                 isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
                 heading={u.heading}
                 color="#EF4444"
               />
+              {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
             </div>
           </LeafletReactMarker>
         ))}

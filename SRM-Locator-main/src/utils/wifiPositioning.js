@@ -154,6 +154,24 @@ export function estimatePosition(scans, aps) {
   };
 }
 
+/**
+ * The floors of `building` that have at least one surveyed AP, lowest first: the tabs of
+ * Stage 7's floor picker. Read from the table rather than hard-coded, because the survey
+ * decides which floors exist (the first export: TECH PARK 0, 1, 2 and 7). An ambiguous
+ * AP's floor still counts - it was heard strongest there.
+ *
+ * @param {Map<string, {building:string|null, floor:number|null}>} aps
+ * @param {string} building
+ * @returns {number[]}
+ */
+export function surveyedFloors(aps, building) {
+  const floors = new Set();
+  for (const ap of aps?.values() ?? []) {
+    if (ap.building === building && Number.isInteger(ap.floor)) floors.add(ap.floor);
+  }
+  return [...floors].sort((a, b) => a - b);
+}
+
 // ---------------------------------------------------------------- wifi_aps cache
 
 /**
