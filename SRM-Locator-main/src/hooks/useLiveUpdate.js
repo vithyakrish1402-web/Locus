@@ -40,7 +40,14 @@ export function useLiveUpdate() {
   const [status, setStatus] = useState(LiveUpdateStatus.IDLE);
   const [manifest, setManifest] = useState(null);
   const [error, setError] = useState(null);
-  const [dismissed, setDismissed] = useState(false);
+  // Which state the strip was dismissed in: dismissing the DOWNLOADING notice must not also
+  // swallow the RESTART that follows it.
+  const [dismissedIn, setDismissedIn] = useState(null);
+  // Download progress: when it started (for the elapsed-seconds readout) and the plugin's
+  // last reported percent, or null before the first report. On the phone the plugin can
+  // sit a minute before its first byte (a stalled connection, then a quick retry), so
+  // "started, no percent yet" is a state of its own and the strip says it is still working.
+  const [download, setDownload] = useState(null);
 
   // The staged bundle handle from download(); set() needs the object, not the version.
   const stagedRef = useRef(null);
@@ -102,14 +109,32 @@ export function useLiveUpdate() {
       }
 
       setManifest(latest);
+      setDownload({ startedAt: Date.now(), percent: null });
       setStatus(LiveUpdateStatus.DOWNLOADING);
 
-      // checksum is verified natively by the plugin; a mismatch rejects the bundle.
-      stagedRef.current = await CapacitorUpdater.download({
-        url: latest.zipUrl,
-        version: latest.version,
-        checksum: latest.sha256,
-      });
+      // Progress, when the plugin reports it. A listener that fails to register costs the
+      // percentage only: the strip still shows the download is running.
+      let progressHandle = null;
+      try {
+        progressHandle = await CapacitorUpdater.addListener('download', (event) => {
+          const percent = Number(event?.percent);
+          if (!Number.isFinite(percent)) return;
+          setDownload((d) => (d ? { ...d, percent: Math.max(0, Math.min(100, Math.round(percent))) } : d));
+        });
+      } catch {
+        progressHandle = null;
+      }
+
+      try {
+        // checksum is verified natively by the plugin; a mismatch rejects the bundle.
+        stagedRef.current = await CapacitorUpdater.download({
+          url: latest.zipUrl,
+          version: latest.version,
+          checksum: latest.sha256,
+        });
+      } finally {
+        progressHandle?.remove?.();
+      }
 
       setStatus(LiveUpdateStatus.READY);
       return latest;
@@ -135,7 +160,8 @@ export function useLiveUpdate() {
     }
   }, []);
 
-  const dismiss = useCallback(() => setDismissed(true), []);
+  const dismiss = useCallback(() => setDismissedIn(statusRef.current), []);
+  const dismissed = dismissedIn !== null && dismissedIn === status;
 
   useEffect(() => {
     if (!supported || coldStartCheckDone) return;
@@ -149,8 +175,17 @@ export function useLiveUpdate() {
     manifest,
     error,
     dismissed,
-    // Only the two states the user can act on ever reach the UI.
-    visible: !dismissed && (status === LiveUpdateStatus.READY || status === LiveUpdateStatus.BLOCKED),
+    download,
+    // What reaches the UI: the two states the user can act on, a download in progress (so
+    // nobody closes the app wondering whether anything is happening - closing it kills the
+    // download), and a failure after a download began. A check that fails before finding
+    // anything stays silent: the app they have keeps working.
+    visible:
+      !dismissed &&
+      (status === LiveUpdateStatus.READY ||
+        status === LiveUpdateStatus.BLOCKED ||
+        status === LiveUpdateStatus.DOWNLOADING ||
+        (status === LiveUpdateStatus.ERROR && manifest !== null)),
     tagPrefix: BUNDLE_TAG_PREFIX,
     check,
     applyNow,

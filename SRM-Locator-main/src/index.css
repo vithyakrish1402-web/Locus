@@ -107,6 +107,12 @@ a[href]:active {
 .locus-soft-ring-dot { animation: locus-sos-pulse 2.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .locus-live-dot, .locus-soft-ring-dot { animation: none; } }
 
+/* Update strip (LiveUpdateToast.jsx): a sweep across the bar while a download has not
+   reported any progress yet. Reduced motion: a still, half-lit bar. */
+.locus-download-sweep { animation: locus-download-sweep 1.4s ease-in-out infinite; }
+@keyframes locus-download-sweep { from { left: -33%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .locus-download-sweep { animation: none; left: 0; width: 100%; opacity: 0.4; } }
+
 /* Comms feed (CommsFeed.jsx): each notice's time left, as a line draining to nothing. */
 .locus-drain { animation: locus-drain linear forwards; }
 @keyframes locus-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }

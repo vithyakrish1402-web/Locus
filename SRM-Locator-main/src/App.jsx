@@ -51,6 +51,7 @@ import { isOnOtherFloor, memberFloorTag } from './utils/indoorView';
 import { ConfidenceHalo, FloorTag } from './components/IndoorMarkers';
 import FloorPicker from './components/FloorPicker';
 import WifiReadout from './components/WifiReadout';
+import SendApp from './components/SendApp';
 import { useIsMobile } from './hooks/useIsMobile';
 import { haptic } from './utils/haptics';
 import { shouldDismissSheet, SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard } from './utils/motion';
@@ -3200,6 +3201,9 @@ const App = () => {
                   </div>
                   <p className="font-inter text-[10px] text-zinc-500 leading-tight">Warning: MAX polling drains battery significantly faster. Use only during active pursuits.</p>
                 </div>
+
+                {/* Setting 4: hand the app to someone else */}
+                <SendApp />
 
               </div>
             </motion.div>

@@ -171,3 +171,29 @@ export function selectLatestApkRelease(releases, options = {}) {
   }
   return best;
 }
+
+/**
+ * The installer "Send App" (SYS_CONFIG) hands out: the APK release matching the version
+ * installed on this phone, so what you send is what you run - or, when that release has
+ * no usable APK (a debug build, a version never released) or the version is unknown (the
+ * web build), the newest APK release. Either way the recipient's copy then live-updates
+ * like the sender's.
+ *
+ * @param {object[]} releases  Parsed JSON from /repos/:owner/:repo/releases
+ * @param {string|null} installedVersion  App.getInfo().version, or null off-device
+ * @returns {object|null} a parseReleaseManifest manifest (version, apkUrl, apkSize, ...)
+ */
+export function selectInstallerRelease(releases, installedVersion) {
+  if (!Array.isArray(releases)) return null;
+  const wanted = parseVersion(installedVersion);
+  if (wanted) {
+    for (const release of releases) {
+      if (!release || typeof release !== 'object' || release.draft) continue;
+      const tag = typeof release.tag_name === 'string' ? release.tag_name : '';
+      if (!tag.toLowerCase().startsWith(APK_TAG_PREFIX)) continue;
+      const parsed = parseReleaseManifest(release);
+      if (parsed.ok && compareVersions(parsed.manifest.version, wanted.join('.')) === 0) return parsed.manifest;
+    }
+  }
+  return selectLatestApkRelease(releases);
+}
