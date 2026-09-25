@@ -7,6 +7,7 @@ import { resolveSosRoom, recordSos, toSosPayload, pendingSosFor, ackSos, memberK
 import {
   rememberMember, forgetMember, rebindReturningMember, collectStaleSocketIds,
   refuseJoin, addPendingRequest, takePendingRequest, withdrawPendingRequests, pendingRequestsOf,
+  isKnownMember, commanderOf,
 } from './squadRoster.js';
 import { toTelemetryRecord } from './telemetry.js';
 
@@ -236,6 +237,10 @@ socket.on('check-ping', (clientTimestamp) => {
       activeSquads[roomCode] = {
         ownerId: socket.id,
         ownerUid: requesterUid,
+        // The squad's own Commander, as opposed to whoever holds command right now
+        // (ownerId/ownerUid), which is a stand-in while the Commander is away. Only a
+        // deliberate exit hands it on (see handleSquadSuccession).
+        commanderUid: requesterUid,
         members: [socket.id],
         memberUids: requesterUid ? { [socket.id]: requesterUid } : {},
         knownUids: requesterUid ? [requesterUid] : [],
@@ -255,10 +260,17 @@ socket.on('check-ping', (clientTimestamp) => {
       return;
     }
 
-    // Case 3: the reconnecting socket IS the squad's owner (uid match) -> always
+    // Case 3: the reconnecting socket IS the squad's Commander (uid match) -> always
     // let them straight back in as OWNER. Rebind their new socket id and keep
     // everyone else already in the roster instead of wiping it.
-    if (requesterUid && existing.ownerUid && requesterUid === existing.ownerUid) {
+    //
+    // However long they were away, and whoever stood in meanwhile. This used to match
+    // ownerUid, which a caretaker (Case 4) overwrote with their own uid, so a Commander
+    // who came back after anyone had stood in was let in as a plain member of their own
+    // squad, for good.
+    if (requesterUid && commanderOf(existing) === requesterUid) {
+      // Whoever holds command now, if it isn't this person on an earlier connection.
+      const standInId = existing.ownerUid !== requesterUid ? existing.ownerId : null;
       // Their own superseded connection(s). This used to only drop the old id from
       // `members` and leave everything else behind: the stale socket stayed subscribed to
       // the room, and its `users`/`locationCache` entries survived — so every other client
@@ -270,6 +282,7 @@ socket.on('check-ping', (clientTimestamp) => {
       existing.members = existing.members.filter(id => !staleIds.includes(id) && io.sockets.sockets.has(id));
       if (!existing.members.includes(socket.id)) existing.members.push(socket.id);
       existing.ownerId = socket.id;
+      existing.ownerUid = requesterUid;
       existing.memberUids = existing.memberUids || {};
       staleIds.forEach(id => delete existing.memberUids[id]);
       existing.memberUids[socket.id] = requesterUid;
@@ -278,17 +291,25 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.join(roomCode);
       purgeStaleSockets(roomCode, staleIds);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
+      // The stand-in goes back to being a member, and is told so. They used to hear
+      // nothing: their screen kept its Commander controls and join queue, and every
+      // decision they took on it was refused.
+      if (standInId) io.to(standInId).emit('demoted-to-member', { roomCode });
       sendJoinQueue(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       broadcastSquadUpdate(roomCode);
       return;
     }
 
-    // Case 4: someone else's request against a room whose owner socket is truly
-    // gone (crashed/uninstalled, not just mid-reconnect) -> let them take over as
-    // caretaker owner rather than stranding the squad, keeping the roster intact.
+    // Case 4: a member the Commander already let in, back on a new socket while the
+    // Commander's socket is gone -> they take over as caretaker rather than the squad
+    // being stranded, keeping the roster intact, until the Commander returns (Case 3).
+    //
+    // Members only. This used to be anyone at all: a stranger's first request with the
+    // code, arriving while the Commander's phone had dropped off, made them Commander
+    // with no approval. A stranger's request now waits (Case 5).
     const ownerIsLive = io.sockets.sockets.has(existing.ownerId);
-    if (!ownerIsLive) {
+    if (!ownerIsLive && isKnownMember(existing, requesterUid)) {
       // The caretaker may themselves be arriving on a new socket, so tear their old one
       // down here too — same reason as Case 3 above.
       const staleIds = collectStaleSocketIds(existing, requesterUid, socket.id);
@@ -332,15 +353,21 @@ socket.on('check-ping', (clientTimestamp) => {
       return;
     }
 
-    // Case 5: normal gatekeeper flow — a genuine new joiner needs the live owner's approval.
+    // Case 5: normal gatekeeper flow — a genuine new joiner needs the owner's approval.
     // Recorded, so that only a request still open can be approved (see resolve-access).
-    const commanderId = existing.ownerId;
     addPendingRequest(existing, socket.id, { uid: requesterUid, name: user?.name ?? null, photo: user?.photo ?? null });
-    io.to(commanderId).emit('access-request', {
-      targetId: socket.id, name: user?.name, photo: user?.photo, roomCode: roomCode
-    });
     // Every reply names its squad, so a client can ignore one about a squad it has left.
     socket.emit('access-pending', { roomCode });
+    if (ownerIsLive) {
+      io.to(existing.ownerId).emit('access-request', {
+        targetId: socket.id, name: user?.name, photo: user?.photo, roomCode: roomCode
+      });
+    } else {
+      // Nobody holds command. A connected member stands in and is handed the queue; with
+      // none connected, the request waits on file for whoever takes command next (the
+      // Commander back, or a member back as caretaker), and each of those sends the queue.
+      promoteStandIn(existing, roomCode);
+    }
   });
 
   // ABORT HANDSHAKE: the joiner stops waiting. Withdrawn server-side, and the Commander
@@ -397,6 +424,10 @@ socket.on('check-ping', (clientTimestamp) => {
     if (!squad || squad.ownerId !== socket.id || targetId === socket.id) return;
 
     const targetUid = squad.memberUids?.[targetId] || io.sockets.sockets.get(targetId)?.data?.uid;
+    // A stand-in holds command only until the Commander returns. Blocking the Commander
+    // (whose old connection is still on the roster while they're away) would turn
+    // "temporarily" into "for good": a block is checked before the Commander's return.
+    if (targetUid && targetUid === commanderOf(squad)) return;
     squad.blockedUids = squad.blockedUids || [];
     if (targetUid && !squad.blockedUids.includes(targetUid)) squad.blockedUids.push(targetUid);
     forgetMember(squad, targetUid);
@@ -779,7 +810,10 @@ socket.on('check-ping', (clientTimestamp) => {
       if (squad.members.length === 0) {
         deleteSquad(roomCode);
       } else if (squad.ownerId === disconnectedId) {
-        squad.ownerId = squad.members[0];
+        // A connected member, if there is one. members[0] could be a dead socket still on
+        // the roster (typically the Commander's, while they're away), and promoting it
+        // left nobody holding command and the promotion addressed to no one.
+        squad.ownerId = squad.members.find(id => io.sockets.sockets.has(id)) ?? squad.members[0];
         // Ownership goes by uid too. The departing Commander's uid used to stay on as
         // ownerUid, so they could walk back in later and be made owner again (request-join
         // Case 3), silently taking the squad from the member promoted here, whose client
@@ -788,7 +822,28 @@ socket.on('check-ping', (clientTimestamp) => {
         io.to(squad.ownerId).emit('promoted-to-owner', { roomCode });
         sendJoinQueue(squad, roomCode, squad.ownerId);
       }
+
+      // The Commander leaving on purpose (or voted out) gives up the squad for good: it
+      // becomes the squad of whoever holds command now, who is then the one a return
+      // hands it back to. (A stand-in leaving changes nothing here: the squad is still
+      // the Commander's to reclaim.)
+      if (departingUid && departingUid === squad.commanderUid) squad.commanderUid = squad.ownerUid;
     }
+  }
+
+  // Put a connected member the Commander let in in charge while nobody holds command, and
+  // hand them the join queue. First on the roster wins, the same order succession uses.
+  // Returns whether anyone was promoted.
+  function promoteStandIn(squad, roomCode) {
+    const standInId = squad.members.find(
+      id => io.sockets.sockets.has(id) && isKnownMember(squad, squad.memberUids?.[id])
+    );
+    if (!standInId) return false;
+    squad.ownerId = standInId;
+    squad.ownerUid = squad.memberUids[standInId];
+    io.to(standInId).emit('promoted-to-owner', { roomCode });
+    sendJoinQueue(squad, roomCode, standInId);
+    return true;
   }
 });
 

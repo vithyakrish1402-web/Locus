@@ -78,6 +78,8 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
   - `'join'` (CONNECT, and a member's or waiting joiner's reconnect): refused with `squad-not-found` if no live squad has the code. It never founds one.
   - none, or `'resume'`: create-or-join, the original behaviour. Every build without intents sends none; a Commander's reconnect sends `'resume'`, so a squad wiped by a server restart comes back under its code.
   - For an existing squad, a known member or the Commander is let straight back in; anyone else is recorded as pending and routed to the Commander for approval.
+  - While the Commander's socket is gone, a member they already let in who comes back on a new socket takes over as caretaker. Anyone else is recorded as pending: the request is handed to a connected member promoted to stand in (`promoted-to-owner`), or, with none connected, waits for whoever takes command next. A stranger's request never makes them Commander.
+  - The squad's Commander (`commanderUid`, distinct from `ownerUid`, whoever holds command now) gets the squad back whenever they return, however long they were away; the stand-in is sent `demoted-to-member`. Only a deliberate exit (leave, vote-out) hands `commanderUid` on, to whoever then holds command. A stand-in cannot block the Commander.
 - `access-request` (`{ targetId, name, photo, roomCode }`): Emitted by server to Commander. The squad's open requests are re-sent to whoever takes over as Commander (a reconnect, a caretaker, a promotion).
 - `cancel-join` (`{ roomCode }`): Sent by a waiting joiner on ABORT HANDSHAKE. Withdraws their request.
 - `access-request-withdrawn` (`{ targetId, roomCode }`): Emitted to the Commander when a request is withdrawn, superseded (the joiner asked again, or asked another squad), or its socket disconnects, and in reply to a decision on a request that is no longer open.
@@ -106,7 +108,8 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
 - `vote-to-kick` (`{ targetId, roomCode }`): Operatives cast votes to exile rogue squad members.
 - `mutiny-status` (`{ targetId, votes, required }`): Broadcasts live vote progress.
 - `exiled`: Emitted to targeted user when majority vote threshold is reached.
-- `promoted-to-owner` (`{ roomCode }`): Succession when the Commander leaves the squad (or is voted out); not on a mere disconnect, which could be a signal blip.
+- `promoted-to-owner` (`{ roomCode }`): Succession when whoever holds command leaves the squad (or is voted out), to a connected member where there is one; also a member promoted to stand in when a join request arrives while nobody holds command. Not on a mere disconnect, which could be a signal blip.
+- `demoted-to-member` (`{ roomCode }`): Emitted to a stand-in (caretaker or promoted member) when the squad's Commander comes back and takes command again. The client drops its Commander controls and join queue.
 
 ---
 
