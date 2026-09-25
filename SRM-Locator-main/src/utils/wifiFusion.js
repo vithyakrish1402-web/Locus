@@ -16,16 +16,15 @@
 // all fall back to GPS for that cycle and never stop the loop.
 
 import { WifiScan, isWifiScanAvailable, scanBudget, SCAN_WINDOW_MS } from './wifiScan.js';
-import { estimateWifiPosition } from './wifiPositioning.js';
+import { estimateWifiPosition, loadAccessPoints, surveyedFloors } from './wifiPositioning.js';
+import { SRM_MASTER_DATABASE } from '../srmDatabase.js';
+import { WIFI_CONFIDENCE_THRESHOLD } from './positionSource.js';
 
 // ---------------------------------------------------------------- tuning (v1 assumptions)
 
-/**
- * Minimum Stage 5 confidence for WiFi to replace GPS. A guess, not a measurement: no
- * confidence has been observed against real TECH PARK scans yet. Tune it once they have.
- * With Stage 5's formula, 0.6 needs at least 3 matched APs voting for one (building, floor).
- */
-export const WIFI_CONFIDENCE_THRESHOLD = 0.6;
+// WIFI_CONFIDENCE_THRESHOLD lives in positionSource.js so the Stage 7 map UI can scale its
+// halo against it without importing this module; it is re-exported here for callers.
+export { WIFI_CONFIDENCE_THRESHOLD };
 
 /**
  * Time between scans. 35 s spends at most 4 scans in any 2 minutes only at the very edge
@@ -74,6 +73,35 @@ export function choosePosition(gps, estimate, threshold = WIFI_CONFIDENCE_THRESH
   return { lat: gps.lat, lng: gps.lng, positionSource: 'gps' };
 }
 
+// ---------------------------------------------------------------- indoor (Stage 7)
+
+const KNOWN_BUILDINGS = new Set(SRM_MASTER_DATABASE.map((b) => b.name));
+
+/**
+ * The indoor reading behind Stage 7's map UI, or null. Stricter than choosePosition: on top
+ * of a position WiFi would be trusted for, it needs a building from SRM_MASTER_DATABASE and
+ * a whole-number floor. An "OTHER" or outdoor estimate can still move the broadcast position
+ * (that is Stage 6's switch, unchanged), but it has no floor to show or send.
+ *
+ * @param {object|null} estimate a fresh Stage 5 estimate, with `floors` from the survey
+ * @returns {{lat:number, lng:number, building:string, floor:number, confidence:number,
+ *   floors:number[]}|null}
+ */
+export function indoorReading(estimate, threshold = WIFI_CONFIDENCE_THRESHOLD) {
+  if (choosePosition({ lat: NaN, lng: NaN }, estimate, threshold).positionSource !== 'wifi') return null;
+  if (!KNOWN_BUILDINGS.has(estimate.building) || !Number.isInteger(estimate.floor)) return null;
+  const floors = Array.isArray(estimate.floors) ? estimate.floors.filter(Number.isInteger) : [];
+  if (!floors.includes(estimate.floor)) floors.push(estimate.floor);
+  return {
+    lat: estimate.lat,
+    lng: estimate.lng,
+    building: estimate.building,
+    floor: estimate.floor,
+    confidence: estimate.confidence,
+    floors: floors.sort((a, b) => a - b),
+  };
+}
+
 // ---------------------------------------------------------------- the loop
 
 /**
@@ -81,11 +109,13 @@ export function choosePosition(gps, estimate, threshold = WIFI_CONFIDENCE_THRESH
  * touches is injectable so tests can drive it without a phone or Firestore.
  *
  * @returns {{resolve(gps): {lat:number, lng:number, positionSource:'gps'|'wifi'},
- *   runCycle(): Promise<void>, stop(): void}}
+ *   indoor(): object|null, subscribe(listener): Function, runCycle(): Promise<void>,
+ *   stop(): void}}
  */
 export function startWifiFusion({
   scan = () => WifiScan.scan(),
   estimate = estimateWifiPosition,
+  floorsFor = async (building) => surveyedFloors(await loadAccessPoints(), building),
   isAvailable = isWifiScanAvailable,
   now = () => Date.now(),
   intervalMs = WIFI_SCAN_INTERVAL_MS,
@@ -100,12 +130,16 @@ export function startWifiFusion({
   let current = null; // { ...estimate, at } from the last cycle that produced one
   let buffer = []; // [{ at, aps }], oldest first, fresh non-empty scans only
   let acceptedAt = []; // our request times of scans the OS accepted, for scanBudget
+  const listeners = new Set();
+
+  const freshEstimate = () => (current && now() - current.at <= maxEstimateAgeMs ? current : null);
 
   // Every exit path of a cycle goes through here, so none can leave an old estimate in
   // place: a cycle either sets a new one or clears it.
   const finish = (estimateOrNull, outcome) => {
     current = estimateOrNull;
     onCycle(outcome);
+    listeners.forEach((listener) => listener());
   };
 
   async function runCycle() {
@@ -143,7 +177,19 @@ export function startWifiFusion({
         return finish(null, 'estimate-error');
       }
       if (stopped) return;
-      finish({ ...next, at: now() }, 'estimate');
+
+      // The floor picker's tabs. Only worth the lookup for an estimate that will be shown,
+      // and a failure costs the other tabs, never the estimate itself.
+      let floors = [];
+      if (indoorReading(next, threshold)) {
+        try {
+          floors = await floorsFor(next.building);
+        } catch {
+          floors = [];
+        }
+        if (stopped) return;
+      }
+      finish({ ...next, floors, at: now() }, 'estimate');
     } finally {
       busy = false;
     }
@@ -157,8 +203,22 @@ export function startWifiFusion({
 
   return {
     resolve(gps) {
-      const fresh = current && now() - current.at <= maxEstimateAgeMs ? current : null;
-      return choosePosition(gps, fresh, threshold);
+      return choosePosition(gps, freshEstimate(), threshold);
+    },
+    /**
+     * Where the phone is indoors right now, or null. Judged on the same fresh estimate and
+     * threshold as resolve(), so a non-null answer always comes with a 'wifi' position.
+     * `expiresAt` is when this answer stops being fresh, for a UI with no cycle due sooner.
+     */
+    indoor() {
+      const fresh = freshEstimate();
+      const reading = indoorReading(fresh, threshold);
+      return reading && { ...reading, expiresAt: fresh.at + maxEstimateAgeMs };
+    },
+    /** Calls `listener` after every cycle and on stop(). Returns the unsubscribe. */
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
     runCycle,
     stop() {
@@ -166,6 +226,8 @@ export function startWifiFusion({
       if (timer !== null) clearInterval(timer);
       current = null;
       buffer = [];
+      listeners.forEach((listener) => listener());
+      listeners.clear();
     },
   };
 }

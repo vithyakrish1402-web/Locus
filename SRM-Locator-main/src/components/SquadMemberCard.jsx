@@ -5,6 +5,8 @@ import { Activity, Ban, Crosshair, Navigation } from 'lucide-react';
 import { calculateBearing, calculateDistanceMeters } from '../utils/geoMath';
 import { compassPoint, continuousAngle, formatMetres, freshness, relativeClock } from '../utils/direction';
 import { PANEL_SPRING } from '../utils/motion';
+import { SHOW_INDOOR_POSITION_TO_SQUAD } from '../utils/positionSource';
+import { floorLabel, hasIndoorFloor } from '../utils/indoorView';
 
 // One squadmate on the roster, built around the question the roster exists to answer:
 // where are they from here? A dial points at them relative to the way the phone faces, the
@@ -121,6 +123,17 @@ export default function SquadMemberCard({ member, me, heading, headingLive, isOw
                 <span className="ml-1 text-xs text-zinc-400">{shownDistance.unit}</span>
               </p>
               <p className="mt-1.5 font-dot text-[10px] uppercase tracking-widest text-red-400">{direction}</p>
+              {/* WiFi Arc Stage 7: the floor they're on, while their telemetry says so. Only
+                  this chip depends on it - distance, direction and freshness above are GPS
+                  and carry on when they leave coverage. */}
+              {SHOW_INDOOR_POSITION_TO_SQUAD && hasIndoorFloor(member) && (
+                <span
+                  data-testid="member-floor-chip"
+                  className="mt-1.5 inline-block px-1.5 py-0.5 font-dot text-[9px] uppercase tracking-widest border border-white/20 text-zinc-300 whitespace-nowrap"
+                >
+                  {member.building} · {floorLabel(member.floor)}
+                </span>
+              )}
             </div>
             <div className="ml-auto flex flex-col items-end gap-1 font-dot text-[10px] uppercase tracking-widest text-zinc-400">
               <span className="flex items-center gap-1.5">

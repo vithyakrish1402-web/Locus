@@ -6,6 +6,7 @@ import {
   WIFI_SCAN_INTERVAL_MS,
   WIFI_SCAN_MAX_AGE_MS,
   choosePosition,
+  indoorReading,
   startWifiFusion,
 } from '../src/utils/wifiFusion.js';
 import { SCAN_LIMIT, SCAN_WINDOW_MS } from '../src/utils/wifiScan.js';
@@ -303,5 +304,94 @@ describe('the scan budget', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(scan).toHaveBeenCalledTimes(5); // the refusal plus a full budget of 4
     fusion.stop();
+  });
+});
+
+// ---------------------------------------------------------------- Stage 7: indoor reading
+
+describe('indoorReading (what the map UI is allowed to show)', () => {
+  const withFloors = (e, floors = [0, 1, 2, 7]) => ({ ...e, floors });
+
+  it('accepts a trusted estimate for a known building and a whole floor', () => {
+    expect(indoorReading(withFloors(estimateOf(0.8)))).toEqual({
+      ...WIFI, building: 'TECH PARK', floor: 1, confidence: 0.8, floors: [0, 1, 2, 7],
+    });
+  });
+
+  it('refuses anything Stage 6 would not broadcast as wifi', () => {
+    expect(indoorReading(null)).toBeNull();
+    expect(indoorReading(withFloors(estimateOf(0.59)))).toBeNull();
+    expect(indoorReading(withFloors({ ...estimateOf(1), lat: null, lng: null }))).toBeNull();
+  });
+
+  it('refuses an unrecognised building or an outdoor/odd floor', () => {
+    expect(indoorReading(withFloors({ ...estimateOf(1), building: 'OTHER' }))).toBeNull();
+    expect(indoorReading(withFloors({ ...estimateOf(1), building: null, floor: null }))).toBeNull();
+    expect(indoorReading(withFloors({ ...estimateOf(1), floor: null }))).toBeNull();
+    expect(indoorReading(withFloors({ ...estimateOf(1), floor: 1.5 }))).toBeNull();
+  });
+
+  it('always includes the live floor among the tabs, sorted', () => {
+    expect(indoorReading(withFloors(estimateOf(1), [7, 0])).floors).toEqual([0, 1, 7]);
+    expect(indoorReading({ ...estimateOf(1) }).floors).toEqual([1]);
+  });
+});
+
+describe('the controller, for the map UI', () => {
+  const floorsFor = vi.fn(async () => [0, 1, 2, 7]);
+
+  it('reports the indoor reading, with its floors and expiry, only while fresh', async () => {
+    const fusion = await start({ scan: async () => fresh(), estimate: async () => estimateOf(0.8), floorsFor, intervalMs: 10 * WIFI_ESTIMATE_MAX_AGE_MS });
+    expect(floorsFor).toHaveBeenCalledWith('TECH PARK');
+    expect(fusion.indoor()).toEqual({
+      ...WIFI, building: 'TECH PARK', floor: 1, confidence: 0.8, floors: [0, 1, 2, 7],
+      expiresAt: Date.now() + WIFI_ESTIMATE_MAX_AGE_MS,
+    });
+    await vi.advanceTimersByTimeAsync(WIFI_ESTIMATE_MAX_AGE_MS + 1);
+    expect(fusion.indoor()).toBeNull();
+    expect(fusion.resolve(GPS).positionSource).toBe('gps'); // the two agree
+    fusion.stop();
+  });
+
+  it('is null whenever resolve() would answer gps', async () => {
+    const lookup = vi.fn(async () => [0, 1]);
+    const fusion = await start({ scan: async () => fresh(), estimate: async () => estimateOf(0.4), floorsFor: lookup });
+    expect(fusion.indoor()).toBeNull();
+    expect(lookup).not.toHaveBeenCalled(); // not looked up for a reading never shown
+    fusion.stop();
+  });
+
+  it('is null for a building outside the campus database, though WiFi is still broadcast', async () => {
+    const fusion = await start({ scan: async () => fresh(), estimate: async () => ({ ...estimateOf(0.9), building: 'OTHER' }), floorsFor });
+    expect(fusion.resolve(GPS).positionSource).toBe('wifi');
+    expect(fusion.indoor()).toBeNull();
+    fusion.stop();
+  });
+
+  it('keeps the estimate when the floor lookup fails, with just the live floor as a tab', async () => {
+    const fusion = await start({
+      scan: async () => fresh(), estimate: async () => estimateOf(0.9), floorsFor: async () => { throw new Error('offline'); },
+    });
+    expect(fusion.indoor().floors).toEqual([1]);
+    fusion.stop();
+  });
+
+  it('tells subscribers after every cycle and on stop, and not after unsubscribing', async () => {
+    const results = [fresh(), { outcome: 'empty', accepted: true, aps: [] }, fresh()];
+    const fusion = startWifiFusion({ isAvailable: () => true, scan: async () => results.shift(), estimate: async () => estimateOf(0.9), floorsFor });
+    const seen = [];
+    const unsubscribe = fusion.subscribe(() => seen.push(fusion.indoor()?.floor ?? null));
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(WIFI_SCAN_INTERVAL_MS);
+    expect(seen).toEqual([1, null]); // signal lost -> null, no error state
+    unsubscribe();
+    await vi.advanceTimersByTimeAsync(WIFI_SCAN_INTERVAL_MS);
+    expect(seen).toEqual([1, null]);
+
+    const late = vi.fn();
+    fusion.subscribe(late);
+    fusion.stop();
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(fusion.indoor()).toBeNull();
   });
 });

@@ -45,6 +45,11 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { useWifiFusion } from './hooks/useWifiFusion';
+import { useIndoorView } from './hooks/useIndoorView';
+import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD } from './utils/positionSource';
+import { isOnOtherFloor, memberFloorTag } from './utils/indoorView';
+import { ConfidenceHalo, FloorTag } from './components/IndoorMarkers';
+import FloorPicker from './components/FloorPicker';
 import { useIsMobile } from './hooks/useIsMobile';
 import { haptic } from './utils/haptics';
 import { shouldDismissSheet, SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard } from './utils/motion';
@@ -613,10 +618,21 @@ const App = () => {
   const telemetryModeRef = useRef('ACTIVE');
   // WiFi Arc Stage 6: every update-location payload takes its lat/lng/positionSource from
   // positionFor(gps). Off by default (src/utils/positionSource.js), and then it is always
-  // the GPS fix with positionSource 'gps'. Only the broadcast position changes: the local
-  // map, the Kalman filter and safety-ping stay on GPS. Stable identity, so listing it in
-  // the telemetry effect's dependencies below never re-runs that effect.
-  const positionFor = useWifiFusion(Boolean(user && hasJoinedSquad && accessStatus === 'granted'));
+  // the GPS fix with positionSource 'gps'. The Kalman filter and safety-ping stay on GPS.
+  // Stable identity, so listing it in the telemetry effect's dependencies below never
+  // re-runs that effect.
+  //
+  // Stage 7: `indoor` is the valid indoor reading behind it (null with the flag off). While
+  // there is one, your own dot is drawn at the WiFi position - the one your squad is being
+  // sent - with a confidence halo, and the floor picker appears. indoorView is the picker's
+  // purely local state: nothing in it reaches positionFor.
+  const { positionFor, indoor } = useWifiFusion(Boolean(user && hasJoinedSquad && accessStatus === 'granted'));
+  const indoorView = useIndoorView(WIFI_POSITIONING_ENABLED ? indoor : null);
+  // Where your own dot goes. With an indoor reading it is shown only on your real floor's
+  // tab: browsing another floor, you aren't on it.
+  const selfIndoor = WIFI_POSITIONING_ENABLED && indoor ? indoor : null;
+  const selfMarkerAt = selfIndoor ? { lat: selfIndoor.lat, lng: selfIndoor.lng } : liveLocation;
+  const showSelfMarker = Boolean(selfMarkerAt) && !(selfIndoor && indoorView?.browsing);
 
   // Start listening for compass heading as soon as we're signed in — on Android
   // this needs no user gesture. On iOS 13+ this call is a silent no-op (that
@@ -972,6 +988,13 @@ const App = () => {
             battery: data.battery || 0,
             status: data.status || 'ACTIVE',
             lastSeen: memberSeenRef.current[id]?.local ?? null,
+            // WiFi Arc Stage 7: the member's building + floor, when their latest update
+            // carried them (they are left out, never null, when they didn't). Absent here
+            // too in that case, so their floor chip and pill go as soon as they leave
+            // coverage, while the GPS-based direction finder carries on untouched.
+            ...(SHOW_INDOOR_POSITION_TO_SQUAD && typeof data.building === 'string' && Number.isInteger(data.floor)
+              ? { building: data.building, floor: data.floor }
+              : {}),
           });
         });
         return formattedUsers;
@@ -2530,7 +2553,9 @@ const App = () => {
               onZoomChange={setCurrentZoom}
               onMapClick={handleMapClick}
               onFocus={handleFocus}
-              liveLocation={liveLocation}
+              liveLocation={showSelfMarker ? selfMarkerAt : null}
+              liveIndoor={selfIndoor}
+              indoorView={indoorView}
               liveIsNavigating={isNavigating}
               liveHeading={liveHeading}
               currentZoom={currentZoom}
@@ -2566,14 +2591,15 @@ const App = () => {
             setIsMapReady(true);
           }}
         >
-          {liveLocation && (
+          {showSelfMarker && (
             <div
               key="live-user"
-              lat={liveLocation.lat}
-              lng={liveLocation.lng}
-              onClick={() => handleFocus(liveLocation, null)}
+              lat={selfMarkerAt.lat}
+              lng={selfMarkerAt.lng}
+              onClick={() => handleFocus(selfMarkerAt, null)}
               style={{ cursor: 'pointer' }}
             >
+              {selfIndoor && <ConfidenceHalo confidence={selfIndoor.confidence} color="#10B981" />}
               <LiveLocationMarker
                 zoom={currentZoom}
                 isNavigating={isNavigating}
@@ -2627,7 +2653,12 @@ const App = () => {
               lat={u.lat}
               lng={u.lng}
               onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)}
-              style={{ cursor: 'pointer', animation: 'locus-member-fade-in 0.6s ease' }}
+              style={{
+                cursor: 'pointer',
+                animation: 'locus-member-fade-in 0.6s ease',
+                // Stage 7: on another floor of the building you're viewing - dimmed, never hidden.
+                ...(SHOW_INDOOR_POSITION_TO_SQUAD && isOnOtherFloor(u, indoorView) ? { opacity: 0.35 } : {}),
+              }}
             >
               <LiveLocationMarker
                 zoom={currentZoom}
@@ -2635,6 +2666,7 @@ const App = () => {
                 heading={u.heading}
                 color="#EF4444"
               />
+              {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
             </div>
           ))}
 
@@ -2702,6 +2734,9 @@ const App = () => {
       )}
 
       {/* Map Interactive Layers */}
+      {/* WiFi Arc Stage 7: floor picker, only while you have an indoor reading. */}
+      {WIFI_POSITIONING_ENABLED && indoorView && <FloorPicker view={indoorView} />}
+
       {/* Right-side Action Column */}
       <div className="absolute right-4 top-1/3 flex flex-col gap-2.5 z-40 pointer-events-auto">
 
@@ -2713,9 +2748,9 @@ const App = () => {
           <MapPin size={20} />
         </button>
 
-        {liveLocation && (
+        {selfMarkerAt && (
           <button
-            onClick={() => handleFocus(liveLocation, null)}
+            onClick={() => handleFocus(selfMarkerAt, null)}
             className={`${MAP_CONTROL} relative !text-red-500 !border-red-500/50 shadow-[0_0_12px_rgba(239,68,68,0.35)]`}
             title="Locate Signal"
           >
