@@ -704,6 +704,18 @@ socket.on('check-ping', (clientTimestamp) => {
     // (leave-squad, vote-to-kick/block) or, for a truly-gone owner, lazily the next
     // time someone actually tries to join the room (see request-join's Case 4) or via
     // the periodic stale-squad sweep.
+    //
+    // One exception: someone is already waiting on this Commander. Their request arrived
+    // while this socket still looked live (a dead phone is only noticed at the heartbeat
+    // timeout, up to ~45 s behind Render's proxy), so it was addressed here and nobody
+    // was promoted. Without this, it waited for as long as the Commander stayed away.
+    // A stand-in is temporary: the Commander still gets the squad back on return.
+    for (const roomCode in activeSquads) {
+      const squad = activeSquads[roomCode];
+      if (squad.ownerId === socket.id && Object.keys(squad.pending ?? {}).length > 0) {
+        promoteStandIn(squad, roomCode);
+      }
+    }
   });
 
   // Withdraw every open join request made from this socket, and with a uid, that person's

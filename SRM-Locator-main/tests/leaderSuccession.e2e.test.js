@@ -118,6 +118,57 @@ describe('while the Commander is away, someone never let into the squad', () => 
   });
 });
 
+describe('a request that reached the Commander just before their phone dropped off', () => {
+  // Seen on a real phone: a killed app is only noticed at the heartbeat timeout, so a
+  // stranger who knocked in that window was addressed to the dead Commander, nobody was
+  // promoted, and the request waited for as long as the Commander stayed away.
+  it('is handed to a member who stands in once the Commander is gone', async () => {
+    const { room, alpha, bravo, charlie } = await squadOfThree();
+    const alphaKnocks = watchKnocks(alpha);
+    const stranger = await connect();
+    expect(await requestJoin(stranger, room, 'uStranger')).toEqual({ outcome: 'pending' });
+    await waitFor(() => alphaKnocks.length); // still live: the request went to Alpha
+
+    const bravoHears = record(bravo);
+    const charlieHears = record(charlie);
+    alpha.disconnect();
+    await waitFor(() => bravoHears.some((h) => h.event === 'access-request'));
+    expect(bravoHears.map((h) => h.event)).toContain('promoted-to-owner');
+    expect(charlieHears.map((h) => h.event)).not.toContain('promoted-to-owner');
+
+    const granted = once(stranger, 'access-granted');
+    bravo.emit('resolve-access', { targetId: stranger.id, roomCode: room, approved: true });
+    expect(await granted).toEqual({ role: 'MEMBER', roomCode: room });
+  });
+
+  it('still leaves the squad the Commander\'s to reclaim, with the request', async () => {
+    const { room, alpha, bravo } = await squadOfThree();
+    const stranger = await connect();
+    await requestJoin(stranger, room, 'uStranger');
+    await settle(alpha);
+    const promoted = once(bravo, 'promoted-to-owner');
+    alpha.disconnect();
+    await promoted;
+
+    const demoted = once(bravo, 'demoted-to-member');
+    const alpha2 = await connect();
+    const knocks = watchKnocks(alpha2);
+    expect(await requestJoin(alpha2, room, 'uA')).toMatchObject({ outcome: 'granted', role: 'OWNER' });
+    await demoted;
+    await waitFor(() => knocks.length);
+    expect(knocks[0]).toMatchObject({ targetId: stranger.id, roomCode: room });
+  });
+
+  it('changes nothing on a Commander\'s drop with nobody waiting (a blip is still just a blip)', async () => {
+    const { alpha, bravo } = await squadOfThree();
+    const bravoHears = record(bravo);
+    alpha.disconnect();
+    await sleep(300);
+    await settle(bravo);
+    expect(bravoHears.map((h) => h.event)).not.toContain('promoted-to-owner');
+  });
+});
+
 describe('while the Commander is away, a member they already let in', () => {
   it('takes over as caretaker when they come back on a new connection', async () => {
     const { room, alpha, bravo } = await squadOfThree();

@@ -108,7 +108,7 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
 - `vote-to-kick` (`{ targetId, roomCode }`): Operatives cast votes to exile rogue squad members.
 - `mutiny-status` (`{ targetId, votes, required }`): Broadcasts live vote progress.
 - `exiled`: Emitted to targeted user when majority vote threshold is reached.
-- `promoted-to-owner` (`{ roomCode }`): Succession when whoever holds command leaves the squad (or is voted out), to a connected member where there is one; also a member promoted to stand in when a join request arrives while nobody holds command. Not on a mere disconnect, which could be a signal blip.
+- `promoted-to-owner` (`{ roomCode }`): Succession when whoever holds command leaves the squad (or is voted out), to a connected member where there is one; also a member promoted to stand in when a join request arrives while nobody holds command, or when the Commander's connection drops with requests already waiting on them. Not on a mere disconnect, which could be a signal blip.
 - `demoted-to-member` (`{ roomCode }`): Emitted to a stand-in (caretaker or promoted member) when the squad's Commander comes back and takes command again. The client drops its Commander controls and join queue.
 
 ---
