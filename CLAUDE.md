@@ -36,8 +36,8 @@ npx cap sync         # sync web build into the Capacitor Android project
 npm test            # run the Vitest suite once (tests/)
 npm run test:watch  # Vitest in watch mode
 
-npm run release -- 1.1.0          # cut a full-APK release (Phase 1 updater)
-npm run release:bundle -- 1.0.1   # ship a JS-only live update (Phase 2 updater)
+npm run release -- 1.2.0          # cut a full-APK release (Phase 1 updater)
+npm run release:bundle -- 1.1.2   # ship a JS-only live update (Phase 2 updater)
 npm run release:verify            # check a published release the way a device would
 
 npm run device-check:wifi         # prove the wifi_aps Firestore read on a USB-connected phone
@@ -50,19 +50,35 @@ signing keystore configured in `android/local.properties`. See **`UPDATER.md`** 
 reference for the whole update system, including the one-time keystore setup and the
 real-device verification steps.
 
-Tests use Vitest and live in `tests/` (geoMath, precognition, squadCode, markerStatus, serverLogic); they cover the pure helpers in `src/utils/` and server logic, not the UI. There is no lint script wired into `package.json` (ESLint config exists at `eslint.config.js`; run it directly with `npx eslint .` if needed).
+Tests use Vitest and live in `tests/`, in three kinds:
+- **Unit tests** (`*.test.js`) cover the pure helpers in `src/utils/` and `backend/`.
+- **End-to-end tests** (`*.e2e.test.js`) run the real `backend/server.js` in a child process on a free port and drive it with real Socket.IO clients (`tests/helpers/e2eServer.js`). Nothing is mocked.
+- **UI tests** (`*.test.jsx`, jsdom) render the real `App.jsx` against a fake socket.
+
+For a bug fix, show the new test failing against the unfixed code, then break each key behaviour one at a time and confirm a test catches it.
+
+There is no lint script wired into `package.json` (ESLint config exists at `eslint.config.js`; run it directly with `npx eslint .` if needed).
 
 The backend does not currently require any `.env` variables — the `GEMINI_API_KEY`-backed `/api/oracle` proxy it once used was deliberately removed (see the architecture-doc note above). `npm run server` still loads `.env` via `--env-file` if one exists, but nothing in the server reads from it today.
 
 ## Architecture
 
-**Frontend**: React 19 + Vite 7 + Tailwind v4. `App.jsx` is a single large component holding almost all state (auth, map, squad/telemetry, AR targeting, geofencing, AI oracle chat, UI modals) — when making changes, expect to work within this file rather than finding separate feature modules. Maps are rendered via `google-map-react` (primary, dark-styled) with Leaflet as a fallback engine.
+**Frontend**: React 19 + Vite 7 + Tailwind v4. `App.jsx` is a single large component holding almost all state (auth, map, squad/telemetry, AR targeting, UI modals) — when making changes, expect to work within this file rather than finding separate feature modules. Maps are rendered via `google-map-react` (primary, dark-styled) with Leaflet as a fallback engine.
 
-**Backend**: `backend/server.js` is a single-file Express + Socket.IO server with no persistence layer — all squad/room/location state lives in in-memory objects (`activeSquads`, `users`, `locationCache`) and is lost on restart. It also proxies AI queries to Gemini (`POST /api/oracle`) so the API key never reaches the client. The frontend picks the backend URL via `VITE_BACKEND_URL`, falling back to `http://localhost:5000` on localhost or the deployed Render URL otherwise (`App.jsx:52`).
+**Backend**: `backend/server.js` is a single-file Express + Socket.IO server with no persistence layer — all squad/room/location state lives in in-memory objects (`activeSquads`, `users`, `locationCache`) and is lost on restart. The frontend picks the backend URL via `VITE_BACKEND_URL`, falling back to `http://localhost:5000` on localhost or the deployed Render URL (`https://locus-1-896t.onrender.com`) otherwise (`App.jsx:77`). Render auto-deploys `main` but reports nothing to GitHub. To confirm a server change is live, probe its behaviour with a scripted socket.io client against the Render URL.
 
 **Real-time protocol**: Squad coordination (join/approve/kick, live location broadcast, waypoints, geofence alerts, "signal lost" dead-man's-switch on disconnect) all flows over Socket.IO events between `App.jsx` and `backend/server.js`. When touching either side of a socket event, grep the other file for the matching event name — the full event catalogue is documented in section 4 of `LOCUS_SYSTEM_ARCHITECTURE.md`.
 
-**Firebase**: Used client-side only, for Auth (email/password — no OAuth redirect flow, deliberately, to stay stable inside the Capacitor WebView) and Firestore. The one collection is `wifi_aps` (WiFi positioning anchors, document ID = lowercase BSSID), seeded by hand with the standalone Admin-SDK script in `tools/wifi-aps-seed/`. `src/utils/wifiPositioning.js` (WiFi Arc Stage 5) reads it once into an in-memory cache and turns recent `WifiScan` results into a position estimate, but nothing in the app calls it yet; wiring it into the map and `update-location` is Stage 6. It is the app's only Firestore read, and it waits for `auth.authStateReady()` because the collection is readable only when signed in. The old `tactical_zones` collection was removed with the geofence painter. There is no `firestore.rules` in the repo; rules live in the Firebase console. Config in `src/firebase.js` is a public client config, not a secret.
+**Squad membership and command** (server side in `backend/server.js` `request-join` and `backend/squadRoster.js`):
+- **People, not connections.** People are recognised by Firebase uid, never by socket id, because every mobile reconnect mints a new socket id. `knownUids` is the approved-member list. Only an approval adds to it, and only leave, vote-out or block removes it. A disconnect never touches it.
+- **Two identities.** `commanderUid` (read through `commanderOf()`) is the squad's own Commander. `ownerId`/`ownerUid` is whoever holds command right now, which may be a stand-in.
+- **Commander away.** While the Commander's socket is gone, only an approved member can take command. A stranger's request is held in `squad.pending`, never admitted and never dropped. It is handed to a connected approved member promoted to stand in (`promoted-to-owner`), or waits for whoever takes command next. That promotion also happens when the Commander's socket drops with requests already waiting on it.
+- **Commander back.** The Commander gets the squad back whenever they return, however long they were away. The stand-in is sent `demoted-to-member`, and the client drops its Commander controls and join queue.
+- **Deliberate exits.** Only a deliberate exit (`leave-squad`, a vote-out) hands `commanderUid` on. A stand-in cannot block the Commander.
+- **Disconnects are not departures.** A raw disconnect never changes command by itself: it fires on every signal blip.
+- **Dead connections look alive for a while.** Behind Render's proxy, a dead phone is only noticed at the socket.io heartbeat timeout, up to about 45 s. Until then its socket still looks live.
+
+**Firebase**: Used client-side only, for Auth (email/password — no OAuth redirect flow, deliberately, to stay stable inside the Capacitor WebView) and Firestore. The one collection is `wifi_aps` (WiFi positioning anchors, document ID = lowercase BSSID), seeded by hand with the standalone Admin-SDK script in `tools/wifi-aps-seed/`. `src/utils/wifiPositioning.js` (WiFi Arc Stage 5) reads it once into an in-memory cache and turns recent `WifiScan` results into a position estimate. Stage 6 (`src/hooks/useWifiFusion.js`) fuses it with GPS for `update-location`, behind `WIFI_POSITIONING_ENABLED` in `src/utils/positionSource.js`. That flag ships **off**: with it off, fusion is left out of the build and positions are GPS only. Turning it on needs a Phase 1 APK first. It is the app's only Firestore read, and it waits for `auth.authStateReady()` because the collection is readable only when signed in. The old `tactical_zones` collection was removed with the geofence painter. There is no `firestore.rules` in the repo; rules live in the Firebase console. Config in `src/firebase.js` is a public client config, not a secret.
 
 **Mobile**: Wrapped via Capacitor (`android/` is the generated native project). After any frontend change intended for the mobile build, run `npm run build` then `npx cap sync`. Two local native plugins are registered by hand in `MainActivity`: `LocusUpdaterPlugin` (see Updates) and `WifiScanPlugin`. `WifiScanPlugin` does fresh WiFi scans for positioning; its JS bridge and result contract are in `src/utils/wifiScan.js`. Its scan logic is a copy of the field-survey tool's (`tools/wifi-survey/`), which is a separate app that must never be wired into this build.
 
@@ -71,3 +87,12 @@ The backend does not currently require any `.env` variables — the `GEMINI_API_
 - **No** → Phase 2, a JS-only bundle (`npm run release:bundle -- <version>`), which swaps the web bundle inside the installed shell with no reinstall. Uses `@capgo/capacitor-updater` in manual mode. The `MIN_NATIVE` line in a `js-*` release body is the compatibility gate that keeps a bundle off a shell too old to run it — it fails closed, and `src/utils/liveUpdateManifest.js` is where that logic lives.
 
 In both tiers the GitHub release *is* the manifest; there is no separate JSON file. Don't hand-edit `versionCode`/`versionName` or attach release assets by hand — the release scripts keep the published checksum and the binary in sync.
+
+**Both tag series share one number line.** Number every release, `v*` or `js-*`, above everything already published in either series. A phone running its APK's own JS counts as running the APK's version. So a bundle numbered below the newest APK is silently skipped as already current (js-1.0.9 after v1.1.0 never reached a phone). And an APK numbered below the newest bundle has its JS replaced by that older bundle. Both release scripts refuse such a version (`releaseVersionConflict`). As of js-1.1.1, the next APK must be 1.1.2 or higher. `npm run release:verify` checks only the APK release, so check a bundle by hand: download it, compare its SHA-256, and replay `shouldApplyBundle` against the live releases list.
+
+## Testing on a real phone
+
+A single USB-connected phone (adb is at `%LOCALAPPDATA%/Android/Sdk/platform-tools/adb.exe`, not on PATH) plus scripted socket.io clients against the Render URL can stand in for a multi-phone squad. Drive the phone with `adb shell input tap/text` and read it with `adb exec-out screencap -p`. The rules:
+- **Never toggle airplane mode or the phone's network.** The dev PC gets its internet from the phone's hotspot. Airplane mode cuts that hotspot and disconnects the scripted clients too. To take LOCUS offline, force-stop it: `adb shell am force-stop com.locus.app`.
+- **The app doesn't keep its squad across a restart.** After a force-stop, rejoin from the lobby with JOIN SQUAD and the code.
+- **The phone has a secure lock screen.** The owner must unlock it. Ask before changing any phone setting (e.g. `svc power stayon usb` to stop it locking mid-test), and restore the setting afterwards.
