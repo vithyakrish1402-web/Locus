@@ -3428,7 +3428,17 @@ const App = () => {
         </button>
       )}
 
-      {arTarget && <ARCompass target={arTarget} liveLocation={liveLocation} speedMps={liveSpeed} onClose={() => setArTarget(null)} />}
+      {arTarget && (
+        <ARCompass
+          target={arTarget}
+          liveLocation={liveLocation}
+          speedMps={liveSpeed}
+          squadMembers={users.filter(u => !blockedUserIds.includes(u.id))}
+          buildings={SRM_MASTER_DATABASE}
+          selfUid={user?.uid ?? null}
+          onClose={() => setArTarget(null)}
+        />
+      )}
 
       {/* ========== SOS TRIGGER (double press-and-hold confirm) ========== */}
       <SosTrigger

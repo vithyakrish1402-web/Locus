@@ -7,6 +7,7 @@ import {
   formatTacticalDistanceBracketed,
   calculateBearing,
   normalizeRotationDelta,
+  angularDifference,
   projectGhostLocation
 } from '../src/utils/geoMath';
 
@@ -161,5 +162,22 @@ describe('geoMath Utility', () => {
       const distanceTravelled = calculateDistanceMeters(startLat, startLng, projected.lat, projected.lng);
       expect(distanceTravelled).toBeCloseTo(100, -1);
     });
+  });
+});
+
+describe('angularDifference', () => {
+  it('is the shortest signed turn from one bearing to another, across north', () => {
+    expect(angularDifference(105, 90)).toBe(15);
+    expect(angularDifference(10, 350)).toBe(20);
+    expect(angularDifference(350, 10)).toBe(-20);
+    expect(angularDifference(-10, 710)).toBe(0);
+  });
+
+  it('is exactly what normalizeRotationDelta computes', () => {
+    for (let a = -400; a <= 400; a += 37) {
+      for (let b = -400; b <= 400; b += 41) {
+        expect(angularDifference(a, b)).toBe(normalizeRotationDelta(a, b));
+      }
+    }
   });
 });

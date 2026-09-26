@@ -79,17 +79,25 @@ export const calculateBearing = (lat1, lng1, lat2, lng2) => {
 };
 
 /**
- * Computes the shortest signed angular delta (within [-180, 180]) to prevent wraparound
- * spinning when crossing the 0° / 360° north boundary.
+ * Shortest signed angle (within [-180, 180]) that turns `from` into `to`, across the
+ * 0° / 360° north boundary: angularDifference(10, 350) is 20, not -340. Positive is
+ * clockwise. The one copy of this math; normalizeRotationDelta and useDeviceHeading use it.
  */
-export const normalizeRotationDelta = (targetAngle, currentAngle) => {
-  const normTarget = ((targetAngle % 360) + 360) % 360;
-  const normCurrent = ((currentAngle % 360) + 360) % 360;
-  let delta = normTarget - normCurrent;
+export const angularDifference = (to, from) => {
+  const normTo = ((to % 360) + 360) % 360;
+  const normFrom = ((from % 360) + 360) % 360;
+  let delta = normTo - normFrom;
   if (delta > 180) delta -= 360;
   if (delta < -180) delta += 360;
   return delta;
 };
+
+/**
+ * Computes the shortest signed angular delta (within [-180, 180]) to prevent wraparound
+ * spinning when crossing the 0° / 360° north boundary. Same math as angularDifference,
+ * named for its job of animating a displayed rotation.
+ */
+export const normalizeRotationDelta = (targetAngle, currentAngle) => angularDifference(targetAngle, currentAngle);
 
 /**
  * Dead Reckoning kinematic engine:

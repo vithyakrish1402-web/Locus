@@ -6,9 +6,13 @@ import { motion } from 'framer-motion';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { calculateBearing, calculateDistanceMeters as calculateDistance, normalizeRotationDelta } from './utils/geoMath';
+import { selectArTags } from './utils/arTags';
+import ARTag from './components/ARTag';
 
 // speedMps: raw m/s from geolocation (App.jsx's liveSpeed).
-const ARCompass = ({ target, liveLocation, speedMps = 0, onClose }) => {
+// squadMembers / buildings: what the floating tags can label (roster entries and
+// SRM_MASTER_DATABASE); selfUid keeps this phone's own user off them.
+const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, onClose }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
   const { heading: compassHeading, permissionsGranted, requestHeadingPermission } = useDeviceHeading();
@@ -59,6 +63,19 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, onClose }) => {
   // Math variables
   const bearing = (liveLocation && target) ? calculateBearing(liveLocation.lat, liveLocation.lng, target.lat, target.lng) : 0;
   const distance = (liveLocation && target) ? calculateDistance(liveLocation.lat, liveLocation.lng, target.lat, target.lng) : 0;
+
+  // Floating tags over whatever is in view, placed in screen percentages (width and
+  // height of 100) so they need no resize handling.
+  const tags = selectArTags({
+    origin: liveLocation,
+    heading,
+    members: squadMembers,
+    buildings,
+    selfUid,
+    target,
+    screenWidth: 100,
+    screenHeight: 100,
+  });
 
   // --- 🧭 WRAPAROUND-SAFE ROTATION ---
   // (bearing - heading) is a raw difference of two 0-360deg values, which jumps
@@ -125,6 +142,18 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, onClose }) => {
 
       {/* Grid Overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none z-10" />
+
+      {/* Floating tags, anchored to real things as the phone pans. Above the arrow ring,
+          below nothing tappable (they take no touches). Drawn furthest first, so where
+          two overlap the nearer one is on top. */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-[25]" aria-hidden="true">
+        {[...tags.ambient].reverse().map((t) => (
+          <ARTag key={t.key} name={t.name} distance={t.distance} x={t.x} y={t.y} variant={t.kind} />
+        ))}
+        {tags.target && (
+          <ARTag key="target" name={tags.target.name} distance={tags.target.distance} x={tags.target.x} y={tags.target.y} variant="target" />
+        )}
+      </div>
 
       {/* Tactical UI Layer */}
       <div className="relative z-20 w-full h-full flex flex-col p-6">
