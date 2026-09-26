@@ -1,21 +1,22 @@
 import { ASSUMED_CAMERA_FOV_DEG } from './arTags';
+import { toLocalMeters } from './arRoadLine';
+import { qConjugate, qFromAxisAngle, qFromEulerYXZ, qMultiply, qRotate } from './deviceOrientation';
 
 // AR Scan's 'realistic' world camera: the phone camera modelled as a real lens in metres,
 // which the three.js road (arRoadScene.js) is drawn through. Pure, so the road's
-// placement and the destination tag that sits on it share one formula, tested without
+// placement and the destination tag that sits on it share one camera, tested without
 // WebGL. (The three.js arrow has a camera of its own, in CSS pixels, that copies the CSS
 // arrow; it has nothing to do with this one.)
+//
+// World axes are three.js's: x east, y up, z south (north is -z), metres from the phone.
 
 // How high the phone is held above the ground. Rough, to be tuned on a phone.
 export const AR_CAMERA_HEIGHT_M = 1.4;
 
-// TEMPORARY — deleted once Stage 5c reads real device pitch.
-// How far below level the phone is assumed to point. Nothing reads the phone's tilt yet,
-// and a level camera puts the horizon mid-screen, squeezing the whole road into a strip
-// behind the arrow ring. 20 deg down puts the horizon where Stage 3's hand-fitted curve
-// has it. This is a stand-in, not a tuning knob: Stage 5c must delete it and use the
-// sensor, not keep it as a fallback or an offset beside the real reading.
-export const AR_ASSUMED_PITCH_DEG = 20;
+// How far below level the camera is taken to point when there is no live tilt: the
+// device never sent beta and gamma (a desktop, an old phone, a denied permission). Only
+// then; with a live tilt the phone's real orientation is used.
+export const FALLBACK_PITCH_DEG = 20;
 
 const rad = (deg) => (deg * Math.PI) / 180;
 
@@ -25,22 +26,40 @@ export const verticalFovDeg = (width, height, horizontalFovDeg = ASSUMED_CAMERA_
   (2 * Math.atan((Math.tan(rad(horizontalFovDeg) / 2) * height) / width) * 180) / Math.PI;
 
 /**
- * Where a point on the ground lands vertically, seen through the world camera, as a
- * fraction of screen height (0 top, 1 bottom). Returns `(distance, angle)`: `distance`
- * metres away, `angle` degrees off to the side of where the phone points. Only the part
- * of the distance straight ahead counts (a pitched camera's height on screen depends on
- * that alone), so it matches where the three.js road puts the same point exactly.
- * This is the shape projectPoint's `screenYFor` takes.
+ * The world camera's orientation, as a quaternion [x, y, z, w]. `heading` is AR Scan's
+ * heading (the one the arrow and the tags use: the smoothed compass, or the GPS course
+ * while walking). `tilt` is useDeviceHeading's ({ q, heading }), or null when there is no
+ * live tilt.
+ *
+ * With a tilt, it is the phone's own orientation turned about the vertical by however far
+ * AR Scan's heading is from the orientation's own, so the road faces where the tags do
+ * and keeps the phone's real pitch and roll. One quaternion product: no angles are split
+ * out and put back together, so nothing jumps when the phone is upright.
+ * Without one, the camera faces `heading`, FALLBACK_PITCH_DEG down, with no roll.
  */
-export const groundScreenYFor = ({ width, height, horizontalFovDeg = ASSUMED_CAMERA_FOV_DEG }) => {
-  const tanHalfV = Math.tan(rad(verticalFovDeg(width, height, horizontalFovDeg)) / 2);
-  const pitch = rad(AR_ASSUMED_PITCH_DEG);
-  const h = AR_CAMERA_HEIGHT_M;
-  return (distance, angle = 0) => {
-    const forward = Math.max(distance, 0) * Math.cos(rad(angle));
-    // The camera looks down `pitch`; `depth` is along its view, `up` up its screen.
-    const depth = h * Math.sin(pitch) + forward * Math.cos(pitch);
-    const up = -h * Math.cos(pitch) + forward * Math.sin(pitch);
-    return 0.5 - (0.5 * up) / (depth * tanHalfV);
-  };
+export const cameraQuaternion = ({ heading, tilt }) => {
+  if (tilt && Array.isArray(tilt.q) && Number.isFinite(tilt.heading)) {
+    // Clockwise on the ground is a negative turn about three.js's y.
+    return qMultiply(qFromAxisAngle([0, 1, 0], -rad(heading - tilt.heading)), tilt.q);
+  }
+  return qFromEulerYXZ(-rad(FALLBACK_PITCH_DEG), -rad(heading), 0);
+};
+
+/**
+ * Where a point on the ground at (`lat`, `lng`) lands on screen through the world camera
+ * oriented `q`, standing at `origin`: { x, y } as fractions of the screen's width and
+ * height, or null when it is behind the camera or off the screen. The same projection
+ * three.js applies to the road, so AR Scan's destination tag sits on the road's end.
+ */
+export const projectGroundPoint = ({ q, width, height, origin, lat, lng, horizontalFovDeg = ASSUMED_CAMERA_FOV_DEG }) => {
+  const { x: east, y: north } = toLocalMeters(origin, { lat, lng });
+  const [cx, cy, cz] = qRotate(qConjugate(q), [east, -AR_CAMERA_HEIGHT_M, -north]);
+  const depth = -cz;
+  if (!(depth > 0.1)) return null;
+  const tanH = Math.tan(rad(horizontalFovDeg) / 2);
+  const tanV = Math.tan(rad(verticalFovDeg(width, height, horizontalFovDeg)) / 2);
+  const x = (1 + cx / (depth * tanH)) / 2;
+  const y = (1 - cy / (depth * tanV)) / 2;
+  if (!(x > 0 && x < 1 && y > 0 && y < 1)) return null;
+  return { x, y };
 };

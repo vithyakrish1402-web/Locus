@@ -63,7 +63,7 @@ export const arRoutePathFor = (arTarget, activeWaypoint, walkingRoute) => {
 };
 
 // Metres east (x) and north (y) of `origin`. Flat, which is plenty over a route's length.
-const toLocal = (origin, p) => {
+export const toLocalMeters = (origin, p) => {
   const R = 6371e3;
   const rad = Math.PI / 180;
   return {
@@ -86,8 +86,8 @@ export const remainingPath = (path, position) => {
   if (pts.length < 2) return [];
   let best = { d2: Infinity, index: 0, t: 0 };
   for (let i = 0; i < pts.length - 1; i++) {
-    const a = toLocal(position, pts[i]);
-    const b = toLocal(position, pts[i + 1]);
+    const a = toLocalMeters(position, pts[i]);
+    const b = toLocalMeters(position, pts[i + 1]);
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const len2 = dx * dx + dy * dy;
@@ -154,7 +154,7 @@ export const remainingRouteSamples = (path, origin) => resamplePath(remainingPat
  */
 export const buildRoadStrip = (samples, origin, width = ROAD_LINE_WORLD_WIDTH_M) => {
   if (!isPoint(origin) || !Array.isArray(samples)) return null;
-  const pts = samples.filter(isPoint).map((s) => ({ ...toLocal(origin, s), along: s.along }));
+  const pts = samples.filter(isPoint).map((s) => ({ ...toLocalMeters(origin, s), along: s.along }));
   if (pts.length < 2) return null;
   const positions = [];
   const alphas = [];

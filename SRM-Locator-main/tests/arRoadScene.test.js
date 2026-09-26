@@ -1,7 +1,8 @@
-// AR Scan Stage 5b: the 'realistic' road line, a real-world strip on the ground seen
-// through a camera in metres. Tested without WebGL (three.js's maths runs anywhere).
+// AR Scan Stages 5b-5c: the 'realistic' road line, a real-world strip on the ground seen
+// through a camera in metres, oriented as the phone really is. Tested without WebGL
+// (three.js's maths runs anywhere).
 import { describe, it, expect } from 'vitest';
-import { Vector3 } from 'three';
+import { Euler, Quaternion, Vector3 } from 'three';
 import { buildRoadScene } from '../src/utils/arRoadScene.js';
 import {
   buildRoadStrip,
@@ -13,10 +14,9 @@ import {
   ROAD_LINE_NEAR_OPACITY,
   ROAD_LINE_FAR_OPACITY,
 } from '../src/utils/arRoadLine.js';
-import { AR_ASSUMED_PITCH_DEG, AR_CAMERA_HEIGHT_M, groundScreenYFor, verticalFovDeg } from '../src/utils/arCamera.js';
+import { AR_CAMERA_HEIGHT_M, FALLBACK_PITCH_DEG, cameraQuaternion, projectGroundPoint, verticalFovDeg } from '../src/utils/arCamera.js';
+import { deviceQuaternion, headingFromQuaternion, qRotate } from '../src/utils/deviceOrientation.js';
 import { ASSUMED_CAMERA_FOV_DEG, selectArTags } from '../src/utils/arTags.js';
-import { angularDifference, calculateBearing } from '../src/utils/geoMath.js';
-import { haversineMeters } from '../src/utils/walkingRoute.js';
 
 const START = { lat: 12.8230, lng: 80.0440 };
 const pt = (north, east = 0) => ({
@@ -27,13 +27,24 @@ const W = 400;
 const H = 800;
 const tan = (deg) => Math.tan((deg * Math.PI) / 180);
 
-const scene = (heading = 0) => {
+const DEG = Math.PI / 180;
+
+// The road's scene, its camera facing `heading`, with the phone's live `tilt` (null: none).
+const scene = (heading = 0, tilt = null) => {
   const view = buildRoadScene();
   view.setView({ width: W, height: H });
-  view.setHeading(heading);
+  view.setOrientation(cameraQuaternion({ heading, tilt }));
   view.camera.updateMatrixWorld(true);
   return view;
 };
+// A live tilt, as useDeviceHeading reports it, for a phone whose camera faces `heading`,
+// `pitch` up from level and rolled `roll` clockwise.
+const tiltFor = (heading, pitch, roll) => {
+  const q = new Quaternion().setFromEuler(new Euler(pitch * DEG, -heading * DEG, -roll * DEG, 'YXZ')).toArray();
+  return { q, heading: headingFromQuaternion(q) };
+};
+const lookOf = (view) => view.camera.getWorldDirection(new Vector3());
+const TILTS = [null, tiltFor(0, -20, 0), tiltFor(40, -35, 8), tiltFor(-10, 5, -12), tiltFor(0, -60, 30)];
 // Where the camera puts a ground point (x east, z south, in metres), in screen pixels.
 const screenOf = (view, x, z, y = 0) => {
   const p = new Vector3(x, y, z).project(view.camera);
@@ -59,13 +70,37 @@ describe('the world camera', () => {
     expect(view.camera.projectionMatrix.elements[0]).toBeCloseTo(1 / tan(ASSUMED_CAMERA_FOV_DEG / 2), 6);
   });
 
-  it('stands AR_CAMERA_HEIGHT_M up, looking AR_ASSUMED_PITCH_DEG down', () => {
+  it('stands AR_CAMERA_HEIGHT_M up; with no live tilt, looks FALLBACK_PITCH_DEG down, unrolled', () => {
     const view = scene();
     expect(view.camera.position.y).toBe(AR_CAMERA_HEIGHT_M);
-    const look = new Vector3();
-    view.camera.getWorldDirection(look);
-    expect((Math.asin(-look.y) * 180) / Math.PI).toBeCloseTo(AR_ASSUMED_PITCH_DEG, 6);
+    const look = lookOf(view);
+    expect(Math.asin(-look.y) / DEG).toBeCloseTo(FALLBACK_PITCH_DEG, 6);
     expect(look.z).toBeLessThan(0); // heading 0: north, which is -z
+    expect(new Vector3(1, 0, 0).applyQuaternion(view.camera.quaternion).y).toBeCloseTo(0, 9);
+  });
+
+  it('with a live tilt, keeps the phone’s real pitch and roll, facing AR Scan’s heading', () => {
+    // The phone's own orientation says 100 deg; AR Scan's heading (smoothed, or the GPS
+    // course) says 110. The camera faces 110, pitched and rolled exactly as the phone is.
+    const tilt = tiltFor(100, -35, 8);
+    const q = cameraQuaternion({ heading: 110, tilt });
+    expect(headingFromQuaternion(q)).toBeCloseTo(110, 6);
+    // Only turned about the vertical: every axis keeps its height, so the pitch (the
+    // view's) and the roll (the right edge's) are the phone's own, exactly.
+    for (const axis of [[1, 0, 0], [0, 1, 0], [0, 0, -1]]) {
+      expect(qRotate(q, axis)[1]).toBeCloseTo(qRotate(tilt.q, axis)[1], 9);
+    }
+    expect(Math.asin(qRotate(q, [0, 0, -1])[1]) / DEG).toBeCloseTo(-35, 6);
+    // And turned by exactly the gap between the two headings.
+    const turn = (v) => (Math.atan2(v[0], -v[2]) / DEG + 360) % 360;
+    expect(turn(qRotate(q, [0, 0, -1])) - turn(qRotate(tilt.q, [0, 0, -1]))).toBeCloseTo(110 - tilt.heading, 6);
+  });
+
+  it('uses the fallback only when there is no live tilt', () => {
+    const pitchDown = (tilt) => Math.asin(-qRotate(cameraQuaternion({ heading: 0, tilt }), [0, 0, -1])[1]) / DEG;
+    expect(pitchDown(tiltFor(0, -50, 0))).toBeCloseTo(50, 6);
+    expect(pitchDown(tiltFor(0, 0, 0))).toBeCloseTo(0, 6); // a real level phone is not the fallback
+    expect(pitchDown(null)).toBeCloseTo(FALLBACK_PITCH_DEG, 6);
   });
 
   it('turns with the heading: facing east shows an eastward road as facing north shows a northward one', () => {
@@ -80,38 +115,89 @@ describe('the world camera', () => {
   });
 });
 
-describe('groundScreenYFor', () => {
-  it('puts a ground point exactly where the three.js camera does, ahead and off to the side', () => {
-    const view = scene(0);
-    const yFor = groundScreenYFor({ width: W, height: H });
-    for (const d of [2, 5, 15, 60, 150, 400]) {
-      for (const angle of [0, -20, 25]) {
-        const r = (angle * Math.PI) / 180;
-        const { y } = screenOf(view, d * Math.sin(r), -d * Math.cos(r));
-        expect(yFor(d, angle) * H).toBeCloseTo(y, 6);
+describe('projectGroundPoint', () => {
+  // The ground point `north` m north and `east` m east of START, through the camera.
+  const project = (tilt, heading, north, east = 0) =>
+    projectGroundPoint({ q: cameraQuaternion({ heading, tilt }), width: W, height: H, origin: START, ...pt(north, east) });
+  const world = (north, east) => ({
+    x: (pt(north, east).lng - START.lng) * DEG * 6371e3 * Math.cos(START.lat * DEG),
+    z: -(pt(north, east).lat - START.lat) * DEG * 6371e3,
+  });
+
+  it('puts a ground point exactly where the three.js camera does, tilted and rolled too', () => {
+    for (const tilt of TILTS) {
+      for (const heading of [0, 25]) {
+        const view = scene(heading, tilt);
+        let seen = 0;
+        for (const [n, e] of [[5, 0], [15, 3], [40, -12], [120, 30], [300, -40], [3, 1], [-20, 0]]) {
+          const p = project(tilt, heading, n, e);
+          const { x, z } = world(n, e);
+          const s = screenOf(view, x, z);
+          const ahead = new Vector3(x, 0, z).sub(view.camera.position).dot(lookOf(view)) > 0.1;
+          if (!(ahead && s.x > 0 && s.x < W && s.y > 0 && s.y < H)) {
+            expect(p).toBeNull();
+            continue;
+          }
+          seen += 1;
+          expect(p.x * W).toBeCloseTo(s.x, 4);
+          expect(p.y * H).toBeCloseTo(s.y, 4);
+        }
+        expect(seen).toBeGreaterThan(0);
       }
     }
   });
 
-  it('places the destination’s tag on the ground under the world camera, off to the side too', () => {
-    const yFor = groundScreenYFor({ width: W, height: H });
-    const target = { name: 'RALLY', ...pt(80, 30) }; // about 20 deg right of north
-    const { target: tag } = selectArTags({ origin: START, heading: 0, target, screenWidth: W, screenHeight: H, targetScreenYFor: yFor });
-    const angle = angularDifference(calculateBearing(START.lat, START.lng, target.lat, target.lng), 0);
-    expect(angle).toBeGreaterThan(15);
-    // The same point on the ground as the three.js camera sees it.
-    const { y } = screenOf(scene(0), 30, -80);
-    expect(tag.y).toBeCloseTo(yFor(haversineMeters(START, target), angle) * H, 6);
-    expect(tag.y).toBeCloseTo(y, 1);
+  it('is null behind the camera', () => {
+    expect(project(null, 0, -30)).toBeNull();
+    expect(project(null, 180, 30)).toBeNull();
   });
 
-  it('rises toward a horizon above mid-screen, since the phone is pitched down', () => {
-    const yFor = groundScreenYFor({ width: W, height: H });
-    const horizon = 0.5 - (0.5 * tan(AR_ASSUMED_PITCH_DEG)) / tan(verticalFovDeg(W, H) / 2);
-    expect(yFor(5)).toBeGreaterThan(yFor(20));
-    expect(yFor(20)).toBeGreaterThan(yFor(150));
-    expect(yFor(1e6)).toBeCloseTo(horizon, 4);
-    expect(horizon).toBeLessThan(0.5);
+  it('places the destination’s tag through the camera, on the road’s end', () => {
+    const q = cameraQuaternion({ heading: 0, tilt: tiltFor(10, -25, 6) });
+    const targetProject = (lat, lng) => projectGroundPoint({ q, width: W, height: H, origin: START, lat, lng });
+    const target = { name: 'RALLY', ...pt(80, 20) };
+    const { target: tag } = selectArTags({ origin: START, heading: 0, target, screenWidth: W, screenHeight: H, targetProject });
+    const at = targetProject(target.lat, target.lng);
+    expect(tag.x).toBeCloseTo(at.x * W, 9);
+    expect(tag.y).toBeCloseTo(at.y * H, 9);
+    expect(tag.distance).toBeGreaterThan(80);
+    const behind = selectArTags({ origin: START, heading: 0, target: { name: 'B', ...pt(-80) }, screenWidth: W, screenHeight: H, targetProject });
+    expect(behind.target).toBeNull();
+  });
+
+  it('with no live tilt, rises toward a horizon FALLBACK_PITCH_DEG above mid-screen', () => {
+    const horizon = 0.5 - (0.5 * tan(FALLBACK_PITCH_DEG)) / tan(verticalFovDeg(W, H) / 2);
+    const y = (n) => project(null, 0, n).y;
+    expect(y(5)).toBeGreaterThan(y(20));
+    expect(y(20)).toBeGreaterThan(y(150));
+    expect(y(1e5)).toBeCloseTo(horizon, 4);
+  });
+
+  it('follows the real pitch: tip the phone up and the road drops down the screen', () => {
+    const y = (pitch) => project(tiltFor(0, pitch, 0), 0, 30).y;
+    expect(y(-10)).toBeGreaterThan(y(-20));
+    expect(y(-20)).toBeGreaterThan(y(-30));
+  });
+});
+
+describe('the phone held upright (beta near 90), through the camera', () => {
+  it('small gamma changes move the road smoothly on screen, with no jumps', () => {
+    // As useDeviceHeading reports it: heading and tilt from the same orientation.
+    for (const beta of [80, 89, 90, 91]) {
+      let prev = null;
+      for (let gamma = -3; gamma <= 3.0001; gamma += 0.1) {
+        const q = deviceQuaternion(10, beta, gamma);
+        const heading = headingFromQuaternion(q);
+        const p = projectGroundPoint({ q: cameraQuaternion({ heading, tilt: { q, heading } }), width: W, height: H, origin: START, ...pt(40, 0) });
+        expect(p).not.toBeNull();
+        if (prev) {
+          // A 0.1 deg step can move a point on screen by about a pixel at most.
+          expect(Math.abs(p.x - prev.x) * W).toBeLessThan(1);
+          expect(Math.abs(p.y - prev.y) * H).toBeLessThan(1);
+        }
+        prev = p;
+      }
+    }
   });
 });
 
@@ -183,7 +269,7 @@ describe('the road seen through the camera', () => {
     for (let k = 1; k < widths.length; k++) {
       expect(widths[k].r.x - widths[k].l.x).toBeLessThan(widths[k - 1].r.x - widths[k - 1].l.x);
     }
-    const pitch = (AR_ASSUMED_PITCH_DEG * Math.PI) / 180;
+    const pitch = FALLBACK_PITCH_DEG * DEG;
     for (const { l, r, z } of widths) {
       const depth = AR_CAMERA_HEIGHT_M * Math.sin(pitch) + -z * Math.cos(pitch);
       const expected = (ROAD_LINE_WORLD_WIDTH_M / (depth * tan(ASSUMED_CAMERA_FOV_DEG / 2))) * (W / 2);

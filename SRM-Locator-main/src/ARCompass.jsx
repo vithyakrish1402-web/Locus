@@ -8,7 +8,7 @@ import { selectArTags } from './utils/arTags';
 import ARTag from './components/ARTag';
 import ARRoadLine from './components/ARRoadLine';
 import { buildRoadRibbon, buildRoadStrip, remainingRouteSamples, roadScreenYFor } from './utils/arRoadLine';
-import { groundScreenYFor } from './utils/arCamera';
+import { cameraQuaternion, projectGroundPoint } from './utils/arCamera';
 import ARRoadGL from './components/ARRoadGL';
 import ARArrow3D from './components/ARArrow3D';
 import { RealisticArrow } from './components/ARArrowGL';
@@ -26,7 +26,10 @@ const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', onClose }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
-  const { heading: compassHeading, permissionsGranted, requestHeadingPermission } = useDeviceHeading();
+  // The compass, read as a camera (the phone held up; see useDeviceHeading), plus the
+  // phone's live tilt in 'realistic' mode, where the three.js road is drawn through it.
+  const { heading: compassHeading, tilt, permissionsGranted, requestHeadingPermission } =
+    useDeviceHeading({ camera: true, tilt: fidelity === 'realistic' });
   // Same fusion as the live map marker: GPS course while walking, the smoothed
   // compass otherwise. The compass alone drifts indoors and near steel.
   const heading = useLiveHeading({
@@ -100,6 +103,10 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
   // A failure is final for this AR Scan session; the canvas's unmount doesn't undo it.
   const onRoadGlStatus = useCallback((next) => setRoadGl((prev) => (prev === 'failed' ? prev : next)), []);
   const roadGlDrawing = Boolean(strip) && roadGl === 'ready';
+  // The world camera: the phone's real tilt, facing AR Scan's heading (FALLBACK_PITCH_DEG
+  // down with no live tilt). The road is drawn through it, and while it is, the
+  // destination's tag is placed through it too, so it sits on the road's end.
+  const orientation = useMemo(() => cameraQuaternion({ heading, tilt }), [heading, tilt]);
 
   const ribbon = routePath && !roadGlDrawing
     ? buildRoadRibbon({ origin: liveLocation, heading, path: routePath, screenWidth: viewport.width, screenHeight: viewport.height })
@@ -108,7 +115,7 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
   // Floating tags over whatever is in view, placed in screen percentages (width and
   // height of 100) so they need no resize handling. While a road is drawn, the
   // destination's tag goes on the road's curve, so the road runs up to it: the ribbon's
-  // hand-fitted curve, or the world camera's ground under the three.js road.
+  // hand-fitted curve, or the world camera itself under the three.js road.
   const tags = selectArTags({
     origin: liveLocation,
     heading,
@@ -118,9 +125,10 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
     target,
     screenWidth: 100,
     screenHeight: 100,
-    targetScreenYFor: roadGlDrawing
-      ? groundScreenYFor({ width: viewport.width, height: viewport.height })
-      : ribbon ? roadScreenYFor : undefined,
+    targetScreenYFor: ribbon ? roadScreenYFor : undefined,
+    targetProject: roadGlDrawing
+      ? (lat, lng) => projectGroundPoint({ q: orientation, width: viewport.width, height: viewport.height, origin: liveLocation, lat, lng })
+      : undefined,
   });
 
   // --- 🧭 WRAPAROUND-SAFE ROTATION ---
@@ -194,7 +202,7 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
 
       {/* The route to the Rally Point, on the ground: under the HUD and the tags. */}
       {ribbon && <ARRoadLine ribbon={ribbon} width={viewport.width} height={viewport.height} />}
-      {strip && roadGl !== 'failed' && <ARRoadGL strip={strip} heading={heading} onStatus={onRoadGlStatus} />}
+      {strip && roadGl !== 'failed' && <ARRoadGL strip={strip} orientation={orientation} onStatus={onRoadGlStatus} />}
 
       {/* Floating tags, anchored to real things as the phone pans. Above the arrow ring,
           below nothing tappable (they take no touches). Drawn furthest first, so where

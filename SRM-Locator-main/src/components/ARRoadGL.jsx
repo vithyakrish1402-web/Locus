@@ -11,13 +11,14 @@ import React, { useEffect, useRef } from 'react';
 // Stage 3 ribbon: `onStatus` reports 'ready' or 'failed', and 'loading' again on unmount.
 //
 // `strip` is buildRoadStrip's output, rebuilt by ARCompass whenever the position or the
-// route changes; `heading` is the same fused heading the tags use, so they turn together.
-// A frame is drawn only when one of them or the layout changes, never in a loop.
-const ARRoadGL = ({ strip, heading, onStatus }) => {
+// route changes; `orientation` is the camera's quaternion (cameraQuaternion: the phone's
+// real tilt, facing the heading the tags use, so they turn together). A frame is drawn
+// only when one of them or the layout changes, never in a loop.
+const ARRoadGL = ({ strip, orientation, onStatus }) => {
   const canvasRef = useRef(null);
   const viewRef = useRef(null);
-  const latest = useRef({ strip, heading });
-  latest.current = { strip, heading };
+  const latest = useRef({ strip, orientation });
+  latest.current = { strip, orientation };
   const onStatusRef = useRef(onStatus);
   useEffect(() => {
     onStatusRef.current = onStatus;
@@ -42,7 +43,7 @@ const ARRoadGL = ({ strip, heading, onStatus }) => {
           view.render();
         };
         view.setRoad(latest.current.strip);
-        view.setHeading(latest.current.heading);
+        view.setOrientation(latest.current.orientation);
         layout();
         // The canvas can change size without a window resize (it fills the AR screen, not
         // the window), and a drawing buffer left at the old size is stretched to fit,
@@ -85,9 +86,9 @@ const ARRoadGL = ({ strip, heading, onStatus }) => {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    view.setHeading(heading);
+    view.setOrientation(orientation);
     view.render();
-  }, [heading]);
+  }, [orientation]);
 
   return (
     <canvas
