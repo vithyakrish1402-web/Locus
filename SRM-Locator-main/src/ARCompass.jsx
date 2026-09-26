@@ -9,6 +9,7 @@ import ARTag from './components/ARTag';
 import ARRoadLine from './components/ARRoadLine';
 import { buildRoadRibbon, roadScreenYFor } from './utils/arRoadLine';
 import ARArrow3D from './components/ARArrow3D';
+import { RealisticArrow } from './components/ARArrowGL';
 
 const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 
@@ -105,6 +106,9 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
   // long way around anytime the user turns through north. Instead, accumulate an
   // unbounded rotation and nudge it each update by the shortest signed delta (<=180deg)
   // needed to reach the new target angle, so the animated value never jumps.
+  // The ring, and the AR screen's root element, which the 'realistic' arrow draws over.
+  const ringRef = useRef(null);
+  const [overlayEl, setOverlayEl] = useState(null);
   const rotationRef = useRef(0);
   const [displayRotation, setDisplayRotation] = useState(0);
 
@@ -143,7 +147,7 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black overflow-hidden pointer-events-auto">
+    <div ref={setOverlayEl} className="fixed inset-0 z-[9999] bg-black overflow-hidden pointer-events-auto">
       {/* Video Background */}
       <video 
         ref={videoRef}
@@ -223,16 +227,16 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
           {/* The ring, and the destination arrow turning inside it by the same
               wraparound-safe angle and spring as before. The arrow depends on
               AR_RENDER_MODE: 'efficient' and 'standard' (and anything unknown) get the
-              CSS 3D wedge; 'realistic' is where AR Scan Stage 5's GPU-rendered arrow
-              goes, and gets the wedge until then. */}
+              CSS 3D wedge; 'realistic' gets the three.js arrow (RealisticArrow), which
+              loads three.js only then. */}
           <div
+            ref={ringRef}
             data-testid="ar-arrow-ring"
             data-fidelity={fidelity}
             className="w-48 h-48 rounded-full border-4 border-red-500 flex items-center justify-center relative z-30 shadow-[0_0_30px_rgba(239,68,68,0.3)] bg-black/20 backdrop-blur-sm"
           >
             {fidelity === 'realistic' ? (
-              // Stage 5: the GPU-rendered arrow replaces this.
-              <ARArrow3D rotation={displayRotation} transition={ARROW_SPRING} />
+              <RealisticArrow rotation={displayRotation} spring={ARROW_SPRING} ringRef={ringRef} overlayEl={overlayEl} />
             ) : (
               <ARArrow3D rotation={displayRotation} transition={ARROW_SPRING} />
             )}
