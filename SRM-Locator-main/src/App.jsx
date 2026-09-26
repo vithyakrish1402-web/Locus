@@ -22,6 +22,7 @@ import LocusGuide from './LocusGuide';
 import ARCompass from './ARCompass';
 import { SRM_MASTER_DATABASE } from './srmDatabase';
 import { arTargetForMember, followArTarget } from './utils/arTags';
+import { arRoutePathFor } from './utils/arRoadLine';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
@@ -3443,6 +3444,7 @@ const App = () => {
           squadMembers={users.filter(u => !blockedUserIds.includes(u.id))}
           buildings={SRM_MASTER_DATABASE}
           selfUid={user?.uid ?? null}
+          routePath={arRoutePathFor(arTarget, activeWaypoint, walkingRoute)}
           onClose={() => setArTarget(null)}
         />
       )}

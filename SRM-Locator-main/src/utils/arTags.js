@@ -27,11 +27,16 @@ export const projectScreenX = (angularDiff, screenWidth, fovDeg = ASSUMED_CAMERA
   return centerX + (angularDiff / half) * centerX;
 };
 
-// Vertical position from distance alone (see TAG_BAND_*): 0 m at the band's bottom,
-// maxDistance and beyond at its top.
-export const projectScreenY = (distance, screenHeight, maxDistance = MAX_TAG_DISTANCE_METERS) => {
+// Vertical position from distance alone: 0 m at the band's bottom, maxDistance and
+// beyond at its top. The band is TAG_BAND_* unless given (the AR road line uses its own).
+export const projectScreenY = (
+  distance,
+  screenHeight,
+  maxDistance = MAX_TAG_DISTANCE_METERS,
+  band = { top: TAG_BAND_TOP, bottom: TAG_BAND_BOTTOM },
+) => {
   const t = Math.min(Math.max(distance / maxDistance, 0), 1);
-  return (TAG_BAND_BOTTOM - t * (TAG_BAND_BOTTOM - TAG_BAND_TOP)) * screenHeight;
+  return (band.bottom - t * (band.bottom - band.top)) * screenHeight;
 };
 
 // arTarget for a squad member, remembering who it is so followArTarget can keep it on them.
@@ -65,15 +70,30 @@ const isTargetMember = (target, m) =>
 
 const sameSpot = (a, b) => a && b && calculateDistanceMeters(a.lat, a.lng, b.lat, b.lng) < 1;
 
-// Place one target, or null when it isn't in view. Distance 0 means standing on it,
-// where no bearing means anything, so that is never tagged either.
-const place = ({ origin, heading, lat, lng, screenWidth, screenHeight, fovDeg }) => {
+/**
+ * Where one real-world point lands on screen, as seen from `origin` facing `heading`:
+ * { distance (whole metres), x, y }, or null when it's outside the view cone. Distance 0
+ * means standing on it, where no bearing means anything, so that is null too.
+ * `maxDistance` and `band` set the vertical placement (see projectScreenY); the tags use
+ * the defaults. The one projection for everything AR Scan draws over the camera.
+ */
+export const projectPoint = ({
+  origin,
+  heading,
+  lat,
+  lng,
+  screenWidth,
+  screenHeight,
+  fovDeg = ASSUMED_CAMERA_FOV_DEG,
+  maxDistance = MAX_TAG_DISTANCE_METERS,
+  band,
+}) => {
   const distance = calculateDistanceMeters(origin.lat, origin.lng, lat, lng);
   if (!(distance > 0)) return null;
   const diff = angularDifference(calculateBearing(origin.lat, origin.lng, lat, lng), heading);
   const x = projectScreenX(diff, screenWidth, fovDeg);
   if (x === null) return null;
-  return { distance, x, y: projectScreenY(Math.min(distance, MAX_TAG_DISTANCE_METERS), screenHeight) };
+  return { distance, x, y: projectScreenY(Math.min(distance, maxDistance), screenHeight, maxDistance, band) };
 };
 
 /**
@@ -118,7 +138,7 @@ export const selectArTags = ({
   const ambient = [];
   for (const c of candidates) {
     if (target && c.name === target.name && sameSpot(c, target)) continue;
-    const p = place({ ...view, lat: c.lat, lng: c.lng });
+    const p = projectPoint({ ...view, lat: c.lat, lng: c.lng });
     if (!p || p.distance > maxDistance) continue;
     ambient.push({ key: c.key, kind: c.kind, name: c.name, ...p });
   }
@@ -126,7 +146,7 @@ export const selectArTags = ({
 
   let targetTag = null;
   if (target && target.lat != null && target.lng != null) {
-    const p = place({ ...view, lat: target.lat, lng: target.lng });
+    const p = projectPoint({ ...view, lat: target.lat, lng: target.lng });
     if (p) targetTag = { key: 'target', kind: 'target', name: target.name, ...p };
   }
 

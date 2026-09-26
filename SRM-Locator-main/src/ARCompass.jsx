@@ -8,11 +8,15 @@ import { useLiveHeading } from './hooks/useLiveHeading';
 import { calculateBearing, calculateDistanceMeters as calculateDistance, normalizeRotationDelta } from './utils/geoMath';
 import { selectArTags } from './utils/arTags';
 import ARTag from './components/ARTag';
+import ARRoadLine from './components/ARRoadLine';
+import { buildRoadRibbon } from './utils/arRoadLine';
 
 // speedMps: raw m/s from geolocation (App.jsx's liveSpeed).
 // squadMembers / buildings: what the floating tags can label (roster entries and
 // SRM_MASTER_DATABASE); selfUid keeps this phone's own user off them.
-const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, onClose }) => {
+// routePath: the walking route to draw on the ground, only when AR Scan is on the squad's
+// Rally Point (see arRoutePathFor); null otherwise.
+const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, onClose }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
   const { heading: compassHeading, permissionsGranted, requestHeadingPermission } = useDeviceHeading();
@@ -76,6 +80,18 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
     screenWidth: 100,
     screenHeight: 100,
   });
+
+  // The road line is drawn in real pixels (its widths are pixel widths), so it needs the
+  // screen's size; AR Scan is full-screen, so that is the window's.
+  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  useEffect(() => {
+    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const ribbon = routePath
+    ? buildRoadRibbon({ origin: liveLocation, heading, path: routePath, screenWidth: viewport.width, screenHeight: viewport.height })
+    : null;
 
   // --- 🧭 WRAPAROUND-SAFE ROTATION ---
   // (bearing - heading) is a raw difference of two 0-360deg values, which jumps
@@ -142,6 +158,9 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
 
       {/* Grid Overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none z-10" />
+
+      {/* The route to the Rally Point, on the ground: under the HUD and the tags. */}
+      {ribbon && <ARRoadLine ribbon={ribbon} width={viewport.width} height={viewport.height} />}
 
       {/* Floating tags, anchored to real things as the phone pans. Above the arrow ring,
           below nothing tappable (they take no touches). Drawn furthest first, so where
