@@ -13,6 +13,13 @@ export const ROAD_LINE_MAX_DISTANCE_METERS = 150;
 // tuned on a phone.
 export const ROAD_LINE_NEAR_WIDTH_PX = 60;
 export const ROAD_LINE_FAR_WIDTH_PX = 8;
+// The 'realistic' road's width on the ground: roughly a walking path. One real-world
+// width, where the ribbon above needs a near and a far pixel width: drawn through a real
+// camera (arRoadScene.js), perspective narrows it into the distance by itself.
+export const ROAD_LINE_WORLD_WIDTH_M = 1.5;
+// The road's fade, solid at your feet to faint at the draw limit. Both renderings use it.
+export const ROAD_LINE_NEAR_OPACITY = 0.55;
+export const ROAD_LINE_FAR_OPACITY = 0.08;
 // The route is resampled this often, so the draw limit and the edge of the view cut it
 // where they fall rather than at the nearest routing vertex (those can be 100 m apart).
 export const ROAD_LINE_STEP_METERS = 5;
@@ -130,6 +137,53 @@ export const resamplePath = (path, maxAlong = ROAD_LINE_MAX_DISTANCE_METERS, ste
   return out;
 };
 
+/**
+ * The part of the route both road renderings draw: what is left of `path` from
+ * `origin`, resampled every ROAD_LINE_STEP_METERS up to ROAD_LINE_MAX_DISTANCE_METERS.
+ * [{ lat, lng, along }], recomputed from scratch each call; [] when there is none.
+ */
+export const remainingRouteSamples = (path, origin) => resamplePath(remainingPath(path, origin));
+
+/**
+ * The 'realistic' road as a flat strip on the ground, for arRoadScene.js to turn into a
+ * mesh, or null when there is nothing to draw. `samples` come from remainingRouteSamples.
+ * Metres from `origin`, in three.js's axes: x east, y up (the ground is y = 0), z south
+ * (so north is -z). Each sample gives a left and a right vertex, ROAD_LINE_WORLD_WIDTH_M
+ * apart across the route's direction there; `alphas` fade with distance along it.
+ * Returns { positions: [x, y, z, ...], alphas: [...], indices: [...] }.
+ */
+export const buildRoadStrip = (samples, origin, width = ROAD_LINE_WORLD_WIDTH_M) => {
+  if (!isPoint(origin) || !Array.isArray(samples)) return null;
+  const pts = samples.filter(isPoint).map((s) => ({ ...toLocal(origin, s), along: s.along }));
+  if (pts.length < 2) return null;
+  const positions = [];
+  const alphas = [];
+  const indices = [];
+  let dir = null;
+  pts.forEach((p, k) => {
+    const prev = pts[Math.max(k - 1, 0)];
+    const next = pts[Math.min(k + 1, pts.length - 1)];
+    const dx = next.x - prev.x;
+    const dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy);
+    if (len > 1e-6) dir = { x: dx / len, y: dy / len };
+    const d = dir || { x: 0, y: 1 };
+    // Left of the direction of travel is (-dy, dx) in east/north.
+    const h = width / 2;
+    const left = { x: p.x - d.y * h, y: p.y + d.x * h };
+    const right = { x: p.x + d.y * h, y: p.y - d.x * h };
+    positions.push(left.x, 0, -left.y, right.x, 0, -right.y);
+    const t = Math.min(Math.max(p.along / ROAD_LINE_MAX_DISTANCE_METERS, 0), 1);
+    const alpha = ROAD_LINE_NEAR_OPACITY - t * (ROAD_LINE_NEAR_OPACITY - ROAD_LINE_FAR_OPACITY);
+    alphas.push(alpha, alpha);
+    if (k > 0) {
+      const a = 2 * (k - 1);
+      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  });
+  return { positions, alphas, indices };
+};
+
 const widthAt = (distance) => {
   const t = Math.min(Math.max(distance / ROAD_LINE_MAX_DISTANCE_METERS, 0), 1);
   return ROAD_LINE_NEAR_WIDTH_PX - t * (ROAD_LINE_NEAR_WIDTH_PX - ROAD_LINE_FAR_WIDTH_PX);
@@ -151,7 +205,7 @@ const widthAt = (distance) => {
  */
 export const buildRoadRibbon = ({ origin, heading, path, screenWidth, screenHeight, fovDeg = ASSUMED_CAMERA_FOV_DEG }) => {
   if (!isPoint(origin) || !Number.isFinite(heading) || !(screenWidth > 0) || !(screenHeight > 0)) return null;
-  const samples = resamplePath(remainingPath(path, origin));
+  const samples = remainingRouteSamples(path, origin);
   if (samples.length < 2) return null;
 
   const project = (s) =>
