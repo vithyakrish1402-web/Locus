@@ -9,7 +9,7 @@ import { calculateBearing, calculateDistanceMeters as calculateDistance, normali
 import { selectArTags } from './utils/arTags';
 import ARTag from './components/ARTag';
 import ARRoadLine from './components/ARRoadLine';
-import { buildRoadRibbon } from './utils/arRoadLine';
+import { buildRoadRibbon, roadScreenYFor } from './utils/arRoadLine';
 
 // speedMps: raw m/s from geolocation (App.jsx's liveSpeed).
 // squadMembers / buildings: what the floating tags can label (roster entries and
@@ -68,19 +68,6 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
   const bearing = (liveLocation && target) ? calculateBearing(liveLocation.lat, liveLocation.lng, target.lat, target.lng) : 0;
   const distance = (liveLocation && target) ? calculateDistance(liveLocation.lat, liveLocation.lng, target.lat, target.lng) : 0;
 
-  // Floating tags over whatever is in view, placed in screen percentages (width and
-  // height of 100) so they need no resize handling.
-  const tags = selectArTags({
-    origin: liveLocation,
-    heading,
-    members: squadMembers,
-    buildings,
-    selfUid,
-    target,
-    screenWidth: 100,
-    screenHeight: 100,
-  });
-
   // The road line is drawn in real pixels (its widths are pixel widths), so it needs the
   // screen's size; AR Scan is full-screen, so that is the window's.
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
@@ -92,6 +79,21 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
   const ribbon = routePath
     ? buildRoadRibbon({ origin: liveLocation, heading, path: routePath, screenWidth: viewport.width, screenHeight: viewport.height })
     : null;
+
+  // Floating tags over whatever is in view, placed in screen percentages (width and
+  // height of 100) so they need no resize handling. While a road is drawn, the
+  // destination's tag goes on the road's curve, so the road runs up to it.
+  const tags = selectArTags({
+    origin: liveLocation,
+    heading,
+    members: squadMembers,
+    buildings,
+    selfUid,
+    target,
+    screenWidth: 100,
+    screenHeight: 100,
+    targetScreenYFor: ribbon ? roadScreenYFor : undefined,
+  });
 
   // --- 🧭 WRAPAROUND-SAFE ROTATION ---
   // (bearing - heading) is a raw difference of two 0-360deg values, which jumps

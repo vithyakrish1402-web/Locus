@@ -7,10 +7,11 @@ import {
   ROAD_LINE_MAX_DISTANCE_METERS,
   ROAD_LINE_NEAR_WIDTH_PX,
   ROAD_LINE_FAR_WIDTH_PX,
-  ROAD_LINE_BAND,
+  ROAD_LINE_BOTTOM,
+  roadScreenYFor,
 } from '../src/utils/arRoadLine.js';
 import { haversineMeters } from '../src/utils/walkingRoute.js';
-import { projectScreenY } from '../src/utils/arTags.js';
+import { projectScreenY, selectArTags } from '../src/utils/arTags.js';
 
 const START = { lat: 12.8230, lng: 80.0440 };
 // A point `north` m north and `east` m east of START.
@@ -153,8 +154,8 @@ describe('buildRoadRibbon', () => {
       expect(r.right[k].x - r.left[k].x).toBeCloseTo(p.width, 6);
     });
     // From low on the screen at your feet up to where a tag that far away sits.
-    expect(first.y).toBeGreaterThan((ROAD_LINE_BAND.bottom - 0.05) * H);
-    expect(first.y).toBeLessThanOrEqual(ROAD_LINE_BAND.bottom * H);
+    expect(first.y).toBeCloseTo(roadScreenYFor(5) * H, 6); // first sample, 5 m ahead
+    expect(first.y).toBeLessThan(ROAD_LINE_BOTTOM * H);
     expect(last.y).toBeCloseTo(projectScreenY(ROAD_LINE_MAX_DISTANCE_METERS, H), 6);
     for (let k = 1; k < r.points.length; k++) expect(r.points[k].y).toBeLessThan(r.points[k - 1].y);
     expect(r.nearY).toBe(first.y);
@@ -167,5 +168,44 @@ describe('buildRoadRibbon', () => {
     }
     expect(buildRoadRibbon({ origin: null, heading: 0, path: [pt(0), pt(50)], screenWidth: W, screenHeight: H })).toBeNull();
     expect(ribbon([pt(0), pt(50)], pt(0), NaN)).toBeNull();
+  });
+});
+
+describe('road line and destination tag heights', () => {
+  const rib = ribbon([pt(-10), pt(300)], pt(0));
+  const roadYAt = (d) => rib.points.find((p) => Math.abs(p.along - d) < 0.01).y;
+  const tagFor = (d, opts = {}) =>
+    selectArTags({ origin: pt(0), heading: 0, target: { name: 'RALLY', ...pt(d) }, buildings: [{ id: 1, name: 'B', ...pt(d, 1) }], screenWidth: W, screenHeight: H, ...opts });
+
+  it('puts the destination tag where the road is at the same distance', () => {
+    for (const d of [5, 35, 140]) {
+      const { target } = tagFor(d, { targetScreenYFor: roadScreenYFor });
+      expect(target.y).toBeCloseTo(roadYAt(d), 0); // within half a pixel
+    }
+  });
+
+  it('leaves the other tags, and the destination tag without a road, on the tags’ band', () => {
+    for (const d of [5, 35, 140]) {
+      const withRoad = tagFor(d, { targetScreenYFor: roadScreenYFor });
+      const building = withRoad.ambient[0];
+      expect(building.y).toBeCloseTo(projectScreenY(Math.hypot(d, 1), H), 0);
+      expect(tagFor(d).target.y).toBeCloseTo(projectScreenY(d, H), 0);
+    }
+  });
+
+  it('follows the exact distance, so the steep near end does not step as you walk', () => {
+    // 3 m beside the route: each sample is sqrt(along^2 + 9) m away, not a whole number.
+    const r = ribbon([pt(-10), pt(300)], pt(0, 3));
+    for (const p of r.points.slice(0, 4)) {
+      expect(p.y).toBeCloseTo(roadScreenYFor(Math.hypot(p.along, 3)) * H, 0);
+    }
+  });
+
+  it('is a perspective curve: from just above the panel toward the horizon, meeting a 150 m tag', () => {
+    expect(roadScreenYFor(0)).toBe(ROAD_LINE_BOTTOM);
+    expect(roadScreenYFor(ROAD_LINE_MAX_DISTANCE_METERS)).toBeCloseTo(projectScreenY(ROAD_LINE_MAX_DISTANCE_METERS, 1), 9);
+    // Near metres spread out, far ones bunch up.
+    const drop = (a, b) => roadScreenYFor(a) - roadScreenYFor(b);
+    expect(drop(0, 15)).toBeGreaterThan(5 * drop(75, 150));
   });
 });

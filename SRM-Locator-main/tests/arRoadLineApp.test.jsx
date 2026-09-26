@@ -146,6 +146,21 @@ describe('the AR road line', () => {
     expect(roadLine().querySelector('polygon').getAttribute('points').split(' ').length).toBeGreaterThan(4);
   });
 
+  it('runs up to the Rally Point tag: the tag sits on the road’s far end', async () => {
+    await onTheMapWithRally();
+    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    await grantAndFaceNorth();
+    // The route (130 m) ends at the Rally Point, so the ribbon's far end is where it is.
+    // The outline runs up the left edge, then back down the right: its far end is the
+    // middle pair of points.
+    const pts = roadLine().querySelector('polygon').getAttribute('points').split(' ').map((p) => p.split(',').map(Number));
+    const n = pts.length / 2;
+    const farEnd = { x: (pts[n - 1][0] + pts[n][0]) / 2, y: (pts[n - 1][1] + pts[n][1]) / 2 };
+    const tag = screen.getAllByTestId('ar-tag').find((t) => t.dataset.variant === 'target');
+    expect((parseFloat(tag.style.top) / 100) * window.innerHeight).toBeCloseTo(farEnd.y, 0);
+    expect((parseFloat(tag.style.left) / 100) * window.innerWidth).toBeCloseTo(farEnd.x, 0);
+  });
+
   it('is not drawn before a real route arrives', async () => {
     globalThis.fetch = vi.fn(() => new Promise(() => {})); // still fetching
     await onTheMapWithRally();

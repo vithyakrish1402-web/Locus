@@ -21,14 +21,24 @@ export const ROAD_LINE_STEP_METERS = 5;
 // At DRIFT_THRESHOLD_M off the route (the most useWalkingRoute tolerates before
 // re-routing) a 60 deg cone first reaches it about 1.7x that far along; 2x covers it.
 export const ROAD_LINE_UNDERFOOT_ALONG_M = 2 * DRIFT_THRESHOLD_M;
-// Vertical band, as fractions of screen height: the near end starts low on the screen,
+// The road line's vertical curve, as fractions of screen height. Ground seen through a
+// camera is a perspective curve, height ~ 1 / distance: the first metres spread down the
+// screen and the far ones bunch toward the horizon. The near end sits at ROAD_LINE_BOTTOM,
 // just above AR Scan's TARGET_LOCK panel (its top is ~0.88 of a 891 px tall screen, and
-// higher on shorter ones, where it would hide the first metres), and the far end meets
-// the height a floating tag at the same distance sits at.
-export const ROAD_LINE_BAND = {
-  top: projectScreenY(ROAD_LINE_MAX_DISTANCE_METERS, 1),
-  bottom: 0.84,
-};
+// higher on shorter ones, where it would hide the first metres). ROAD_LINE_D0_METERS sets
+// how fast the curve rises: at that distance the road is halfway to the horizon. The
+// horizon is derived so the road's far limit meets the height a floating tag that far
+// away sits at. The destination's own tag uses this curve too while a road is drawn
+// (selectArTags' targetScreenYFor), so the road always reaches it.
+export const ROAD_LINE_BOTTOM = 0.84;
+export const ROAD_LINE_D0_METERS = 15;
+const farShare = ROAD_LINE_D0_METERS / (ROAD_LINE_MAX_DISTANCE_METERS + ROAD_LINE_D0_METERS);
+export const ROAD_LINE_HORIZON =
+  (projectScreenY(ROAD_LINE_MAX_DISTANCE_METERS, 1) - ROAD_LINE_BOTTOM * farShare) / (1 - farShare);
+
+// Height of a point on the road `distance` metres away, as a fraction of screen height.
+export const roadScreenYFor = (distance) =>
+  ROAD_LINE_HORIZON + (ROAD_LINE_BOTTOM - ROAD_LINE_HORIZON) * (ROAD_LINE_D0_METERS / (Math.max(distance, 0) + ROAD_LINE_D0_METERS));
 
 /**
  * The route to draw for this AR Scan session, or null. Only when AR Scan is on the
@@ -153,8 +163,7 @@ export const buildRoadRibbon = ({ origin, heading, path, screenWidth, screenHeig
       screenWidth,
       screenHeight,
       fovDeg,
-      maxDistance: ROAD_LINE_MAX_DISTANCE_METERS,
-      band: ROAD_LINE_BAND,
+      screenYFor: roadScreenYFor,
     });
 
   let i = 0;

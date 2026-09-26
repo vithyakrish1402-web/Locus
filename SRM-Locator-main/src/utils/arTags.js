@@ -1,4 +1,5 @@
 import { angularDifference, calculateBearing, calculateDistanceMeters } from './geoMath';
+import { haversineMeters } from './walkingRoute';
 
 // AR Scan's floating tags: which squad members and buildings get a label, and where on
 // screen it sits. Pure, so the projection is tested without a camera or a compass.
@@ -27,17 +28,15 @@ export const projectScreenX = (angularDiff, screenWidth, fovDeg = ASSUMED_CAMERA
   return centerX + (angularDiff / half) * centerX;
 };
 
-// Vertical position from distance alone: 0 m at the band's bottom, maxDistance and
-// beyond at its top. The band is TAG_BAND_* unless given (the AR road line uses its own).
-export const projectScreenY = (
-  distance,
-  screenHeight,
-  maxDistance = MAX_TAG_DISTANCE_METERS,
-  band = { top: TAG_BAND_TOP, bottom: TAG_BAND_BOTTOM },
-) => {
+// The floating tags' vertical position, from distance alone (see TAG_BAND_*): 0 m at
+// the band's bottom, maxDistance and beyond at its top.
+export const projectScreenY = (distance, screenHeight, maxDistance = MAX_TAG_DISTANCE_METERS) => {
   const t = Math.min(Math.max(distance / maxDistance, 0), 1);
-  return (band.bottom - t * (band.bottom - band.top)) * screenHeight;
+  return (TAG_BAND_BOTTOM - t * (TAG_BAND_BOTTOM - TAG_BAND_TOP)) * screenHeight;
 };
+
+// projectScreenY as a fraction of screen height: projectPoint's default vertical curve.
+const tagScreenYFor = (distance) => projectScreenY(distance, 1);
 
 // arTarget for a squad member, remembering who it is so followArTarget can keep it on them.
 export const arTargetForMember = (m, fallbackName = 'SQUAD_NODE') => ({
@@ -74,8 +73,10 @@ const sameSpot = (a, b) => a && b && calculateDistanceMeters(a.lat, a.lng, b.lat
  * Where one real-world point lands on screen, as seen from `origin` facing `heading`:
  * { distance (whole metres), x, y }, or null when it's outside the view cone. Distance 0
  * means standing on it, where no bearing means anything, so that is null too.
- * `maxDistance` and `band` set the vertical placement (see projectScreenY); the tags use
- * the defaults. The one projection for everything AR Scan draws over the camera.
+ * `screenYFor(metres)` gives the height as a fraction of the screen: the tags' band by
+ * default, the road line's perspective curve for the road (see arRoadLine.js). It gets the
+ * exact distance, not the whole metres, so a steep curve doesn't step as you walk.
+ * The one projection for everything AR Scan draws over the camera.
  */
 export const projectPoint = ({
   origin,
@@ -85,15 +86,14 @@ export const projectPoint = ({
   screenWidth,
   screenHeight,
   fovDeg = ASSUMED_CAMERA_FOV_DEG,
-  maxDistance = MAX_TAG_DISTANCE_METERS,
-  band,
+  screenYFor = tagScreenYFor,
 }) => {
   const distance = calculateDistanceMeters(origin.lat, origin.lng, lat, lng);
   if (!(distance > 0)) return null;
   const diff = angularDifference(calculateBearing(origin.lat, origin.lng, lat, lng), heading);
   const x = projectScreenX(diff, screenWidth, fovDeg);
   if (x === null) return null;
-  return { distance, x, y: projectScreenY(Math.min(distance, maxDistance), screenHeight, maxDistance, band) };
+  return { distance, x, y: screenYFor(haversineMeters(origin, { lat, lng })) * screenHeight };
 };
 
 /**
@@ -106,6 +106,10 @@ export const projectPoint = ({
  * anyway), else null. `ambient` holds up to MAX_VISIBLE_TAGS other tags, nearest first,
  * each { key, kind: 'member' | 'building', name, distance, x, y }. The destination never
  * gets an ambient tag as well.
+ *
+ * `targetScreenYFor`, when given, places the destination's tag on that vertical curve
+ * instead of the tags' band. AR Scan passes the road line's curve while a road is drawn,
+ * so the destination's tag sits where the road reaches it.
  */
 export const selectArTags = ({
   origin,
@@ -119,6 +123,7 @@ export const selectArTags = ({
   fovDeg = ASSUMED_CAMERA_FOV_DEG,
   maxDistance = MAX_TAG_DISTANCE_METERS,
   maxTags = MAX_VISIBLE_TAGS,
+  targetScreenYFor,
 }) => {
   if (!origin || origin.lat == null || origin.lng == null || !Number.isFinite(heading)) {
     return { target: null, ambient: [] };
@@ -146,7 +151,7 @@ export const selectArTags = ({
 
   let targetTag = null;
   if (target && target.lat != null && target.lng != null) {
-    const p = projectPoint({ ...view, lat: target.lat, lng: target.lng });
+    const p = projectPoint({ ...view, lat: target.lat, lng: target.lng, ...(targetScreenYFor ? { screenYFor: targetScreenYFor } : {}) });
     if (p) targetTag = { key: 'target', kind: 'target', name: target.name, ...p };
   }
 
