@@ -3,6 +3,8 @@ import {
   projectScreenX,
   projectScreenY,
   selectArTags,
+  followArTarget,
+  arTargetForMember,
   ASSUMED_CAMERA_FOV_DEG,
   MAX_TAG_DISTANCE_METERS,
   MAX_VISIBLE_TAGS,
@@ -134,5 +136,45 @@ describe('selectArTags', () => {
       .toEqual({ target: null, ambient: [] });
     expect(tags({ heading: NaN, buildings: [building(1, 0, 100)] }).ambient).toEqual([]);
     expect(tags({ buildings: [{ id: 9, name: 'HERE', ...ORIGIN }] }).ambient).toEqual([]);
+  });
+});
+
+describe('arTargetForMember / followArTarget', () => {
+  const bravo = { id: 'sock-1', uid: 'u-b', name: 'BRAVO', hasFix: true, lat: 1, lng: 2 };
+
+  it('remembers the member by uid, or by socket id when they have none', () => {
+    expect(arTargetForMember(bravo)).toEqual({ lat: 1, lng: 2, name: 'BRAVO', memberUid: 'u-b' });
+    expect(arTargetForMember({ ...bravo, uid: null, name: '' })).toEqual({ lat: 1, lng: 2, name: 'SQUAD_NODE', memberId: 'sock-1' });
+  });
+
+  it('moves to the member’s live position, matched by uid across a socket id change', () => {
+    const t = arTargetForMember(bravo);
+    expect(followArTarget(t, [{ ...bravo, id: 'sock-2', lat: 5, lng: 6 }])).toEqual({ ...t, lat: 5, lng: 6 });
+  });
+
+  it('matches by socket id when there is no uid', () => {
+    const t = arTargetForMember({ ...bravo, uid: null });
+    expect(followArTarget(t, [{ ...bravo, uid: null, lat: 5, lng: 6 }])).toMatchObject({ lat: 5, lng: 6 });
+  });
+
+  it('returns the same object when there is nothing newer', () => {
+    const t = arTargetForMember(bravo);
+    expect(followArTarget(t, [bravo])).toBe(t); // hasn't moved
+    expect(followArTarget(t, [{ ...bravo, hasFix: false, lat: null, lng: null }])).toBe(t); // lost fix
+    expect(followArTarget(t, [])).toBe(t); // left
+    expect(followArTarget(t, [{ ...bravo, uid: 'u-other', lat: 9, lng: 9 }])).toBe(t); // someone else
+    const building = { lat: 1, lng: 2, name: 'TECH PARK' };
+    expect(followArTarget(building, [{ ...bravo, lat: 9 }])).toBe(building);
+    expect(followArTarget(null, [bravo])).toBeNull();
+  });
+});
+
+describe('selectArTags, destination on a squad member', () => {
+  it('gives that member no ambient tag, even when the destination is a stale spot', () => {
+    const m = member('a', 0, 100);
+    const staleTarget = { ...arTargetForMember(m), ...at(3, 60) };
+    const { target, ambient } = tags({ members: [m, member('b', 5, 150)], target: staleTarget });
+    expect(target.name).toBe('Ma');
+    expect(ambient.map((t) => t.key)).toEqual(['member-b']);
   });
 });

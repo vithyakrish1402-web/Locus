@@ -34,6 +34,35 @@ export const projectScreenY = (distance, screenHeight, maxDistance = MAX_TAG_DIS
   return (TAG_BAND_BOTTOM - t * (TAG_BAND_BOTTOM - TAG_BAND_TOP)) * screenHeight;
 };
 
+// arTarget for a squad member, remembering who it is so followArTarget can keep it on them.
+export const arTargetForMember = (m, fallbackName = 'SQUAD_NODE') => ({
+  lat: m.lat,
+  lng: m.lng,
+  name: m.name || fallbackName,
+  ...(m.uid ? { memberUid: m.uid } : { memberId: m.id }),
+});
+
+/**
+ * AR Scan's destination, kept on a squad member as they move. When arTarget was aimed at
+ * a member it carries memberUid (stable across reconnects) or, for a member with no uid,
+ * memberId (their socket id). Returns arTarget moved to that member's live position, or
+ * arTarget itself (same object, so a state update bails out) when there is nothing newer:
+ * not a member, or the member has no fix right now or has left, in which case their last
+ * known position stands.
+ */
+export const followArTarget = (arTarget, members) => {
+  if (!arTarget || (!arTarget.memberUid && !arTarget.memberId) || !Array.isArray(members)) return arTarget;
+  const live = members.find((m) =>
+    arTarget.memberUid ? m.uid === arTarget.memberUid : m.id === arTarget.memberId);
+  if (!live || !live.hasFix || live.lat == null || live.lng == null) return arTarget;
+  if (live.lat === arTarget.lat && live.lng === arTarget.lng) return arTarget;
+  return { ...arTarget, lat: live.lat, lng: live.lng };
+};
+
+// Whether roster entry `m` is the member arTarget follows.
+const isTargetMember = (target, m) =>
+  Boolean(target && (target.memberUid ? m.uid === target.memberUid : target.memberId && m.id === target.memberId));
+
 const sameSpot = (a, b) => a && b && calculateDistanceMeters(a.lat, a.lng, b.lat, b.lng) < 1;
 
 // Place one target, or null when it isn't in view. Distance 0 means standing on it,
@@ -79,6 +108,7 @@ export const selectArTags = ({
   const candidates = [
     ...members
       .filter((m) => m && m.hasFix && m.lat != null && m.lng != null && !(selfUid && m.uid === selfUid))
+      .filter((m) => !isTargetMember(target, m))
       .map((m) => ({ key: `member-${m.id}`, kind: 'member', name: m.name || 'SQUAD_NODE', lat: m.lat, lng: m.lng })),
     ...buildings
       .filter((b) => b && b.lat != null && b.lng != null)
