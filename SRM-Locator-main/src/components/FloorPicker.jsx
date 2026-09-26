@@ -8,11 +8,29 @@ import { floorLabel } from '../utils/indoorView';
  * emerald "live" dot - emerald being your own colour on the map - so it stays obvious
  * even while you look at another floor. Tapping a tab changes the view only.
  *
+ * Every building you're in gets the picker. One the survey hasn't covered still shows it,
+ * saying there are no floors, rather than leaving you to wonder whether it failed to load.
+ *
  * @param {ReturnType<import('../hooks/useIndoorView').useIndoorView>} view never null here
  */
 export default function FloorPicker({ view }) {
   const reduceMotion = useReducedMotion();
   const floorsTopDown = [...view.floors].reverse();
+
+  if (floorsTopDown.length === 0) {
+    return (
+      <div className="absolute left-4 top-1/3 z-40 pointer-events-auto">
+        <div
+          role="status"
+          aria-label={`${view.building}: no floors available`}
+          className="w-11 py-2 flex flex-col items-center gap-1 bg-black/70 backdrop-blur-md border border-white/15 text-zinc-500 font-dot text-[9px] tracking-widest text-center leading-tight"
+        >
+          <span aria-hidden="true" className="text-xs">-</span>
+          <span aria-hidden="true">NO<br />FLR</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="absolute left-4 top-1/3 z-40 flex items-start gap-2 pointer-events-auto">

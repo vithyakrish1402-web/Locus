@@ -47,7 +47,7 @@ import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { useWifiFusion } from './hooks/useWifiFusion';
 import { useIndoorView } from './hooks/useIndoorView';
 import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD } from './utils/positionSource';
-import { isOnOtherFloor, memberFloorTag } from './utils/indoorView';
+import { buildingAt, isOnOtherFloor, memberFloorTag } from './utils/indoorView';
 import { ConfidenceHalo, FloorTag } from './components/IndoorMarkers';
 import FloorPicker from './components/FloorPicker';
 import WifiReadout from './components/WifiReadout';
@@ -626,11 +626,16 @@ const App = () => {
   //
   // Stage 7: `indoor` is the valid indoor reading behind it (null with the flag off). While
   // there is one, your own dot is drawn at the WiFi position - the one your squad is being
-  // sent - with a confidence halo, and the floor picker appears. indoorView is the picker's
-  // purely local state: nothing in it reaches positionFor.
+  // sent - with a confidence halo. indoorView is the floor picker's purely local state:
+  // nothing in it reaches positionFor. The picker shows in any building your GPS fix is
+  // inside, reading or not, so an unsurveyed building gets one too (saying it has no floors).
   const wifiActive = Boolean(user && hasJoinedSquad && accessStatus === 'granted');
   const { positionFor, indoor, lastCycle } = useWifiFusion(wifiActive);
-  const indoorView = useIndoorView(WIFI_POSITIONING_ENABLED ? indoor : null);
+  const gpsBuilding = useMemo(
+    () => (WIFI_POSITIONING_ENABLED ? buildingAt(liveLocation)?.name ?? null : null),
+    [liveLocation]
+  );
+  const indoorView = useIndoorView(WIFI_POSITIONING_ENABLED ? indoor : null, gpsBuilding);
   // Where your own dot goes. With an indoor reading it is shown only on your real floor's
   // tab: browsing another floor, you aren't on it.
   const selfIndoor = WIFI_POSITIONING_ENABLED && indoor ? indoor : null;
@@ -2737,7 +2742,7 @@ const App = () => {
       )}
 
       {/* Map Interactive Layers */}
-      {/* WiFi Arc Stage 7: floor picker, only while you have an indoor reading. */}
+      {/* WiFi Arc Stage 7: floor picker, in whatever building you're in. */}
       {WIFI_POSITIONING_ENABLED && indoorView && <FloorPicker view={indoorView} />}
       {/* Owner-only field-test readout: every scan cycle's numbers, for judging the estimates. */}
       {WIFI_POSITIONING_ENABLED && isAdmin && <WifiReadout lastCycle={lastCycle} active={wifiActive} />}
