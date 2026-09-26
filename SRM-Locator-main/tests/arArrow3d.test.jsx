@@ -63,8 +63,9 @@ describe('ARCompass arrow by AR_RENDER_MODE', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
   };
 
-  for (const fidelity of ['efficient', 'standard', 'realistic']) {
-    it(`draws the 3D arrow for '${fidelity}' (realistic until Stage 5 replaces it)`, async () => {
+  // 'realistic' has its own arrow since Stage 5a: see arArrowRealistic.test.jsx.
+  for (const fidelity of ['efficient', 'standard']) {
+    it(`draws the 3D arrow for '${fidelity}'`, async () => {
       await open(fidelity);
       expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe(fidelity);
       expect(screen.getByTestId('ar-arrow-3d')).toBeTruthy();
