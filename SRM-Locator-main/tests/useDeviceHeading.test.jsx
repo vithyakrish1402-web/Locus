@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderHook, act, cleanup } from '@testing-library/react';
 import { useDeviceHeading, smoothHeading } from '../src/hooks/useDeviceHeading.js';
 
@@ -77,5 +77,29 @@ describe('useDeviceHeading() smoothing', () => {
       act(() => orient('deviceorientationabsolute', { absolute: true, alpha: 340 })); // 20
     }
     expect(result.current.headingRef.current).toBeCloseTo(20, 1);
+  });
+});
+
+describe('useDeviceHeading() render gate', () => {
+  // The gate compares the size of a turn, not its direction: an anticlockwise turn is as
+  // real as a clockwise one and has to reach the rendered heading too.
+  it('passes turns in both directions through to the rendered heading', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const { result } = renderHook(() => useDeviceHeading());
+    await act(async () => { await result.current.requestHeadingPermission(); });
+    act(() => orient('deviceorientationabsolute', { absolute: true, alpha: 270 })); // 90
+    expect(result.current.heading).toBeCloseTo(90, 6);
+
+    for (const [alpha, dir] of [[300, -1], [240, 1]]) { // 60 (anticlockwise), then 120 (clockwise)
+      const before = result.current.heading;
+      for (let i = 0; i < 30; i++) {
+        now += 200;
+        act(() => orient('deviceorientationabsolute', { absolute: true, alpha }));
+      }
+      expect(Math.sign(result.current.heading - before)).toBe(dir);
+      expect(Math.abs(result.current.heading - (360 - alpha))).toBeLessThan(1.5); // MIN_DELTA_DEG
+    }
+    vi.restoreAllMocks();
   });
 });

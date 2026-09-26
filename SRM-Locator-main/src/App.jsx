@@ -21,6 +21,7 @@ import {
 import LocusGuide from './LocusGuide';
 import ARCompass from './ARCompass';
 import { SRM_MASTER_DATABASE } from './srmDatabase';
+import { arTargetForMember, followArTarget } from './utils/arTags';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
@@ -555,6 +556,12 @@ const App = () => {
   const [selectedItem, setSelectedItem] = useState(null);
 
   const [users, setUsers] = useState([]);
+  // AR Scan aimed at a squad member follows them as they move, instead of pointing at
+  // where they stood when it was opened. followArTarget returns the same object when
+  // nothing moved, so this settles without a re-render.
+  useEffect(() => {
+    setArTarget(prev => followArTarget(prev, users));
+  }, [users]);
   const [liveLocation, setLiveLocation] = useState(null);
   // Raw m/s from geolocation's coords.speed, tracked separately from the km/h value
   // broadcast over the wire — drives this device's own LiveLocationMarker isNavigating state.
@@ -2390,7 +2397,7 @@ const App = () => {
                     isOwner={squadRole === 'OWNER'}
                     onPing={sendPing}
                     onBlock={toggleBlock}
-                    onAR={(m) => setArTarget({ lat: m.lat, lng: m.lng, name: m.name })}
+                    onAR={(m) => setArTarget(arTargetForMember(m))}
                     onTrack={(m) => handleFocus({ lat: m.lat, lng: m.lng }, null)}
                   />
                 </motion.div>
@@ -3390,7 +3397,7 @@ const App = () => {
             // null coordinate points it nowhere. No one with a fix: scan toward campus.
             const scanNode = users.find(u => u.hasFix);
             setArTarget(scanNode
-              ? { lat: scanNode.lat, lng: scanNode.lng, name: scanNode.name || 'SQUAD_NODE' }
+              ? arTargetForMember(scanNode)
               : { lat: SRM_KTR_COORDS.lat, lng: SRM_KTR_COORDS.lng, name: 'SRM_HQ' });
           } else {
             setMobileView('squad'); setActiveTab('users'); setSelectedItem(null);
@@ -3428,7 +3435,17 @@ const App = () => {
         </button>
       )}
 
-      {arTarget && <ARCompass target={arTarget} liveLocation={liveLocation} speedMps={liveSpeed} onClose={() => setArTarget(null)} />}
+      {arTarget && (
+        <ARCompass
+          target={arTarget}
+          liveLocation={liveLocation}
+          speedMps={liveSpeed}
+          squadMembers={users.filter(u => !blockedUserIds.includes(u.id))}
+          buildings={SRM_MASTER_DATABASE}
+          selfUid={user?.uid ?? null}
+          onClose={() => setArTarget(null)}
+        />
+      )}
 
       {/* ========== SOS TRIGGER (double press-and-hold confirm) ========== */}
       <SosTrigger

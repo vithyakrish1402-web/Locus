@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { angularDifference } from '../utils/geoMath';
 
 // deviceorientation fires at roughly the sensor rate (~60Hz on Android). Calling
 // setHeading on every event re-renders all of App.jsx — which owns the map, every
@@ -38,10 +39,7 @@ export const smoothHeading = (vec, nextDeg, alpha = HEADING_SMOOTHING_ALPHA) => 
 
 // Shortest angular distance between two bearings, accounting for the 360->0 wrap
 // (so 359deg -> 1deg reads as 2deg of movement, not 358).
-const angularDelta = (a, b) => {
-  const d = Math.abs(a - b) % 360;
-  return d > 180 ? 360 - d : d;
-};
+const angularDelta = (a, b) => Math.abs(angularDifference(a, b));
 
 // Extracted from ARCompass.jsx so the AR compass and the live map marker
 // (LiveLocationMarker) share one compass implementation. Each caller still gets
