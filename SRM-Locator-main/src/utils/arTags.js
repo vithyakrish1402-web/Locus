@@ -73,9 +73,11 @@ const sameSpot = (a, b) => a && b && calculateDistanceMeters(a.lat, a.lng, b.lat
  * Where one real-world point lands on screen, as seen from `origin` facing `heading`:
  * { distance (whole metres), x, y }, or null when it's outside the view cone. Distance 0
  * means standing on it, where no bearing means anything, so that is null too.
- * `screenYFor(metres)` gives the height as a fraction of the screen: the tags' band by
- * default, the road line's perspective curve for the road (see arRoadLine.js). It gets the
- * exact distance, not the whole metres, so a steep curve doesn't step as you walk.
+ * `screenYFor(metres, angle)` gives the height as a fraction of the screen: the tags' band
+ * by default, the road line's perspective curve for the road (see arRoadLine.js), or the
+ * 'realistic' world camera's ground (arCamera.js groundScreenYFor, which also needs
+ * `angle`, the degrees off to the side). It gets the exact distance, not the whole
+ * metres, so a steep curve doesn't step as you walk.
  * The one projection for everything AR Scan draws over the camera.
  */
 export const projectPoint = ({
@@ -93,7 +95,7 @@ export const projectPoint = ({
   const diff = angularDifference(calculateBearing(origin.lat, origin.lng, lat, lng), heading);
   const x = projectScreenX(diff, screenWidth, fovDeg);
   if (x === null) return null;
-  return { distance, x, y: screenYFor(haversineMeters(origin, { lat, lng })) * screenHeight };
+  return { distance, x, y: screenYFor(haversineMeters(origin, { lat, lng }), diff) * screenHeight };
 };
 
 /**

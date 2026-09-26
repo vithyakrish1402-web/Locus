@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { notify } from './utils/notify';
 import { X, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
@@ -7,7 +7,9 @@ import { calculateBearing, calculateDistanceMeters as calculateDistance, normali
 import { selectArTags } from './utils/arTags';
 import ARTag from './components/ARTag';
 import ARRoadLine from './components/ARRoadLine';
-import { buildRoadRibbon, roadScreenYFor } from './utils/arRoadLine';
+import { buildRoadRibbon, buildRoadStrip, remainingRouteSamples, roadScreenYFor } from './utils/arRoadLine';
+import { groundScreenYFor } from './utils/arCamera';
+import ARRoadGL from './components/ARRoadGL';
 import ARArrow3D from './components/ARArrow3D';
 import { RealisticArrow } from './components/ARArrowGL';
 
@@ -18,7 +20,9 @@ const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 // SRM_MASTER_DATABASE); selfUid keeps this phone's own user off them.
 // routePath: the walking route to draw on the ground, only when AR Scan is on the squad's
 // Rally Point (see arRoutePathFor); null otherwise.
-// fidelity: sysConfig.arFidelity (AR_RENDER_MODE), which picks the arrow (see the ring below).
+// fidelity: sysConfig.arFidelity (AR_RENDER_MODE), which picks the arrow (see the ring below)
+// and the road line: 'realistic' draws the road with three.js (ARRoadGL), the rest with
+// the Stage 3 ribbon.
 const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', onClose }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
@@ -79,13 +83,32 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-  const ribbon = routePath
+
+  // 'realistic' mode's road: a real-world strip on the ground (buildRoadStrip), rebuilt
+  // only when the position or the route changes (turning just turns the camera). The
+  // three.js canvas exists only while there is a strip. Until it is drawing, and for good
+  // if WebGL fails, the Stage 3 ribbon stands in, as the CSS arrow does for the arrow.
+  const realistic = fidelity === 'realistic';
+  const liveLat = liveLocation?.lat;
+  const liveLng = liveLocation?.lng;
+  const strip = useMemo(() => {
+    if (!realistic || !routePath) return null;
+    const origin = { lat: liveLat, lng: liveLng };
+    return buildRoadStrip(remainingRouteSamples(routePath, origin), origin);
+  }, [realistic, routePath, liveLat, liveLng]);
+  const [roadGl, setRoadGl] = useState('loading');
+  // A failure is final for this AR Scan session; the canvas's unmount doesn't undo it.
+  const onRoadGlStatus = useCallback((next) => setRoadGl((prev) => (prev === 'failed' ? prev : next)), []);
+  const roadGlDrawing = Boolean(strip) && roadGl === 'ready';
+
+  const ribbon = routePath && !roadGlDrawing
     ? buildRoadRibbon({ origin: liveLocation, heading, path: routePath, screenWidth: viewport.width, screenHeight: viewport.height })
     : null;
 
   // Floating tags over whatever is in view, placed in screen percentages (width and
   // height of 100) so they need no resize handling. While a road is drawn, the
-  // destination's tag goes on the road's curve, so the road runs up to it.
+  // destination's tag goes on the road's curve, so the road runs up to it: the ribbon's
+  // hand-fitted curve, or the world camera's ground under the three.js road.
   const tags = selectArTags({
     origin: liveLocation,
     heading,
@@ -95,7 +118,9 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
     target,
     screenWidth: 100,
     screenHeight: 100,
-    targetScreenYFor: ribbon ? roadScreenYFor : undefined,
+    targetScreenYFor: roadGlDrawing
+      ? groundScreenYFor({ width: viewport.width, height: viewport.height })
+      : ribbon ? roadScreenYFor : undefined,
   });
 
   // --- 🧭 WRAPAROUND-SAFE ROTATION ---
@@ -169,6 +194,7 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
 
       {/* The route to the Rally Point, on the ground: under the HUD and the tags. */}
       {ribbon && <ARRoadLine ribbon={ribbon} width={viewport.width} height={viewport.height} />}
+      {strip && roadGl !== 'failed' && <ARRoadGL strip={strip} heading={heading} onStatus={onRoadGlStatus} />}
 
       {/* Floating tags, anchored to real things as the phone pans. Above the arrow ring,
           below nothing tappable (they take no touches). Drawn furthest first, so where

@@ -80,6 +80,20 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
   };
 });
 
+// 'realistic' mode's three.js modules, stood in for so it runs without WebGL. The road's
+// records every strip it is given.
+const roadViews = vi.hoisted(() => []);
+vi.mock('../src/utils/arRoadScene.js', () => ({
+  createRoadView: () => {
+    const view = { setRoad: vi.fn(), setHeading: vi.fn(), setView: vi.fn(), render: vi.fn(), dispose: vi.fn() };
+    roadViews.push(view);
+    return view;
+  },
+}));
+vi.mock('../src/utils/arArrowScene.js', () => ({
+  createArrowView: () => ({ setRotation: vi.fn(), setView: vi.fn(), render: vi.fn(), dispose: vi.fn() }),
+}));
+
 const { default: App } = await import('../src/App.jsx');
 
 beforeEach(() => {
@@ -186,5 +200,68 @@ describe('the AR road line', () => {
     await grantAndFaceNorth();
     expect(screen.getByText('SRM_HQ', { selector: 'h2' })).toBeTruthy();
     expect(roadLine()).toBeNull();
+  });
+});
+
+describe('the AR road line in REALISTIC mode', () => {
+  const roadGl = () => screen.queryByTestId('ar-road-gl');
+  const chooseRealistic = () => {
+    fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
+    fireEvent.click(screen.getByRole('button', { name: /^REALISTIC$/ }));
+  };
+  beforeEach(() => {
+    roadViews.length = 0;
+  });
+  const settle = () => act(async () => {});
+
+  it('is drawn in three.js when AR Scan is on the Rally Point', async () => {
+    await onTheMapWithRally();
+    chooseRealistic();
+    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    await grantAndFaceNorth();
+    await settle();
+    expect(roadGl()).toBeTruthy();
+    expect(roadLine()).toBeNull();
+    expect(roadViews).toHaveLength(1);
+    expect(roadViews[0].setRoad.mock.calls.at(-1)[0].positions.length).toBeGreaterThan(6);
+  });
+
+  it('is not drawn before a real route arrives', async () => {
+    globalThis.fetch = vi.fn(() => new Promise(() => {}));
+    await onTheMapWithRally();
+    chooseRealistic();
+    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    await grantAndFaceNorth();
+    await settle();
+    expect(roadGl()).toBeNull();
+    expect(roadLine()).toBeNull();
+    expect(roadViews).toHaveLength(0);
+  });
+
+  it('is not drawn when AR Scan is on a squad member, even one on the Rally Point', async () => {
+    await onTheMapWithRally();
+    act(() => fakeSocket.receive('users-update', {
+      'sock-1': { uid: 'u-bravo', name: 'Bravo', roomCode: code, lat: RALLY.lat, lng: RALLY.lng, battery: 50, lastSeen: 1 },
+    }));
+    chooseRealistic();
+    fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+    await grantAndFaceNorth();
+    await settle();
+    expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
+    expect(roadGl()).toBeNull();
+    expect(roadLine()).toBeNull();
+    expect(roadViews).toHaveLength(0);
+  });
+
+  it('is not drawn on the SRM_HQ default', async () => {
+    await onTheMapWithRally();
+    chooseRealistic();
+    fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+    await grantAndFaceNorth();
+    await settle();
+    expect(screen.getByText('SRM_HQ', { selector: 'h2' })).toBeTruthy();
+    expect(roadGl()).toBeNull();
+    expect(roadLine()).toBeNull();
+    expect(roadViews).toHaveLength(0);
   });
 });
