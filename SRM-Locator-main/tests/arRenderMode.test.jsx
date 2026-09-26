@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 //
-// SYS_CONFIG -> AR_RENDER_MODE: the AR Scan fidelity setting. Nothing reads it yet (later
-// AR Scan stages will); it has to be selectable and show which option is active.
+// SYS_CONFIG -> AR_RENDER_MODE, AR Scan's main fidelity dial, and AR_FEATURE_OVERRIDES,
+// each feature's own setting under it: selectable, showing which option is active, and
+// reaching AR Scan.
 //
 // Renders the real App.jsx; only the socket, Firebase, native plugins, maps and the update
 // hooks are stubbed (same harness as tabBarAndBanners.test.jsx).
@@ -134,5 +135,54 @@ describe('AR_RENDER_MODE reaches AR Scan', () => {
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: /SCAN/ }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
     expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe('efficient');
+  });
+});
+
+// Stage 6: AR_FEATURE_OVERRIDES, one row per AR Scan feature under the main dial.
+describe('AR_FEATURE_OVERRIDES', () => {
+  const row = (label) => within(screen.getByRole('group', { name: label }));
+  const optionsOf = (label) => row(label).getAllByRole('button').map((b) => b.textContent);
+  const pressed = (label) => row(label).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent);
+
+  it('sits after AR_RENDER_MODE, one row per feature, each with only its own options', () => {
+    openSettings();
+    const dial = screen.getByText('AR_RENDER_MODE');
+    const block = screen.getByText('AR_FEATURE_OVERRIDES');
+    expect(dial.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(optionsOf('AMBIENT_TAGS')).toEqual(['AUTO', 'OFF']);
+    expect(optionsOf('ROAD_LINE')).toEqual(['AUTO', 'OFF', 'EFFICIENT', 'REALISTIC']);
+    expect(optionsOf('ARROW')).toEqual(['AUTO', 'EFFICIENT', 'REALISTIC']);
+  });
+
+  it('starts with every feature on AUTO', () => {
+    openSettings();
+    for (const label of ['AMBIENT_TAGS', 'ROAD_LINE', 'ARROW']) expect(pressed(label)).toEqual(['AUTO']);
+  });
+
+  it('sets one feature at a time, leaving the others and the main dial alone', () => {
+    openSettings();
+    fireEvent.click(screen.getByRole('button', { name: 'ROAD_LINE OFF' }));
+    expect(pressed('ROAD_LINE')).toEqual(['OFF']);
+    expect(pressed('AMBIENT_TAGS')).toEqual(['AUTO']);
+    expect(pressed('ARROW')).toEqual(['AUTO']);
+    expect(isActive('STANDARD')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'ARROW REALISTIC' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AMBIENT_TAGS OFF' }));
+    expect(pressed('ROAD_LINE')).toEqual(['OFF']); // an earlier choice survives a later one
+    expect(pressed('ARROW')).toEqual(['REALISTIC']);
+    expect(pressed('AMBIENT_TAGS')).toEqual(['OFF']);
+    fireEvent.click(screen.getByRole('button', { name: 'ROAD_LINE AUTO' }));
+    expect(pressed('ROAD_LINE')).toEqual(['AUTO']);
+    expect(pressed('ARROW')).toEqual(['REALISTIC']);
+  });
+
+  it('reaches AR Scan: an arrow override beats the main dial', async () => {
+    openSettings();
+    fireEvent.click(option('REALISTIC'));
+    fireEvent.click(screen.getByRole('button', { name: 'ARROW EFFICIENT' }));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: /SCAN/ }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+    expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe('efficient');
+    expect(screen.getByTestId('ar-arrow-3d')).toBeTruthy();
   });
 });

@@ -24,6 +24,17 @@ import { SRM_MASTER_DATABASE } from './srmDatabase';
 import { arTargetForMember, followArTarget } from './utils/arTags';
 import { arRoutePathFor } from './utils/arRoadLine';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
+import { AR_FEATURE_OPTIONS, DEFAULT_AR_FEATURE_OVERRIDES } from './utils/arFeatures';
+
+// SYS_CONFIG's AR_FEATURE_OVERRIDES rows: a selected option wears its tier's colour, as
+// in AR_RENDER_MODE (AUTO is the neutral one, like STANDARD there).
+const OVERRIDE_ACTIVE_STYLE = {
+  auto: 'bg-white/10 text-white border-white',
+  off: 'bg-zinc-500/20 text-zinc-300 border-zinc-400',
+  efficient: 'bg-emerald-500/20 text-emerald-500 border-emerald-500',
+  realistic: 'bg-red-500/20 text-red-500 border-red-500',
+};
+const OVERRIDE_GRID_COLS = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' };
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
 import { useWaypointNavigationLine } from './hooks/useWaypointNavigationLine';
@@ -457,11 +468,17 @@ const App = () => {
     audio: true,
     theme: 'tactical', // 'tactical' | 'stealth'
     polling: 'standard', // 'eco' | 'standard' | 'max'
-    arFidelity: 'standard' // 'efficient' | 'standard' | 'realistic': picks AR Scan's arrow (see ARCompass)
+    arFidelity: 'standard', // 'efficient' | 'standard' | 'realistic': AR Scan's main dial (see ARCompass)
+    arFeatureOverrides: DEFAULT_AR_FEATURE_OVERRIDES // per feature; 'auto' follows arFidelity (see arFeatures.js)
   });
 
+  // `key` is a setting's name, or 'group.name' for one entry of a nested setting
+  // (arFeatureOverrides.roadLine), merged into the rest of its group.
   const toggleConfig = (key, value) => {
-    setSysConfig(prev => ({ ...prev, [key]: value }));
+    const [group, name] = key.split('.');
+    setSysConfig(prev => (name
+      ? { ...prev, [group]: { ...prev[group], [name]: value } }
+      : { ...prev, [key]: value }));
   };
   // --- COMMANDER TELEMETRY STATE ---
   const [showTelemetryModal, setShowTelemetryModal] = useState(false);
@@ -3236,7 +3253,41 @@ const App = () => {
                   <p className="font-inter text-[10px] text-zinc-500 leading-tight">REALISTIC mode uses more battery and needs a newer phone.</p>
                 </div>
 
-                {/* Setting 5: hand the app to someone else */}
+                {/* Setting 5: AR Scan per-feature overrides. AUTO follows AR_RENDER_MODE;
+                    each feature offers only what it has (arFeatures.js). */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+                    <Sliders size={16} className="text-blue-400" />
+                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">AR_FEATURE_OVERRIDES</span>
+                  </div>
+                  {[['tags', 'AMBIENT_TAGS'], ['roadLine', 'ROAD_LINE'], ['arrow', 'ARROW']].map(([feature, label]) => {
+                    const options = ['auto', ...AR_FEATURE_OPTIONS[feature]];
+                    return (
+                      <div key={feature} role="group" aria-label={label} className="space-y-2">
+                        <span className="font-dot text-[10px] uppercase tracking-widest text-zinc-500">{label}</span>
+                        <div className={`grid gap-2 ${OVERRIDE_GRID_COLS[options.length]}`}>
+                          {options.map((option) => {
+                            const active = sysConfig.arFeatureOverrides[feature] === option;
+                            return (
+                              <button
+                                key={option}
+                                onClick={() => toggleConfig(`arFeatureOverrides.${feature}`, option)}
+                                aria-label={`${label} ${option.toUpperCase()}`}
+                                aria-pressed={active}
+                                className={`py-3 font-dot text-[10px] uppercase tracking-widest border transition-colors ${active ? OVERRIDE_ACTIVE_STYLE[option] : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}
+                              >
+                                {option.toUpperCase()}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <p className="font-inter text-[10px] text-zinc-500 leading-tight">AUTO follows AR_RENDER_MODE. Set a feature on its own, e.g. the road line OFF on an older phone.</p>
+                </div>
+
+                {/* Setting 6: hand the app to someone else */}
                 <SendApp />
 
               </div>
@@ -3446,6 +3497,7 @@ const App = () => {
           selfUid={user?.uid ?? null}
           routePath={arRoutePathFor(arTarget, activeWaypoint, walkingRoute)}
           fidelity={sysConfig.arFidelity}
+          overrides={sysConfig.arFeatureOverrides}
           onClose={() => setArTarget(null)}
         />
       )}
