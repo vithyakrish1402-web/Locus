@@ -85,7 +85,7 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 const roadViews = vi.hoisted(() => []);
 vi.mock('../src/utils/arRoadScene.js', () => ({
   createRoadView: () => {
-    const view = { setRoad: vi.fn(), setHeading: vi.fn(), setView: vi.fn(), render: vi.fn(), dispose: vi.fn() };
+    const view = { setRoad: vi.fn(), setOrientation: vi.fn(), setView: vi.fn(), render: vi.fn(), dispose: vi.fn() };
     roadViews.push(view);
     return view;
   },

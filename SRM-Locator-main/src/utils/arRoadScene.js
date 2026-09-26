@@ -8,7 +8,7 @@ import {
   Scene,
   WebGLRenderer,
 } from 'three';
-import { AR_ASSUMED_PITCH_DEG, AR_CAMERA_HEIGHT_M, verticalFovDeg } from './arCamera';
+import { AR_CAMERA_HEIGHT_M, verticalFovDeg } from './arCamera';
 
 // AR Scan's 'realistic' road line: the route to the Rally Point as a flat strip on the
 // ground, seen through a camera modelled in metres (arCamera.js). Loaded with a dynamic
@@ -36,7 +36,8 @@ export const buildRoadGeometry = (strip) => {
  * the camera and:
  *   setRoad(strip): the strip to draw (buildRoadStrip), or null for none. Replaces the
  *     last one outright; nothing about the route is kept between calls.
- *   setHeading(deg): where the phone points, clockwise from north
+ *   setOrientation(q): the camera's orientation, [x, y, z, w] (arCamera.js's
+ *     cameraQuaternion: the phone's real tilt, facing AR Scan's heading)
  *   setView({ width, height }): the screen size
  */
 export const buildRoadScene = () => {
@@ -49,12 +50,9 @@ export const buildRoadScene = () => {
   });
   let mesh = null;
 
-  // Standing at the origin, eyes AR_CAMERA_HEIGHT_M up. Turned by the heading first, then
-  // tipped down by the pitch, so the pitch is always about the phone's own left-right.
+  // Standing at the origin, eyes AR_CAMERA_HEIGHT_M up, turned by setOrientation.
   const camera = new PerspectiveCamera(50, 1, 0.1, 1000);
   camera.position.set(0, AR_CAMERA_HEIGHT_M, 0);
-  camera.rotation.order = 'YXZ';
-  camera.rotation.x = (-AR_ASSUMED_PITCH_DEG * Math.PI) / 180;
 
   const clearRoad = () => {
     if (!mesh) return;
@@ -75,10 +73,8 @@ export const buildRoadScene = () => {
       mesh = new Mesh(buildRoadGeometry(strip), material);
       scene.add(mesh);
     },
-    // three.js looks down -z (north here); turning clockwise on the ground is a negative
-    // turn about y.
-    setHeading: (deg) => {
-      camera.rotation.y = (-deg * Math.PI) / 180;
+    setOrientation: (q) => {
+      camera.quaternion.fromArray(q);
     },
     setView: ({ width, height }) => {
       camera.fov = verticalFovDeg(width, height);
@@ -103,7 +99,7 @@ export const createRoadView = (canvas) => {
   const view = buildRoadScene();
   return {
     setRoad: view.setRoad,
-    setHeading: view.setHeading,
+    setOrientation: view.setOrientation,
     setView: ({ width, height, pixelRatio = 1 }) => {
       renderer.setPixelRatio(Math.min(pixelRatio, 2));
       renderer.setSize(width, height, false);

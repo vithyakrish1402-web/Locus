@@ -73,11 +73,9 @@ const sameSpot = (a, b) => a && b && calculateDistanceMeters(a.lat, a.lng, b.lat
  * Where one real-world point lands on screen, as seen from `origin` facing `heading`:
  * { distance (whole metres), x, y }, or null when it's outside the view cone. Distance 0
  * means standing on it, where no bearing means anything, so that is null too.
- * `screenYFor(metres, angle)` gives the height as a fraction of the screen: the tags' band
- * by default, the road line's perspective curve for the road (see arRoadLine.js), or the
- * 'realistic' world camera's ground (arCamera.js groundScreenYFor, which also needs
- * `angle`, the degrees off to the side). It gets the exact distance, not the whole
- * metres, so a steep curve doesn't step as you walk.
+ * `screenYFor(metres)` gives the height as a fraction of the screen: the tags' band by
+ * default, the road line's perspective curve for the road (see arRoadLine.js). It gets the
+ * exact distance, not the whole metres, so a steep curve doesn't step as you walk.
  * The one projection for everything AR Scan draws over the camera.
  */
 export const projectPoint = ({
@@ -95,7 +93,7 @@ export const projectPoint = ({
   const diff = angularDifference(calculateBearing(origin.lat, origin.lng, lat, lng), heading);
   const x = projectScreenX(diff, screenWidth, fovDeg);
   if (x === null) return null;
-  return { distance, x, y: screenYFor(haversineMeters(origin, { lat, lng }), diff) * screenHeight };
+  return { distance, x, y: screenYFor(haversineMeters(origin, { lat, lng })) * screenHeight };
 };
 
 /**
@@ -112,6 +110,9 @@ export const projectPoint = ({
  * `targetScreenYFor`, when given, places the destination's tag on that vertical curve
  * instead of the tags' band. AR Scan passes the road line's curve while a road is drawn,
  * so the destination's tag sits where the road reaches it.
+ * `targetProject`, when given, places it outright instead: `(lat, lng)` returns { x, y }
+ * as fractions of the screen, or null when it is out of view. AR Scan passes the world
+ * camera's projection (arCamera.js) while the three.js road is drawn.
  */
 export const selectArTags = ({
   origin,
@@ -126,6 +127,7 @@ export const selectArTags = ({
   maxDistance = MAX_TAG_DISTANCE_METERS,
   maxTags = MAX_VISIBLE_TAGS,
   targetScreenYFor,
+  targetProject,
 }) => {
   if (!origin || origin.lat == null || origin.lng == null || !Number.isFinite(heading)) {
     return { target: null, ambient: [] };
@@ -153,8 +155,16 @@ export const selectArTags = ({
 
   let targetTag = null;
   if (target && target.lat != null && target.lng != null) {
-    const p = projectPoint({ ...view, lat: target.lat, lng: target.lng, ...(targetScreenYFor ? { screenYFor: targetScreenYFor } : {}) });
-    if (p) targetTag = { key: 'target', kind: 'target', name: target.name, ...p };
+    if (targetProject) {
+      const at = targetProject(target.lat, target.lng);
+      const distance = calculateDistanceMeters(origin.lat, origin.lng, target.lat, target.lng);
+      if (at && distance > 0) {
+        targetTag = { key: 'target', kind: 'target', name: target.name, distance, x: at.x * screenWidth, y: at.y * screenHeight };
+      }
+    } else {
+      const p = projectPoint({ ...view, lat: target.lat, lng: target.lng, ...(targetScreenYFor ? { screenYFor: targetScreenYFor } : {}) });
+      if (p) targetTag = { key: 'target', kind: 'target', name: target.name, ...p };
+    }
   }
 
   return { target: targetTag, ambient: ambient.slice(0, maxTags) };

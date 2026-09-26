@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 //
-// AR Scan Stage 5b: 'realistic' mode draws the road line with three.js. Both three.js
-// modules are stood in for, so these run without WebGL; the road's maths is tested in
-// arRoadScene.test.js.
+// AR Scan Stages 5b-5c: 'realistic' mode draws the road line with three.js, through the
+// phone's real orientation. Both three.js modules are stood in for, so these run without
+// WebGL; the road's maths is tested in arRoadScene.test.js.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
-import { groundScreenYFor } from '../src/utils/arCamera.js';
+import { cameraQuaternion, projectGroundPoint } from '../src/utils/arCamera.js';
+import { deviceQuaternion, qAngleDeg } from '../src/utils/deviceOrientation.js';
 
 const gl = vi.hoisted(() => ({ loaded: false, views: [], fail: false }));
 vi.mock('../src/utils/arRoadScene.js', () => {
@@ -13,7 +14,7 @@ vi.mock('../src/utils/arRoadScene.js', () => {
   return {
     createRoadView: vi.fn(() => {
       if (gl.fail) throw new Error('WebGL unavailable');
-      const view = { setRoad: vi.fn(), setHeading: vi.fn(), setView: vi.fn(), render: vi.fn(), dispose: vi.fn() };
+      const view = { setRoad: vi.fn(), setOrientation: vi.fn(), setView: vi.fn(), render: vi.fn(), dispose: vi.fn() };
       gl.views.push(view);
       return view;
     }),
@@ -45,11 +46,14 @@ const ROUTE = [HERE, north(60), north(60, 5), north(120)];
 const compass = ({ fidelity = 'realistic', routePath = ROUTE, where = HERE } = {}) => (
   <ARCompass target={RALLY} liveLocation={where} routePath={routePath} fidelity={fidelity} onClose={() => {}} />
 );
-const face = (alpha) => {
+// A compass reading; with `beta` and `gamma`, the phone's tilt too.
+const face = (alpha, beta, gamma) => {
   const event = new Event('deviceorientationabsolute');
-  Object.assign(event, { absolute: true, alpha });
+  Object.assign(event, { absolute: true, alpha, ...(beta !== undefined ? { beta, gamma } : {}) });
   act(() => window.dispatchEvent(event));
 };
+const lastOrientation = (view) => view.setOrientation.mock.calls.at(-1)[0];
+const expectSameOrientation = (a, b) => expect(qAngleDeg(a, b)).toBeLessThan(1e-4); // acos near 1 limits the precision
 // Heading 0 (north) until a compass reading says otherwise. The compass hook emits at
 // most one reading per 100 ms, so a test that turns the phone leaves this one out.
 const open = async (props, { faceNorth = true } = {}) => {
@@ -101,24 +105,32 @@ describe('the realistic road', () => {
     expect(gl.views).toHaveLength(1);
   });
 
-  it('gets the strip of what is left of the route, the heading, and draws it', async () => {
-    await open();
+  it('gets the strip of what is left of the route and draws it; with no live tilt, through the fallback camera', async () => {
+    await open(); // a compass reading without beta and gamma
     const [view] = gl.views;
     const strip = view.setRoad.mock.calls.at(-1)[0];
     expect(strip.positions.length).toBeGreaterThan(6 * 10);
-    expect(view.setHeading).toHaveBeenLastCalledWith(0);
+    expectSameOrientation(lastOrientation(view), cameraQuaternion({ heading: 0, tilt: null }));
     expect(view.setView).toHaveBeenCalled();
     expect(view.render).toHaveBeenCalled();
+  });
+
+  it('with a live tilt, draws through the phone’s real orientation', async () => {
+    await open(undefined, { faceNorth: false });
+    const [view] = gl.views;
+    face(0, 60, 4); // upright-ish, 30 deg down, a little rolled
+    expectSameOrientation(lastOrientation(view), deviceQuaternion(0, 60, 4));
+    expect(qAngleDeg(lastOrientation(view), cameraQuaternion({ heading: 0, tilt: null }))).toBeGreaterThan(5);
   });
 
   it('only turns the camera when the phone turns, without rebuilding the road', async () => {
     await open(undefined, { faceNorth: false });
     const [view] = gl.views;
-    expect(view.setHeading).toHaveBeenLastCalledWith(0);
+    expectSameOrientation(lastOrientation(view), cameraQuaternion({ heading: 0, tilt: null }));
     const builds = view.setRoad.mock.calls.length;
     const frames = view.render.mock.calls.length;
     face(340); // alpha 340 is a heading of 20
-    expect(view.setHeading).toHaveBeenLastCalledWith(expect.closeTo(20, 0));
+    expectSameOrientation(lastOrientation(view), cameraQuaternion({ heading: 20, tilt: null }));
     expect(view.setRoad.mock.calls.length).toBe(builds);
     expect(view.render.mock.calls.length).toBeGreaterThan(frames);
   });
@@ -133,10 +145,21 @@ describe('the realistic road', () => {
     expect(gl.views).toHaveLength(1); // same canvas, new geometry
   });
 
-  it('puts the Rally Point’s tag at the road’s height under the world camera', async () => {
+  const expectTagThrough = (q) => {
+    const at = projectGroundPoint({ q, width: window.innerWidth, height: window.innerHeight, origin: HERE, lat: RALLY.lat, lng: RALLY.lng });
+    expect(parseFloat(targetTag().style.left) / 100).toBeCloseTo(at.x, 3);
+    expect(parseFloat(targetTag().style.top) / 100).toBeCloseTo(at.y, 3);
+  };
+
+  it('puts the Rally Point’s tag where the world camera puts the road’s end', async () => {
     await open();
-    const yFor = groundScreenYFor({ width: window.innerWidth, height: window.innerHeight });
-    expect(parseFloat(targetTag().style.top) / 100).toBeCloseTo(yFor(120, 0), 2);
+    expectTagThrough(cameraQuaternion({ heading: 0, tilt: null }));
+  });
+
+  it('keeps the Rally Point’s tag on the road’s end as the phone tilts', async () => {
+    await open(undefined, { faceNorth: false });
+    face(0, 75, -3);
+    expectTagThrough(deviceQuaternion(0, 75, -3));
   });
 
   it('keeps the Stage 3 ribbon, and its tag curve, when WebGL is unavailable', async () => {
