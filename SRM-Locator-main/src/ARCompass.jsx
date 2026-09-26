@@ -4,12 +4,22 @@ import { Navigation, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 // eslint-disable-next-line no-unused-vars -- used via <motion.div> (see App.jsx's import for why the linter can't see this)
 import { motion } from 'framer-motion';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
+import { useLiveHeading } from './hooks/useLiveHeading';
 import { calculateBearing, calculateDistanceMeters as calculateDistance, normalizeRotationDelta } from './utils/geoMath';
 
-const ARCompass = ({ target, liveLocation, onClose }) => {
+// speedMps: raw m/s from geolocation (App.jsx's liveSpeed).
+const ARCompass = ({ target, liveLocation, speedMps = 0, onClose }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
-  const { heading, permissionsGranted, requestHeadingPermission } = useDeviceHeading();
+  const { heading: compassHeading, permissionsGranted, requestHeadingPermission } = useDeviceHeading();
+  // Same fusion as the live map marker: GPS course while walking, the smoothed
+  // compass otherwise. The compass alone drifts indoors and near steel.
+  const heading = useLiveHeading({
+    lat: liveLocation?.lat,
+    lng: liveLocation?.lng,
+    speedMps,
+    compassHeading,
+  });
 
   // 1. Initialize Camera
   const startCamera = async () => {

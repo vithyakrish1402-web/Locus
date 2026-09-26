@@ -454,7 +454,8 @@ const App = () => {
   const [sysConfig, setSysConfig] = useState({
     audio: true,
     theme: 'tactical', // 'tactical' | 'stealth'
-    polling: 'standard' // 'eco' | 'standard' | 'max'
+    polling: 'standard', // 'eco' | 'standard' | 'max'
+    arFidelity: 'standard' // 'efficient' | 'standard' | 'realistic' (AR Scan; nothing reads it yet)
   });
 
   const toggleConfig = (key, value) => {
@@ -609,9 +610,9 @@ const App = () => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const liveLocationRef = useRef(null);
   // Shared with ARCompass.jsx (src/hooks/useDeviceHeading.js) so both the AR
-  // targeting view and this device's own map marker read the same compass value.
-  // `heading` is throttled for rendering; `headingRef` always holds the newest raw
-  // bearing. The GPS-tracking effect below intentionally does NOT list `heading` as
+  // targeting view and this device's own map marker read the compass the same way.
+  // `heading` is throttled for rendering; `headingRef` always holds the newest
+  // (smoothed) bearing. The GPS-tracking effect below intentionally does NOT list `heading` as
   // a dependency (that would tear down and re-register the geolocation watch on
   // every compass tick), so it reads the ref instead and still emits a current value.
   const { heading, headingRef, hasReading: hasHeadingReading, requestHeadingPermission } = useDeviceHeading();
@@ -3207,7 +3208,27 @@ const App = () => {
                   <p className="font-inter text-[10px] text-zinc-500 leading-tight">Warning: MAX polling drains battery significantly faster. Use only during active pursuits.</p>
                 </div>
 
-                {/* Setting 4: hand the app to someone else */}
+                {/* Setting 4: AR Scan render fidelity */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+                    <Crosshair size={16} className="text-blue-400" />
+                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">AR_RENDER_MODE</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button onClick={() => toggleConfig('arFidelity', 'efficient')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.arFidelity === 'efficient' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
+                      <Battery size={14} /> EFFICIENT
+                    </button>
+                    <button onClick={() => toggleConfig('arFidelity', 'standard')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.arFidelity === 'standard' ? 'bg-white/10 text-white border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
+                      <Activity size={14} /> STANDARD
+                    </button>
+                    <button onClick={() => toggleConfig('arFidelity', 'realistic')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.arFidelity === 'realistic' ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
+                      <Zap size={14} /> REALISTIC
+                    </button>
+                  </div>
+                  <p className="font-inter text-[10px] text-zinc-500 leading-tight">REALISTIC mode uses more battery and needs a newer phone.</p>
+                </div>
+
+                {/* Setting 5: hand the app to someone else */}
                 <SendApp />
 
               </div>
@@ -3407,7 +3428,7 @@ const App = () => {
         </button>
       )}
 
-      {arTarget && <ARCompass target={arTarget} liveLocation={liveLocation} onClose={() => setArTarget(null)} />}
+      {arTarget && <ARCompass target={arTarget} liveLocation={liveLocation} speedMps={liveSpeed} onClose={() => setArTarget(null)} />}
 
       {/* ========== SOS TRIGGER (double press-and-hold confirm) ========== */}
       <SosTrigger

@@ -13,6 +13,29 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 const MIN_INTERVAL_MS = 100; // <= 10 state updates/sec
 const MIN_DELTA_DEG = 1.5;   // ignore sensor jitter below this
 
+// The gate above only limits how often a value is emitted; a noisy reading that
+// clears MIN_DELTA_DEG still went straight through as a visible jump. So the raw
+// bearing is smoothed first, with an exponential moving average applied per sensor
+// event. Lower = steadier but slower to follow a real turn. Needs tuning on a phone:
+// try 0.1 (steadier) or 0.35 (more responsive).
+export const HEADING_SMOOTHING_ALPHA = 0.2;
+
+// One step of a circular EMA. A bearing can't be averaged as a number (averaging
+// 350deg and 10deg gives 180deg, due south), so each bearing becomes a unit vector,
+// the EMA runs on the x and y components, and atan2 turns the result back into a
+// 0-360 bearing. `vec` is the running average (null before the first reading, which
+// is taken as-is); returns the new average and its bearing.
+export const smoothHeading = (vec, nextDeg, alpha = HEADING_SMOOTHING_ALPHA) => {
+  const rad = (nextDeg * Math.PI) / 180;
+  const x = Math.cos(rad);
+  const y = Math.sin(rad);
+  const out = vec
+    ? { x: vec.x + alpha * (x - vec.x), y: vec.y + alpha * (y - vec.y) }
+    : { x, y };
+  const deg = (Math.atan2(out.y, out.x) * 180) / Math.PI;
+  return { vec: out, heading: (deg + 360) % 360 };
+};
+
 // Shortest angular distance between two bearings, accounting for the 360->0 wrap
 // (so 359deg -> 1deg reads as 2deg of movement, not 358).
 const angularDelta = (a, b) => {
@@ -21,8 +44,8 @@ const angularDelta = (a, b) => {
 };
 
 // Extracted from ARCompass.jsx so the AR compass and the live map marker
-// (LiveLocationMarker) both read from the same compass value instead of each
-// running their own DeviceOrientation listener.
+// (LiveLocationMarker) share one compass implementation. Each caller still gets
+// its own DeviceOrientation listener and its own smoothing state.
 export function useDeviceHeading() {
   const [heading, setHeading] = useState(0);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
@@ -31,10 +54,11 @@ export function useDeviceHeading() {
   // ever comes and `heading` stays 0, which would pass for "facing north".
   const [hasReading, setHasReading] = useState(false);
 
-  // Always holds the newest raw bearing, untouched by the throttle above, so
+  // Always holds the newest smoothed bearing, untouched by the throttle above, so
   // telemetry emits report the true current heading rather than whatever value
   // last made it past the render gate.
   const headingRef = useRef(0);
+  const smoothVecRef = useRef(null);
   const lastEmitAtRef = useRef(0);
   const lastEmitValRef = useRef(null);
 
@@ -56,6 +80,9 @@ export function useDeviceHeading() {
     // Otherwise it overwrites the absolute heading with 0!
     if (next === null || Number.isNaN(next)) return;
 
+    const smoothed = smoothHeading(smoothVecRef.current, next);
+    smoothVecRef.current = smoothed.vec;
+    next = smoothed.heading;
     headingRef.current = next;
     setHasReading(true); // a no-op re-render after the first
 
