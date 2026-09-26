@@ -6,7 +6,7 @@
 // Renders the real App.jsx; only the socket, Firebase, native plugins, maps and the update
 // hooks are stubbed (same harness as tabBarAndBanners.test.jsx).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
   const handlers = new Map();
@@ -124,5 +124,15 @@ describe('AR_RENDER_MODE', () => {
       }
       expect(screen.getByRole('button', { name: /STANDARD \(5s\)/ }).className).not.toContain('text-zinc-500');
     }
+  });
+});
+
+describe('AR_RENDER_MODE reaches AR Scan', () => {
+  it('opens AR Scan with the selected mode', async () => {
+    openSettings();
+    fireEvent.click(option('EFFICIENT'));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: /SCAN/ }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+    expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe('efficient');
   });
 });

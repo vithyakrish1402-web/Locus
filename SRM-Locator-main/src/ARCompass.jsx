@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { notify } from './utils/notify';
-import { Navigation, X, AlertTriangle, ShieldAlert } from 'lucide-react';
-// eslint-disable-next-line no-unused-vars -- used via <motion.div> (see App.jsx's import for why the linter can't see this)
-import { motion } from 'framer-motion';
+import { X, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { calculateBearing, calculateDistanceMeters as calculateDistance, normalizeRotationDelta } from './utils/geoMath';
@@ -10,13 +8,17 @@ import { selectArTags } from './utils/arTags';
 import ARTag from './components/ARTag';
 import ARRoadLine from './components/ARRoadLine';
 import { buildRoadRibbon, roadScreenYFor } from './utils/arRoadLine';
+import ARArrow3D from './components/ARArrow3D';
+
+const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 
 // speedMps: raw m/s from geolocation (App.jsx's liveSpeed).
 // squadMembers / buildings: what the floating tags can label (roster entries and
 // SRM_MASTER_DATABASE); selfUid keeps this phone's own user off them.
 // routePath: the walking route to draw on the ground, only when AR Scan is on the squad's
 // Rally Point (see arRoutePathFor); null otherwise.
-const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, onClose }) => {
+// fidelity: sysConfig.arFidelity (AR_RENDER_MODE), which picks the arrow (see the ring below).
+const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', onClose }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
   const { heading: compassHeading, permissionsGranted, requestHeadingPermission } = useDeviceHeading();
@@ -218,14 +220,23 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
             <div className="absolute w-2 h-2 bg-red-500 rounded-full" />
           </div>
 
-          {/* Rotating Arrow */}
-          <motion.div
-            animate={{ rotate: displayRotation }}
-            transition={{ type: "spring", damping: 15, stiffness: 100 }}
-            className="w-48 h-48 rounded-full border-4 border-red-500 flex flex-col items-center justify-start pt-2 relative z-30 shadow-[0_0_30px_rgba(239,68,68,0.3)] bg-black/20 backdrop-blur-sm"
+          {/* The ring, and the destination arrow turning inside it by the same
+              wraparound-safe angle and spring as before. The arrow depends on
+              AR_RENDER_MODE: 'efficient' and 'standard' (and anything unknown) get the
+              CSS 3D wedge; 'realistic' is where AR Scan Stage 5's GPU-rendered arrow
+              goes, and gets the wedge until then. */}
+          <div
+            data-testid="ar-arrow-ring"
+            data-fidelity={fidelity}
+            className="w-48 h-48 rounded-full border-4 border-red-500 flex items-center justify-center relative z-30 shadow-[0_0_30px_rgba(239,68,68,0.3)] bg-black/20 backdrop-blur-sm"
           >
-            <Navigation size={48} className="text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,1)]" fill="currentColor" />
-          </motion.div>
+            {fidelity === 'realistic' ? (
+              // Stage 5: the GPU-rendered arrow replaces this.
+              <ARArrow3D rotation={displayRotation} transition={ARROW_SPRING} />
+            ) : (
+              <ARArrow3D rotation={displayRotation} transition={ARROW_SPRING} />
+            )}
+          </div>
 
         </div>
 

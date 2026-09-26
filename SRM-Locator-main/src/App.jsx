@@ -457,7 +457,7 @@ const App = () => {
     audio: true,
     theme: 'tactical', // 'tactical' | 'stealth'
     polling: 'standard', // 'eco' | 'standard' | 'max'
-    arFidelity: 'standard' // 'efficient' | 'standard' | 'realistic' (AR Scan; nothing reads it yet)
+    arFidelity: 'standard' // 'efficient' | 'standard' | 'realistic': picks AR Scan's arrow (see ARCompass)
   });
 
   const toggleConfig = (key, value) => {
@@ -3445,6 +3445,7 @@ const App = () => {
           buildings={SRM_MASTER_DATABASE}
           selfUid={user?.uid ?? null}
           routePath={arRoutePathFor(arTarget, activeWaypoint, walkingRoute)}
+          fidelity={sysConfig.arFidelity}
           onClose={() => setArTarget(null)}
         />
       )}
