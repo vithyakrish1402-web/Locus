@@ -265,3 +265,41 @@ describe('the AR road line in REALISTIC mode', () => {
     expect(roadViews).toHaveLength(0);
   });
 });
+
+// Stage 6: the road line's own override, through the real App and a real route.
+describe('the AR road line override, with the main dial on REALISTIC', () => {
+  const roadGl = () => screen.queryByTestId('ar-road-gl');
+  const openWith = async (roadLine) => {
+    await onTheMapWithRally();
+    fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
+    fireEvent.click(screen.getByRole('button', { name: /^REALISTIC$/ }));
+    fireEvent.click(screen.getByRole('button', { name: `ROAD_LINE ${roadLine}` }));
+    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    await grantAndFaceNorth();
+    await act(async () => {});
+  };
+  beforeEach(() => {
+    roadViews.length = 0;
+  });
+
+  it('OFF: no road at all, while the arrow stays 3D', async () => {
+    await openWith('OFF');
+    expect(roadGl()).toBeNull();
+    expect(roadLine()).toBeNull();
+    expect(roadViews).toHaveLength(0);
+    expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe('realistic');
+  });
+
+  it('EFFICIENT: the light ribbon instead of the 3D road', async () => {
+    await openWith('EFFICIENT');
+    expect(roadLine()).toBeTruthy();
+    expect(roadGl()).toBeNull();
+    expect(roadViews).toHaveLength(0);
+  });
+
+  it('AUTO: follows the dial, the 3D road', async () => {
+    await openWith('AUTO');
+    expect(roadGl()).toBeTruthy();
+    expect(roadLine()).toBeNull();
+  });
+});

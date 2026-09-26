@@ -12,6 +12,7 @@ import { cameraQuaternion, projectGroundPoint } from './utils/arCamera';
 import ARRoadGL from './components/ARRoadGL';
 import ARArrow3D from './components/ARArrow3D';
 import { RealisticArrow } from './components/ARArrowGL';
+import { resolveArFeatures } from './utils/arFeatures';
 
 const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 
@@ -20,16 +21,24 @@ const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 // SRM_MASTER_DATABASE); selfUid keeps this phone's own user off them.
 // routePath: the walking route to draw on the ground, only when AR Scan is on the squad's
 // Rally Point (see arRoutePathFor); null otherwise.
-// fidelity: sysConfig.arFidelity (AR_RENDER_MODE), which picks the arrow (see the ring below)
-// and the road line: 'realistic' draws the road with three.js (ARRoadGL), the rest with
-// the Stage 3 ribbon.
-const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', onClose }) => {
+// fidelity: sysConfig.arFidelity (AR_RENDER_MODE), the main dial.
+// overrides: sysConfig.arFeatureOverrides, each feature's own setting ('auto' follows the
+// dial). Together they give each feature's fidelity (resolveArFeatures), which is all
+// that is read below:
+//   arrow: 'realistic' is the three.js arrow, anything else the CSS one (see the ring).
+//   roadLine: 'realistic' is the three.js road (ARRoadGL), 'off' none, anything else the
+//     Stage 3 ribbon.
+//   tags: 'off' hides the ambient tags. The destination's own tag stays: it is part of
+//     finding the way, as the arrow is.
+const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', overrides, onClose }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
+  const features = resolveArFeatures(fidelity, overrides);
+  const roadPath = features.roadLine === 'off' ? null : routePath;
   // The compass, read as a camera (the phone held up; see useDeviceHeading), plus the
-  // phone's live tilt in 'realistic' mode, where the three.js road is drawn through it.
+  // phone's live tilt when the road is 3D, the only thing drawn through it.
   const { heading: compassHeading, tilt, permissionsGranted, requestHeadingPermission } =
-    useDeviceHeading({ camera: true, tilt: fidelity === 'realistic' });
+    useDeviceHeading({ camera: true, tilt: features.roadLine === 'realistic' });
   // Same fusion as the live map marker: GPS course while walking, the smoothed
   // compass otherwise. The compass alone drifts indoors and near steel.
   const heading = useLiveHeading({
@@ -91,14 +100,14 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
   // only when the position or the route changes (turning just turns the camera). The
   // three.js canvas exists only while there is a strip. Until it is drawing, and for good
   // if WebGL fails, the Stage 3 ribbon stands in, as the CSS arrow does for the arrow.
-  const realistic = fidelity === 'realistic';
+  const realistic = features.roadLine === 'realistic';
   const liveLat = liveLocation?.lat;
   const liveLng = liveLocation?.lng;
   const strip = useMemo(() => {
-    if (!realistic || !routePath) return null;
+    if (!realistic || !roadPath) return null;
     const origin = { lat: liveLat, lng: liveLng };
-    return buildRoadStrip(remainingRouteSamples(routePath, origin), origin);
-  }, [realistic, routePath, liveLat, liveLng]);
+    return buildRoadStrip(remainingRouteSamples(roadPath, origin), origin);
+  }, [realistic, roadPath, liveLat, liveLng]);
   const [roadGl, setRoadGl] = useState('loading');
   // A failure is final for this AR Scan session; the canvas's unmount doesn't undo it.
   const onRoadGlStatus = useCallback((next) => setRoadGl((prev) => (prev === 'failed' ? prev : next)), []);
@@ -108,8 +117,8 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
   // destination's tag is placed through it too, so it sits on the road's end.
   const orientation = useMemo(() => cameraQuaternion({ heading, tilt }), [heading, tilt]);
 
-  const ribbon = routePath && !roadGlDrawing
-    ? buildRoadRibbon({ origin: liveLocation, heading, path: routePath, screenWidth: viewport.width, screenHeight: viewport.height })
+  const ribbon = roadPath && !roadGlDrawing
+    ? buildRoadRibbon({ origin: liveLocation, heading, path: roadPath, screenWidth: viewport.width, screenHeight: viewport.height })
     : null;
 
   // Floating tags over whatever is in view, placed in screen percentages (width and
@@ -208,7 +217,7 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
           below nothing tappable (they take no touches). Drawn furthest first, so where
           two overlap the nearer one is on top. */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-[25]" aria-hidden="true">
-        {[...tags.ambient].reverse().map((t) => (
+        {features.tags !== 'off' && [...tags.ambient].reverse().map((t) => (
           <ARTag key={t.key} name={t.name} distance={t.distance} x={t.x} y={t.y} variant={t.kind} />
         ))}
         {tags.target && (
@@ -259,17 +268,17 @@ const ARCompass = ({ target, liveLocation, speedMps = 0, squadMembers = [], buil
           </div>
 
           {/* The ring, and the destination arrow turning inside it by the same
-              wraparound-safe angle and spring as before. The arrow depends on
-              AR_RENDER_MODE: 'efficient' and 'standard' (and anything unknown) get the
-              CSS 3D wedge; 'realistic' gets the three.js arrow (RealisticArrow), which
-              loads three.js only then. */}
+              wraparound-safe angle and spring as before. The arrow depends on its
+              resolved fidelity (AR_RENDER_MODE, or its override): 'efficient' and
+              'standard' (and anything unknown) get the CSS 3D wedge; 'realistic' gets
+              the three.js arrow (RealisticArrow), which loads three.js only then. */}
           <div
             ref={ringRef}
             data-testid="ar-arrow-ring"
-            data-fidelity={fidelity}
+            data-fidelity={features.arrow}
             className="w-48 h-48 rounded-full border-4 border-red-500 flex items-center justify-center relative z-30 shadow-[0_0_30px_rgba(239,68,68,0.3)] bg-black/20 backdrop-blur-sm"
           >
-            {fidelity === 'realistic' ? (
+            {features.arrow === 'realistic' ? (
               <RealisticArrow rotation={displayRotation} spring={ARROW_SPRING} ringRef={ringRef} overlayEl={overlayEl} />
             ) : (
               <ARArrow3D rotation={displayRotation} transition={ARROW_SPRING} />
