@@ -90,6 +90,12 @@ vi.mock('../src/utils/wifiFusion.js', () => ({
     };
   },
 }));
+// The survey table, for the floor picker in a building you're in without a reading.
+vi.mock('../src/utils/wifiPositioning.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadAccessPoints: async () =>
+    new Map([0, 1, 2, 7].map((floor) => [`ap-${floor}`, { lat: 0, lng: 0, building: 'TECH PARK', floor, ambiguousFloor: false }])),
+}));
 vi.mock('../src/hooks/useLiveUpdate.js', () => ({
   useLiveUpdate: () => ({ status: 'idle', supported: false, restart: vi.fn() }),
 }));
@@ -352,5 +358,66 @@ describe('where your own dot is drawn (Google engine)', () => {
 
     setIndoor(null);
     await waitFor(() => expect(selfDiv().getAttribute('lat')).toBe(String(GPS.lat)));
+  });
+});
+
+describe('the floor picker without a WiFi reading', () => {
+  // Inside TECH PARK's footprint (surveyed) and UNIVERSITY BUILDING's (never surveyed).
+  const IN_TECH_PARK = { lat: 12.8246325, lng: 80.0453585 };
+  const IN_UNIVERSITY_BUILDING = { lat: 12.8234851, lng: 80.042357 };
+  const gpsAt = ({ lat, lng }) => {
+    navigator.geolocation.getCurrentPosition = vi.fn((ok) => ok({ coords: { latitude: lat, longitude: lng, speed: 0 } }));
+  };
+  const noFloors = () => screen.queryByRole('status', { name: /no floors available/ });
+
+  it.each(['google', 'leaflet'])('shows the surveyed floors in a building you are in, with none open (%s)', async (engine) => {
+    gpsAt(IN_TECH_PARK);
+    const App = await loadApp({ share: true, engine });
+    await joinSquad(App);
+    squadUpdate([BRAVO]);
+
+    await waitFor(() => expect(floorTabs()).not.toBeNull());
+    expect(within(floorTabs()).getAllByRole('tab').map((t) => t.textContent)).toEqual(['F7', 'F2', 'F1', 'G']);
+    expect(within(floorTabs()).queryByTestId('live-floor-dot')).toBeNull();
+    expect(within(floorTabs()).getAllByRole('tab').every((t) => t.getAttribute('aria-selected') === 'false')).toBe(true);
+    expect(halo()).toBeNull();
+
+    // No tab open: nobody dimmed. Open G: Bravo, on F7, dims. Tap G again: back to none.
+    const bravo = () => screen.getByText('BRAVO · F7').parentElement.style.opacity;
+    await waitFor(() => expect(bravo()).toBe(''));
+    fireEvent.click(tab('G'));
+    await waitFor(() => expect(bravo()).toBe('0.35'));
+    fireEvent.click(tab('G'));
+    await waitFor(() => expect(bravo()).toBe(''));
+  });
+
+  it('opens on your live floor once a reading arrives, whatever you had picked', async () => {
+    gpsAt(IN_TECH_PARK);
+    const App = await loadApp({ share: false, engine: 'leaflet' });
+    await joinSquad(App);
+    await waitFor(() => expect(floorTabs()).not.toBeNull());
+    fireEvent.click(tab('F7'));
+
+    setIndoor(INDOOR);
+    await waitFor(() => expect(halo()).not.toBeNull());
+    expect(tab('F2').getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByRole('button', { name: /Return to/ })).toBeNull();
+  });
+
+  it('still shows in a building the survey never covered, saying it has no floors', async () => {
+    gpsAt(IN_UNIVERSITY_BUILDING);
+    const App = await loadApp({ share: false, engine: 'leaflet' });
+    await joinSquad(App);
+    await waitFor(() => expect(noFloors()).not.toBeNull());
+    expect(noFloors().getAttribute('aria-label')).toBe('UNIVERSITY BUILDING: no floors available');
+    expect(floorTabs()).toBeNull();
+  });
+
+  it('is absent outdoors', async () => {
+    const App = await loadApp({ share: false, engine: 'leaflet' });
+    await joinSquad(App);
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(floorTabs()).toBeNull();
+    expect(noFloors()).toBeNull();
   });
 });

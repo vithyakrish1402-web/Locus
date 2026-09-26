@@ -5,6 +5,7 @@ import {
   MAX_HALO_PX,
   MIN_HALO_PX,
   RETURN_CHIP_DELAY_MS,
+  buildingAt,
   floorLabel,
   haloFor,
   isOnOtherFloor,
@@ -80,6 +81,7 @@ describe('squadmates on the map', () => {
     expect(isOnOtherFloor({ building: 'TECH PARK 2', floor: 2 }, view)).toBe(false);
     expect(isOnOtherFloor({}, view)).toBe(false); // outdoors
     expect(isOnOtherFloor({ building: 'TECH PARK', floor: 2 }, null)).toBe(false); // no picker
+    expect(isOnOtherFloor({ building: 'TECH PARK', floor: 2 }, { building: 'TECH PARK', viewedFloor: null })).toBe(false); // no tab open
   });
 });
 
@@ -122,5 +124,28 @@ describe('what update-location carries', () => {
   it('a GPS position gets no floor, however the reading looks', () => {
     const gps = { ...GPS, positionSource: 'gps' };
     expect(withIndoorFields(gps, fusion(gps, INDOOR))).toBe(gps);
+  });
+});
+
+describe('buildingAt', () => {
+  const SQUARE = { name: 'SQUARE', footprint: [[0, 0], [0, 1], [1, 1], [1, 0]] };
+  const DOT_ONLY = { name: 'DOT ONLY', lat: 0.5, lng: 0.5 };
+
+  it('finds the building whose footprint holds the point', () => {
+    expect(buildingAt({ lat: 0.5, lng: 0.5 }, [DOT_ONLY, SQUARE])?.name).toBe('SQUARE');
+    expect(buildingAt({ lat: 1.5, lng: 0.5 }, [SQUARE])).toBeNull();
+    expect(buildingAt({ lat: 0.5, lng: -0.1 }, [SQUARE])).toBeNull();
+  });
+
+  it('never matches a building with no footprint, or no point at all', () => {
+    expect(buildingAt({ lat: 0.5, lng: 0.5 }, [DOT_ONLY])).toBeNull();
+    expect(buildingAt(null, [SQUARE])).toBeNull();
+    expect(buildingAt({ lat: NaN, lng: 0.5 }, [SQUARE])).toBeNull();
+  });
+
+  it('knows the real campus footprints', () => {
+    expect(buildingAt({ lat: 12.8246325, lng: 80.0453585 })?.name).toBe('TECH PARK');
+    expect(buildingAt({ lat: 12.8247035, lng: 80.0458793 })?.name).toBe('TECH PARK 2');
+    expect(buildingAt({ lat: 12.8231, lng: 80.0442 })).toBeNull(); // between buildings
   });
 });

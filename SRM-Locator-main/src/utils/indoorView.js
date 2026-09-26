@@ -4,6 +4,7 @@
 // WIFI_POSITIONING_ENABLED / SHOW_INDOOR_POSITION_TO_SQUAD at the call site.
 
 import { WIFI_CONFIDENCE_THRESHOLD } from './positionSource.js';
+import { SRM_MASTER_DATABASE } from '../srmDatabase.js';
 
 /** Halo radius at full confidence: tight, because the estimate is as sure as it gets. */
 export const MIN_HALO_PX = 24;
@@ -35,6 +36,34 @@ export function haloFor(confidence, threshold = WIFI_CONFIDENCE_THRESHOLD) {
   };
 }
 
+/**
+ * The building whose traced footprint contains `point`, or null. This is what puts a floor
+ * picker on the map for a building the WiFi survey has never covered: your GPS fix alone
+ * says which building you're in, even when nothing says which floor. Buildings with no
+ * footprint in the database can't be told apart from the ground around them, so they never
+ * match. Ray casting over [lat, lng] pairs, which is exact enough at a building's scale.
+ *
+ * @param {{lat:number, lng:number}|null} point
+ * @param {Array<{name:string, footprint?:number[][]}>} [buildings]
+ */
+export function buildingAt(point, buildings = SRM_MASTER_DATABASE) {
+  if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return null;
+  return (
+    buildings.find(({ footprint }) => {
+      if (!Array.isArray(footprint) || footprint.length < 3) return false;
+      let inside = false;
+      for (let i = 0, j = footprint.length - 1; i < footprint.length; j = i++) {
+        const [latI, lngI] = footprint[i];
+        const [latJ, lngJ] = footprint[j];
+        if (latI > point.lat !== latJ > point.lat && point.lng < ((lngJ - lngI) * (point.lat - latI)) / (latJ - latI) + lngI) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    }) ?? null
+  );
+}
+
 /** Whether a roster member reported an indoor floor in their latest telemetry. */
 export function hasIndoorFloor(member) {
   return typeof member?.building === 'string' && Number.isInteger(member?.floor);
@@ -50,11 +79,17 @@ export function memberFloorTag(member) {
  * Whether a squadmate is drawn dimmed: they are in the building you're looking at, on a
  * floor other than the tab you have open. Dimmed, never hidden - squad positions are not
  * something a map view gets to make disappear. Members outdoors, in another building, or
- * seen while you have no floor picker are never dimmed.
+ * seen while you have no floor picker or no tab open are never dimmed.
  *
  * @param {object} member a roster entry
  * @param {{building:string, viewedFloor:number}|null} view from useIndoorView
  */
 export function isOnOtherFloor(member, view) {
-  return Boolean(view) && hasIndoorFloor(member) && member.building === view.building && member.floor !== view.viewedFloor;
+  return (
+    Boolean(view) &&
+    Number.isInteger(view.viewedFloor) &&
+    hasIndoorFloor(member) &&
+    member.building === view.building &&
+    member.floor !== view.viewedFloor
+  );
 }
