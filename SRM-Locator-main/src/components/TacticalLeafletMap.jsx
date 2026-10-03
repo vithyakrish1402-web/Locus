@@ -11,6 +11,7 @@ import WaypointMarker from './WaypointMarker';
 import BuildingMarker from './BuildingMarker';
 import LeafletReactMarker from './LeafletReactMarker';
 import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
+import { registerMapDriver } from '../utils/mapFocus';
 
 // This engine exists precisely because there is no Google Maps key (see App.jsx's
 // mapEngineFailed / the "keyless Leaflet/OSM engine" warning), so its own basemap must
@@ -65,6 +66,22 @@ const ViewController = ({ center, zoom }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [center?.lat, center?.lng, zoom]);
+  return null;
+};
+
+// Hands the shared glide (utils/mapFocus.js) this map's own animated move.
+const FocusDriver = () => {
+  const map = useMap();
+  useEffect(() => registerMapDriver({
+    element: map.getContainer(),
+    getView: () => ({ ...map.getCenter(), zoom: map.getZoom() }),
+    setView: ({ lat, lng, zoom }) => map.setView([lat, lng], zoom, { animate: false }),
+    fly: ({ lat, lng, zoom }, ms, done) => {
+      map.once('moveend', done);
+      map.flyTo([lat, lng], zoom, { duration: ms / 1000 });
+      return () => { map.off('moveend', done); map.stop(); };
+    },
+  }), [map]);
   return null;
 };
 
@@ -139,6 +156,7 @@ const TacticalLeafletMap = ({
         maxZoom={21}
       />
       <ViewController center={center} zoom={zoom} />
+      <FocusDriver />
       <ClickHandler onMapClick={onMapClick} />
       <ZoomTracker onZoomChange={onZoomChange} />
 
