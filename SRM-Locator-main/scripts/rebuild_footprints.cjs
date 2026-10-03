@@ -57,11 +57,10 @@ const NAME_MATCH = {
   23: 241765449,  // KAARI HOSTEL               -> "Kaari Hostel"
   25: 1443234347, // ADHIYAMAN HOSTEL           -> "Adhyaman Hostel"
   27: 64399874,   // MEENAKSHI HOSTEL           -> "Menakshi Hostel Block"
-  28: null,       // SENBAGAM HOSTEL            -> not mapped; nearest is Adhyaman's own outline
   29: 1428764545, // KALPANA CHAWLA HOSTEL      -> "Kalpana Chawla Hostel"
   30: null,       // SISTER NIVEDITA HOSTEL     -> resolved by containment (rule 2)
   31: 676318049,  // TECH PARK 2                -> "Tech Park 2"
-  32: 748948558,  // C V RAMAN BLOCK            -> "C V Raman Block"
+  32: null,        // C V RAMAN BLOCK            -> OSM way 748948558 circles an empty cleared lot; point set by hand on Google
   33: 188582627,  // MBA BLOCK                  -> "MBA Block"
   34: 1443234346, // OORI HOSTEL                -> "Oori Hostel"
   35: 1443234348, // NELSON MANDELA HOSTEL      -> "Nelson Mandela Hostel"
