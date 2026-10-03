@@ -58,11 +58,11 @@ afterEach(() => {
 });
 
 describe('flag off', () => {
-  it('is ON in the source since js-1.1.3 (the TECH PARK field test)', async () => {
+  it('is OFF in the source (the TECH PARK field test is paused since js-1.1.14)', async () => {
     vi.resetModules();
     vi.doUnmock('../src/utils/positionSource.js');
     const { WIFI_POSITIONING_ENABLED } = await import('../src/utils/positionSource.js');
-    expect(WIFI_POSITIONING_ENABLED).toBe(true);
+    expect(WIFI_POSITIONING_ENABLED).toBe(false);
   });
 
   it('loads no WiFi module, starts no timer, and answers GPS - even while active', async () => {

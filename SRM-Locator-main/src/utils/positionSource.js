@@ -6,9 +6,9 @@
 // constant, so the build drops the dynamic import and the WiFi modules altogether), no
 // scan is ever requested, and every update reports positionSource 'gps'.
 //
-// Keep this false until the TECH PARK device check has shown Stage 5's estimates are good.
+// Paused (false) since js-1.1.14: flip it back to true to resume the TECH PARK field test.
 // Turning it off again after a bad release needs only this line and a JS-only bundle.
-export const WIFI_POSITIONING_ENABLED = true;
+export const WIFI_POSITIONING_ENABLED = false;
 
 /**
  * Minimum Stage 5 confidence for WiFi to replace GPS. A guess, not a measurement: no
