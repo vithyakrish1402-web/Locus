@@ -53,6 +53,7 @@ import { CodeTiles, CodeInput } from './components/SquadCode';
 import SquadMemberCard from './components/SquadMemberCard';
 import { sortByDistance } from './utils/direction';
 import { notify } from './utils/notify';
+import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
@@ -951,7 +952,21 @@ const App = () => {
 
     socket.on('new-waypoint', (waypointData) => {
       console.log(`[SYS_NET] New Rally Point acquired:`, waypointData);
+      // The in-app notice is for the others in the squad: not the one who placed it (the
+      // server echoes it back to them), and not the server re-sending the rally point
+      // already on the map after a reconnect.
+      const shown = activeWaypointRef.current;
+      const isRepeat = shown && shown.lat === waypointData?.lat && shown.lng === waypointData?.lng
+        && shown.setBy === waypointData?.setBy;
+      const placedByMe = Boolean(waypointData?.setBy) && waypointData.setBy === selfIdRef.current;
       setActiveWaypoint(waypointData);
+      if (!isRepeat && !placedByMe) {
+        const { lat, lng, setBy } = waypointData ?? {};
+        notify.info('A squad member designated a rally point. Tap to view it.', {
+          title: 'RALLY_POINT',
+          onClick: () => focusRallyPointRef.current({ lat, lng, setBy }),
+        });
+      }
       triggerSystemNotification("🎯 RALLY POINT DESIGNATED", "New tactical coordinates uploaded to map.");
     });
 
@@ -1584,6 +1599,49 @@ const App = () => {
       return [...prev, userId];
     });
   };
+
+  // What the squad-wide socket handler (declared earlier, bound once per squad) needs to
+  // read at tap time rather than at the time it was created.
+  const activeWaypointRef = useRef(null);
+  activeWaypointRef.current = activeWaypoint;
+  const selfIdRef = useRef(null);
+  selfIdRef.current = user?.uid || socket.id;
+  const focusRallyPointRef = useRef(() => {});
+
+  // Glides the map to a point; if no map engine has registered yet, jumps instead. Either way
+  // mapProps ends up at the target, so the controlled `center`/`zoom` stay in step.
+  const glideTo = (coords, zoom) => {
+    const commit = () => setMapProps({ center: { lat: coords.lat, lng: coords.lng }, zoom });
+    if (!focusMapOn({ lat: coords.lat, lng: coords.lng, zoom }, { onDone: commit })) commit();
+  };
+
+  // A matrix row: closes the phone sheet (it covers the map) and glides to the building.
+  const handleBuildingTap = (building) => {
+    if (!Number.isFinite(building?.lat) || !Number.isFinite(building?.lng)) {
+      if (import.meta.env.DEV) console.warn('[matrix] building has no coordinates', building?.id);
+      return;
+    }
+    setBuildingIntel('');
+    setSelectedItem(building);
+    setMobileView('grid');
+    glideTo(building, MAP_FOCUS_BUILDING_ZOOM);
+  };
+
+  // The rally notice's tap. Looks the rally point up now, not from the notice: it may have
+  // been cleared or replaced since (there is one rally point per squad, and no id to match).
+  focusRallyPointRef.current = ({ lat, lng }) => {
+    const live = activeWaypointRef.current;
+    if (!live || live.lat !== lat || live.lng !== lng) {
+      notify.info('Rally point no longer active.', { title: 'RALLY_POINT' });
+      return;
+    }
+    setMobileView('grid');
+    glideTo(live, MAP_FOCUS_RALLY_ZOOM);
+  };
+
+  // The google-map-react engine's driver for utils/mapFocus.js. Leaflet registers its own.
+  const googleDriverOffRef = useRef(null);
+  useEffect(() => () => googleDriverOffRef.current?.(), []);
 
   const handleFocus = (coords, item) => {
     setMapProps({ center: coords, zoom: 19 });
@@ -2318,7 +2376,7 @@ const App = () => {
                   exit={{ opacity: 0 }}
                   key={building.id}
                   className="p-4 mb-2 bg-gray-900 border border-gray-800 rounded-lg active:bg-gray-800 transition-colors relative group hover:border-white/40 cursor-pointer"
-                  onClick={() => handleFocus({ lat: building.lat, lng: building.lng }, building)}
+                  onClick={() => handleBuildingTap(building)}
                 >
                   <div className="absolute top-0 left-0 w-2 h-2 bg-white/20" />
                   <div className="flex items-start justify-between mb-4">
@@ -2621,6 +2679,16 @@ const App = () => {
           onGoogleApiLoaded={({ map }) => {
             mapRef.current = map;
             map.setTilt(0);
+            googleDriverOffRef.current?.();
+            googleDriverOffRef.current = registerMapDriver({
+              element: map.getDiv?.(),
+              getView: () => ({ lat: map.getCenter().lat(), lng: map.getCenter().lng(), zoom: map.getZoom() }),
+              // Fractional zoom only exists on vector maps (moveCamera); raster maps take whole levels.
+              setView: ({ lat, lng, zoom }) => {
+                if (typeof map.moveCamera === 'function') map.moveCamera({ center: { lat, lng }, zoom });
+                else { map.setCenter({ lat, lng }); map.setZoom(Math.round(zoom)); }
+              },
+            });
             // 🟢 GREEN LIGHT: Map canvas is live — safe to draw saved zones now
             setIsMapReady(true);
           }}

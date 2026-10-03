@@ -47,7 +47,11 @@ function Notice({ item, reduceMotion }) {
     >
       <div className="flex items-start gap-3 p-3 pr-2">
         <Icon size={18} className={`${look.accent} mt-0.5 shrink-0`} aria-hidden="true" />
-        <div className="min-w-0 flex-1 text-left">
+        {/* A tappable notice (item.onClick) dismisses itself, then runs its action. */}
+        <div
+          className={`min-w-0 flex-1 text-left ${item.onClick ? 'cursor-pointer' : ''}`}
+          {...(item.onClick ? { role: 'button', tabIndex: 0, onClick: () => { dismiss(item.id); item.onClick(); } } : {})}
+        >
           <p className={`font-dot text-[10px] uppercase tracking-widest ${look.accent}`}>{item.title || look.label}</p>
           <p className="mt-0.5 font-dot text-[11px] uppercase tracking-wider leading-relaxed text-zinc-200 break-words">{item.message}</p>
         </div>
