@@ -8,4 +8,6 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  // Tests assume the keyless (Leaflet) build whatever the developer's .env holds.
+  test: { env: { VITE_GOOGLE_MAPS_API_KEY: '' } },
 })
