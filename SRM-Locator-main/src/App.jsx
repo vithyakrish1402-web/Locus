@@ -1615,16 +1615,22 @@ const App = () => {
     if (!focusMapOn({ lat: coords.lat, lng: coords.lng, zoom }, { onDone: commit })) commit();
   };
 
-  // A matrix row: closes the phone sheet (it covers the map) and glides to the building.
-  const handleBuildingTap = (building) => {
+  // Closes the phone sheet (it covers the map) and glides to a matrix building. Shared by the
+  // row tap and the row's waypoint button.
+  const showBuildingOnMap = (building) => {
     if (!Number.isFinite(building?.lat) || !Number.isFinite(building?.lng)) {
       if (import.meta.env.DEV) console.warn('[matrix] building has no coordinates', building?.id);
-      return;
+      return false;
     }
-    setBuildingIntel('');
-    setSelectedItem(building);
     setMobileView('grid');
     glideTo(building, MAP_FOCUS_BUILDING_ZOOM);
+    return true;
+  };
+
+  const handleBuildingTap = (building) => {
+    if (!showBuildingOnMap(building)) return;
+    setBuildingIntel('');
+    setSelectedItem(building);
   };
 
   // The rally notice's tap. Looks the rally point up now, not from the notice: it may have
@@ -2408,7 +2414,7 @@ const App = () => {
                       <Crosshair size={14} />
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleWaypointSelect(building); }}
+                      onClick={(e) => { e.stopPropagation(); handleWaypointSelect(building); showBuildingOnMap(building); }}
                       className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white"
                     >
                       SELECT_WAYPOINT
