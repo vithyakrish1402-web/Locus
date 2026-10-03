@@ -55,6 +55,7 @@ import BuildingInfo from './components/BuildingInfo';
 import { BUILDING_INFO_LABEL } from './utils/buildingInfo';
 import { sortByDistance } from './utils/direction';
 import { notify } from './utils/notify';
+import { mapEngineStatus, MAP_STATUS_LABEL, MAP_STATUS_REASON_TEXT } from './utils/mapEngineStatus';
 import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
@@ -555,7 +556,26 @@ const App = () => {
   // The Leaflet engine uses CARTO + Esri tiles, which need no key and carry no
   // watermark, so with no key it is strictly the better engine — use it immediately
   // rather than rendering a broken-looking Google map.
-  const [mapEngineFailed, setMapEngineFailed] = useState(!GOOGLE_MAPS_API_KEY);
+  // The flag is now derived from the reason Google was given up on (null = still in use),
+  // so SYS_CONFIG can say why. First reason wins; the switch stays one-way per session.
+  const [mapFailReason, setMapFailReason] = useState(GOOGLE_MAPS_API_KEY ? null : 'no-key');
+  const mapEngineFailed = mapFailReason !== null;
+  const failMapEngine = (reason) => setMapFailReason((prev) => prev ?? reason);
+  const mapStatus = mapEngineStatus(mapFailReason);
+  useEffect(() => {
+    if (import.meta.env.DEV && mapFailReason) console.warn(`[SYS_MAP] Backup map active, reason: ${mapFailReason}`);
+  }, [mapFailReason]);
+  // Google calls window.gm_authFailure when it loaded but refused the key (website
+  // restriction, billing off, API not enabled). Listen only while Google is the engine.
+  useEffect(() => {
+    if (mapEngineFailed) return;
+    const previous = window.gm_authFailure;
+    const handler = () => failMapEngine('key-rejected');
+    window.gm_authFailure = handler;
+    return () => {
+      if (window.gm_authFailure === handler) window.gm_authFailure = previous;
+    };
+  }, [mapEngineFailed]);
 
   const [isRecordingPath, setIsRecordingPath] = useState(false);
   const [recordedCoords, setRecordedCoords] = useState([]);
@@ -616,7 +636,7 @@ const App = () => {
     const timeoutId = setTimeout(() => {
       if (!isMapReady) {
         console.warn('[SYS_MAP] Google Maps did not initialize in time — falling back to Leaflet.');
-        setMapEngineFailed(true);
+        failMapEngine('timeout');
       }
     }, 8000);
     return () => clearTimeout(timeoutId);
@@ -3267,6 +3287,10 @@ const App = () => {
                       ORBITAL (SATELLITE)
                     </button>
                   </div>
+                  <p className="font-inter text-[10px] text-zinc-500 leading-tight" data-testid="map-engine-status">
+                    {MAP_STATUS_LABEL[mapStatus.engine]}
+                    {mapStatus.reason !== 'ok' && <><br />{MAP_STATUS_REASON_TEXT[mapStatus.reason]}</>}
+                  </p>
                 </div>
 
                 {/* Setting 3: Polling Rate */}
