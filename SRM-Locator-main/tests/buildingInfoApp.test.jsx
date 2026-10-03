@@ -115,6 +115,9 @@ const openInfo = (card) => {
   return screen.getByTestId('building-info');
 };
 const byName = (name) => SRM_MASTER_DATABASE.find((b) => b.name === name);
+// Every real building now has details, so a test fixture stands in for one that has none.
+const NO_INFO = 'TEST BUILDING (NO INFO)';
+SRM_MASTER_DATABASE.push({ id: 9001, name: NO_INFO, category: 'RESIDENTIAL', lat: 12.8215, lng: 80.0435 });
 
 describe('the building card', () => {
   it('has no QUERY_DATA option, only Building Info', async () => {
@@ -128,7 +131,7 @@ describe('the building card', () => {
   it('opens Building Info to something useful, not blank, for a full, partial and empty building', async () => {
     render(<App />);
     await joinAsMember();
-    for (const name of ['TECH PARK', 'SRM DENTAL COLLEGE', 'SENBAGAM HOSTEL']) {
+    for (const name of ['TECH PARK', 'SRM DENTAL COLLEGE', NO_INFO]) {
       const card = await openCard(byName(name));
       const info = openInfo(card);
       expect(info.textContent.trim().length, name).toBeGreaterThan(0);
@@ -151,9 +154,9 @@ describe('the building card', () => {
   it('falls back to the friendly line, with both actions, when a building has none', async () => {
     render(<App />);
     await joinAsMember();
-    const info = openInfo(await openCard(byName('SENBAGAM HOSTEL')));
+    const info = openInfo(await openCard(byName(NO_INFO)));
     expect(info.textContent).toContain(BUILDING_INFO_EMPTY_TEXT);
-    expect(info.textContent).toContain('SENBAGAM HOSTEL');
+    expect(info.textContent).toContain(NO_INFO);
   });
 
   it('Show on map glides to the building', async () => {

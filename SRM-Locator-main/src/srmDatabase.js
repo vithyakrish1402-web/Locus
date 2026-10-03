@@ -4,7 +4,7 @@ export const SRM_MASTER_DATABASE = [
   { id: 1, name: "UNIVERSITY BUILDING", category: "ACADEMIC", lat: 12.8234851, lng: 80.042357, footprint: [[12.8235693,80.0420734],[12.8232416,80.0420216],[12.8231317,80.0426975],[12.8237473,80.0426436],[12.8237354,80.0423487],[12.8235693,80.0420734]], info: "The administrative heart and main library block." },
   { id: 2, name: "TECH PARK", category: "ACADEMIC", lat: 12.8246325, lng: 80.0453585, footprint: [[12.824866,80.0449305],[12.8247568,80.0449368],[12.8244935,80.0449622],[12.8244895,80.0451523],[12.8245588,80.0451713],[12.8245829,80.0454849],[12.8245467,80.0454947],[12.8244395,80.0455099],[12.8245081,80.0455703],[12.8245035,80.0456449],[12.8246301,80.0456408],[12.8247651,80.0456351],[12.8248558,80.0456265],[12.8248586,80.0452589],[12.824866,80.0449305]], info: "Home to CSE & IT departments. 15 floors of innovation." },
   { id: 31, name: "TECH PARK 2", category: "ACADEMIC", lat: 12.8247035, lng: 80.0458793, footprint: [[12.8248919,80.0457128],[12.8248788,80.0460398],[12.8245218,80.0460395],[12.8245215,80.045725],[12.8248919,80.0457128]], info: "Tech Park's second tower, beside the original." },
-  { id: 32, name: "C V RAMAN BLOCK", category: "ACADEMIC", lat: 12.8254055, lng: 80.0443458, footprint: [[12.8255794,80.0441191],[12.8252211,80.0441137],[12.8252133,80.0445751],[12.8256082,80.0445751],[12.8255794,80.0441191]], info: "Academic block north of the Bio-Tech Block." },
+  { id: 32, name: "C V RAMAN BLOCK", category: "ACADEMIC", lat: 12.8250609, lng: 80.0443539, info: "Sir C V Raman Research Park, the northern wing of the Bio-Tech complex." },
   { id: 33, name: "MBA BLOCK", category: "ACADEMIC", lat: 12.8236698, lng: 80.0440245, footprint: [[12.8234692,80.0442472],[12.8239766,80.044215],[12.8239831,80.0437991],[12.8234614,80.0438261],[12.8234588,80.0440353],[12.8234692,80.0442472]], info: "Faculty of Management (MBA) block." },
   { id: 39, name: "VALLIAMMAI ENGINEERING COLLEGE", category: "ACADEMIC", lat: 12.8274116, lng: 80.0433954, info: "Mapped as a single point only (no building outline)." },
   { id: 4, name: "SRM CENTRAL LIBRARY", category: "ACADEMIC", lat: 12.8236146, lng: 80.0424808, info: "Massive library complex." },
@@ -42,7 +42,6 @@ export const SRM_MASTER_DATABASE = [
 
   // 🛌 Operative Barracks (Women's Hostels)
   { id: 27, name: "MEENAKSHI HOSTEL", category: "RESIDENTIAL", lat: 12.8222759, lng: 80.0423615, footprint: [[12.822617,80.0423453],[12.8221322,80.0423337],[12.8221356,80.0421849],[12.8220327,80.0421824],[12.8220257,80.0424872],[12.8223747,80.0424956],[12.8226134,80.0425014],[12.822617,80.0423453]], info: "Women's residential block." },
-  { id: 28, name: "SENBAGAM HOSTEL", category: "RESIDENTIAL", lat: 12.8215, lng: 80.0435, info: "Women's residential block (Unverified sub-block)." },
   { id: 29, name: "KALPANA CHAWLA HOSTEL", category: "RESIDENTIAL", lat: 12.8203606, lng: 80.0454129, footprint: [[12.8205827,80.0451233],[12.8201541,80.0451162],[12.8201316,80.0457105],[12.820574,80.0457016],[12.8205827,80.0451233]], info: "Women's residential block." },
   { id: 30, name: "SISTER NIVEDITA HOSTEL", category: "RESIDENTIAL", lat: 12.8210819, lng: 80.0441384, footprint: [[12.8212817,80.0440384],[12.8212798,80.0442423],[12.8208822,80.0442384],[12.8208841,80.0440345],[12.8212817,80.0440384]], info: "Women's residential block (Unverified sub-block)." }
 ];
