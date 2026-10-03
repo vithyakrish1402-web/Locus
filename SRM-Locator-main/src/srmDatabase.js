@@ -6,7 +6,7 @@ export const SRM_MASTER_DATABASE = [
   { id: 31, name: "TECH PARK 2", category: "ACADEMIC", lat: 12.8247035, lng: 80.0458793, footprint: [[12.8248919,80.0457128],[12.8248788,80.0460398],[12.8245218,80.0460395],[12.8245215,80.045725],[12.8248919,80.0457128]], info: "Tech Park's second tower, beside the original." },
   { id: 32, name: "C V RAMAN BLOCK", category: "ACADEMIC", lat: 12.8254055, lng: 80.0443458, footprint: [[12.8255794,80.0441191],[12.8252211,80.0441137],[12.8252133,80.0445751],[12.8256082,80.0445751],[12.8255794,80.0441191]], info: "Academic block north of the Bio-Tech Block." },
   { id: 33, name: "MBA BLOCK", category: "ACADEMIC", lat: 12.8236698, lng: 80.0440245, footprint: [[12.8234692,80.0442472],[12.8239766,80.044215],[12.8239831,80.0437991],[12.8234614,80.0438261],[12.8234588,80.0440353],[12.8234692,80.0442472]], info: "Faculty of Management (MBA) block." },
-  { id: 39, name: "VALLIAMMAI ENGINEERING COLLEGE", category: "ACADEMIC", lat: 12.8274116, lng: 80.0433954, info: "Mapped as a single point only (no building outline)." },
+  { id: 39, name: "VALLIAMMAI ENGINEERING COLLEGE", category: "ACADEMIC", lat: 12.82633, lng: 80.0425, info: "Mapped as a single point only (no building outline)." },
   { id: 4, name: "SRM CENTRAL LIBRARY", category: "ACADEMIC", lat: 12.8236146, lng: 80.0424808, info: "Massive library complex." },
 
   // ⚙️ Engineering Sector

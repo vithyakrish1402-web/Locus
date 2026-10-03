@@ -68,7 +68,7 @@ const NAME_MATCH = {
   36: 1443234349, // AGASTHAYAR HOSTEL          -> "Agasthayar Hostel"
   37: 1447068325, // SANNASI C BLOCK            -> "Sannasi C Block, Hostel"
   38: 1428764543, // N BLOCK                    -> "N Block Mens Hostel"
-  39: null,       // VALLIAMMAI ENGINEERING COL -> OSM has only a point node (7252536752), no outline
+  39: null,       // VALLIAMMAI ENGINEERING COL -> no outline; point set by hand on Google satellite (OSM node 7252536752 sits on a PG hostel ~170m away)
 };
 
 const fetchOsm = () => new Promise((resolve, reject) => {
