@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.div>, which this config can't see
 import { motion, useReducedMotion, useMotionValue, animate } from 'framer-motion';
 import { Activity, Ban, Crosshair, Navigation } from 'lucide-react';
-import { calculateBearing, calculateDistanceMeters } from '../utils/geoMath';
-import { compassPoint, continuousAngle, formatMetres, freshness, relativeClock } from '../utils/direction';
+import { continuousAngle, freshness, locateTarget } from '../utils/direction';
 import { PANEL_SPRING } from '../utils/motion';
 import { SHOW_INDOOR_POSITION_TO_SQUAD } from '../utils/positionSource';
 import { floorLabel, hasIndoorFloor } from '../utils/indoorView';
@@ -15,8 +14,6 @@ import { floorLabel, hasIndoorFloor } from '../utils/indoorView';
 //
 // Replaces an inline card whose distance was a small label, which offered no direction at
 // all, repeated PING (an icon and a button), and used rounded corners unlike the rest.
-
-const HERE_METRES = 15; // closer than GPS can tell apart: shown as "HERE", not a direction
 
 const FRESH_STYLE = {
   live: { text: 'text-emerald-400', bar: 'bg-emerald-500' },
@@ -73,16 +70,9 @@ export default function SquadMemberCard({ member, me, heading, headingLive, isOw
   const style = FRESH_STYLE[fresh.level];
   const located = member.hasFix && me && Number.isFinite(member.lat) && Number.isFinite(member.lng);
 
-  let distance = null;
-  let bearing = null;
-  if (located) {
-    distance = calculateDistanceMeters(me.lat, me.lng, member.lat, member.lng);
-    bearing = calculateBearing(me.lat, me.lng, member.lat, member.lng);
-  }
-  const here = Number.isFinite(distance) && distance < HERE_METRES;
-  const shownDistance = formatMetres(distance);
-  const clock = headingLive ? relativeClock(bearing, heading) : null;
-  const direction = here ? 'WITH YOU' : clock?.label ?? (bearing !== null ? `BEARING ${compassPoint(bearing)}` : null);
+  const where = located ? locateTarget(me, member, { heading, headingLive }) : null;
+  const { here = false, shownDistance = null, direction = null } = where ?? {};
+  const bearing = where ? where.bearing : null;
   // Relative to the phone when the compass works; otherwise north-up.
   const angle = bearing === null ? 0 : headingLive ? bearing - heading : bearing;
 
