@@ -44,7 +44,7 @@ const NAME_MATCH = {
   7: 1216056974,  // BASIC ENGINEERING LAB      -> "BEL Lab"
   8: 188582615,   // SCHOOL OF ARCHITECTURE     -> "Architecture Block"
   9: 188582621,   // HI-TECH BLOCK              -> "High Tech Block"
-  10: 64400114,   // BIO-TECH BLOCK             -> "biotech block"
+  10: 64400114,   // BIO-TECH BLOCK             -> "biotech block" (NB: point was then set by hand to Google's marker, 12.8247144,80.0439714; a re-run moves it)
   11: 188582626,  // AEROSPACE BLOCK (HANGAR)   -> "Aerospace Hanger"
   12: null,       // SRM MEDICAL COLLEGE        -> nearest OSM building is 109m away
   13: null,       // SRM GLOBAL HOSPITALS       -> nothing mapped within 140m
