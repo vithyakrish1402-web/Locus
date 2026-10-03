@@ -1,4 +1,7 @@
-// Words and angles for "where is my squadmate?" on the squad roster (SquadMemberCard.jsx).
+import { calculateBearing, calculateDistanceMeters } from './geoMath';
+
+// Words and angles for "where is my squadmate?" on the squad roster (SquadMemberCard.jsx),
+// and "where is that building?" in the building card (BuildingInfo.jsx).
 
 const POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
@@ -62,4 +65,24 @@ export function sortByDistance(members, me) {
   const d2 = (m) => (m.lat - me.lat) ** 2 + ((m.lng - me.lng) * Math.cos((me.lat * Math.PI) / 180)) ** 2;
   const withFix = members.filter(located).sort((x, y) => d2(x) - d2(y));
   return [...withFix, ...members.filter((m) => !located(m))];
+}
+
+/** Closer than GPS can tell apart: shown as "HERE" / "WITH YOU", not a direction. */
+export const HERE_METRES = 15;
+
+/**
+ * Distance, bearing and the spoken direction from `me` to `target` ({lat, lng}). The one
+ * place the squad roster and the building card get their readout from, so they agree.
+ * @returns {{distance:number, bearing:number, here:boolean, shownDistance:{value:string,unit:string},
+ *   direction:string, clock:object|null}|null} null while either point has no coordinates
+ */
+export function locateTarget(me, target, { heading, headingLive } = {}) {
+  if (!me || !target) return null;
+  if (![me.lat, me.lng, target.lat, target.lng].every(Number.isFinite)) return null;
+  const distance = calculateDistanceMeters(me.lat, me.lng, target.lat, target.lng);
+  const bearing = calculateBearing(me.lat, me.lng, target.lat, target.lng);
+  const here = distance < HERE_METRES;
+  const clock = headingLive ? relativeClock(bearing, heading) : null;
+  const direction = here ? 'WITH YOU' : clock?.label ?? `BEARING ${compassPoint(bearing)}`;
+  return { distance, bearing, here, shownDistance: formatMetres(distance), direction, clock };
 }

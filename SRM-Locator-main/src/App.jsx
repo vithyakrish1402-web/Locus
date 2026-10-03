@@ -9,7 +9,7 @@ import { motion, AnimatePresence, useDragControls, useReducedMotion } from 'fram
 import GoogleMapReact from 'google-map-react';
 import {
   MapPin, Users, Search, Settings, Navigation, ShieldCheck,
-  Building2, Sparkles, MessageSquare, Send, Loader2,
+  Building2, MessageSquare, Send, Loader2, Info,
   BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
   Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
@@ -51,6 +51,8 @@ import BottomTabBar from './components/BottomTabBar';
 import CommsFeed from './components/CommsFeed';
 import { CodeTiles, CodeInput } from './components/SquadCode';
 import SquadMemberCard from './components/SquadMemberCard';
+import BuildingInfo from './components/BuildingInfo';
+import { BUILDING_INFO_LABEL } from './utils/buildingInfo';
 import { sortByDistance } from './utils/direction';
 import { notify } from './utils/notify';
 import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
@@ -528,7 +530,7 @@ const App = () => {
     [offlineNodes, ghostClockTick]
   );
 
-  const [buildingIntel, setBuildingIntel] = useState('');
+  const [showBuildingInfo, setShowBuildingInfo] = useState(false);
 
   // --- ADDED: ROUTING STATE ---
   const [routeStart, setRouteStart] = useState(null);
@@ -1487,10 +1489,6 @@ const App = () => {
     }
   }, [isSatellite, mapProps.zoom]);
 
-  // aiLoading is still used by the building-intel "QUERY_DATA" panel below
-  // (generateBuildingInsights) — that's static local data, not an API call.
-  const [aiLoading, setAiLoading] = useState(false);
-
   // --- 🔐 THE MASTER AUTH ENGINE ---
   const executeAuthDirective = async (method, isRegistering = false) => {
     setLoginMethod(method);
@@ -1578,16 +1576,6 @@ const App = () => {
     console.log(`>> Signal transmitted to Node: ${targetId}`);
   };
 
-  const generateBuildingInsights = async (building) => {
-    setAiLoading(true);
-    setBuildingIntel(''); // Clear previous building info only
-
-    setTimeout(() => {
-      setBuildingIntel(building.tacticalIntel || "[SYS_WARN] No tactical intel available.");
-      setAiLoading(false);
-    }, 600);
-  };
-
   const toggleBlock = (userId) => {
     setBlockedUserIds(prev => {
       if (prev.includes(userId)) return prev.filter(id => id !== userId);
@@ -1629,7 +1617,7 @@ const App = () => {
 
   const handleBuildingTap = (building) => {
     if (!showBuildingOnMap(building)) return;
-    setBuildingIntel('');
+    setShowBuildingInfo(false);
     setSelectedItem(building);
   };
 
@@ -1651,7 +1639,7 @@ const App = () => {
 
   const handleFocus = (coords, item) => {
     setMapProps({ center: coords, zoom: 19 });
-    setBuildingIntel(''); // <--- THIS ENSURES OLD DATA VANISHES WHEN YOU CLICK A NEW PIN
+    setShowBuildingInfo(false); // a new pin starts with its info closed
     if (item) setSelectedItem(item);
   };
 
@@ -2923,22 +2911,13 @@ const App = () => {
 
 
             <div className="px-6 pb-4 flex gap-3">
-              {/* If no intel is loaded and we aren't fetching, show the button */}
-              {!buildingIntel && !aiLoading && (
-                <button
-                  onClick={() => generateBuildingInsights(selectedItem)}
-                  className="flex-1 py-3 border border-white/20 hover:bg-white/10 font-dot text-[10px] text-white flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
-                >
-                  <Sparkles size={14} className="text-red-500" /> QUERY_DATA
-                </button>
-              )}
-
-              {/* If we ARE fetching, show the loader */}
-              {aiLoading && (
-                <div className="flex-1 py-3 border border-white/20 font-dot text-[10px] text-zinc-500 flex items-center justify-center gap-2 uppercase tracking-widest">
-                  <Loader2 className="animate-spin text-red-500" size={14} /> FETCHING...
-                </div>
-              )}
+              <button
+                onClick={() => setShowBuildingInfo((open) => !open)}
+                aria-expanded={showBuildingInfo}
+                className="flex-1 py-3 border border-white/20 hover:bg-white/10 font-dot text-[10px] text-white flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
+              >
+                <Info size={14} className="text-red-500" /> {BUILDING_INFO_LABEL}
+              </button>
 
               {/* Always show the Waypoint/Destination button */}
               <button
@@ -2955,12 +2934,15 @@ const App = () => {
               </button>
             </div>
 
-            {buildingIntel && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 pb-6 max-h-40 overflow-y-auto custom-scrollbar">
-                <div className="font-inter text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap border-l-2 border-red-500 pl-4 py-1">
-                  {buildingIntel}
-                </div>
-              </motion.div>
+            {showBuildingInfo && (
+              <BuildingInfo
+                building={selectedItem}
+                me={liveLocation}
+                heading={heading}
+                headingLive={hasHeadingReading}
+                onTakeMeThere={() => handleWaypointSelect(selectedItem)}
+                onShowOnMap={() => showBuildingOnMap(selectedItem)}
+              />
             )}
           </motion.div>
         )}
