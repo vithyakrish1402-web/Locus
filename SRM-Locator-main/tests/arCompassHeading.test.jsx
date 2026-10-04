@@ -15,6 +15,8 @@ vi.mock('framer-motion', () => ({
 }));
 
 const { default: ARCompass } = await import('../src/ARCompass.jsx');
+const { magneticDeclination } = await import('../src/utils/declination.js');
+const { calculateBearing } = await import('../src/utils/geoMath.js');
 
 afterEach(cleanup);
 
@@ -47,8 +49,13 @@ describe('ARCompass heading', () => {
     expect(rotation()).toBeCloseTo(90, 0); // target east, heading north
   });
 
-  it('standing still, uses the compass', async () => {
+  it('standing still, uses the compass, corrected to true north', async () => {
     await openAr(0);
-    expect(rotation()).toBeCloseTo(-90, 0); // target east, heading south
+    // Target east; the phone faces magnetic south, which is true 180 + declination
+    // (WMM2025, about -1.1 deg here: the declination grid point AR Scan uses).
+    const declination = magneticDeclination(12.82, 80.04);
+    expect(declination).toBeLessThan(-0.5);
+    const bearing = calculateBearing(NORTH.lat, NORTH.lng, TARGET.lat, TARGET.lng); // ~90
+    expect(rotation()).toBeCloseTo(bearing - (180 + declination), 1);
   });
 });

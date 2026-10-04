@@ -202,13 +202,17 @@ const widthAt = (distance) => {
  * Returns { points: [{ x, y, distance, width, along }], left, right, nearY, farY }, where
  * left/right are the ribbon's edges (width tapering with distance) and nearY/farY where it
  * starts and ends on screen, for the fade.
+ *
+ * `projectGround`, when given, places each sample instead: `(lat, lng)` returns { x, y }
+ * in pixels, or null when off screen. AR Scan passes the world camera's ground projection
+ * (arCamera.js), so the ribbon, the 3D road and the tags all go through one camera.
  */
-export const buildRoadRibbon = ({ origin, heading, path, screenWidth, screenHeight, fovDeg = ASSUMED_CAMERA_FOV_DEG }) => {
+export const buildRoadRibbon = ({ origin, heading, path, screenWidth, screenHeight, fovDeg = ASSUMED_CAMERA_FOV_DEG, projectGround }) => {
   if (!isPoint(origin) || !Number.isFinite(heading) || !(screenWidth > 0) || !(screenHeight > 0)) return null;
   const samples = remainingRouteSamples(path, origin);
   if (samples.length < 2) return null;
 
-  const project = (s) =>
+  const project = (s) => (projectGround ? groundSample(s) :
     projectPoint({
       origin,
       heading,
@@ -218,7 +222,11 @@ export const buildRoadRibbon = ({ origin, heading, path, screenWidth, screenHeig
       screenHeight,
       fovDeg,
       screenYFor: roadScreenYFor,
-    });
+    }));
+  function groundSample(s) {
+    const at = projectGround(s.lat, s.lng);
+    return at ? { x: at.x, y: at.y, distance: haversineMeters(origin, s) } : null;
+  }
 
   let i = 0;
   let p = project(samples[i]);

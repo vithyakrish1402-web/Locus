@@ -164,6 +164,8 @@ describe('the AR road line', () => {
     await onTheMapWithRally();
     fireEvent.click(screen.getByTitle('AR Track Rally Point'));
     await grantAndFaceNorth();
+    // The tag glides to a new spot (the Landmark Anchor Engine's easing); let it land.
+    await act(() => new Promise((r) => setTimeout(r, 800)));
     // The route (130 m) ends at the Rally Point, so the ribbon's far end is where it is.
     // The outline runs up the left edge, then back down the right: its far end is the
     // middle pair of points.

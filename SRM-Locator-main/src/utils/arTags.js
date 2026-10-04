@@ -1,31 +1,34 @@
 import { angularDifference, calculateBearing, calculateDistanceMeters } from './geoMath';
 import { haversineMeters } from './walkingRoute';
 
-// AR Scan's floating tags: which squad members and buildings get a label, and where on
-// screen it sits. Pure, so the projection is tested without a camera or a compass.
+// AR Scan's older screen projection, by bearing and distance alone (no tilt), which the
+// Stage 3 ribbon still uses by default (arRoadLine.js), plus who AR Scan is tracking.
+// The tags themselves are placed by the Landmark Anchor Engine (landmarkAnchorEngine.js).
 
-// A rough stand-in for the phone camera's horizontal field of view. Real phones vary and
-// nothing here reads the camera's intrinsics, so this needs tuning on a device.
+// The default horizontal field of view, for callers that don't pass the real one. AR Scan
+// itself passes effectiveHorizontalFov's (landmarkAnchorEngine.js), from the live video.
 export const ASSUMED_CAMERA_FOV_DEG = 60;
-// Anything further than this is left untagged even when it's straight ahead.
+// The far end of the distance band below.
 export const MAX_TAG_DISTANCE_METERS = 500;
-// Clutter cap: the nearest ones win.
-export const MAX_VISIBLE_TAGS = 6;
 
-// Vertical band the tags sit in, as fractions of screen height. A crude horizon: the
-// nearest things sit lowest, the furthest highest. Not tilt-compensated (nothing in the
-// app reads the phone's pitch yet), so it is only right when the phone is held upright.
+// A vertical band by distance alone, as fractions of screen height: a crude horizon, the
+// nearest things lowest, the furthest highest. Not tilt-compensated. The Stage 3 ribbon's
+// default curve is fitted to meet it (roadScreenYFor); AR Scan itself now draws the
+// ribbon through the real camera instead (buildRoadRibbon's projectGround).
 export const TAG_BAND_TOP = 0.18;
 export const TAG_BAND_BOTTOM = 0.46; // above most of the arrow ring, which sits mid-screen
 
+const rad = (deg) => (deg * Math.PI) / 180;
+
 // Horizontal screen position for a target `angularDiff` degrees clockwise of where the
-// phone points, or null when it's outside the view cone. A target exactly on the edge is
-// outside (its tag would be cut in half).
+// phone points, or null when it's outside the view cone. A pinhole camera's mapping
+// (by the tangent, as the 3D road's camera does it), so tags agree with what the lens
+// shows toward the edges. A target exactly on the edge is outside.
 export const projectScreenX = (angularDiff, screenWidth, fovDeg = ASSUMED_CAMERA_FOV_DEG) => {
   const half = fovDeg / 2;
   if (!Number.isFinite(angularDiff) || Math.abs(angularDiff) >= half) return null;
   const centerX = screenWidth / 2;
-  return centerX + (angularDiff / half) * centerX;
+  return centerX + (Math.tan(rad(angularDiff)) / Math.tan(rad(half))) * centerX;
 };
 
 // The floating tags' vertical position, from distance alone (see TAG_BAND_*): 0 m at
@@ -63,12 +66,6 @@ export const followArTarget = (arTarget, members) => {
   return { ...arTarget, lat: live.lat, lng: live.lng };
 };
 
-// Whether roster entry `m` is the member arTarget follows.
-const isTargetMember = (target, m) =>
-  Boolean(target && (target.memberUid ? m.uid === target.memberUid : target.memberId && m.id === target.memberId));
-
-const sameSpot = (a, b) => a && b && calculateDistanceMeters(a.lat, a.lng, b.lat, b.lng) < 1;
-
 /**
  * Where one real-world point lands on screen, as seen from `origin` facing `heading`:
  * { distance (whole metres), x, y }, or null when it's outside the view cone. Distance 0
@@ -94,78 +91,4 @@ export const projectPoint = ({
   const x = projectScreenX(diff, screenWidth, fovDeg);
   if (x === null) return null;
   return { distance, x, y: screenYFor(haversineMeters(origin, { lat, lng })) * screenHeight };
-};
-
-/**
- * The tags to draw. `origin` is { lat, lng } (this phone), `heading` the fused heading.
- * `members` are roster entries ({ id, uid, name, hasFix, lat, lng }); `buildings` are
- * SRM_MASTER_DATABASE entries. `target` is AR Scan's one destination (arTarget).
- *
- * Returns { target, ambient }: `target` is the destination's tag when it's in view (no
- * distance cap and outside the MAX_VISIBLE_TAGS count, since its arrow points there
- * anyway), else null. `ambient` holds up to MAX_VISIBLE_TAGS other tags, nearest first,
- * each { key, kind: 'member' | 'building', name, distance, x, y }. The destination never
- * gets an ambient tag as well.
- *
- * `targetScreenYFor`, when given, places the destination's tag on that vertical curve
- * instead of the tags' band. AR Scan passes the road line's curve while a road is drawn,
- * so the destination's tag sits where the road reaches it.
- * `targetProject`, when given, places it outright instead: `(lat, lng)` returns { x, y }
- * as fractions of the screen, or null when it is out of view. AR Scan passes the world
- * camera's projection (arCamera.js) while the three.js road is drawn.
- */
-export const selectArTags = ({
-  origin,
-  heading,
-  members = [],
-  buildings = [],
-  selfUid = null,
-  target = null,
-  screenWidth,
-  screenHeight,
-  fovDeg = ASSUMED_CAMERA_FOV_DEG,
-  maxDistance = MAX_TAG_DISTANCE_METERS,
-  maxTags = MAX_VISIBLE_TAGS,
-  targetScreenYFor,
-  targetProject,
-}) => {
-  if (!origin || origin.lat == null || origin.lng == null || !Number.isFinite(heading)) {
-    return { target: null, ambient: [] };
-  }
-  const view = { origin, heading, screenWidth, screenHeight, fovDeg };
-
-  const candidates = [
-    ...members
-      .filter((m) => m && m.hasFix && m.lat != null && m.lng != null && !(selfUid && m.uid === selfUid))
-      .filter((m) => !isTargetMember(target, m))
-      .map((m) => ({ key: `member-${m.id}`, kind: 'member', name: m.name || 'SQUAD_NODE', lat: m.lat, lng: m.lng })),
-    ...buildings
-      .filter((b) => b && b.lat != null && b.lng != null)
-      .map((b) => ({ key: `building-${b.id}`, kind: 'building', name: b.name, lat: b.lat, lng: b.lng })),
-  ];
-
-  const ambient = [];
-  for (const c of candidates) {
-    if (target && c.name === target.name && sameSpot(c, target)) continue;
-    const p = projectPoint({ ...view, lat: c.lat, lng: c.lng });
-    if (!p || p.distance > maxDistance) continue;
-    ambient.push({ key: c.key, kind: c.kind, name: c.name, ...p });
-  }
-  ambient.sort((a, b) => a.distance - b.distance);
-
-  let targetTag = null;
-  if (target && target.lat != null && target.lng != null) {
-    if (targetProject) {
-      const at = targetProject(target.lat, target.lng);
-      const distance = calculateDistanceMeters(origin.lat, origin.lng, target.lat, target.lng);
-      if (at && distance > 0) {
-        targetTag = { key: 'target', kind: 'target', name: target.name, distance, x: at.x * screenWidth, y: at.y * screenHeight };
-      }
-    } else {
-      const p = projectPoint({ ...view, lat: target.lat, lng: target.lng, ...(targetScreenYFor ? { screenYFor: targetScreenYFor } : {}) });
-      if (p) targetTag = { key: 'target', kind: 'target', name: target.name, ...p };
-    }
-  }
-
-  return { target: targetTag, ambient: ambient.slice(0, maxTags) };
 };

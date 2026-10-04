@@ -61,25 +61,26 @@ describe('the road line override, under every dial', () => {
         const resolved = override === 'auto' ? dial : override;
         const want = expected[resolved] ?? 'ribbon'; // 'standard' draws the ribbon
         expect(drawn().road).toBe(want);
-        // The phone's tilt is read only for the 3D road, the only thing drawn through it.
-        expect(drawn().tilt).toBe(want === '3d');
+        // The phone's tilt is read in every mode: the tags are anchored through it
+        // (Landmark Anchor Engine), not only the 3D road.
+        expect(drawn().tilt).toBe(true);
         // The arrow follows its own setting (auto: the dial), untouched by the road's.
         expect(drawn().arrow).toBe(dial === 'realistic' ? '3d' : 'css');
       });
     }
   }
 
-  it('off also takes the destination tag back off the road’s curve, onto the tags’ band', async () => {
+  it('leaves the destination tag where it is with the road on, off or absent: one camera for all', async () => {
+    const targetTop = () => parseFloat(screen.getAllByTestId('ar-tag').find((t) => t.dataset.variant === 'target').style.top);
     await open({ fidelity: 'standard', overrides: OV() });
-    const onRoad = screen.getAllByTestId('ar-tag').find((t) => t.dataset.variant === 'target').style.top;
+    const onRoad = targetTop();
     cleanup();
     await open({ fidelity: 'standard', overrides: OV({ roadLine: 'off' }) });
-    const offRoad = screen.getAllByTestId('ar-tag').find((t) => t.dataset.variant === 'target').style.top;
+    const offRoad = targetTop();
     cleanup();
     await open({ fidelity: 'standard', overrides: OV(), routePath: null });
-    const noRoad = screen.getAllByTestId('ar-tag').find((t) => t.dataset.variant === 'target').style.top;
-    expect(offRoad).not.toBe(onRoad);
-    expect(offRoad).toBe(noRoad);
+    expect(offRoad).toBeCloseTo(onRoad, 3);
+    expect(targetTop()).toBeCloseTo(onRoad, 3);
   });
 });
 
@@ -118,13 +119,13 @@ describe('the ambient tags override', () => {
 });
 
 describe('the motivating case: an older phone on REALISTIC', () => {
-  it('road off, arrow left on auto: the 3D arrow, no road, no tilt read', async () => {
+  it('road off, arrow left on auto: the 3D arrow, no road, the destination still anchored', async () => {
     await open({ fidelity: 'realistic', overrides: OV({ roadLine: 'off' }) });
-    expect(drawn()).toMatchObject({ road: 'none', arrow: '3d', tilt: false, target: true });
+    expect(drawn()).toMatchObject({ road: 'none', arrow: '3d', tilt: true, target: true });
   });
 
   it('road efficient, arrow left on auto: the 3D arrow over the light ribbon', async () => {
     await open({ fidelity: 'realistic', overrides: OV({ roadLine: 'efficient' }) });
-    expect(drawn()).toMatchObject({ road: 'ribbon', arrow: '3d', tilt: false });
+    expect(drawn()).toMatchObject({ road: 'ribbon', arrow: '3d', tilt: true });
   });
 });

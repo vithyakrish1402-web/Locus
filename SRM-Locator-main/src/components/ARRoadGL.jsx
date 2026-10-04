@@ -14,11 +14,13 @@ import React, { useEffect, useRef } from 'react';
 // route changes; `orientation` is the camera's quaternion (cameraQuaternion: the phone's
 // real tilt, facing the heading the tags use, so they turn together). A frame is drawn
 // only when one of them or the layout changes, never in a loop.
-const ARRoadGL = ({ strip, orientation, onStatus }) => {
+// `fovDeg` is the view's horizontal field of view, the one the tags are placed with.
+const ARRoadGL = ({ strip, orientation, fovDeg, onStatus }) => {
   const canvasRef = useRef(null);
   const viewRef = useRef(null);
-  const latest = useRef({ strip, orientation });
-  latest.current = { strip, orientation };
+  const latest = useRef({ strip, orientation, fovDeg });
+  latest.current = { strip, orientation, fovDeg };
+  const layoutRef = useRef(null);
   const onStatusRef = useRef(onStatus);
   useEffect(() => {
     onStatusRef.current = onStatus;
@@ -39,9 +41,10 @@ const ARRoadGL = ({ strip, orientation, onStatus }) => {
         const layout = () => {
           const width = canvas.clientWidth || window.innerWidth;
           const height = canvas.clientHeight || window.innerHeight;
-          view.setView({ width, height, pixelRatio: window.devicePixelRatio || 1 });
+          view.setView({ width, height, horizontalFovDeg: latest.current.fovDeg, pixelRatio: window.devicePixelRatio || 1 });
           view.render();
         };
+        layoutRef.current = layout;
         view.setRoad(latest.current.strip);
         view.setOrientation(latest.current.orientation);
         layout();
@@ -72,6 +75,7 @@ const ARRoadGL = ({ strip, orientation, onStatus }) => {
       view?.dispose();
       view = null;
       viewRef.current = null;
+      layoutRef.current = null;
       onStatusRef.current?.('loading');
     };
   }, []);
@@ -89,6 +93,10 @@ const ARRoadGL = ({ strip, orientation, onStatus }) => {
     view.setOrientation(orientation);
     view.render();
   }, [orientation]);
+
+  useEffect(() => {
+    layoutRef.current?.();
+  }, [fovDeg]);
 
   return (
     <canvas
