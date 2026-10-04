@@ -39,6 +39,7 @@ npm run test:watch  # Vitest in watch mode
 npm run release -- 1.2.0          # cut a full-APK release (Phase 1 updater)
 npm run release:bundle -- 1.1.2   # ship a JS-only live update (Phase 2 updater)
 npm run release:verify            # check a published release the way a device would
+npm run release:verify -- --bundle  # the same for the latest js-* bundle
 
 npm run device-check:wifi         # prove the wifi_aps Firestore read on a USB-connected phone
 ```
@@ -88,7 +89,7 @@ The backend does not currently require any `.env` variables — the `GEMINI_API_
 
 In both tiers the GitHub release *is* the manifest; there is no separate JSON file. Don't hand-edit `versionCode`/`versionName` or attach release assets by hand — the release scripts keep the published checksum and the binary in sync.
 
-**Both tag series share one number line.** Number every release, `v*` or `js-*`, above everything already published in either series. A phone running its APK's own JS counts as running the APK's version. So a bundle numbered below the newest APK is silently skipped as already current (js-1.0.9 after v1.1.0 never reached a phone). And an APK numbered below the newest bundle has its JS replaced by that older bundle. Both release scripts refuse such a version (`releaseVersionConflict`). As of js-1.1.16, the next release of either series must be 1.1.17 or higher (versions compare numerically, so 1.1.10 is above 1.1.9). `npm run release:verify` checks only the APK release, so check a bundle by hand: download it, compare its SHA-256, and replay `shouldApplyBundle` against the live releases list.
+**Both tag series share one number line.** Number every release, `v*` or `js-*`, above everything already published in either series. A phone running its APK's own JS counts as running the APK's version. So a bundle numbered below the newest APK is silently skipped as already current (js-1.0.9 after v1.1.0 never reached a phone). And an APK numbered below the newest bundle has its JS replaced by that older bundle. Both release scripts refuse such a version (`releaseVersionConflict`). As of js-1.1.19, the next release of either series must be 1.1.20 or higher (versions compare numerically, so 1.1.10 is above 1.1.9). This line goes stale whenever a release ships without updating it, so check `gh release list` before picking a number. `npm run release:verify -- --bundle` checks the latest bundle the way a device would (download, SHA-256, zip layout, `MIN_NATIVE`); replaying `shouldApplyBundle` against the live releases list is still by hand.
 
 ## Testing on a real phone
 
