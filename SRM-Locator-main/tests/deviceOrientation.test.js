@@ -5,8 +5,11 @@ import { describe, it, expect } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
 import {
   deviceQuaternion,
+  fusedSensorQuaternion,
   headingFromQuaternion,
   qAngleDeg,
+  qFromAxisAngle,
+  qMultiply,
   qRotate,
   smoothQuaternion,
 } from '../src/utils/deviceOrientation.js';
@@ -171,5 +174,24 @@ describe('smoothQuaternion', () => {
     const flipped = b.map((v) => -v); // the same orientation
     expect(qAngleDeg(a, smoothQuaternion(a, flipped, 0.5))).toBeCloseTo(5, 3);
     expect(smoothQuaternion(null, b, 0.5)).toBe(b);
+  });
+});
+
+describe('fusedSensorQuaternion', () => {
+  // The DeviceOrientation spec's own composition: intrinsic Z-X'-Y'' from east-north-up
+  // to the phone, which is what an AbsoluteOrientationSensor reading (frame 'device') is.
+  const D = Math.PI / 180;
+  const enuFromAngles = (a, b, g) =>
+    qMultiply(qMultiply(qFromAxisAngle([0, 0, 1], a * D), qFromAxisAngle([1, 0, 0], b * D)), qFromAxisAngle([0, 1, 0], g * D));
+
+  it('gives the same camera orientation as the orientation event for the same pose', () => {
+    for (const [a, b, g, s] of [[0, 0, 0, 0], [30, 80, 5, 0], [200, 95, -10, 0], [310, -40, 60, 90], [77, 120, -85, 270]]) {
+      expect(qAngleDeg(fusedSensorQuaternion(enuFromAngles(a, b, g), s), deviceQuaternion(a, b, g, s))).toBeLessThan(1e-4);
+    }
+  });
+
+  it('reads the right heading when held up facing east', () => {
+    // Upright (beta 90), screen toward you, camera east: alpha 270.
+    expect(headingFromQuaternion(fusedSensorQuaternion(enuFromAngles(270, 90, 0)))).toBeCloseTo(90, 6);
   });
 });

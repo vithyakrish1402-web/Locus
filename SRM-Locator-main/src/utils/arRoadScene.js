@@ -76,8 +76,10 @@ export const buildRoadScene = () => {
     setOrientation: (q) => {
       camera.quaternion.fromArray(q);
     },
-    setView: ({ width, height }) => {
-      camera.fov = verticalFovDeg(width, height);
+    // horizontalFovDeg: the view's real horizontal field of view (AR Scan passes the
+    // one its tags use), else verticalFovDeg's default.
+    setView: ({ width, height, horizontalFovDeg }) => {
+      camera.fov = verticalFovDeg(width, height, horizontalFovDeg);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
     },

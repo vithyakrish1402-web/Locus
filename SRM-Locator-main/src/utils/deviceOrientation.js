@@ -78,6 +78,20 @@ export const deviceQuaternion = (alphaDeg, betaDeg, gammaDeg, screenAngleDeg = 0
   return qMultiply(qMultiply(q, backNotTop), qFromAxisAngle([0, 0, 1], -screenAngleDeg * DEG));
 };
 
+// East-north-up (the sensors' Earth frame: x east, y north, z up) to three.js's world
+// (x east, y up, z south): -90 deg about x.
+const ENU_TO_WORLD = [-HALF_SQRT, 0, 0, HALF_SQRT];
+
+/**
+ * The camera's orientation, as deviceQuaternion gives it, from an AbsoluteOrientationSensor
+ * reading (`sensorQ` [x, y, z, w], referenceFrame 'device': the rotation from the phone's
+ * own axes to east-north-up). The phone's axes already are the camera's (x right, y up the
+ * screen, looking out of the back along -z), so it only needs the change of world frame,
+ * then the screen's own rotation.
+ */
+export const fusedSensorQuaternion = (sensorQ, screenAngleDeg = 0) =>
+  qMultiply(qMultiply(ENU_TO_WORLD, sensorQ), qFromAxisAngle([0, 0, 1], -screenAngleDeg * DEG));
+
 /**
  * Which way the phone faces, as a compass heading (degrees clockwise from north), from
  * its camera orientation `q`. Held up, that is where the camera looks; lying flat, where

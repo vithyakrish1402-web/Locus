@@ -16,7 +16,8 @@ import {
 } from '../src/utils/arRoadLine.js';
 import { AR_CAMERA_HEIGHT_M, FALLBACK_PITCH_DEG, cameraQuaternion, projectGroundPoint, verticalFovDeg } from '../src/utils/arCamera.js';
 import { deviceQuaternion, headingFromQuaternion, qRotate } from '../src/utils/deviceOrientation.js';
-import { ASSUMED_CAMERA_FOV_DEG, selectArTags } from '../src/utils/arTags.js';
+import { ASSUMED_CAMERA_FOV_DEG } from '../src/utils/arTags.js';
+import { LandmarkAnchorEngine } from '../src/utils/landmarkAnchorEngine.js';
 
 const START = { lat: 12.8230, lng: 80.0440 };
 const pt = (north, east = 0) => ({
@@ -152,17 +153,22 @@ describe('projectGroundPoint', () => {
     expect(project(null, 180, 30)).toBeNull();
   });
 
-  it('places the destination’s tag through the camera, on the road’s end', () => {
+  it('is the camera the Landmark Anchor Engine places a ground-anchored destination through', () => {
     const q = cameraQuaternion({ heading: 0, tilt: tiltFor(10, -25, 6) });
-    const targetProject = (lat, lng) => projectGroundPoint({ q, width: W, height: H, origin: START, lat, lng });
-    const target = { name: 'RALLY', ...pt(80, 20) };
-    const { target: tag } = selectArTags({ origin: START, heading: 0, target, screenWidth: W, screenHeight: H, targetProject });
-    const at = targetProject(target.lat, target.lng);
-    expect(tag.x).toBeCloseTo(at.x * W, 9);
-    expect(tag.y).toBeCloseTo(at.y * H, 9);
-    expect(tag.distance).toBeGreaterThan(80);
-    const behind = selectArTags({ origin: START, heading: 0, target: { name: 'B', ...pt(-80) }, screenWidth: W, screenHeight: H, targetProject });
-    expect(behind.target).toBeNull();
+    const tagFor = (where) => {
+      const engine = new LandmarkAnchorEngine();
+      engine.setPosition(START);
+      engine.setLandmarks([{ id: 'target', kind: 'target', name: 'RALLY', ...where, heightM: 0 }]);
+      return engine.frame({ q, hFovDeg: ASSUMED_CAMERA_FOV_DEG, width: W, height: H, targetId: 'target' }).tags[0];
+    };
+    const target = pt(80, 20);
+    const at = projectGroundPoint({ q, width: W, height: H, origin: START, lat: target.lat, lng: target.lng });
+    const tag = tagFor(target);
+    expect(tag.screenX).toBeCloseTo(at.x * W, 6);
+    expect(tag.screenY).toBeCloseTo(at.y * H, 6);
+    // Behind the camera it can't be projected: it goes to the nearer edge instead.
+    expect(projectGroundPoint({ q, width: W, height: H, origin: START, ...pt(-80) })).toBeNull();
+    expect(tagFor(pt(-80)).offscreenSide).toMatch(/^(left|right)$/);
   });
 
   it('with no live tilt, rises toward a horizon FALLBACK_PITCH_DEG above mid-screen', () => {

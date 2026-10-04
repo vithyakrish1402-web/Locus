@@ -7,6 +7,11 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
 import { cameraQuaternion, projectGroundPoint } from '../src/utils/arCamera.js';
 import { deviceQuaternion, qAngleDeg } from '../src/utils/deviceOrientation.js';
+import { effectiveHorizontalFov } from '../src/utils/landmarkAnchorEngine.js';
+
+// These are about the camera and the road, so the compass is taken as true north here;
+// the declination correction has its own tests (arCompassHeading.test.jsx).
+vi.mock('../src/utils/declination.js', () => ({ magneticDeclination: () => 0 }));
 
 const gl = vi.hoisted(() => ({ loaded: false, views: [], fail: false }));
 vi.mock('../src/utils/arRoadScene.js', () => {
@@ -146,7 +151,9 @@ describe('the realistic road', () => {
   });
 
   const expectTagThrough = (q) => {
-    const at = projectGroundPoint({ q, width: window.innerWidth, height: window.innerHeight, origin: HERE, lat: RALLY.lat, lng: RALLY.lng });
+    // AR Scan's real field of view: jsdom plays no video, so the screen's own shape.
+    const horizontalFovDeg = effectiveHorizontalFov({ screenWidth: window.innerWidth, screenHeight: window.innerHeight });
+    const at = projectGroundPoint({ q, width: window.innerWidth, height: window.innerHeight, origin: HERE, lat: RALLY.lat, lng: RALLY.lng, horizontalFovDeg });
     expect(parseFloat(targetTag().style.left) / 100).toBeCloseTo(at.x, 3);
     expect(parseFloat(targetTag().style.top) / 100).toBeCloseTo(at.y, 3);
   };
@@ -159,6 +166,8 @@ describe('the realistic road', () => {
   it('keeps the Rally Point’s tag on the road’s end as the phone tilts', async () => {
     await open(undefined, { faceNorth: false });
     face(0, 75, -3);
+    // The tag glides to its new spot (the Landmark Anchor Engine's easing); let it land.
+    await act(() => new Promise((r) => setTimeout(r, 800)));
     expectTagThrough(deviceQuaternion(0, 75, -3));
   });
 

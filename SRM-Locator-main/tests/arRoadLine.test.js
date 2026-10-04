@@ -11,7 +11,9 @@ import {
   roadScreenYFor,
 } from '../src/utils/arRoadLine.js';
 import { haversineMeters } from '../src/utils/walkingRoute.js';
-import { projectScreenY, selectArTags } from '../src/utils/arTags.js';
+import { projectScreenY } from '../src/utils/arTags.js';
+import { cameraQuaternion, projectGroundPoint } from '../src/utils/arCamera.js';
+import { LandmarkAnchorEngine } from '../src/utils/landmarkAnchorEngine.js';
 
 const START = { lat: 12.8230, lng: 80.0440 };
 // A point `north` m north and `east` m east of START.
@@ -171,25 +173,35 @@ describe('buildRoadRibbon', () => {
   });
 });
 
-describe('road line and destination tag heights', () => {
-  const rib = ribbon([pt(-10), pt(300)], pt(0));
-  const roadYAt = (d) => rib.points.find((p) => Math.abs(p.along - d) < 0.01).y;
-  const tagFor = (d, opts = {}) =>
-    selectArTags({ origin: pt(0), heading: 0, target: { name: 'RALLY', ...pt(d) }, buildings: [{ id: 1, name: 'B', ...pt(d, 1) }], screenWidth: W, screenHeight: H, ...opts });
+describe('road line and destination tag, through one camera', () => {
+  const q = cameraQuaternion({ heading: 0, tilt: null });
+  const FOV = 50;
+  const projectGround = (lat, lng) => {
+    const at = projectGroundPoint({ q, width: W, height: H, origin: pt(0), lat, lng, horizontalFovDeg: FOV });
+    return at && { x: at.x * W, y: at.y * H };
+  };
 
-  it('puts the destination tag where the road is at the same distance', () => {
-    for (const d of [5, 35, 140]) {
-      const { target } = tagFor(d, { targetScreenYFor: roadScreenYFor });
-      expect(target.y).toBeCloseTo(roadYAt(d), 0); // within half a pixel
+  it('places each ribbon sample where the camera puts it on the ground', () => {
+    const rib = buildRoadRibbon({ origin: pt(0), heading: 0, path: [pt(-10), pt(300)], screenWidth: W, screenHeight: H, projectGround });
+    expect(rib.points.length).toBeGreaterThan(2);
+    // (pt() converts metres to degrees flat; within half a pixel of the route's own samples.)
+    for (const p of rib.points) {
+      const at = projectGround(pt(p.along).lat, pt(p.along).lng);
+      expect(p.x).toBeCloseTo(at.x, 0);
+      expect(p.y).toBeCloseTo(at.y, 0);
     }
   });
 
-  it('leaves the other tags, and the destination tag without a road, on the tags’ band', () => {
-    for (const d of [5, 35, 140]) {
-      const withRoad = tagFor(d, { targetScreenYFor: roadScreenYFor });
-      const building = withRoad.ambient[0];
-      expect(building.y).toBeCloseTo(projectScreenY(Math.hypot(d, 1), H), 0);
-      expect(tagFor(d).target.y).toBeCloseTo(projectScreenY(d, H), 0);
+  it('meets the destination tag (anchored on the ground) at the road’s far end', () => {
+    for (const d of [20, 60, 140]) {
+      const rib = buildRoadRibbon({ origin: pt(0), heading: 0, path: [pt(-10), pt(d)], screenWidth: W, screenHeight: H, projectGround });
+      const end = rib.points[rib.points.length - 1];
+      const engine = new LandmarkAnchorEngine();
+      engine.setPosition(pt(0));
+      engine.setLandmarks([{ id: 'target', kind: 'target', name: 'RALLY', ...pt(d), heightM: 0 }]);
+      const [tag] = engine.frame({ q, hFovDeg: FOV, width: W, height: H, targetId: 'target' }).tags;
+      expect(tag.screenX).toBeCloseTo(end.x, 6);
+      expect(tag.screenY).toBeCloseTo(end.y, 6);
     }
   });
 
