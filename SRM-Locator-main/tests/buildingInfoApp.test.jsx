@@ -83,9 +83,9 @@ const { __resetNotifications } = await import('../src/utils/notify.js');
 const { BUILDING_INFO_LABEL, BUILDING_INFO_EMPTY_TEXT } = await import('../src/utils/buildingInfo.js');
 
 const joinAsMember = async () => {
-  fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-  fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: 'KTR7X9' } });
-  fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+  fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: 'KTR7X9' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'KTR7X9' }));
   await screen.findByTestId('map');
 };

@@ -105,8 +105,8 @@ const matrixOpen = () => Boolean(screen.queryByText('SYS_TELEMETRY // MATRIX'));
 let squadCode;
 const commanderOnSquadPanel = () => {
   render(<App />);
-  squadCode = screen.getByText('GENERATED SQUAD DESIGNATOR').parentElement.querySelector('span').textContent;
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  squadCode = document.querySelector('.sr-only').textContent;
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: squadCode }));
   fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
 };
@@ -279,8 +279,8 @@ describe('the telemetry matrix after leaving the squad', () => {
     // Put out of the squad while the matrix is up (it covers the whole screen, so this is
     // how it happens: a block or a mutiny vote, not a tap), then into a new one.
     act(() => fakeSocket.receive('exiled', { reason: 'blocked' }));
-    fireEvent.click(screen.getByRole('button', { name: 'CREATE SQUAD' }));
-    fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Create a group' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
     expect(matrixOpen()).toBe(false);
   });
 });

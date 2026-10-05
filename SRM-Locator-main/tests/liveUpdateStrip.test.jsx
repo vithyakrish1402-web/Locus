@@ -84,6 +84,7 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 
 const { default: App } = await import('../src/App.jsx');
 const { LiveUpdateStatus } = await import('../src/hooks/useLiveUpdate.js');
+const { BOOT, LOBBY } = await import('../src/copy/access.js');
 
 const ready = () => ({
   status: LiveUpdateStatus.READY,
@@ -133,7 +134,7 @@ describe('the JS update strip is offered on every screen', () => {
   it('on the boot screen, while sign-in is still being restored', () => {
     authState.pending = true;
     render(<App />);
-    expect(screen.getByText('INITIALIZING_SECURE_LINK...')).toBeTruthy();
+    expect(screen.getByRole('status', { name: BOOT.loading })).toBeTruthy();
     expect(strip()).toBeTruthy();
   });
 
@@ -152,22 +153,22 @@ describe('the JS update strip is offered on every screen', () => {
     render(<App />);
     await skipIntro();
     fireEvent.click(screen.getByRole('button', { name: /initialize secure link/i }));
-    expect(screen.queryByText('SECURE_CHANNEL')).toBeNull();
+    expect(screen.queryByText(LOBBY.title)).toBeNull();
     expect(strip()).toBeTruthy();
   });
 
   it('in the squad lobby - where the device check found it missing', () => {
     render(<App />);
-    expect(screen.getByText('SECURE_CHANNEL')).toBeTruthy();
+    expect(screen.getByText(LOBBY.title)).toBeTruthy();
     expect(strip()).toBeTruthy();
     expect(screen.getByText('Version 1.0.5 is ready. Restart to use it.')).toBeTruthy();
   });
 
   it('on the map, exactly once', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
-    expect(screen.queryByText('SECURE_CHANNEL')).toBeNull(); // on the map now
+    expect(screen.queryByText(LOBBY.title)).toBeNull(); // on the map now
     expect(screen.getAllByText('Version 1.0.5 is ready. Restart to use it.')).toHaveLength(1);
   });
 });
@@ -184,7 +185,7 @@ describe('where the strip sits', () => {
 
   it('sits above the tab bar on the map', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     expect(raised()).toBe(true);
   });
@@ -195,8 +196,8 @@ describe('when the strip steps aside', () => {
   // the map it covered the roster whenever the squad sheet was open.
   it('hides while a text field has focus, and returns after', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-    const input = screen.getByPlaceholderText('E.G. KTR7X9');
+    fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+    const input = screen.getByPlaceholderText('e.g. KTR7X9');
     expect(strip()).toBeTruthy();
     act(() => { input.focus(); });
     expect(strip()).toBeNull();
@@ -206,8 +207,8 @@ describe('when the strip steps aside', () => {
 
   it('comes back when the focused field is removed without a blur (Enter joining a squad)', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-    const input = screen.getByPlaceholderText('E.G. KTR7X9');
+    fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+    const input = screen.getByPlaceholderText('e.g. KTR7X9');
     act(() => { input.focus(); });
     expect(strip()).toBeNull();
     // What Chrome does when a focused element leaves the page: nothing. No blur, no focusout.
@@ -228,7 +229,7 @@ describe('when the strip steps aside', () => {
     window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
     try {
       render(<App />);
-      fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
       act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
       expect(strip()).toBeTruthy();
       const bar = screen.getByRole('navigation', { name: 'Main' });
@@ -251,7 +252,7 @@ describe('a building card on a phone', () => {
     window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
     try {
       render(<App />);
-      fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
       act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
       fireEvent.click(screen.getByRole('button', { name: /MATRIX/ }));
       fireEvent.click(screen.getAllByText('NELSON MANDELA HOSTEL')[0]);

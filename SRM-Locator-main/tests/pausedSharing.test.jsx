@@ -112,8 +112,8 @@ let squadCode;
 const inSquadAt = async (spot) => {
   navigator.geolocation.getCurrentPosition.mockImplementation((ok) => ok({ coords: { latitude: spot.lat, longitude: spot.lng, speed: 0 } }));
   render(<App />);
-  squadCode = screen.getByText('GENERATED SQUAD DESIGNATOR').parentElement.querySelector('span').textContent;
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  squadCode = document.querySelector('.sr-only').textContent;
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: squadCode }));
   await act(async () => {});
   fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
@@ -230,7 +230,7 @@ describe('Paused sharing (FROZEN)', () => {
 
   it('a paused member with no fix when pausing sends no position at all', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
     squadCode = undefined;
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     await act(async () => {});

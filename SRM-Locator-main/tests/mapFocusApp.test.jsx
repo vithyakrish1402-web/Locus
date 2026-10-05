@@ -85,9 +85,9 @@ const { __resetNotifications } = await import('../src/utils/notify.js');
 const RALLY = { lat: 12.8231, lng: 80.0442, name: 'RALLY POINT', setBy: 'u-other' };
 
 const joinAsMember = async () => {
-  fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-  fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: 'KTR7X9' } });
-  fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+  fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: 'KTR7X9' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'KTR7X9' }));
   await screen.findByTestId('map');
 };

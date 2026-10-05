@@ -135,9 +135,9 @@ async function loadApp({ share, engine }) {
 
 async function joinSquad(App) {
   render(createElement(App));
-  fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-  fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: CODE } });
-  fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+  fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: CODE } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: CODE }));
   await waitFor(() => expect(fake.started).toBe(1));
   await waitFor(() => expect(fake.listeners.size).toBe(1));

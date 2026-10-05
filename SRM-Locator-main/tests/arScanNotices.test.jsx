@@ -94,7 +94,7 @@ const arScan = () => screen.getByRole('button', { name: /GRANT_ACCESS/ }).closes
 
 const onMapWithArScanOpen = () => {
   render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
   fireEvent.click(screen.getByRole('button', { name: 'SCAN' }));
 };

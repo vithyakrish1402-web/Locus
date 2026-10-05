@@ -4,6 +4,7 @@ export { default as Button } from './Button';
 export { default as IconButton } from './IconButton';
 export { default as Card, SectionLabel } from './Card';
 export { default as NoticeCard } from './NoticeCard';
+export { default as InlineMessage } from './InlineMessage';
 export { default as Chip, StatusDot, Badge } from './Chip';
 export { default as SegmentedControl } from './SegmentedControl';
 export { default as RadioList } from './RadioList';

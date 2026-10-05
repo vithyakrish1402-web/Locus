@@ -89,9 +89,9 @@ const openSquadTab = () => fireEvent.click(screen.getAllByRole('button', { name:
 // stranger's request waiting and the join queue open.
 const standInWithQueueOpen = async () => {
   render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-  fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: CODE } });
-  fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+  fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: CODE } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: CODE }));
   await screen.findByTestId('map');
 

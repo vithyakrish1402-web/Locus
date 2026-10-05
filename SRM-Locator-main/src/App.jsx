@@ -12,13 +12,18 @@ import {
   Building2, MessageSquare, Send, Loader2, Info,
   BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
-  Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
+  AlertCircle, Check, Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
 
 // 👇 ADD THIS LINE RIGHT HERE
 import LocusGuide from './LocusGuide';
+import BrandMark from './components/access/BrandMark';
+import StatusScreen from './components/access/StatusScreen';
+import { Button, Card, IconButton, InlineMessage, SegmentedControl, TextField } from './components/ui';
+import { AUTH_PROBLEMS, BOOT, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
+import { authProblem } from './utils/authProblems';
 import ARCompass from './ARCompass';
 import { SRM_MASTER_DATABASE } from './srmDatabase';
 import { arTargetForMember, followArTarget } from './utils/arTags';
@@ -197,226 +202,162 @@ const STEALTH_MAP_STYLES = [
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] }
 ];
 
-// --- THE NEW AUTH TERMINAL (Replaces CinematicLanding) ---
-// Shown while Firebase restores the saved session on a cold start. It used to be a single
-// line of plain text; now a radar ring sweeps around it so the wait reads as work in
-// progress, in the same visual language as the rest of the app. Reduced motion: no sweep.
+// --- LOADING AND SIGN-IN (redesign P3; words in src/copy/access.js) ---
+// Shown while Firebase restores the saved session on a cold start: the LOCUS mark, the name
+// and what it is for. Still, with nothing spinning: the wait is short.
 const BootScreen = () => (
-  <div className="h-screen bg-black text-white flex flex-col justify-center items-center gap-8 bg-dots" role="status" aria-live="polite">
-    <div className="relative w-28 h-28" aria-hidden="true">
-      <div className="absolute inset-0 rounded-full border border-white/15" />
-      <div className="absolute inset-5 rounded-full border border-red-500/30" />
-      <div className="absolute inset-[3.25rem] rounded-full bg-red-500 shadow-[0_0_14px_rgba(239,68,68,0.9)]" />
-      <div className="absolute inset-0 rounded-full locus-radar-sweep" />
+  <div
+    className="min-h-[100dvh] bg-bg text-text font-ui flex flex-col items-center justify-center gap-4 px-5"
+    role="status"
+    aria-live="polite"
+    aria-label={BOOT.loading}
+  >
+    <BrandMark />
+    <div className="text-center">
+      <p className="text-title">{BOOT.title}</p>
+      <p className="text-body text-text-secondary">{BOOT.tagline}</p>
     </div>
-    <div className="font-dot text-xs tracking-[0.3em] text-zinc-300">INITIALIZING_SECURE_LINK...</div>
   </div>
 );
 
+// Which field a sign-in problem is about, so that field is outlined too. (A plain object:
+// `Map` in this file is lucide's map icon.)
+const PROBLEM_FIELD = {
+  [AUTH_PROBLEMS.wrongCredentials]: 'password',
+  [AUTH_PROBLEMS.weakPassword]: 'password',
+  [AUTH_PROBLEMS.noAccount]: 'email',
+  [AUTH_PROBLEMS.badEmail]: 'email',
+  [AUTH_PROBLEMS.emailInUse]: 'email',
+  [AUTH_PROBLEMS.missingEmailForReset]: 'email',
+  [AUTH_PROBLEMS.missingName]: 'name',
+};
+
+// Sign in, create an account, and "reset link sent". A problem shows in an amber message above
+// the fields, with the field it is about outlined; it used to be a notice in the corner that
+// timed out. While signing in, the fields grey out and the button says so (it used to be a
+// full-screen "LINKING..." overlay).
 const AuthTerminal = ({
   email, setEmail, password, setPassword, showPassword, setShowPassword, executeAuthDirective, loginMethod, username, setUsername, latency
 }) => {
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [screen, setScreen] = useState('sign-in'); // 'sign-in' | 'create' | 'reset-sent'
+  const [problem, setProblem] = useState(null);
+  const busy = Boolean(loginMethod);
+  const creating = screen === 'create';
+  const problemField = problem ? PROBLEM_FIELD[problem] : undefined;
+  const go = (next) => { setScreen(next); setProblem(null); };
 
-  // --- 🔑 FORGOT PASSWORD / KEY RECOVERY HANDLER ---
   const handleForgotPassword = async () => {
-    if (!email || !email.trim()) {
-      notify.warning("[SYS_ERROR] ID // EMAIL IS REQUIRED FOR KEY RECOVERY.");
+    if (!email.trim()) {
+      setProblem(AUTH_PROBLEMS.missingEmailForReset);
       return;
     }
     try {
       await sendPasswordResetEmail(auth, email.trim());
-      notify.success(`[RECOVERY_DISPATCHED] RESET SIGNAL TRANSMITTED TO ${email.trim().toUpperCase()}. CHECK YOUR INBOX.`);
+      go('reset-sent');
     } catch (error) {
-      console.error("Password Reset Error:", error.code);
-      let errorMessage = `[SYS_FAILURE] ${error.message}`;
-      switch (error.code) {
-        case 'auth/user-not-found': errorMessage = "[ACCESS_DENIED] NO OPERATIVE FOUND WITH THIS EMAIL."; break;
-        case 'auth/invalid-email': errorMessage = "[SYS_ERROR] MALFORMED ID // EMAIL SYNTAX."; break;
-        case 'auth/too-many-requests': errorMessage = "[SEC_LOCKOUT] TOO MANY REQUESTS. STAND BY BEFORE RETRYING."; break;
-      }
-      notify.error(errorMessage);
+      console.error('Password reset error:', error.code);
+      setProblem(authProblem(error, 'reset'));
     }
   };
 
-  // Dynamic Ping Color Logic
-  const getPingColor = (ping) => {
-    if (!ping) return 'bg-zinc-500';
-    if (ping < 80) return 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]';
-    if (ping < 150) return 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]';
-    return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse';
+  const submit = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setProblem(null);
+    setProblem(await executeAuthDirective('email', creating));
   };
 
+  const words = creating ? CREATE_ACCOUNT : screen === 'reset-sent' ? RESET : SIGN_IN;
+  const eye = (
+    <IconButton
+      label={showPassword ? SIGN_IN.hidePassword : SIGN_IN.showPassword}
+      icon={showPassword ? EyeOff : Eye}
+      onClick={() => setShowPassword(!showPassword)}
+    />
+  );
+
   return (
-    <div className="relative w-full h-screen bg-black text-white font-inter selection:bg-red-500/30 flex items-center justify-center overflow-hidden bg-dots px-4">
+    <div
+      className="relative min-h-[100dvh] bg-bg text-text font-ui px-5 flex flex-col"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top) + 3rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)' }}
+    >
+      {/* Round trip to the server, when one has been measured (after leaving a group). */}
+      {latency > 0 && (
+        <p className="absolute right-5 text-caption text-text-secondary tabular-nums" style={{ top: 'calc(env(safe-area-inset-top) + 1rem)' }}>
+          {SIGN_IN.connection(latency)}
+        </p>
+      )}
 
-      {/* 📡 RESTORED PING HUD 📡 */}
-      <div className="absolute right-4 sm:right-8 z-50 flex items-center gap-3 font-dot text-xs tracking-widest text-zinc-400" style={{ top: 'max(1.5rem, calc(env(safe-area-inset-top) + 0.75rem))' }}>
-        <span className="uppercase">SYS_PING</span>
-        <div className="flex items-center gap-2 bg-zinc-900/50 border border-white/10 px-3 py-1">
-          <div className={`w-2 h-2 rounded-full ${getPingColor(latency)}`} />
-          <span className={latency > 150 ? 'text-red-500' : 'text-white'}>
-            {latency ? `${latency}MS` : 'CALCULATING...'}
-          </span>
-        </div>
-      </div>
+      <main className="w-full max-w-md mx-auto flex-1">
+        <BrandMark />
+        <h1 className="mt-6 text-display">{words.title}</h1>
+        <p className="mt-2 text-body text-text-secondary">{words.intro}</p>
 
-      {/* Subtle background radar */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-        <div className="w-[80vw] h-[80vw] max-w-3xl max-h-3xl border border-white/10 rounded-full flex flex-col items-center justify-center animate-[spin_60s_linear_infinite]">
-          <div className="w-1/2 h-1/2 border border-red-500/20 rounded-full animate-[spin_30s_linear_infinite_reverse]" />
-        </div>
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="w-full max-w-md p-7 sm:p-10 border border-white/20 bg-black relative pointer-events-auto z-10 shadow-[0_0_50px_rgba(255,255,255,0.05)]"
-      >
-        <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
-        <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
-        <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
-        <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
-
-        <div className="mb-10 text-left border-b border-white/20 pb-6 flex items-start justify-between">
-          <div>
-            <h2 className="text-3xl font-dot uppercase tracking-widest mb-2">Auth_Node</h2>
-            <p className="text-red-500 font-dot text-xs">
-              {isRegistering ? 'CREATING CREDENTIALS...' : 'AWAITING CREDENTIALS...'}
-            </p>
+        {screen === 'reset-sent' ? (
+          <div className="mt-6 flex flex-col gap-5">
+            <InlineMessage tone="success">
+              {RESET.sent(email.trim()).map((part, i) => (i === 1 ? <strong key={i} className="font-semibold">{part}</strong> : part))}
+            </InlineMessage>
+            <TextField label={SIGN_IN.email} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+            <Button block size="large" onClick={() => go('sign-in')}>{RESET.back}</Button>
           </div>
-          <Waypoints size={32} className="text-zinc-600" />
-        </div>
-
-        <form onSubmit={(e) => { e.preventDefault(); executeAuthDirective('email', isRegistering); }} className="space-y-6 relative z-50">
-
-          <AnimatePresence>
-            {isRegistering && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-2 overflow-hidden"
-              >
-                <label className="text-xs font-dot text-white tracking-widest uppercase">CODENAME // Username</label>
-                <input
-                  type="text"
-                  placeholder="E.G. GHOST_01"
-                  className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm text-white uppercase"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value.toUpperCase())}
-                  maxLength={15}
-                />
-              </motion.div>
+        ) : (
+          <form onSubmit={submit} className="mt-6 flex flex-col gap-5" noValidate>
+            {problem && <InlineMessage>{problem}</InlineMessage>}
+            {creating && (
+              <TextField
+                label={CREATE_ACCOUNT.name}
+                hint={CREATE_ACCOUNT.nameHint}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                maxLength={15}
+                autoComplete="name"
+                invalid={problemField === 'name'}
+                disabled={busy}
+              />
             )}
-          </AnimatePresence>
-
-          <div className="space-y-2">
-            <label className="text-xs font-dot text-white tracking-widest uppercase">ID // Email</label>
-            <input
+            <TextField
+              label={SIGN_IN.email}
               type="email"
-              placeholder="you@srmist.edu.in"
-              className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
+              placeholder={SIGN_IN.emailPlaceholder}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              invalid={problemField === 'email'}
+              disabled={busy}
             />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-dot text-white tracking-widest uppercase">KEY // Passkey</label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
-          {!isRegistering && (
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="text-[10px] font-dot text-zinc-500 hover:text-red-400 uppercase tracking-widest transition-colors border-b border-transparent hover:border-red-400 pb-0.5"
-              >
-                [ FORGOT KEY? RECOVER ACCESS ]
-              </button>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className={`w-full py-4 mt-4 font-dot uppercase tracking-widest border transition-all flex justify-center items-center gap-2 ${isRegistering
-              ? 'bg-red-500 text-white border-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
-              : 'bg-white text-black border-white hover:bg-red-500 hover:text-white hover:border-red-500'
-              }`}
-          >
-            {isRegistering ? 'REQUEST_ACCESS' : 'INITIALIZE_LINK'} <ArrowRight size={16} />
-          </button>
-        </form>
-
-        <div className="mt-6 flex justify-center relative z-50">
-          <button
-            type="button"
-            onClick={() => setIsRegistering(!isRegistering)}
-            className="text-[10px] font-dot text-zinc-500 hover:text-white uppercase tracking-widest transition-colors border-b border-transparent hover:border-white pb-1"
-          >
-            {isRegistering ? '[ ABORT // RETRIEVE EXISTING ID ]' : '[ NO CLEARANCE? REGISTER NEW ID ]'}
-          </button>
-        </div>
-
-        {/* TACTICAL BYPASS: Google Auth Disabled for Mobile WebViews. Enforcing Email/Passkey only. */}
-        {/*
-        <div className="flex items-center gap-4 my-8 relative z-50">
-          <div className="h-[1px] bg-white/20 flex-1"></div>
-          <span className="text-[10px] font-dot text-zinc-500 uppercase">OR EXT_AUTH</span>
-          <div className="h-[1px] bg-white/20 flex-1"></div>
-        </div>
-
-        <button
-          onClick={() => executeAuthDirective('google')}
-          className="w-full py-4 border border-white/30 hover:border-white transition-all font-dot uppercase text-xs flex items-center justify-center gap-3 bg-black text-white relative z-50"
-        >
-          <div className="w-4 h-4 border border-white flex items-center justify-center">
-            <span className="text-[10px] leading-none">G</span>
-          </div>
-          CONTINUE VIA GOOGLE
-        </button>
-        */}
-      </motion.div>
-
-      {/* Auth Overlay Modal */}
-      <AnimatePresence>
-        {loginMethod && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[100] bg-black/90 backdrop-blur-md border-[8px] border-white flex flex-col items-center justify-center p-6 pointer-events-auto"
-          >
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-              className="w-24 h-24 border-2 border-white/20 border-t-red-500 rounded-full mb-8 relative"
-            >
-              <div className="absolute inset-2 border border-white/10 rounded-full" />
-            </motion.div>
-            <h2 className="text-3xl font-dot uppercase tracking-widest text-white mb-2 blink">LINKING...</h2>
-            <p className="text-red-500 font-dot text-sm uppercase">ESTABLISHING SECURE CONNECTION</p>
-          </motion.div>
+            <TextField
+              label={SIGN_IN.password}
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={creating ? 'new-password' : 'current-password'}
+              hint={creating ? CREATE_ACCOUNT.passwordHint : undefined}
+              trailing={eye}
+              invalid={problemField === 'password'}
+              disabled={busy}
+            />
+            {!creating && (
+              <div className="flex justify-end -mt-2">
+                <Button variant="plain" onClick={handleForgotPassword} disabled={busy}>{SIGN_IN.forgotPassword}</Button>
+              </div>
+            )}
+            <Button type="submit" block size="large" aria-busy={busy || undefined} icon={busy ? Loader2 : null} className={busy ? '[&>svg]:animate-spin' : ''}>
+              {busy ? (creating ? CREATE_ACCOUNT.submitting : SIGN_IN.submitting) : words.submit}
+            </Button>
+          </form>
         )}
-      </AnimatePresence>
+      </main>
+
+      <p className="w-full max-w-md mx-auto mt-8 flex flex-wrap items-center justify-center gap-x-1 text-body text-text-secondary">
+        {creating ? CREATE_ACCOUNT.haveAccount : SIGN_IN.newHere}
+        <Button variant="plain" onClick={() => go(creating ? 'sign-in' : 'create')} disabled={busy}>
+          {creating ? CREATE_ACCOUNT.toSignIn : SIGN_IN.toCreate}
+        </Button>
+      </p>
+
+      {/* TACTICAL BYPASS: Google Auth Disabled for Mobile WebViews. Enforcing Email/Passkey only.
+          (executeAuthDirective('google') still exists; nothing offers it.) */}
     </div>
   );
 };
@@ -622,6 +563,12 @@ const App = () => {
   // Why the lobby is showing again, when the server turned a request down (no live squad
   // under the code, the code already taken, the squad gone). Cleared by the next action.
   const [lobbyNotice, setLobbyNotice] = useState(null);
+  // The code of a squad whose Commander just turned this user's request down: the lobby shows
+  // "Request not approved" until they choose to try another code. (It used to be a notice.)
+  const [deniedCode, setDeniedCode] = useState(null);
+  // Let into a squad after waiting for approval: "You're in" shows over the map until
+  // dismissed. Not for a squad you create, nor a reconnect into one you were already in.
+  const [justApproved, setJustApproved] = useState(false);
 
   // --- MAP ENGINE FALLBACK WATCHDOG ---
   // Armed only once the map screen is actually about to render (past auth +
@@ -1184,6 +1131,7 @@ const App = () => {
     setAccessStatus(null);
     setSquadRole(null);
     setPendingRequests([]);
+    setJustApproved(false);
   }, []);
 
   // --- GATEKEEPER PROTOCOL LISTENERS ---
@@ -1208,6 +1156,7 @@ const App = () => {
 
     socket.on('access-granted', (payload) => {
       if (!isAboutThisSquad(payload)) return;
+      if (accessStatus === 'pending') setJustApproved(true);
       setAccessStatus('granted');
       setSquadRole(payload?.role);
       // Paused: a reconnect gives this phone a new socket, which the server has no position
@@ -1240,7 +1189,7 @@ const App = () => {
       if (!isAboutThisSquad(payload)) return;
       setAccessStatus('denied');
       setHasJoinedSquad(false);
-      notify.error("[SYS_REJECTED] The Squad Commander denied your entry.");
+      setDeniedCode(currentRoom);
     });
 
     // A JOIN for a code no live squad has. Answered this way rather than by founding a new
@@ -1248,19 +1197,14 @@ const App = () => {
     // this client is still waiting to be let in, or after a reconnect finds it gone.
     socket.on('squad-not-found', (payload) => {
       if (!isAboutThisSquad(payload)) return;
-      returnToLobby(accessStatus === 'granted'
-        ? `SQUAD ${currentRoom} NO LONGER EXISTS ON THE SERVER.`
-        : `NO ACTIVE SQUAD WITH CODE ${currentRoom}. CHECK THE CODE, OR ASK YOUR COMMANDER TO INITIALIZE IT FIRST.`);
+      returnToLobby(accessStatus === 'granted' ? LOBBY.ended(currentRoom) : LOBBY.notFound);
     });
 
     // A CREATE under a code a live squad already has. Answered this way rather than by
     // queueing the creator for that stranger squad's approval.
     socket.on('squad-code-taken', (payload) => {
       if (!isAboutThisSquad(payload)) return;
-      returnToLobby(
-        `CODE ${currentRoom} IS ALREADY IN USE BY ANOTHER SQUAD. A NEW CODE HAS BEEN GENERATED: SHARE THIS ONE INSTEAD.`,
-        generateRandomSquadCode()
-      );
+      returnToLobby(LOBBY.codeTaken, generateRandomSquadCode());
     });
 
     // One entry per request: the server re-sends a squad's queue to whoever takes over as
@@ -1545,6 +1489,8 @@ const App = () => {
   }, [isSatellite, mapProps.zoom]);
 
   // --- 🔐 THE MASTER AUTH ENGINE ---
+  // Signs in or creates the account. Returns the problem to show on the screen (an
+  // AUTH_PROBLEMS sentence), or null; the screen shows it in place, not as a notice.
   const executeAuthDirective = async (method, isRegistering = false) => {
     setLoginMethod(method);
 
@@ -1556,17 +1502,15 @@ const App = () => {
       else if (method === 'email') {
         // ✉️ SECURE ENCRYPTED CHANNEL
         if (!email || !password) {
-          notify.warning("[SYS_ERROR] ID AND KEY ARE REQUIRED FOR LINK.");
           setLoginMethod(null);
-          return;
+          return AUTH_PROBLEMS.missingEmailAndPassword;
         }
 
         if (isRegistering) {
           // 1. Enforce Username Requirement
           if (!username.trim()) {
-            notify.warning("[SYS_ERROR] CODENAME REQUIRED FOR NEW RECRUITS.");
             setLoginMethod(null);
-            return;
+            return AUTH_PROBLEMS.missingName;
           }
 
           // 2. Create the Node in the Mainframe
@@ -1575,14 +1519,15 @@ const App = () => {
           // 3. Generate a unique Tactical Bot Avatar based on their username
           const generatedAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}&backgroundColor=000000`;
 
-          // 4. Attach the data to their Firebase Profile
+          // 4. Attach the data to their Firebase Profile. Still saved in capitals, as every
+          // existing account's name is (whether to keep what people type is the owner's call).
           await updateProfile(userCredential.user, {
-            displayName: username.toUpperCase(),
+            displayName: username.trim().toUpperCase(),
             photoURL: generatedAvatar
           });
 
           // 5. Force React to recognize the newly attached data immediately
-          setUser({ ...userCredential.user, displayName: username.toUpperCase(), photoURL: generatedAvatar });
+          setUser({ ...userCredential.user, displayName: username.trim().toUpperCase(), photoURL: generatedAvatar });
 
         } else {
           // VERIFY EXISTING CREDENTIALS
@@ -1590,18 +1535,11 @@ const App = () => {
         }
       }
     } catch (error) {
-      console.error("Auth Terminal Error:", error.code);
-
-      let errorMessage = `[SYS_FAILURE] ${error.message}`;
-      switch (error.code) {
-        case 'auth/invalid-credential': errorMessage = "[ACCESS_DENIED] CREDENTIALS REJECTED. CHECK ID AND KEY."; break;
-        case 'auth/email-already-in-use': errorMessage = "[SYS_WARN] THIS ID ALREADY EXISTS IN THE MATRIX. INITIATE LOGIN INSTEAD."; break;
-        case 'auth/weak-password': errorMessage = "[SEC_VIOLATION] KEY ENCRYPTION TOO WEAK. MINIMUM 6 CHARACTERS REQUIRED."; break;
-        case 'auth/invalid-email': errorMessage = "[SYS_ERROR] MALFORMED ID SYNTAX."; break;
-      }
-      notify.error(errorMessage);
+      console.error('Sign-in error:', error.code);
       setLoginMethod(null);
+      return authProblem(error, isRegistering ? 'create' : 'sign-in');
     }
+    return null;
   };
 
   // --- 🚨 KILL SWITCH LOGOUT HANDLER ---
@@ -2013,107 +1951,100 @@ const App = () => {
   }
 
   if (user && !hasJoinedSquad) {
-    return (
-      <div className="h-screen w-full bg-black flex flex-col items-center justify-center text-white p-6 bg-dots">
-        {updateOverlay}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md p-8 md:p-10 border border-white/20 bg-black relative shadow-[0_0_50px_rgba(255,0,0,0.1)] text-center pointer-events-auto"
-        >
-          <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
-          <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
-          <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
-          <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
-
-          <ShieldCheck size={44} className="text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-dot uppercase tracking-widest mb-1">SECURE_CHANNEL</h2>
-          <p className="text-zinc-500 font-dot text-[10px] uppercase mb-6 tracking-widest">
-            {squadMode === 'create' ? 'INITIALIZE NEW SQUAD PROTOCOL' : 'JOIN EXISTING OPERATIVE NETWORK'}
-          </p>
-
-          {/* Mode Switcher Tabs */}
-          <div className="flex border border-white/20 mb-6 font-dot text-xs uppercase tracking-widest">
-            <button
-              onClick={() => {
-                setSquadMode('create');
-                setSquadCode(generateRandomSquadCode());
-                setLobbyNotice(null);
-              }}
-              className={`flex-1 py-3 transition-colors ${squadMode === 'create' ? 'bg-white text-black font-bold' : 'text-zinc-500 hover:text-white'}`}
-            >
-              CREATE SQUAD
-            </button>
-            <button
-              onClick={() => {
-                setSquadMode('join');
-                setSquadCode('');
-                setLobbyNotice(null);
-              }}
-              className={`flex-1 py-3 transition-colors border-l border-white/20 ${squadMode === 'join' ? 'bg-white text-black font-bold' : 'text-zinc-500 hover:text-white'}`}
-            >
-              JOIN SQUAD
-            </button>
-          </div>
-
-          {lobbyNotice && (
-            <p role="alert" className="mb-6 p-3 border border-red-500/50 bg-red-500/10 text-left font-dot text-[10px] text-red-400 uppercase tracking-widest leading-relaxed">
-              {lobbyNotice}
-            </p>
-          )}
-
-          {squadMode === 'create' ? (
-            <div className="space-y-6">
-              <div className="p-4 border border-red-500/40 bg-red-500/5 relative">
-                <p className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest mb-2">GENERATED SQUAD DESIGNATOR</p>
-                {/* Six tiles that decrypt into place, tap-to-copy and share (SquadCode.jsx).
-                    The caption always asked people to share the code; now they can. */}
-                <CodeTiles code={squadCode} />
-                <div className="mt-3 flex items-center justify-center gap-2">
-                  <p className="text-[9px] font-dot text-zinc-500 uppercase tracking-widest">
-                    Share this code with your team to grant entry clearance.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => { setSquadCode(generateRandomSquadCode()); setLobbyNotice(null); }}
-                    className="p-1.5 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white shrink-0"
-                    title="Generate New Code"
-                  >
-                    <RefreshCw size={12} />
-                  </button>
-                </div>
-              </div>
-
-              <button
-                onClick={handleJoinSquad}
-                className="w-full py-4 bg-red-500 text-white font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-600 shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all flex items-center justify-center gap-2"
+    // Turned down: say so, and offer another try (the join tab, with the code kept to edit).
+    if (deniedCode) {
+      return (
+        <>
+          {updateOverlay}
+          <StatusScreen
+            testId="not-approved"
+            tone="warning"
+            icon={<AlertCircle size={40} />}
+            title={NOT_APPROVED.title}
+            action={(
+              <Button
+                block
+                size="large"
+                onClick={() => { setSquadMode('join'); setSquadCode(deniedCode); setDeniedCode(null); setLobbyNotice(null); }}
               >
-                INITIALIZE SQUAD <ArrowRight size={16} />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="space-y-2 text-left">
-                <p className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ENTER SQUAD CODE (ALPHANUMERIC ONLY)</p>
-                {/* Tiles over one real input (SquadCode.jsx): keyboard, paste and autofill as
-                    normal, and Enter now connects (it used to do nothing). */}
+                {NOT_APPROVED.tryAnother}
+              </Button>
+            )}
+          >
+            <p>{NOT_APPROVED.body(deniedCode)}</p>
+          </StatusScreen>
+        </>
+      );
+    }
+
+    // The lobby (redesign P3; words in src/copy/access.js): create a group, or join one by
+    // its code. Why the server turned a request down (no group under that code, the group
+    // ended, the code taken) shows in the card, in amber.
+    const joining = squadMode === 'join';
+    const lobbyProblemId = 'lobby-problem';
+    return (
+      <div
+        className="min-h-[100dvh] bg-bg text-text font-ui px-5 flex flex-col"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 3rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+      >
+        {updateOverlay}
+        <main className="w-full max-w-md mx-auto flex-1">
+          <p className="text-body text-text-secondary">{LOBBY.hello(firstNameOf(user.displayName))}</p>
+          <h1 className="mt-1 text-display">{LOBBY.title}</h1>
+
+          <SegmentedControl
+            className="mt-6"
+            label={LOBBY.modes}
+            value={squadMode}
+            onChange={(mode) => {
+              if (mode === squadMode) return;
+              setSquadMode(mode);
+              setSquadCode(mode === 'create' ? generateRandomSquadCode() : '');
+              setLobbyNotice(null);
+            }}
+            options={[
+              { value: 'create', label: LOBBY.createTab },
+              { value: 'join', label: LOBBY.joinTab },
+            ]}
+          />
+
+          <Card className="mt-5">
+            {joining ? (
+              <>
+                <p className="mb-3 text-secondary font-semibold text-text-secondary">{LOBBY.joinCode}</p>
                 <CodeInput
                   value={squadCode}
                   onChange={(code) => { setSquadCode(code); setLobbyNotice(null); }}
                   onSubmit={handleJoinSquad}
+                  problem={Boolean(lobbyNotice)}
+                  describedBy={lobbyNotice ? lobbyProblemId : undefined}
                 />
-              </div>
+                {lobbyNotice && (
+                  <p id={lobbyProblemId} role="alert" className="mt-4 flex items-start gap-2 text-body text-text">
+                    <AlertCircle size={20} className="shrink-0 mt-0.5 text-warning" aria-hidden="true" />
+                    {lobbyNotice}
+                  </p>
+                )}
+                <p className="mt-4 text-secondary text-text-secondary">{LOBBY.joinHelp}</p>
+              </>
+            ) : (
+              <>
+                <p className="mb-3 text-secondary font-semibold text-text-secondary">{LOBBY.yourCode}</p>
+                {lobbyNotice && (
+                  <InlineMessage tone={lobbyNotice === LOBBY.codeTaken ? 'info' : 'warning'} className="mb-4">{lobbyNotice}</InlineMessage>
+                )}
+                <CodeTiles code={squadCode} onNewCode={() => { setSquadCode(generateRandomSquadCode()); setLobbyNotice(null); }} />
+                <p className="mt-4 text-secondary text-text-secondary">{LOBBY.createHelp}</p>
+              </>
+            )}
+          </Card>
+        </main>
 
-              <button
-                onClick={handleJoinSquad}
-                disabled={!squadCode.trim()}
-                className="w-full py-4 bg-white text-black font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-500 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                CONNECT TO SQUAD <ArrowRight size={16} />
-              </button>
-            </div>
-          )}
-        </motion.div>
+        <div className="w-full max-w-md mx-auto mt-6">
+          <Button block size="large" onClick={handleJoinSquad} disabled={!squadCode.trim()}>
+            {joining ? LOBBY.joinButton : LOBBY.createButton}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -2534,33 +2465,54 @@ const App = () => {
         </div>
       </motion.div>
 
-      {/* --- 1. WAITING ROOM OVERLAY --- */}
+      {/* --- WAITING FOR APPROVAL, AND "YOU'RE IN" (redesign P3) --- */}
+      {/* Full screens over the map and its tab bar, under the Emergency button (see
+          StatusScreen). Waiting used to be a dark overlay with the tab bar still on top. */}
       {hasJoinedSquad && accessStatus !== 'granted' && (
-        <div className="absolute inset-0 z-[1000] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center pointer-events-auto p-6">
-          <Loader2 className="animate-spin text-red-500 mb-6" size={40} />
-          <h2 className="font-dot text-white text-2xl tracking-[0.3em] uppercase mb-2 text-center">
-            {accessStatus === 'denied' ? 'ACCESS_DENIED' : 'AWAITING_CLEARANCE'}
-          </h2>
-          <p className="font-inter text-zinc-500 text-sm text-center max-w-xs px-6 mb-6">
-            {accessStatus === 'denied'
-              ? 'Handshake rejected by Commander.'
-              : 'Transmitting handshake to Squad Commander. Stand by...'}
-          </p>
-
-          <button
-            onClick={() => {
-              // Tell the server too. It used to go on holding the request, and a Commander
-              // who tapped GRANT later pulled this user into their squad, wherever they had
-              // gone since (see resolve-access in backend/server.js).
-              socket.emit('cancel-join', { roomCode: squadCode.trim().toUpperCase() });
-              setHasJoinedSquad(false);
-              setAccessStatus(null);
-            }}
-            className="px-6 py-3 border border-red-500/50 text-red-400 hover:bg-red-500 hover:text-white font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2"
-          >
-            <X size={14} /> ABORT HANDSHAKE
-          </button>
-        </div>
+        <StatusScreen
+          testId="waiting"
+          icon={<Loader2 size={40} className="animate-spin motion-reduce:animate-none" />}
+          title={WAITING.title}
+          action={(
+            <Button
+              variant="secondary"
+              block
+              size="large"
+              onClick={() => {
+                // Tell the server too. It used to go on holding the request, and a Commander
+                // who tapped GRANT later pulled this user into their squad, wherever they had
+                // gone since (see resolve-access in backend/server.js).
+                socket.emit('cancel-join', { roomCode: squadCode.trim().toUpperCase() });
+                setHasJoinedSquad(false);
+                setAccessStatus(null);
+              }}
+            >
+              {WAITING.cancel}
+            </Button>
+          )}
+        >
+          <p>{WAITING.body(squadCode)}</p>
+        </StatusScreen>
+      )}
+      {justApproved && accessStatus === 'granted' && (
+        <StatusScreen
+          testId="youre-in"
+          tone="success"
+          icon={<Check size={40} />}
+          title={YOURE_IN.title}
+          action={<Button block size="large" onClick={() => setJustApproved(false)}>{YOURE_IN.openMap}</Button>}
+        >
+          {/* Says what is actually happening to their location: the mode is kept from their
+              last group, so this isn't always "live". */}
+          <p>{YOURE_IN.body[telemetryMode]}</p>
+          <span className="inline-flex items-center gap-2 min-h-10 px-4 rounded-full bg-surface border border-border shadow-[var(--shadow-1)] text-label text-text">
+            <span
+              aria-hidden="true"
+              className={`w-2.5 h-2.5 rounded-full ${telemetryMode === 'ACTIVE' ? 'bg-success' : telemetryMode === 'FROZEN' ? 'bg-warning' : 'border border-dashed border-border-control'}`}
+            />
+            {YOURE_IN.chip[telemetryMode]}
+          </span>
+        </StatusScreen>
       )}
       {/* --- 🌐 TACTICAL GEOFENCE HUD --- */}
       {/* This HUD, the banners below and the route panel all hang at top-24, which on a

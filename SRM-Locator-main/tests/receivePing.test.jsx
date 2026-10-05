@@ -102,9 +102,9 @@ const { default: App } = await import('../src/App.jsx');
 // Signed in -> lobby -> JOIN SQUAD -> code -> CONNECT, as a person would.
 const renderInSquad = () => {
   render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-  fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: 'KTR7X9' } });
-  fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+  fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: 'KTR7X9' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
 };
 
 let alertSpy;

@@ -75,17 +75,9 @@ a[href]:active {
   to { transform: scale(1.9); opacity: 0; }
 }
 
-/* Boot screen radar (BootScreen in App.jsx): a wedge of light sweeping the rings.
-   Retired by the redesign: deleted with the loading screen's piece (P3). */
-.locus-radar-sweep {
-  background: conic-gradient(from 0deg, rgba(239, 68, 68, 0.55), rgba(239, 68, 68, 0) 70deg, transparent 360deg);
-  mask: radial-gradient(circle, transparent 0 18%, #000 19%);
-  animation: locus-radar-spin 1.6s linear infinite;
-}
+/* A full turn, for the targeting FAB's orbiting ring below. (The boot screen's radar sweep
+   that also used it went with the redesigned loading screen.) */
 @keyframes locus-radar-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .locus-radar-sweep { animation: none; opacity: 0.5; }
-}
 
 /* Locate button: a ring breathes out from the button every few seconds, like a beacon. */
 .locus-soft-ring { animation: locus-soft-ring 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }

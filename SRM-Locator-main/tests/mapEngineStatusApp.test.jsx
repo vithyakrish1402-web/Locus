@@ -67,7 +67,7 @@ const loadApp = async (key) => {
 };
 
 const enterMapScreen = () => {
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
 };
 const statusText = () => {
   fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));

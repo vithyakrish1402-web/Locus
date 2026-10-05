@@ -111,15 +111,15 @@ const clearButton = () => screen.queryByTitle('Clear Rally Point');
 const rallyPointOnMap = () => screen.queryByTitle('AR Track Rally Point');
 
 const joinAsMember = async (code = 'KTR7X9') => {
-  fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-  fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: code } });
-  fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+  fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: code } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: code }));
   await waitFor(() => expect(leaflet.props).not.toBeNull());
 };
 
 const createAsCommander = async () => {
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   await waitFor(() => expect(leaflet.props).not.toBeNull());
 };
 
@@ -239,9 +239,9 @@ describe('the clear control on the Google engine (used whenever a Maps key is co
     const { default: GoogleApp } = await import('../src/App.jsx');
     try {
       render(<GoogleApp />);
-      fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-      fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: 'KTR7X9' } });
-      fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+      fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+      fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: 'KTR7X9' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
       act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'KTR7X9' }));
       act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-self' }));
 

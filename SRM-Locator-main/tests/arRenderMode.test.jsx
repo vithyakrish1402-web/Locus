@@ -97,7 +97,7 @@ afterEach(() => {
 // Signed in -> lobby -> INITIALIZE -> the map -> SYS_CONFIG.
 const openSettings = () => {
   render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
   fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
 };

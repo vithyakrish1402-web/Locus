@@ -106,7 +106,7 @@ const scanAtBravo = async () => {
   navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: HERE.lat, longitude: HERE.lng, speed: 0 } });
   render(<App />);
   code = document.querySelector('.sr-only').textContent;
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
   roster({ 'sock-1': member(HERE.lat + 0.001, HERE.lng) });
   fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
@@ -124,7 +124,7 @@ const cardArAtBravo = async () => {
   navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: HERE.lat, longitude: HERE.lng, speed: 0 } });
   render(<App />);
   code = document.querySelector('.sr-only').textContent;
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
   roster({ 'sock-1': member(HERE.lat + 0.001, HERE.lng) });
   fireEvent.click(tabBar().getByRole('button', { name: /SQUAD/ }));
