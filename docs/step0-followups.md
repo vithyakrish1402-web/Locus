@@ -186,6 +186,8 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
 - **Ping with distance and direction.** The design's ping notice says how far away the sender is and in which direction. `receive-ping` carries only `senderName`, so this needs the sender's id added to `receive-ping` (a data and server change), not a match by name. Until then the notice names the sender only.
 - **Hide on the update download sheet.** The design has a Hide button while a full update downloads. Today the download and install sheets cannot be dismissed (no Later, Escape blocked while busy), and that stays for now (owner, 2026-10-05). If Hide is added, a failure after hiding must always bring the sheet back.
 
+- **Shop and transit pins on satellite.** Google's satellite view shows its own shop and bus pins, because the map style arrays (which turn them off on the plain map) don't apply to satellite imagery. Left as is for now (owner, 2026-10-05).
+
 ## Decisions for batch 1 (owner, 2026-10-05)
 
 - Names: new accounts save the name as typed. Capitals-only names are shown as stored everywhere except the greeting's first name.
@@ -204,3 +206,4 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
 - **Location explainer changes when sharing starts.** Before, the app asked Android for location as soon as you were in a group. Now, until location is known to be allowed (a real fix noted on the phone, or the Permissions API), the "Allow location" sheet shows first and nothing asks for or shares a location until Continue. After "Not now" nothing is shared at all: the group doesn't see you on their map, and an Emergency alert goes without a location, until "Turn on location" on the "Location is off" card. Existing installs see the sheet once, unless Android's WebView answers the Permissions API.
 - The explainer is a sheet, so like the other sheets it sits over the Emergency button while it is open (see the P12 note).
 - Floor tags and the confidence halo still show only behind `SHOW_INDOOR_POSITION_TO_SQUAD` and `WIFI_POSITIONING_ENABLED`, both off; untouched.
+- Markers under the sharing chip or the banners stack: accepted for now (owner, 2026-10-05). Taps still pass through to the map. The meeting point plate is moved clear of the right-hand map controls (Map batch fix 3).
