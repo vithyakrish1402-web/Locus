@@ -30,6 +30,7 @@ import BottomTabBar from '../../components/BottomTabBar';
 import BuildingInfo from '../../components/BuildingInfo';
 import ARTag from '../../components/ARTag';
 import LocusGuide from '../../LocusGuide';
+import BootScreen from '../../components/access/BootScreen';
 import { notify, __resetNotifications } from '../../utils/notify';
 import { UpdateStatus } from '../../hooks/useAppUpdate';
 import { LiveUpdateStatus } from '../../hooks/useLiveUpdate';
@@ -70,6 +71,7 @@ const pad = { padding: 16, display: 'flex', flexDirection: 'column', gap: 16 };
 // Each screen: what a frame shows (see Frame).
 const SCREENS = {
   tokens: { label: 'Design tokens', render: () => <TokenSheet /> },
+  loading: { label: 'Loading (cold start)', render: () => <BootScreen /> },
   components: { label: 'Components', render: () => <ComponentSheet /> },
   sheet: { label: 'Sheet (member options)', render: () => <SheetDemo /> },
   'emergency-button': {

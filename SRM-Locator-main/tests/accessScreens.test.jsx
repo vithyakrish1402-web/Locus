@@ -204,7 +204,7 @@ describe('create account', () => {
     expect(firebaseAuth.createUserWithEmailAndPassword).not.toHaveBeenCalled();
   });
 
-  it('shows the name as typed, and still saves it in capitals as every account so far', async () => {
+  it('saves the name as typed, not in capitals', async () => {
     firebaseAuth.createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'u-new' } });
     firebaseAuth.updateProfile.mockResolvedValue();
     await toSignIn();
@@ -214,7 +214,7 @@ describe('create account', () => {
     type(SIGN_IN.email, 'meera@srmist.edu.in');
     type(SIGN_IN.password, 'correct-horse');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: CREATE_ACCOUNT.submit })); });
-    expect(firebaseAuth.updateProfile).toHaveBeenCalledWith({ uid: 'u-new' }, expect.objectContaining({ displayName: 'MEERA IYER' }));
+    expect(firebaseAuth.updateProfile).toHaveBeenCalledWith({ uid: 'u-new' }, expect.objectContaining({ displayName: 'Meera Iyer' }));
   });
 });
 

@@ -20,9 +20,10 @@ import {
 // 👇 ADD THIS LINE RIGHT HERE
 import LocusGuide from './LocusGuide';
 import BrandMark from './components/access/BrandMark';
+import BootScreen from './components/access/BootScreen';
 import StatusScreen from './components/access/StatusScreen';
 import { Button, Card, IconButton, InlineMessage, SegmentedControl, TextField } from './components/ui';
-import { AUTH_PROBLEMS, BOOT, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
+import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
 import { authProblem } from './utils/authProblems';
 import ARCompass from './ARCompass';
 import { SRM_MASTER_DATABASE } from './srmDatabase';
@@ -203,22 +204,7 @@ const STEALTH_MAP_STYLES = [
 ];
 
 // --- LOADING AND SIGN-IN (redesign P3; words in src/copy/access.js) ---
-// Shown while Firebase restores the saved session on a cold start: the LOCUS mark, the name
-// and what it is for. Still, with nothing spinning: the wait is short.
-const BootScreen = () => (
-  <div
-    className="min-h-[100dvh] bg-bg text-text font-ui flex flex-col items-center justify-center gap-4 px-5"
-    role="status"
-    aria-live="polite"
-    aria-label={BOOT.loading}
-  >
-    <BrandMark />
-    <div className="text-center">
-      <p className="text-title">{BOOT.title}</p>
-      <p className="text-body text-text-secondary">{BOOT.tagline}</p>
-    </div>
-  </div>
-);
+// The loading screen is src/components/access/BootScreen.jsx.
 
 // Which field a sign-in problem is about, so that field is outlined too. (A plain object:
 // `Map` in this file is lucide's map icon.)
@@ -1519,15 +1505,16 @@ const App = () => {
           // 3. Generate a unique Tactical Bot Avatar based on their username
           const generatedAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}&backgroundColor=000000`;
 
-          // 4. Attach the data to their Firebase Profile. Still saved in capitals, as every
-          // existing account's name is (whether to keep what people type is the owner's call).
+          // 4. Attach the data to their Firebase Profile. The name is saved as typed. Accounts
+          // made before the redesign keep the capitals they were saved with; nothing compares
+          // names (members, blocks and approvals all go by uid), so the two can sit side by side.
           await updateProfile(userCredential.user, {
-            displayName: username.trim().toUpperCase(),
+            displayName: username.trim(),
             photoURL: generatedAvatar
           });
 
           // 5. Force React to recognize the newly attached data immediately
-          setUser({ ...userCredential.user, displayName: username.trim().toUpperCase(), photoURL: generatedAvatar });
+          setUser({ ...userCredential.user, displayName: username.trim(), photoURL: generatedAvatar });
 
         } else {
           // VERIFY EXISTING CREDENTIALS
