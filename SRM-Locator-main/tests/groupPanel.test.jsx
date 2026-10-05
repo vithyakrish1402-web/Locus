@@ -84,7 +84,7 @@ const { GROUP_HEADER, GROUP_TABS } = await import('../src/copy/group.js');
 const HERE = { lat: 12.8230, lng: 80.0440 };
 let code;
 const member = (id, extra = {}) => ({
-  [id]: { uid: `u-${id}`, name: id, roomCode: code, lat: HERE.lat + 0.001, lng: HERE.lng, speed: 0, heading: 0, battery: 90, status: 'ACTIVE', lastSeen: Date.now(), ...extra },
+  [`sock-${id}`]: { uid: `u-${id}`, name: id, roomCode: code, lat: HERE.lat + 0.001, lng: HERE.lng, speed: 0, heading: 0, battery: 90, status: 'ACTIVE', lastSeen: Date.now(), ...extra },
 });
 
 /** On the map in a group: the Group Lead of one you created, or a member of one you joined. */
@@ -213,5 +213,69 @@ describe('your location: Live, Paused or Hidden', () => {
     expect(help()).toBe("Your location will be shared live once it's found.");
     mode('Paused');
     expect(help()).toBe("No spot has been shared yet, so the group won't see you on their map.");
+  });
+});
+
+describe("a member's options", () => {
+  const options = (name) => within(screen.getByRole('dialog', { name: `Options for ${name}` }));
+  const open = async (lead, extra = {}) => {
+    await inAGroup({ lead, members: () => member('Meera Iyer', extra) });
+    tab(GROUP_TABS.members);
+    fireEvent.click(panel().getByRole('button', { name: 'Options for Meera Iyer' }));
+  };
+  const emitted = (event) => fakeSocket.emit.mock.calls.filter(([e]) => e === event);
+
+  it('Ping, Show on map and Find with AR Scan for anyone; Remove and block only for the Group Lead', async () => {
+    await open(false);
+    expect(options('Meera Iyer').getByRole('button', { name: 'Ping Meera' })).toBeTruthy();
+    expect(options('Meera Iyer').getByRole('button', { name: 'Show on map' })).toBeTruthy();
+    expect(options('Meera Iyer').getByRole('button', { name: 'Find with AR Scan' })).toBeTruthy();
+    expect(options('Meera Iyer').queryByRole('button', { name: 'Remove and block' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Options for Meera Iyer' }).textContent).not.toMatch(/Vote|Navigate to/);
+  });
+
+  it("shows their battery and speed, which the row doesn't", async () => {
+    await open(true, { battery: 64, speed: 4 });
+    expect(screen.getByTestId('member-options').textContent).toContain('Battery 64% · 4 km/h');
+  });
+
+  it('Ping pings them', async () => {
+    await open(false);
+    fireEvent.click(options('Meera Iyer').getByRole('button', { name: 'Ping Meera' }));
+    expect(emitted('ping-user')[0][1]).toMatchObject({ targetId: 'sock-Meera Iyer' });
+  });
+
+  it('with no fix: Ping only, nothing that would aim at nowhere', async () => {
+    await open(false, { lat: null, lng: null });
+    expect(options('Meera Iyer').getByRole('button', { name: 'Ping Meera' })).toBeTruthy();
+    expect(options('Meera Iyer').queryByRole('button', { name: 'Show on map' })).toBeNull();
+    expect(options('Meera Iyer').queryByRole('button', { name: 'Find with AR Scan' })).toBeNull();
+  });
+
+  it('Remove and block asks first, in words that never mention unblocking, and only then blocks', async () => {
+    await open(true);
+    fireEvent.click(options('Meera Iyer').getByRole('button', { name: 'Remove and block' }));
+    expect(emitted('block-user')).toEqual([]);
+    const confirm = screen.getByRole('dialog', { name: 'Remove and block Meera Iyer?' });
+    expect(confirm.textContent).toContain("Meera is removed from your group straight away and can't ask to join again.");
+    expect(confirm.textContent).not.toMatch(/unblock|Blocked/i);
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Remove and block' }));
+    expect(emitted('block-user')).toEqual([['block-user', { roomCode: code, targetId: 'sock-Meera Iyer' }]]);
+    await waitFor(() => expect(panel().queryByText('Meera Iyer')).toBeNull());
+  });
+
+  it('Cancel on the confirmation blocks no one', async () => {
+    await open(true);
+    fireEvent.click(options('Meera Iyer').getByRole('button', { name: 'Remove and block' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Remove and block Meera Iyer?' })).getByRole('button', { name: 'Cancel' }));
+    expect(emitted('block-user')).toEqual([]);
+    expect(panel().getByText('Meera Iyer')).toBeTruthy();
+  });
+
+  it('the Remove and block button is red, and nothing else in the sheet is', async () => {
+    await open(true);
+    const sheet = screen.getByTestId('member-options');
+    const red = [...sheet.querySelectorAll('button')].filter((b) => /danger/.test(b.innerHTML + b.className));
+    expect(red.map((b) => b.textContent)).toEqual(['Remove and block']);
   });
 });

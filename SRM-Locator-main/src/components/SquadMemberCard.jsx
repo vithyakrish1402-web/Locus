@@ -1,29 +1,25 @@
 import React, { useEffect, useState } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.div>, which this config can't see
 import { motion, useReducedMotion, useMotionValue, animate } from 'framer-motion';
-import { Activity, Ban, Crosshair, Navigation } from 'lucide-react';
-import { continuousAngle, freshness, locateTarget } from '../utils/direction';
+import { MoreVertical, Navigation } from 'lucide-react';
+import { Avatar, IconButton } from './ui';
+import { continuousAngle } from '../utils/direction';
 import { PANEL_SPRING } from '../utils/motion';
 import { SHOW_INDOOR_POSITION_TO_SQUAD } from '../utils/positionSource';
 import { floorLabel, hasIndoorFloor } from '../utils/indoorView';
+import { MEMBERS } from '../copy/group';
+import { MEMBER_DOTS, memberStatus, memberWhere } from '../utils/memberStatus';
 
-// One squadmate on the roster, built around the question the roster exists to answer:
-// where are they from here? A dial points at them relative to the way the phone faces, the
-// distance reads at a glance, and the direction is given the way you'd say it out loud
-// ("3 O'CLOCK"). Without a compass reading the dial falls back to north-up and says "NE".
+// One member in the group panel (redesign Group panel batch, piece 3), built around the
+// question the list exists to answer: where are they from here? Their initials in a ring
+// (dashed while Paused), a dot and their status in words, how far and which way ("120 m",
+// "11 o'clock", or a compass direction without a compass reading), and an arrow turning to
+// point at them. Their actions (Ping, Show on map, Find with AR Scan, and the Group Lead's
+// Remove and block) are in their options sheet, opened by the ⋮ button.
 //
-// Replaces an inline card whose distance was a small label, which offered no direction at
-// all, repeated PING (an icon and a button), and used rounded corners unlike the rest.
+// Display only: the stored photo is still sent with every update, just not shown here.
 
-const FRESH_STYLE = {
-  live: { text: 'text-emerald-400', bar: 'bg-emerald-500' },
-  recent: { text: 'text-emerald-400/80', bar: 'bg-emerald-500/60' },
-  stale: { text: 'text-yellow-400', bar: 'bg-yellow-500' },
-  lost: { text: 'text-red-400', bar: 'bg-red-500' },
-  none: { text: 'text-zinc-500', bar: 'bg-zinc-700' },
-};
-
-/** Re-renders every `ms`, so "12s AGO" keeps counting between telemetry updates. */
+/** Re-renders every `ms`, so "Last update 2 min ago" keeps counting between updates. */
 function useNow(ms) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -33,7 +29,7 @@ function useNow(ms) {
   return now;
 }
 
-function BearingDial({ angle, here, northUp, reduceMotion }) {
+function PointingArrow({ angle, reduceMotion }) {
   // The arrow's live rotation. Each new angle is put on the same unwrapped scale as where
   // the arrow is right now, so it always turns the short way (359° -> 1° is 2°, not 358°),
   // and the spring starts from its current position and speed if it is still moving.
@@ -46,135 +42,53 @@ function BearingDial({ angle, here, northUp, reduceMotion }) {
   }, [angle, reduceMotion, rotate]);
 
   return (
-    <div className="relative w-14 h-14 shrink-0" aria-hidden="true">
-      <div className="absolute inset-0 rounded-full border border-white/15 bg-black" />
-      <div className="absolute inset-[5px] rounded-full border border-dashed border-white/10" />
-      {/* The phone's own "ahead", or north when the dial is north-up. */}
-      <span className="absolute left-1/2 top-0.5 -translate-x-1/2 font-dot text-[7px] text-zinc-500">{northUp ? 'N' : '▲'}</span>
-      {here ? (
-        <span className="absolute inset-[18px] rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)] locus-soft-ring-dot" />
-      ) : (
-        <motion.div className="absolute inset-0 flex items-center justify-center" style={{ rotate }}>
-          {/* lucide's Navigation arrow points up-right (45°); turned back so 0° means up. */}
-          <Navigation size={20} className="text-red-500 drop-shadow-[0_0_6px_rgba(239,68,68,0.8)] -rotate-45" fill="currentColor" />
-        </motion.div>
-      )}
-    </div>
+    <span className="relative w-12 h-12 shrink-0 rounded-full bg-sunken text-accent flex items-center justify-center" aria-hidden="true">
+      <motion.span className="flex" style={{ rotate }}>
+        {/* lucide's Navigation arrow points up-right (45°); turned back so 0° means up. */}
+        <Navigation size={20} className="-rotate-45" />
+      </motion.span>
+    </span>
   );
 }
 
-export default function SquadMemberCard({ member, me, heading, headingLive, isOwner, onPing, onBlock, onAR, onTrack }) {
+/**
+ * @param {{ member: object, me: {lat:number,lng:number}|null, heading: number,
+ *   headingLive: boolean, onOptions: (member: object) => void }} props
+ */
+export default function SquadMemberCard({ member, me, heading, headingLive, onOptions }) {
   const reduceMotion = useReducedMotion();
   const now = useNow(5000);
-  const fresh = freshness(member.lastSeen, now);
-  const style = FRESH_STYLE[fresh.level];
-  const located = member.hasFix && me && Number.isFinite(member.lat) && Number.isFinite(member.lng);
-
-  const where = located ? locateTarget(me, member, { heading, headingLive }) : null;
-  const { here = false, shownDistance = null, direction = null } = where ?? {};
-  const bearing = where ? where.bearing : null;
-  // Relative to the phone when the compass works; otherwise north-up.
-  const angle = bearing === null ? 0 : headingLive ? bearing - heading : bearing;
+  const status = memberStatus(member, now);
+  const place = memberWhere(member, me, { heading, headingLive });
+  const name = member.name || '?';
 
   return (
-    <div className="relative mb-2 border border-white/10 bg-zinc-950 overflow-hidden">
-      <span className={`absolute left-0 top-0 bottom-0 w-[3px] ${style.bar}`} aria-hidden="true" />
-
-      <div className="p-4 pl-5">
-        {/* Who */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 flex items-center justify-center font-dot text-sm border overflow-hidden shrink-0 border-emerald-500/70 text-emerald-400 bg-emerald-500/10">
-              {member.photo ? <img src={member.photo} className="w-full h-full object-cover" alt="" /> : (member.name || '?').charAt(0)}
-            </div>
-            <div className="min-w-0">
-              <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none truncate">{member.name}</h4>
-              <p className={`mt-1 font-dot text-[10px] uppercase tracking-widest ${style.text}`}>
-                {fresh.level === 'live' && <span className="inline-block w-1.5 h-1.5 mr-1.5 rounded-full bg-emerald-400 align-middle locus-live-dot" />}
-                {fresh.text}
-                {member.role ? <span className="text-zinc-600"> · {member.role}</span> : null}
-              </p>
-            </div>
-          </div>
-          {isOwner && (
-            <button type="button" onClick={() => onBlock(member.id)} className="p-2 text-zinc-600 hover:text-red-500 shrink-0" title="Instant Ban">
-              <Ban size={16} />
-            </button>
-          )}
-        </div>
-
-        {/* Where */}
-        {located ? (
-          <div className="mt-4 flex items-center gap-4">
-            <BearingDial angle={angle} here={here} northUp={!headingLive} reduceMotion={reduceMotion} />
-            <div className="min-w-0">
-              <p className="font-dot leading-none text-white">
-                <span className="text-3xl tracking-wider">{here ? '<15' : shownDistance.value}</span>
-                <span className="ml-1 text-xs text-zinc-400">{shownDistance.unit}</span>
-              </p>
-              <p className="mt-1.5 font-dot text-[10px] uppercase tracking-widest text-red-400">{direction}</p>
-            </div>
-            <div className="ml-auto flex flex-col items-end gap-1 font-dot text-[10px] uppercase tracking-widest text-zinc-400">
-              <span className="flex items-center gap-1.5">
-                <span className="w-1.5 h-3 border border-zinc-500 rounded-[1px] relative flex items-end overflow-hidden">
-                  <span className={`w-full ${member.battery < 25 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ height: `${member.battery || 0}%` }} />
-                </span>
-                {member.battery || 0}%
-              </span>
-              <span className="flex items-center gap-1.5"><Activity size={11} className="text-blue-400" />{member.speed || 0} KM/H</span>
-            </div>
-          </div>
-        ) : (
-          // On the roster, but nothing to aim at yet: no coordinates have come through for
-          // them. Says so instead of offering buttons that would point at nothing.
-          <div className="mt-4 w-full py-3 border border-dashed border-white/20 text-zinc-500 font-dot text-xs uppercase tracking-widest text-center">
-            AWAITING_GPS_FIX
-          </div>
-        )}
-
-        {/* WiFi Arc Stage 7: the floor they're on, while their telemetry says so. Only this
-            chip depends on it - the direction finder above is GPS and carries on when they
-            leave coverage. Outside that block, because it needs no fix of your own. */}
+    <div data-testid="member-row" className="flex items-center gap-3 py-3 border-b border-border font-ui text-text">
+      <Avatar name={name} dashed={member.status === 'FROZEN' || !member.hasFix} />
+      <div className="flex-1 min-w-0">
+        <h4 className="text-heading truncate">{name}</h4>
+        <p className="mt-0.5 flex items-center gap-2 text-secondary text-text-secondary" data-testid="member-status">
+          <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${MEMBER_DOTS[status.dot]}`} aria-hidden="true" />
+          {status.text}
+        </p>
+        {/* WiFi Arc Stage 7: the floor they're on, while their telemetry says so (off). */}
         {SHOW_INDOOR_POSITION_TO_SQUAD && hasIndoorFloor(member) && (
           <p
             data-testid="member-floor-chip"
-            className="mt-3 inline-block px-1.5 py-0.5 font-dot text-[9px] uppercase tracking-widest border border-white/20 text-zinc-300 whitespace-nowrap"
+            className="mt-1 inline-block px-2 py-0.5 rounded-full bg-sunken text-caption text-text-secondary whitespace-nowrap"
           >
             {member.building} · {floorLabel(member.floor)}
           </p>
         )}
-
-        {/* What to do */}
-        <div className="mt-4 flex gap-2">
-          {/* A ping, not an emergency: the squad-wide SOS is the SosTrigger button. */}
-          <button
-            type="button"
-            onClick={() => onPing(member.id)}
-            className="flex-1 py-2.5 border border-white/20 bg-white/5 text-zinc-300 font-dot text-[10px] uppercase tracking-widest hover:bg-white hover:text-black"
-          >
-            PING
-          </button>
-          {located && (
-            <>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onAR(member); }}
-                className="w-11 flex items-center justify-center border border-white/30 bg-black text-white hover:border-red-500 hover:text-red-500"
-                title="AR Tracking"
-              >
-                <Crosshair size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={() => onTrack(member)}
-                className="flex-1 py-2.5 border border-white/30 text-white font-dot text-[10px] uppercase tracking-widest hover:bg-white hover:text-black"
-              >
-                TRACK_TARGET
-              </button>
-            </>
-          )}
-        </div>
       </div>
+      {place && (
+        <div className="text-right shrink-0" data-testid="member-where">
+          <p className="text-heading tabular-nums">{place.distance}</p>
+          {place.direction && <p className="text-secondary text-text-secondary">{place.direction}</p>}
+        </div>
+      )}
+      {place && !place.where.here && <PointingArrow angle={place.angle} reduceMotion={reduceMotion} />}
+      <IconButton label={MEMBERS.options(name)} icon={MoreVertical} onClick={() => onOptions(member)} />
     </div>
   );
 }

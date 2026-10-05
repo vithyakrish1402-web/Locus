@@ -121,7 +121,7 @@ const bravoWalksAway = (id = 'sock-1', extra = {}) => {
   for (let i = 0; i < 8; i++) roster({ [id]: member(HERE.lat + 0.006, HERE.lng, extra) });
 };
 
-// Same, but opened from Bravo's card in the SQUAD sheet (its AR Tracking button).
+// Same, but opened from Bravo's row in the group panel (Find with AR Scan, in their options).
 const cardArAtBravo = async () => {
   navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: HERE.lat, longitude: HERE.lng, speed: 0 } });
   render(<App />);
@@ -130,10 +130,8 @@ const cardArAtBravo = async () => {
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
   roster({ 'sock-1': member(HERE.lat + 0.001, HERE.lng) });
   fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
-  // The smallest element around Bravo's name that holds an AR Tracking button: their card.
-  let card = screen.getByRole('heading', { level: 4, name: 'Bravo' });
-  while (!within(card).queryByTitle('AR Tracking')) card = card.parentElement;
-  fireEvent.click(within(card).getByTitle('AR Tracking'));
+  fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Options for Bravo' })).getByRole('button', { name: 'Find with AR Scan' }));
   await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
 };

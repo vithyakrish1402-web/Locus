@@ -23,7 +23,7 @@ import { guideSeen, rememberGuideSeen } from './utils/guideSeen';
 import BrandMark from './components/access/BrandMark';
 import BootScreen from './components/access/BootScreen';
 import StatusScreen from './components/access/StatusScreen';
-import { Button, Card, IconButton, InlineMessage, SegmentedControl, TextField } from './components/ui';
+import { Avatar, Button, Card, IconButton, InlineMessage, SegmentedControl, TextField } from './components/ui';
 import PlaceCard from './components/PlaceCard';
 import MeetingPointConfirm from './components/MeetingPointConfirm';
 import { SETTINGS } from './copy/settings';
@@ -35,7 +35,8 @@ import RouteCard from './components/map/RouteCard';
 import BuildingRow from './components/map/BuildingRow';
 import GroupHeader from './components/group/GroupHeader';
 import SharingControl from './components/group/SharingControl';
-import { GROUP_TABS } from './copy/group';
+import MemberOptions from './components/group/MemberOptions';
+import { GROUP_TABS, MEMBERS as GROUP_MEMBERS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -348,6 +349,7 @@ const App = () => {
   // --- MOBILE VIEW STATE ---
   // Controls which panel is active on mobile bottom HUD: 'grid' | 'matrix' | 'squad' | 'cmd'
   const [mobileView, setMobileView] = useState('grid');
+  const [optionsMemberId, setOptionsMemberId] = useState(null);
   // Phone layout and the squad/matrix sheet (see the Sidebar Panel below).
   const isMobile = useIsMobile();
   const reduceMotion = useReducedMotion();
@@ -1912,6 +1914,8 @@ const App = () => {
   // "Location is off" after the explainer's Not now, until location is turned on or the card
   // is dismissed.
   const showDeclinedCard = locationDeclined && !locationReady && !declinedCardDismissed;
+  // Whose options sheet is open: an id, so it follows their live updates and closes if they go.
+  const optionsMember = optionsMemberId ? users.find((u) => u.id === optionsMemberId) ?? null : null;
   // The group panel's search, for members as for buildings (it used to filter buildings only).
   const matchesSearch = (name) => (name || '').toLowerCase().includes(searchQuery.trim().toLowerCase());
   // "You're in" says live only once there is a fix to share (Map batch fixes).
@@ -2206,7 +2210,7 @@ const App = () => {
             meeting point buttons: they stand 10 rem above the screen's bottom edge plus the
             gesture bar's inset, and this panel ends 4 rem up without that inset. 8 rem plus the
             inset leaves 2 rem between the last row and the buttons on any phone. */}
-        <div data-testid="group-panel-list" className="flex-1 overflow-y-auto p-4 pt-1 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 space-y-3 custom-scrollbar">
+        <div data-testid="group-panel-list" className={`flex-1 overflow-y-auto p-4 pt-1 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}>
           <SegmentedControl
             label={GROUP_TABS.label}
             value={activeTab === 'buildings' ? 'buildings' : 'users'}
@@ -2345,26 +2349,18 @@ const App = () => {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     key={`ghost-row-${ghost.id}`}
+                    data-testid="lost-member-row"
                     onClick={() => handleFocus(ghost.position, null)}
-                    className="p-4 mb-2 bg-gray-900 border border-dashed border-zinc-600 rounded-lg active:bg-gray-800 transition-colors relative group hover:border-zinc-400 cursor-pointer opacity-80"
+                    className="flex items-center gap-3 py-3 border-b border-border font-ui text-text cursor-pointer"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 flex items-center justify-center font-dot text-sm border border-dashed border-zinc-600 text-zinc-400 overflow-hidden shrink-0">
-                          {ghost.photo ? <img src={ghost.photo} className="w-full h-full object-cover grayscale" alt="" /> : ghost.name.charAt(0)}
-                        </div>
-                        <div className="flex flex-col">
-                          <h4 className="font-dot text-sm uppercase tracking-widest text-zinc-300 leading-none mb-1">{ghost.name}</h4>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] font-dot uppercase tracking-widest px-1.5 py-0.5 border border-dashed border-zinc-500 text-zinc-400">
-                              {ghost.phase === 'expired' ? 'LAST KNOWN' : 'SIGNAL LOST'}
-                            </span>
-                            <span className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest">{ghost.elapsedLabel} AGO</span>
-                          </div>
-                        </div>
-                      </div>
-                      <WifiOff size={16} className="text-zinc-500 shrink-0" />
+                    <Avatar name={ghost.name || '?'} dashed className="opacity-70" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-heading truncate text-text-secondary">{ghost.name}</h4>
+                      <p className="mt-0.5 text-secondary text-text-secondary">
+                        {ghost.phase === 'expired' ? GROUP_MEMBERS.lastSeen(ghost.elapsedLabel) : GROUP_MEMBERS.lostConnection(ghost.elapsedLabel)}
+                      </p>
                     </div>
+                    <WifiOff size={20} className="text-text-secondary shrink-0" aria-hidden="true" />
                   </motion.div>
                 )),
                 // Nearest first (by straight-line distance from this phone); members with no
@@ -2382,11 +2378,7 @@ const App = () => {
                     me={liveLocation}
                     heading={heading}
                     headingLive={hasHeadingReading}
-                    isOwner={squadRole === 'OWNER'}
-                    onPing={sendPing}
-                    onBlock={toggleBlock}
-                    onAR={(m) => setArTarget(arTargetForMember(m))}
-                    onTrack={(m) => handleFocus({ lat: m.lat, lng: m.lng }, null)}
+                    onOptions={(m) => setOptionsMemberId(m.id)}
                   />
                 </motion.div>
                 )),
@@ -3255,6 +3247,25 @@ const App = () => {
       {!(selectedItem && activeTab === 'buildings') && (
         <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
       )}
+
+      {/* A member's options (components/group/MemberOptions.jsx): Ping, Show on map, Find with
+          AR Scan, and the Group Lead's Remove and block behind its confirmation. */}
+      <MemberOptions
+        member={optionsMember}
+        me={liveLocation}
+        heading={heading}
+        headingLive={hasHeadingReading}
+        isLead={squadRole === 'OWNER'}
+        onClose={() => setOptionsMemberId(null)}
+        onPing={sendPing}
+        onShowOnMap={(m) => {
+          handleFocus({ lat: m.lat, lng: m.lng }, null);
+          // On a phone the open panel covers the map: get out of the way, as a building does.
+          if (isMobile) setMobileView('grid');
+        }}
+        onArScan={(m) => setArTarget(arTargetForMember(m))}
+        onRemoveAndBlock={toggleBlock}
+      />
 
       {/* The camera explainer, before AR Scan opens, only until the camera has been allowed.
           Not now leaves AR Scan closed, as AR Scan's own Cancel does. */}

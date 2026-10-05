@@ -309,8 +309,8 @@ describe.each(['google', 'leaflet'])('on the %s engine', (engine) => {
       squadUpdate([{ ...bravoOutside, positionSource: 'gps', lastSeen: 2 }, CHARLIE]);
       await waitFor(() => expect(pill('BRAVO · F7')).toBeNull());
       expect(screen.queryByTestId('member-floor-chip')).toBeNull();
-      const bravoCard = screen.getAllByText('Bravo').find((el) => el.tagName === 'H4').closest('.relative');
-      expect(bravoCard.textContent).toMatch(/\bM\b|KM/);
+      const bravoCard = screen.getAllByText('Bravo').find((el) => el.tagName === 'H4').closest('[data-testid="member-row"]');
+      expect(bravoCard.textContent).toMatch(/\d+(\.\d+)? (m|km)/);
     });
   });
 });
@@ -340,7 +340,7 @@ describe("a squadmate's floor chip", () => {
     await joinSquad(App);
     squadUpdate([BRAVO]);
     fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
-    await screen.findByText('AWAITING_GPS_FIX');
+    await screen.findAllByTestId('member-floor-chip');
     expect(screen.getByTestId('member-floor-chip').textContent).toBe('TECH PARK · F7');
   });
 });

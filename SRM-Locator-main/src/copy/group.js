@@ -38,3 +38,38 @@ export const SHARING_CONTROL = {
     GHOST: "Other members won't see you on their map.",
   },
 };
+
+// A member's row and their options sheet.
+export const MEMBERS = {
+  liveNow: 'Live now',
+  live: 'Live',
+  paused: 'Paused',
+  // No coordinates have come through for them yet (owner's wording).
+  waiting: 'Waiting for location',
+  lastUpdate: (minutes) => `Last update ${minutes} min ago`,
+  withYou: 'With you',
+  lostConnection: (elapsed) => `Lost connection ${elapsed} ago`,
+  lastSeen: (elapsed) => `Last seen ${elapsed} ago`,
+  options: (name) => `Options for ${name}`,
+  battery: (percent) => `Battery ${percent}%`,
+  speed: (kmh) => `${kmh} km/h`,
+};
+
+export const MEMBER_OPTIONS = {
+  ping: (first) => `Ping ${first}`,
+  showOnMap: 'Show on map',
+  arScan: 'Find with AR Scan',
+  removeAndBlock: 'Remove and block',
+  cancel: 'Cancel',
+};
+
+// The Group Lead's confirmation. It never mentions unblocking: there is no Unblock (owner).
+export const REMOVE_AND_BLOCK = {
+  title: (name) => `Remove and block ${name}?`,
+  body: (first) => `${first} is removed from your group straight away and can't ask to join again.`,
+  confirm: 'Remove and block',
+  cancel: 'Cancel',
+};
+
+/** A member's first name, for "Ping Meera" ("Someone" when they have no name). */
+export const firstName = (name) => ((typeof name === 'string' && name.trim()) ? name.trim().split(/\s+/)[0] : 'Someone');

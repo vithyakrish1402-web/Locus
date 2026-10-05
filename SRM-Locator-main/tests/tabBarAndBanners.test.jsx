@@ -214,7 +214,7 @@ describe('the squad roster', () => {
     const names = screen.getAllByRole('heading', { level: 4 }).map((h) => h.textContent);
     expect(names.indexOf('Nearby')).toBeGreaterThan(-1);
     expect(names.indexOf('Nearby')).toBeLessThan(names.indexOf('Faraway'));
-    expect(screen.getAllByText(/^BEARING (N|NE|E|SE|S|SW|W|NW)$/).length).toBe(2);
+    expect(screen.getAllByText(/^to the (north|north-east|east|south-east|south|south-west|west|north-west)$/).length).toBe(2);
   });
 });
 
