@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Info, ShieldAlert, X } from 'lucide-react';
 import { subscribe, dismiss } from '../utils/notify';
 import { PANEL_SPRING, projectMomentum } from '../utils/motion';
+import { LAYER } from '../utils/layers';
 
 // Renders the comms feed (src/utils/notify.js): the app's non-blocking replacement for
 // window.alert(). Notices drop in from the top and stack; each shows how long it has left
@@ -77,7 +78,17 @@ function Notice({ item, reduceMotion }) {
   );
 }
 
-export default function CommsFeed() {
+// Where the feed starts. Over AR Scan it drops below AR's header (its ALIGN, RESET and close
+// buttons end about 6.5rem down, and the compass calibration notice under them about 9.5rem;
+// AR Scan is drawn from the very top, without the safe-area inset), so a notice never covers
+// those or moves them.
+const TOP = 'max(0.75rem, calc(env(safe-area-inset-top) + 0.5rem))';
+export const TOP_OVER_AR_SCAN = '10rem';
+
+/**
+ * @param {{ overArScan?: boolean }} props overArScan: AR Scan is open (see TOP_OVER_AR_SCAN)
+ */
+export default function CommsFeed({ overArScan = false }) {
   const [items, setItems] = useState([]);
   const reduceMotion = useReducedMotion();
   useEffect(() => subscribe(setItems), []);
@@ -85,8 +96,12 @@ export default function CommsFeed() {
   return (
     <div
       aria-live="polite"
-      className="fixed inset-x-0 z-[9000] flex justify-center px-4 pointer-events-none"
-      style={{ top: 'max(0.75rem, calc(env(safe-area-inset-top) + 0.5rem))' }}
+      data-testid="comms-feed"
+      data-over-ar-scan={overArScan || undefined}
+      className="fixed inset-x-0 flex justify-center px-4 pointer-events-none"
+      // LAYER.toast: over AR Scan, whose notices (ALIGN, compass access) used to be drawn
+      // underneath it and expire unseen; under an update gate and an incoming SOS.
+      style={{ zIndex: LAYER.toast, top: overArScan ? TOP_OVER_AR_SCAN : TOP }}
     >
       <div className="w-full max-w-md flex flex-col gap-2">
         <AnimatePresence initial={false}>

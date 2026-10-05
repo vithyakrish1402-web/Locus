@@ -27,6 +27,7 @@ import ARRoadGL from './components/ARRoadGL';
 import ARArrow3D from './components/ARArrow3D';
 import { RealisticArrow } from './components/ARArrowGL';
 import { resolveArFeatures } from './utils/arFeatures';
+import { LAYER } from './utils/layers';
 
 const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 
@@ -354,7 +355,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
 
   if (!permissionsGranted) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center p-6 text-center text-white">
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-6 text-center text-white" style={{ zIndex: LAYER.arScan }}>
         <ShieldAlert size={48} className="text-red-500 mb-6 animate-pulse" />
         <h2 className="font-dot text-2xl tracking-widest uppercase mb-4 text-white">SYS_AR // OPTICS_SYNC</h2>
         <p className="font-inter text-sm text-zinc-400 mb-8 max-w-sm">
@@ -378,7 +379,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   }
 
   return (
-    <div ref={setOverlayEl} className="fixed inset-0 z-[9999] bg-black overflow-hidden pointer-events-auto">
+    <div ref={setOverlayEl} data-testid="ar-scan" className="fixed inset-0 bg-black overflow-hidden pointer-events-auto" style={{ zIndex: LAYER.arScan }}>
       {/* Video Background */}
       <video 
         ref={videoRef}

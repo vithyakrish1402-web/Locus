@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { useAlertAudio } from '../hooks/useAlertAudio';
+import { LAYER } from '../utils/layers';
 
 // Full-viewport takeover for an incoming squad-wide SOS. Deliberately NOT a
 // toast/modal: no click-outside dismiss, no Escape dismiss, no auto-timeout.
@@ -7,10 +8,10 @@ import { useAlertAudio } from '../hooks/useAlertAudio';
 // missed by glancing away, or dismissed by an accidental tap, defeats the point.
 // (Android's Back button is held off separately, in useBackButtonGuard.)
 //
-// z-[10002]: one above every other z-index in the app (UpdateModal's 10000 is the
-// next highest actual-runtime value; LocusGuide's 10000 never coexists with this
-// screen since it only renders pre-login). A distress beacon outranks everything
-// else on screen, including a mandatory update gate. Rendered as a `fixed` sibling at the
+// LAYER.emergency (utils/layers.js): the top of the app's stacking order, over AR Scan,
+// the notices and UpdateModal (LocusGuide's own 10000 never coexists with this screen,
+// since it only renders pre-login). A distress beacon outranks everything else on
+// screen, including a mandatory update gate. Rendered as a `fixed` sibling at the
 // top level of App.jsx's return, not nested inside the map component tree, so it
 // isn't trapped inside a Leaflet/Google Maps stacking context — those libraries
 // only establish stacking contexts within their own subtree.
@@ -104,10 +105,10 @@ const SosOverlay = ({ senderName, lat, lng, ageMs = 0, pendingCount = 0, onAckno
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
       onKeyDown={handleKeyDown}
-      className="fixed inset-0 z-[10002] flex items-center justify-center pointer-events-auto"
+      className="fixed inset-0 flex items-center justify-center pointer-events-auto"
       // #4A0A0A, opaque: a deep maroon that reads as "emergency" without being
       // mistaken for the tactical-red (#EF4444) UI chrome, and hides the map fully.
-      style={{ background: '#4A0A0A' }}
+      style={{ zIndex: LAYER.emergency, background: '#4A0A0A' }}
     >
       <p id={descriptionId} className="sr-only">{spokenDescription}</p>
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { UpdateStatus } from '../hooks/useAppUpdate';
+import { LAYER } from '../utils/layers';
 
 // HUD panel for the full-APK self-updater. Two shapes, one component:
 //
@@ -7,8 +8,8 @@ import { UpdateStatus } from '../hooks/useAppUpdate';
 //   - [MANDATORY]     -> a full-viewport takeover with no LATER and no Escape, the same
 //                        "there is exactly one way out" posture as SosOverlay
 //
-// z-[10000]: above everything in App.jsx and level with LocusGuide's top layer, but
-// deliberately below SosOverlay (10002) - a distress beacon outranks a version bump.
+// LAYER.update (utils/layers.js): above everything in App.jsx, but deliberately below
+// SosOverlay (LAYER.emergency) - a distress beacon outranks a version bump.
 
 const CornerBrackets = () => (
   <>
@@ -208,8 +209,8 @@ const UpdateModal = ({ update }) => {
       aria-labelledby={titleId}
       aria-describedby={bodyId}
       onKeyDown={handleKeyDown}
-      className="fixed inset-0 z-[10000] flex items-center justify-center p-6"
-      style={{ background: mandatory ? '#000000' : 'rgba(0,0,0,0.88)' }}
+      className="fixed inset-0 flex items-center justify-center p-6"
+      style={{ zIndex: LAYER.update, background: mandatory ? '#000000' : 'rgba(0,0,0,0.88)' }}
     >
       <div ref={panelRef} className="relative w-full max-w-lg border border-white/20 bg-black px-8 py-8">
         <CornerBrackets />

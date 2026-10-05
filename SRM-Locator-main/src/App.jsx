@@ -1966,7 +1966,7 @@ const App = () => {
         hidden={hasJoinedSquad && isMobile && (sheetOpen || Boolean(selectedItem && activeTab === 'buildings'))}
       />
       {/* Non-blocking notices (src/utils/notify.js) - what window.alert() used to be. */}
-      <CommsFeed />
+      <CommsFeed overArScan={Boolean(arTarget)} />
     </>
   );
 
