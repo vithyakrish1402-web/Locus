@@ -210,10 +210,10 @@ describe('a Rally Point leaving the map', () => {
     await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
 
     fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
-    expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
+    expect(screen.getByTestId('route-card')).toBeTruthy();
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-other' }));
     act(() => fakeSocket.receive('remove-waypoint'));
-    expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
+    expect(screen.getByTestId('route-card')).toBeTruthy();
   });
 });
 
@@ -241,7 +241,7 @@ describe('Navigate and the meeting point', () => {
     await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
 
     fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.navigate }));
-    expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
+    expect(screen.getByTestId('route-card')).toBeTruthy();
     expect(emitted('publish-waypoint')).toEqual([]);
     expect(leaflet.props.activeWaypoint).toBeNull();
   });
@@ -253,7 +253,7 @@ describe('Navigate and the meeting point', () => {
     await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
 
     fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
-    expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
+    expect(screen.getByTestId('route-card')).toBeTruthy();
     expect(emitted('publish-waypoint')).toEqual([]);
   });
 
@@ -305,7 +305,7 @@ describe('Navigate and the meeting point', () => {
 
     fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.navigate }));
     fireEvent.click(endRoute());
-    await waitFor(() => expect(screen.queryByText('ACTIVE_WAYPOINT_TRACKING')).toBeNull());
+    await waitFor(() => expect(screen.queryByTestId('route-card')).toBeNull());
     expect(emitted('clear-waypoint')).toEqual([]);
     expect(leaflet.props.activeWaypoint).toMatchObject({ lat: RALLY.lat, lng: RALLY.lng });
   });

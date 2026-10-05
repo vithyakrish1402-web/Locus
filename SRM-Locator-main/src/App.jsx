@@ -26,12 +26,12 @@ import StatusScreen from './components/access/StatusScreen';
 import { Button, Card, IconButton, InlineMessage, SegmentedControl, TextField } from './components/ui';
 import PlaceCard from './components/PlaceCard';
 import MeetingPointConfirm from './components/MeetingPointConfirm';
-import { ROUTE } from './copy/place';
 import { SETTINGS } from './copy/settings';
 import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen';
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
-import { BELOW_TOP_BAR } from './utils/mapChrome';
+import { BELOW_CHIP, BELOW_TOP_BAR } from './utils/mapChrome';
+import RouteCard from './components/map/RouteCard';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
 import { cssColor } from './utils/cssColor';
@@ -2062,40 +2062,20 @@ const App = () => {
       />
       <SharingChip mode={telemetryMode} />
 
-      {/* --- ACTIVE ROUTE HUD --- */}
+      {/* Your own route (components/map/RouteCard.jsx), under the sharing chip. On a phone it
+          sits under an open group panel (z-[850] < 900), as before. */}
       <AnimatePresence>
         {(routeStart || routeData) && (
           <motion.div
-            initial={{ y: -50, opacity: 0 }}
+            key="route-card"
+            initial={reduceMotion ? { opacity: 0 } : { y: -16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -50, opacity: 0 }}
-            className="absolute top-24 left-1/2 -translate-x-1/2 z-[850] md:z-[1000] w-[90%] max-w-md bg-black border border-red-500 pointer-events-auto shadow-[0_0_30px_rgba(239,68,68,0.2)]"
+            exit={reduceMotion ? { opacity: 0 } : { y: -16, opacity: 0 }}
+            transition={reduceMotion ? { duration: 0.15 } : PANEL_SPRING}
+            className="absolute inset-x-3 z-[850] md:z-[1000] md:left-1/2 md:right-auto md:w-[28rem] md:-translate-x-1/2"
+            style={{ top: BELOW_CHIP }}
           >
-            <div className="p-4 flex flex-col gap-2 relative">
-              <button onClick={clearRoute} aria-label={ROUTE.end} title={ROUTE.end} className="absolute top-2 right-2 flex items-center gap-1 text-zinc-400 hover:text-white font-dot text-[10px] uppercase tracking-widest">
-                {ROUTE.end} <X size={16} />
-              </button>
-
-              <div className="flex items-center gap-2 text-red-500 font-dot text-xs uppercase tracking-widest">
-                <Waypoints size={14} className="animate-pulse" />
-                ACTIVE_WAYPOINT_TRACKING
-              </div>
-
-              <div className="flex justify-between items-end mt-2">
-                <div className="flex flex-col font-dot text-sm text-white uppercase tracking-widest">
-                  <span>{routeStart?.name || "AWAITING_START"}</span>
-                  <span className="text-zinc-600">↓</span>
-                  <span>{routeEnd?.name || "AWAITING_TARGET"}</span>
-                </div>
-
-                {displayedRouteData && (
-                  <div className="text-right flex flex-col">
-                    <span className="text-2xl font-dot text-red-500 leading-none">{displayedRouteData.distance.text}</span>
-                    <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ETA: {displayedRouteData.duration.text}</span>
-                  </div>
-                )}
-              </div>
-            </div>
+            <RouteCard start={routeStart} end={routeEnd} data={displayedRouteData} onEnd={clearRoute} />
           </motion.div>
         )}
       </AnimatePresence>

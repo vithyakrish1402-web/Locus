@@ -175,7 +175,7 @@ describe('the AR road line', () => {
     await onTheMapWithRally();
     fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
     await act(async () => {});
-    expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
+    expect(screen.getByTestId('route-card')).toBeTruthy();
 
     fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();

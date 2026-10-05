@@ -44,3 +44,13 @@ export const MARKERS = {
   findWithAr: 'Find with AR Scan',
   removeMeetingPoint: 'Remove meeting point',
 };
+
+// Your own route (Navigate).
+export const ROUTE_CARD = {
+  walkingTo: (place) => `Walking to ${place}`,
+  fromYou: 'from your location',
+  from: (place) => `from ${place}`,
+  choosing: 'Choose where to go',
+  choosingHelp: (start) => (start ? `From ${start}. Pick a place, then Set as destination.` : 'Pick a place, then Set as destination.'),
+  end: 'End route',
+};
