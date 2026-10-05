@@ -250,7 +250,7 @@ describe('a building card on a phone', () => {
       render(<App />);
       fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
       act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
-      fireEvent.click(screen.getByRole('button', { name: /MATRIX/ }));
+      fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
       fireEvent.click(screen.getAllByText('NELSON MANDELA HOSTEL')[0]);
       const card = screen.getByTestId('location-card');
       expect(card.className).toContain('bottom-[calc(11rem');
