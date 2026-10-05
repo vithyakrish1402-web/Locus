@@ -77,6 +77,16 @@ const { default: App } = await import('../src/App.jsx');
 const { LOCATION_EXPLAINER } = await import('../src/copy/permissions.js');
 const { MAP_BANNERS } = await import('../src/copy/map.js');
 const { LOCATION_ALLOWED_KEY } = await import('../src/utils/locationPermission.js');
+const { LAYER } = await import('../src/utils/layers.js');
+
+// jsdom has no Web Audio; an incoming SOS's alarm needs just enough to start and stop.
+class FakeAudioContext {
+  constructor() { this.state = 'running'; this.currentTime = 0; this.destination = {}; }
+  createOscillator() { return { type: '', frequency: { setValueAtTime() {} }, connect() {}, disconnect() {}, start() {}, stop() {} }; }
+  createGain() { return { gain: { setValueAtTime() {} }, connect() {}, disconnect() {} }; }
+  resume() { return Promise.resolve(); }
+  close() { return Promise.resolve(); }
+}
 
 const FIX = { coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } };
 const explainer = () => screen.queryByRole('dialog', { name: LOCATION_EXPLAINER.title });
@@ -154,6 +164,65 @@ describe('the location explainer', () => {
     await onTheMap();
     expect(explainer()).toBeTruthy();
     expect(screen.getByTestId('sharing-chip').textContent).toBe('Waiting for your location');
+  });
+
+  it('waits for the phone to answer: never flashes up when location turns out to be allowed', async () => {
+    let answer;
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: { query: vi.fn(() => new Promise((resolve) => { answer = resolve; })) },
+    });
+    await onTheMap();
+    expect(explainer()).toBeNull();
+    await act(async () => answer({ state: 'granted' }));
+    expect(explainer()).toBeNull();
+    expect(geo.getCurrentPosition).toHaveBeenCalled();
+  });
+
+  it('shows once the phone answers that location is not allowed yet', async () => {
+    let answer;
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: { query: vi.fn(() => new Promise((resolve) => { answer = resolve; })) },
+    });
+    await onTheMap();
+    expect(explainer()).toBeNull();
+    await act(async () => answer({ state: 'prompt' }));
+    expect(explainer()).toBeTruthy();
+  });
+
+  it('allowed but no fix yet (a timeout indoors) still counts: it never shows again', async () => {
+    geo.getCurrentPosition = vi.fn((_ok, fail) => fail({ code: 3, message: 'timeout' }));
+    await onTheMap();
+    fireEvent.click(within(explainer()).getByRole('button', { name: LOCATION_EXPLAINER.continue }));
+    await act(async () => {});
+    expect(localStorage.getItem(LOCATION_ALLOWED_KEY)).toBe('1');
+    cleanup();
+    await onTheMap();
+    expect(explainer()).toBeNull();
+  });
+
+  it('a received Emergency alert draws over it', async () => {
+    window.AudioContext = FakeAudioContext;
+    try {
+      await onTheMap();
+      expect(explainer()).toBeTruthy();
+      act(() => fakeSocket.receive('sos-received', { id: 'sos-1', senderId: 'bravo-socket', senderName: 'Bravo', lat: 12.8231, lng: 80.0442, ageMs: 0 }));
+      const alert = screen.getByRole('alertdialog');
+      expect(alert.textContent).toContain('BRAVO');
+      // Both are drawn, the alert on the higher layer, and not inside the explainer's sheet.
+      expect(explainer()).toBeTruthy();
+      expect(explainer().contains(alert)).toBe(false);
+      const layerOf = (el) => { for (let n = el; n; n = n.parentElement) if (n.style?.zIndex) return Number(n.style.zIndex); return 0; };
+      expect(layerOf(explainer())).toBe(LAYER.sheet);
+      expect(layerOf(alert)).toBe(LAYER.emergency);
+      expect(layerOf(alert)).toBeGreaterThan(layerOf(explainer()));
+      // And it answers: the alert's own button works with the explainer still open.
+      fireEvent.click(within(alert).getByRole('button', { name: /acknowledge/i }));
+      expect(fakeSocket.emit).toHaveBeenCalledWith('sos-ack', { id: 'sos-1' });
+    } finally {
+      delete window.AudioContext;
+    }
   });
 
   it("doesn't show when the phone says location is already allowed", async () => {

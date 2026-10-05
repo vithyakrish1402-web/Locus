@@ -561,6 +561,9 @@ const App = () => {
   // phone's note of a real fix, or the Permissions API. Until Continue, nothing asks for or
   // shares a location. Not now leaves it off, with the "Location is off" card to turn it on.
   const [locationAllowed, setLocationAllowed] = useState(locationKnownAllowed);
+  // Whether the Permissions API has answered yet. Until it has, the explainer waits, so a
+  // phone that already allows location never sees it flash up for a moment at launch.
+  const [permissionChecked, setPermissionChecked] = useState(locationKnownAllowed);
   const [locationExplained, setLocationExplained] = useState(false);
   const [locationDeclined, setLocationDeclined] = useState(false);
   const [declinedCardDismissed, setDeclinedCardDismissed] = useState(false);
@@ -570,7 +573,9 @@ const App = () => {
   useEffect(() => {
     let live = true;
     locationPermissionGranted().then((granted) => {
-      if (!live || !granted) return;
+      if (!live) return;
+      setPermissionChecked(true);
+      if (!granted) return;
       rememberLocationAllowed();
       setLocationAllowed(true);
     });
@@ -588,7 +593,12 @@ const App = () => {
     setLocationError(null);
     setLocationRetry((n) => n + 1);
   };
-  const onGeolocationError = (err) => setLocationError(err?.code === 1 ? 'denied' : 'no-fix');
+  const onGeolocationError = (err) => {
+    // Anything but a refusal (a timeout indoors, no position) means Android allowed location:
+    // noted like a fix, so the explainer doesn't come back next time for want of one.
+    if (err?.code !== 1) noteRealFix();
+    setLocationError(err?.code === 1 ? 'denied' : 'no-fix');
+  };
 
   const [squadCode, setSquadCode] = useState('');
   const [squadMode, setSquadMode] = useState('create'); // 'create' or 'join'
@@ -2525,7 +2535,7 @@ const App = () => {
 
       {/* The location explainer, once you are on the map, until location is allowed. */}
       <LocationExplainer
-        open={!locationReady && !locationDeclined && !justApproved}
+        open={permissionChecked && !locationReady && !locationDeclined && !justApproved}
         onContinue={() => setLocationExplained(true)}
         onNotNow={() => setLocationDeclined(true)}
       />
