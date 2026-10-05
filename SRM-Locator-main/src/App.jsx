@@ -9,7 +9,7 @@ import { motion, AnimatePresence, useDragControls, useReducedMotion } from 'fram
 import GoogleMapReact from 'google-map-react';
 import {
   MapPin, Users, Search, Settings, Navigation, ShieldCheck,
-  Building2, MessageSquare, Send, Loader2, Info,
+  Building2, MessageSquare, Send, Loader2,
   BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
   AlertCircle, Check, Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
@@ -23,6 +23,9 @@ import BrandMark from './components/access/BrandMark';
 import BootScreen from './components/access/BootScreen';
 import StatusScreen from './components/access/StatusScreen';
 import { Button, Card, IconButton, InlineMessage, SegmentedControl, TextField } from './components/ui';
+import PlaceCard from './components/PlaceCard';
+import MeetingPointConfirm from './components/MeetingPointConfirm';
+import { ROUTE } from './copy/place';
 import { NOTICES, OS_NOTICES } from './copy/notices';
 import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
 import { authProblem } from './utils/authProblems';
@@ -58,8 +61,6 @@ import BottomTabBar from './components/BottomTabBar';
 import CommsFeed from './components/CommsFeed';
 import { CodeTiles, CodeInput } from './components/SquadCode';
 import SquadMemberCard from './components/SquadMemberCard';
-import BuildingInfo from './components/BuildingInfo';
-import { BUILDING_INFO_LABEL } from './utils/buildingInfo';
 import { sortByDistance } from './utils/direction';
 import { notify } from './utils/notify';
 import { mapEngineStatus, MAP_STATUS_LABEL, MAP_STATUS_REASON_TEXT } from './utils/mapEngineStatus';
@@ -462,6 +463,8 @@ const App = () => {
   );
 
   const [showBuildingInfo, setShowBuildingInfo] = useState(false);
+  // The place waiting on "Set as meeting point"'s confirmation, or null.
+  const [meetingPointToConfirm, setMeetingPointToConfirm] = useState(null);
 
   // --- ADDED: ROUTING STATE ---
   const [routeStart, setRouteStart] = useState(null);
@@ -1660,10 +1663,10 @@ const App = () => {
   };
 
   // --- TACTICAL ROUTING ENGINE ---
-  // Finalizing a destination here also designates it as the squad's shared
-  // rally point (publish-waypoint) — SELECT_WAYPOINT previously only ever
-  // updated this client's own local route HUD, so no marker ever reached
-  // anyone else in the squad.
+  // Sets the group's meeting point (publish-waypoint): only from the place card's "Set as
+  // meeting point", once confirmed. Navigate used to do this too (8602d13, 2026-08-03, from
+  // when it was the only way to share a place); since the redesign (P5c) it starts only
+  // your own route.
   const publishSquadWaypoint = (destination) => {
     const waypoint = { lat: destination.lat, lng: destination.lng, name: destination.name };
     setActiveWaypoint(waypoint);
@@ -1678,7 +1681,6 @@ const App = () => {
         setRouteStart({ name: "MY_LOCATION", ...liveLocation });
         setRouteEnd(targetCoords);
         calculateActualRoute({ name: "MY_LOCATION", ...liveLocation }, targetCoords);
-        publishSquadWaypoint(targetCoords);
       } else {
         setRouteStart(targetCoords);
       }
@@ -1687,7 +1689,6 @@ const App = () => {
       setRouteEnd(targetCoords);
       setSelectedItem(null);
       calculateActualRoute(routeStart, targetCoords);
-      publishSquadWaypoint(targetCoords);
     }
   };
 
@@ -1736,16 +1737,9 @@ const App = () => {
     setRouteData(null);
   };
 
-  // The tracking panel's own close (X) button, specifically — asks the server
-  // to clear the squad's shared waypoint too (mirroring the Commander's
-  // dedicated CLEAR button exactly: same emit, same server-side owner-only
-  // check), rather than optimistically clearing activeWaypoint here and
-  // risking this viewer's map disagreeing with everyone else's about whether
-  // the rally point still exists.
-  const closeWaypointTrackingPanel = () => {
-    clearRoute();
-    if (activeWaypoint) socket.emit('clear-waypoint', squadCode);
-  };
+  // The route card's "End route" ends your own route and nothing else. It used to clear the
+  // group's meeting point as well (2ec4aa8), back when Navigate was what set it; now the
+  // meeting point goes only by Remove on its marker or the Group Lead's clear.
 
 
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
@@ -1753,7 +1747,10 @@ const App = () => {
   // --- LIVE LOCATION MARKER STATE ---
   // Movement alone (no waypoint needed) already counts as "navigating" —
   // drop the speed clause here if that should require an explicit waypoint instead.
-  const isNavigating = Boolean(activeWaypoint) || liveSpeed > NAVIGATING_SPEED_MPS;
+  // Your own destination (Navigate, from where you are), or null. Building-to-building routes
+  // without a fix have no live start, so no walking line.
+  const personalTarget = routeStart?.name === 'MY_LOCATION' && routeEnd ? routeEnd : null;
+  const isNavigating = Boolean(activeWaypoint || personalTarget) || liveSpeed > NAVIGATING_SPEED_MPS;
   const liveHeading = useLiveHeading({
     lat: liveLocation?.lat,
     lng: liveLocation?.lng,
@@ -1778,13 +1775,22 @@ const App = () => {
     liveLocation,
     activeWaypoint,
   });
+  // The same walking route, to your own destination while you have one: the map shows that
+  // line instead of the meeting point's. AR Scan's road line still follows the meeting
+  // point's route only (walkingRoute), as before.
+  const personalRoute = useWalkingRoute({
+    engine: mapEngineFailed ? 'leaflet' : 'google',
+    liveLocation,
+    activeWaypoint: personalTarget,
+  });
+  const shownRoute = personalTarget ? personalRoute : walkingRoute;
 
   // Live navigation line from the operative's own position to the active
   // squad waypoint — same "no-op on Leaflet/before mount" gating as above.
   useWaypointNavigationLine(
     !mapEngineFailed && isMapReady ? mapRef.current : null,
-    walkingRoute?.path,
-    walkingRoute?.isRealRoute,
+    shownRoute?.path,
+    shownRoute?.isRealRoute,
     '#EF4444'
   );
 
@@ -1800,24 +1806,13 @@ const App = () => {
   const canClearWaypoint = squadRole === 'OWNER'
     || Boolean(activeWaypoint?.setBy && activeWaypoint.setBy === (user?.uid || socket.id));
 
-  // The route panel opened by choosing a destination is what published that Rally Point,
-  // and it tracks it: when the Rally Point is cleared (by anyone), the panel closes with it
-  // rather than staying up, still pointing the way to a Rally Point that no longer exists.
-  const trackedWaypointRef = useRef(null);
-  useEffect(() => {
-    const tracked = trackedWaypointRef.current;
-    trackedWaypointRef.current = activeWaypoint;
-    if (tracked && !activeWaypoint && routeEnd?.lat === tracked.lat && routeEnd?.lng === tracked.lng) {
-      setRouteStart(null);
-      setRouteEnd(null);
-      setRouteData(null);
-    }
-  }, [activeWaypoint, routeEnd]);
+  // Your own route (Navigate) is yours alone: it no longer closes when the group's meeting
+  // point is removed, since choosing a destination no longer sets one.
 
   const isTrackingSquadWaypoint = Boolean(
     routeEnd && activeWaypoint && routeEnd.lat === activeWaypoint.lat && routeEnd.lng === activeWaypoint.lng
   );
-  const displayedRouteData = (isTrackingSquadWaypoint && walkingRoute) || routeData;
+  const displayedRouteData = (personalTarget && personalRoute) || (isTrackingSquadWaypoint && walkingRoute) || routeData;
 
   // --- TACTICAL MAP RENDERING ENGINE ---
   // Memoised on exactly the inputs that can change the map's configuration.
@@ -2104,8 +2099,8 @@ const App = () => {
             className="absolute top-24 left-1/2 -translate-x-1/2 z-[850] md:z-[1000] w-[90%] max-w-md bg-black border border-red-500 pointer-events-auto shadow-[0_0_30px_rgba(239,68,68,0.2)]"
           >
             <div className="p-4 flex flex-col gap-2 relative">
-              <button onClick={closeWaypointTrackingPanel} className="absolute top-2 right-2 text-zinc-500 hover:text-white">
-                <X size={16} />
+              <button onClick={clearRoute} aria-label={ROUTE.end} title={ROUTE.end} className="absolute top-2 right-2 flex items-center gap-1 text-zinc-400 hover:text-white font-dot text-[10px] uppercase tracking-widest">
+                {ROUTE.end} <X size={16} />
               </button>
 
               <div className="flex items-center gap-2 text-red-500 font-dot text-xs uppercase tracking-widest">
@@ -2611,7 +2606,7 @@ const App = () => {
               ghostMembers={ghostMembers}
               activeTab={activeTab}
               activeWaypoint={activeWaypoint}
-              walkingRoute={walkingRoute}
+              walkingRoute={shownRoute}
               canClearWaypoint={canClearWaypoint}
               highlightBuildingId={(activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null}
               onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}
@@ -2841,73 +2836,47 @@ const App = () => {
         </button>
       </div>
 
-      {/* Selected Location Card. On a phone it sits above the floating SOS button (80 px
-          tall, 80 px up, plus the safe area): it used to start at 96 px, so SOS - drawn on
-          top - covered the card's first button. 11rem clears it with a gap. */}
+      {/* The place card (components/PlaceCard.jsx). On a phone it sits above the floating SOS
+          button (80 px tall, 80 px up, plus the safe area): it used to start at 96 px, so SOS -
+          drawn on top - covered the card's first button. 11rem clears it with a gap. */}
       <AnimatePresence>
         {selectedItem && activeTab === 'buildings' && (
           <motion.div
-            initial={{ opacity: 0, x: 60 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 60 }}
-            transition={{ duration: 0.4 }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={reduceMotion ? { duration: 0.15 } : PANEL_SPRING}
             data-testid="location-card"
-            className="absolute inset-x-4 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 z-[600] md:w-80 max-h-[55vh] md:max-h-none overflow-y-auto bg-black border border-white/20 pointer-events-auto flex flex-col pt-6 pb-2"
+            className="absolute inset-x-3 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 z-[600] md:w-96 max-h-[60vh] md:max-h-[80vh] overflow-y-auto rounded-card pointer-events-auto"
           >
-            <div className="px-6 pb-4 border-b border-white/20 flex justify-between items-start">
-              <div className="flex-1 pr-4">
-                <span className="inline-block border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest px-2 py-0.5 mb-2">
-                  SYS_NODE // {selectedItem.category}
-                </span>
-                <h2 className="text-xl font-dot uppercase tracking-widest text-white leading-tight">{selectedItem.name}</h2>
-              </div>
-              <button onClick={() => setSelectedItem(null)} className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors shrink-0">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="p-6 pb-4">
-              <p className="font-inter text-zinc-400 text-sm leading-relaxed">{selectedItem.info}</p>
-            </div>
-
-
-            <div className="px-6 pb-4 flex gap-3">
-              <button
-                onClick={() => setShowBuildingInfo((open) => !open)}
-                aria-expanded={showBuildingInfo}
-                className="flex-1 py-3 border border-white/20 hover:bg-white/10 font-dot text-[10px] text-white flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
-              >
-                <Info size={14} className="text-red-500" /> {BUILDING_INFO_LABEL}
-              </button>
-
-              {/* Always show the Waypoint/Destination button */}
-              <button
-                onClick={() => setArTarget({ lat: selectedItem.lat, lng: selectedItem.lng, name: selectedItem.name })}
-                className="flex-1 py-3 bg-black border border-white/20 text-white hover:border-red-500 hover:text-red-500 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
-              >
-                <Crosshair size={14} /> AR_TRACK
-              </button>
-              <button
-                onClick={() => handleWaypointSelect(selectedItem)}
-                className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
-              >
-                <Navigation size={14} /> {routeStart && !routeEnd ? "SET_DESTINATION" : "WAYPOINT"}
-              </button>
-            </div>
-
-            {showBuildingInfo && (
-              <BuildingInfo
-                building={selectedItem}
-                me={liveLocation}
-                heading={heading}
-                headingLive={hasHeadingReading}
-                onTakeMeThere={() => handleWaypointSelect(selectedItem)}
-                onShowOnMap={() => showBuildingOnMap(selectedItem)}
-              />
-            )}
+            <PlaceCard
+              place={selectedItem}
+              me={liveLocation}
+              heading={heading}
+              headingLive={hasHeadingReading}
+              choosingDestination={Boolean(routeStart && !routeEnd)}
+              expanded={showBuildingInfo}
+              onToggleExpanded={() => setShowBuildingInfo((open) => !open)}
+              onClose={() => setSelectedItem(null)}
+              onNavigate={() => handleWaypointSelect(selectedItem)}
+              onArScan={() => setArTarget({ lat: selectedItem.lat, lng: selectedItem.lng, name: selectedItem.name })}
+              // Who may set one follows the server: any member of the group.
+              onSetMeetingPoint={hasJoinedSquad ? () => setMeetingPointToConfirm(selectedItem) : null}
+              onShowOnMap={() => showBuildingOnMap(selectedItem)}
+            />
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* "Set as meeting point" asks first: it moves the meeting point on everyone's map. */}
+      <MeetingPointConfirm
+        place={meetingPointToConfirm}
+        onConfirm={() => {
+          publishSquadWaypoint(meetingPointToConfirm);
+          setMeetingPointToConfirm(null);
+        }}
+        onCancel={() => setMeetingPointToConfirm(null)}
+      />
 
       {/* --- PRIVACY MODAL --- */}
       <AnimatePresence>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// The building card's "Building Info" option, driven through the real App.jsx: it must open
+// The place card's "More about this place", driven through the real App.jsx: it must open
 // to something for every building, never a blank, an error or "undefined".
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent, within, waitFor } from '@testing-library/react';
@@ -81,6 +81,7 @@ const { default: App } = await import('../src/App.jsx');
 const { SRM_MASTER_DATABASE } = await import('../src/srmDatabase.js');
 const { __resetNotifications } = await import('../src/utils/notify.js');
 const { BUILDING_INFO_LABEL, BUILDING_INFO_EMPTY_TEXT } = await import('../src/utils/buildingInfo.js');
+const { PLACE } = await import('../src/copy/place.js');
 
 const joinAsMember = async () => {
   fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
@@ -136,9 +137,11 @@ describe('the building card', () => {
       const info = openInfo(card);
       expect(info.textContent.trim().length, name).toBeGreaterThan(0);
       expect(info.textContent, name).not.toMatch(/undefined|null|NaN/);
-      expect(within(info).getByRole('button', { name: /take me there/i })).toBeTruthy();
-      expect(within(info).getByRole('button', { name: /show on map/i })).toBeTruthy();
-      fireEvent.click(within(card).getAllByRole('button')[0]); // close the card
+      // Navigate and AR Scan stay on the card; Show on map and Show less sit under them.
+      expect(within(card).getByRole('button', { name: PLACE.navigate })).toBeTruthy();
+      expect(within(card).getByRole('button', { name: PLACE.showOnMap })).toBeTruthy();
+      expect(within(card).getByRole('button', { name: PLACE.less })).toBeTruthy();
+      fireEvent.click(within(card).getByRole('button', { name: PLACE.close }));
     }
   });
 
@@ -151,31 +154,54 @@ describe('the building card', () => {
     expect(info.textContent).not.toContain(BUILDING_INFO_EMPTY_TEXT);
   });
 
-  it('falls back to the friendly line, with both actions, when a building has none', async () => {
+  it('falls back to the friendly line when a building has none', async () => {
     render(<App />);
     await joinAsMember();
     const info = openInfo(await openCard(byName(NO_INFO)));
     expect(info.textContent).toContain(BUILDING_INFO_EMPTY_TEXT);
-    expect(info.textContent).toContain(NO_INFO);
   });
 
   it('Show on map glides to the building', async () => {
     render(<App />);
     await joinAsMember();
     const b = byName('TECH PARK');
-    const info = openInfo(await openCard(b));
+    const card = await openCard(b);
+    openInfo(card);
     focus.spy.mockClear();
-    fireEvent.click(within(info).getByRole('button', { name: /show on map/i }));
+    fireEvent.click(within(card).getByRole('button', { name: PLACE.showOnMap }));
     expect(focus.spy).toHaveBeenCalledTimes(1);
     expect(focus.spy.mock.calls[0][0]).toEqual({ lat: b.lat, lng: b.lng, zoom: 19 });
   });
 
-  it('Take me there starts the waypoint flow, closing the card', async () => {
+  // "Take me there" (the old Building Info panel's) did exactly what Navigate does: both
+  // called handleWaypointSelect with the same place. So it went, and Navigate stays.
+  it('has no "Take me there": Navigate does the same, closing the card', async () => {
     render(<App />);
     await joinAsMember();
-    const info = openInfo(await openCard(byName('TECH PARK')));
-    fireEvent.click(within(info).getByRole('button', { name: /take me there/i }));
+    const card = await openCard(byName('TECH PARK'));
+    openInfo(card);
+    expect(within(card).queryByRole('button', { name: /take me there/i })).toBeNull();
+    fireEvent.click(within(card).getByRole('button', { name: PLACE.navigate }));
     await waitFor(() => expect(screen.queryByTestId('location-card')).toBeNull());
+  });
+
+  it('opens "More about this place" in place, and Show less closes it', async () => {
+    render(<App />);
+    await joinAsMember();
+    const card = await openCard(byName('TECH PARK'));
+    const more = within(card).getByRole('button', { name: PLACE.more });
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    openInfo(card);
+    fireEvent.click(within(card).getByRole('button', { name: PLACE.less }));
+    expect(screen.queryByTestId('building-info')).toBeNull();
+  });
+
+  it('shows the category and the name, without the old tactical labels', async () => {
+    render(<App />);
+    await joinAsMember();
+    const card = await openCard(byName('TECH PARK'));
+    expect(within(card).getByText('Academic')).toBeTruthy();
+    expect(card.textContent).not.toMatch(/SYS_NODE|AR_TRACK|WAYPOINT|SET_DESTINATION/);
   });
 
   it('closes Building Info when another building is picked', async () => {

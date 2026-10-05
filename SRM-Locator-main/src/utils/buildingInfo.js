@@ -10,10 +10,12 @@
 //   floors       number      storeys above ground
 //   facilities   string[]    notable rooms or facilities
 
+import { PLACE } from '../copy/place.js';
+
 /** Name of the option shown to users. */
-export const BUILDING_INFO_LABEL = 'Building Info';
+export const BUILDING_INFO_LABEL = PLACE.more;
 /** Shown when a building has no extra details yet. */
-export const BUILDING_INFO_EMPTY_TEXT = 'More details coming soon';
+export const BUILDING_INFO_EMPTY_TEXT = PLACE.noDetails;
 
 export const BUILDING_DETAILS = {
   2: { departments: ['CSE', 'IT'], floors: 15 },

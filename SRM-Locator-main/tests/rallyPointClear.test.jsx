@@ -15,7 +15,7 @@
 // Renders the real App.jsx; the Leaflet engine (the one in use without a Maps key) is
 // stood in for by the real WaypointMarker, wired the way TacticalLeafletMap wires it.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
   const handlers = new Map();
@@ -102,6 +102,8 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 });
 
 const { default: App } = await import('../src/App.jsx');
+const { SRM_MASTER_DATABASE } = await import('../src/srmDatabase.js');
+const { PLACE, MEETING_POINT_CONFIRM, ROUTE } = await import('../src/copy/place.js');
 
 const RALLY = { lat: 12.8231, lng: 80.0442, name: 'RALLY POINT' };
 const FIX = { coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } };
@@ -201,19 +203,120 @@ describe('a Rally Point leaving the map', () => {
     await waitFor(() => expect(rallyPointOnMap()).toBeNull());
   });
 
-  it('closes the route panel that was tracking it', async () => {
-    gpsFix = FIX; // choosing a destination routes from the user's own position
+  it("doesn't end your own route: Navigate no longer sets it, so the two are separate", async () => {
+    gpsFix = FIX;
     render(<App />);
     await joinAsMember('KTR7X9');
     await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
 
     fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
     expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
-    const [[published]] = emitted('publish-waypoint');
-    act(() => fakeSocket.receive('new-waypoint', { ...published.waypoint, setBy: 'u-self' }));
-
+    act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-other' }));
     act(() => fakeSocket.receive('remove-waypoint'));
+    expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
+  });
+});
+
+// Navigate starts your own route only. It used to set the group's meeting point as well
+// (8602d13); the meeting point is now set only by "Set as meeting point", after a
+// confirmation, and removed only by Remove on its marker or the Group Lead's clear.
+describe('Navigate and the meeting point', () => {
+  const building = SRM_MASTER_DATABASE[0];
+  const openCard = async () => {
+    fireEvent.click((await screen.findAllByText(building.name))[0]);
+    return screen.getByTestId('location-card');
+  };
+  const endRoute = () => screen.getByRole('button', { name: ROUTE.end });
+
+  beforeEach(() => {
+    // The walking route asks a routing service; here it falls back to the straight line.
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('offline'))));
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("the card's Navigate starts your own route and tells nobody", async () => {
+    gpsFix = FIX;
+    render(<App />);
+    await joinAsMember();
+    await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
+
+    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.navigate }));
+    expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
+    expect(emitted('publish-waypoint')).toEqual([]);
+    expect(leaflet.props.activeWaypoint).toBeNull();
+  });
+
+  it("the buildings list's Navigate is your own route too", async () => {
+    gpsFix = FIX;
+    render(<App />);
+    await joinAsMember();
+    await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
+    expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
+    expect(emitted('publish-waypoint')).toEqual([]);
+  });
+
+  it('draws the walking line to your own destination, with the same route the meeting point uses', async () => {
+    gpsFix = FIX;
+    render(<App />);
+    await joinAsMember();
+    await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
+
+    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.navigate }));
+    await waitFor(() => expect(leaflet.props.walkingRoute?.path.at(-1)).toMatchObject({ lat: building.lat, lng: building.lng }));
+  });
+
+  it("without a fix it is two steps, and the second place's button says so", async () => {
+    render(<App />);
+    await joinAsMember();
+    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.navigate }));
+    fireEvent.click((await screen.findAllByText(SRM_MASTER_DATABASE[1].name))[0]);
+    expect(within(screen.getByTestId('location-card')).getByRole('button', { name: PLACE.setDestination })).toBeTruthy();
+  });
+
+  it('"Set as meeting point" asks first, then sets it as before', async () => {
+    render(<App />);
+    await joinAsMember();
+    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.setMeetingPoint }));
+
+    const dialog = screen.getByRole('dialog', { name: MEETING_POINT_CONFIRM.title(building.name) });
+    expect(emitted('publish-waypoint')).toEqual([]);
+    fireEvent.click(within(dialog).getByRole('button', { name: MEETING_POINT_CONFIRM.confirm }));
+    expect(emitted('publish-waypoint')).toEqual([
+      [{ roomCode: 'KTR7X9', waypoint: { lat: building.lat, lng: building.lng, name: building.name } }],
+    ]);
+  });
+
+  it('Cancel sets nothing', async () => {
+    render(<App />);
+    await joinAsMember();
+    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.setMeetingPoint }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: MEETING_POINT_CONFIRM.title(building.name) })).getByRole('button', { name: MEETING_POINT_CONFIRM.cancel }));
+    expect(emitted('publish-waypoint')).toEqual([]);
+  });
+
+  it("End route ends only your route, even for the Group Lead with a meeting point up", async () => {
+    gpsFix = FIX;
+    render(<App />);
+    await createAsCommander();
+    await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
+    act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-self' }));
+
+    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.navigate }));
+    fireEvent.click(endRoute());
     await waitFor(() => expect(screen.queryByText('ACTIVE_WAYPOINT_TRACKING')).toBeNull());
+    expect(emitted('clear-waypoint')).toEqual([]);
+    expect(leaflet.props.activeWaypoint).toMatchObject({ lat: RALLY.lat, lng: RALLY.lng });
+  });
+
+  it("the Group Lead's CLEAR in the group panel still clears it", async () => {
+    render(<App />);
+    await createAsCommander();
+    act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-other' }));
+    openSquadTab();
+    fireEvent.click(screen.getByRole('button', { name: /^CLEAR$/ }));
+    expect(emitted('clear-waypoint')).toHaveLength(1);
   });
 });
 

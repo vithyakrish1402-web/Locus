@@ -27,14 +27,16 @@ import LiveUpdateToast from '../../components/LiveUpdateToast';
 import SquadMemberCard from '../../components/SquadMemberCard';
 import { CodeTiles, CodeInput } from '../../components/SquadCode';
 import BottomTabBar from '../../components/BottomTabBar';
-import BuildingInfo from '../../components/BuildingInfo';
+import PlaceCard from '../../components/PlaceCard';
+import MeetingPointConfirm from '../../components/MeetingPointConfirm';
+import { SRM_MASTER_DATABASE } from '../../srmDatabase';
 import ARTag from '../../components/ARTag';
 import LocusGuide from '../../LocusGuide';
 import BootScreen from '../../components/access/BootScreen';
 import { notify, __resetNotifications } from '../../utils/notify';
 import { UpdateStatus } from '../../hooks/useAppUpdate';
 import { LiveUpdateStatus } from '../../hooks/useLiveUpdate';
-import { AR_TAGS, BUILDING, ME, MEMBERS, NOTICES, SOS, appUpdate, liveUpdate } from './sampleData';
+import { AR_TAGS, ME, MEMBERS, NOTICES, SOS, appUpdate, liveUpdate } from './sampleData';
 
 const params = new URLSearchParams(window.location.search);
 
@@ -138,18 +140,52 @@ const SCREENS = {
     label: 'Bottom tab bar',
     render: () => <BottomTabBar tabs={TABS} activeId="grid" onSelect={() => {}} />,
   },
-  'place-details': {
-    label: 'More about this place',
+  'place-card': { label: 'Place card', render: () => <PlaceOnMap place={campusPlace(2)} /> },
+  'place-card-more': { label: 'Place card, more about this place', render: () => <PlaceOnMap place={campusPlace(2)} expanded /> },
+  'place-card-no-details': { label: 'Place card, no more details', render: () => <PlaceOnMap place={campusPlace(39)} expanded /> },
+  'place-card-second-step': { label: 'Place card, choosing a destination (no GPS)', render: () => <PlaceOnMap place={campusPlace(2)} me={null} choosingDestination /> },
+  'meeting-point-confirm': {
+    label: 'Set as meeting point (confirm)',
     render: () => (
-      <div style={{ paddingTop: 120 }}>
-        <BuildingInfo building={BUILDING} me={ME} heading={0} headingLive onTakeMeThere={() => {}} onShowOnMap={() => {}} />
-      </div>
+      <>
+        <PlaceOnMap place={campusPlace(2)} />
+        <MeetingPointConfirm place={campusPlace(2)} onConfirm={() => {}} onCancel={() => {}} />
+      </>
     ),
   },
   'ar-tags-bright': { label: 'AR Scan labels over a bright scene', render: () => <ArTags scene="bright" /> },
   'ar-tags-dark': { label: 'AR Scan labels over a dark scene', render: () => <ArTags scene="dark" /> },
   guide: { label: 'Guide (signed-out landing page)', render: () => <LocusGuide onInitialize={() => {}} /> },
 };
+
+// A place from the campus data, as the app has it.
+const campusPlace = (id) => SRM_MASTER_DATABASE.find((b) => b.id === id);
+
+// The place card where the app puts it: above the Emergency button's spot, on the screen's
+// background (the map behind it is the Map batch's).
+function PlaceOnMap({ place, expanded = false, me = ME, choosingDestination = false }) {
+  const [open, setOpen] = useState(expanded);
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: 'var(--color-bg)' }}>
+      <div style={{ position: 'absolute', left: 12, right: 12, bottom: 'calc(11rem)', maxHeight: '60vh', overflowY: 'auto', borderRadius: 16 }}>
+        <PlaceCard
+          place={place}
+          me={me}
+          heading={330}
+          headingLive
+          choosingDestination={choosingDestination}
+          expanded={open}
+          onToggleExpanded={() => setOpen((v) => !v)}
+          onClose={() => {}}
+          onNavigate={() => {}}
+          onArScan={() => {}}
+          onSetMeetingPoint={() => {}}
+          onShowOnMap={() => {}}
+        />
+      </div>
+    </div>
+  );
+}
 
 // The tokens themselves (src/theme/tokens.css), drawn with var() so each frame shows its
 // own theme's values.

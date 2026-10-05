@@ -160,6 +160,25 @@ describe('the AR road line', () => {
     expect(roadLine().querySelector('polygon').getAttribute('points').split(' ').length).toBeGreaterThan(4);
   });
 
+  // Navigate now starts your own route, drawn on the map with the same walking route. AR
+  // Scan's road line still follows the Rally Point's route only (the road to your own
+  // destination is the AR batch's job), so your own route must not take its place.
+  it('still follows the Rally Point while you are on your own route somewhere else', async () => {
+    const realFetch = globalThis.fetch;
+    // A real route only toward the Rally Point; anything else gets no answer.
+    globalThis.fetch = vi.fn(async (url) => (String(url).includes(`${RALLY.lng},${RALLY.lat}?`)
+      ? realFetch(url)
+      : Promise.reject(new Error('offline'))));
+    await onTheMapWithRally();
+    fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
+    await act(async () => {});
+    expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
+
+    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    await grantAndFaceNorth();
+    expect(roadLine()).toBeTruthy();
+  });
+
   it('runs up to the Rally Point tag: the tag sits on the road’s far end', async () => {
     await onTheMapWithRally();
     fireEvent.click(screen.getByTitle('AR Track Rally Point'));
