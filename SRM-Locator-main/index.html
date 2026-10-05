@@ -4,7 +4,26 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    
+
+    <!-- Light or dark, before first paint, so the wrong theme never flashes on screen. The
+         same rule as resolveTheme in src/theme/theme.js (which takes over once the app
+         runs); tests/themePrePaint.test.js keeps the two the same. -->
+    <script>
+      (function () {
+        var theme = 'light';
+        try {
+          var saved = window.localStorage.getItem('locus.theme');
+          if (saved === 'light' || saved === 'dark') theme = saved;
+          else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
+        } catch (e) {
+          try {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
+          } catch (e2) { /* no way to ask: light */ }
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+
     <script>
       if (typeof global === 'undefined') {
         window.global = window;

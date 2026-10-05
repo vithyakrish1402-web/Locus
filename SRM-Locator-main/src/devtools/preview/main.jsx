@@ -6,9 +6,8 @@
 // own chrome uses inline styles only, so Tailwind (which scans src/ for class names when it
 // builds the app's stylesheet) picks up nothing from it.
 //
-// Until the theme tokens exist (redesign piece P1), both frames render the same dark UI;
-// each frame already sets data-theme="light" / "dark" on its <html>, which is what P1 will
-// key off.
+// Each frame sets data-theme="light" / "dark" on its <html>, which the design tokens
+// (src/theme/tokens.css) key off. Screens not yet converted to the tokens look the same in both.
 // An entry point that nothing imports, so react-refresh has no module boundary to keep.
 /* eslint-disable react-refresh/only-export-components */
 import React, { useEffect } from 'react';
@@ -60,6 +59,7 @@ const pad = { padding: 16, display: 'flex', flexDirection: 'column', gap: 16 };
 
 // Each screen: what a frame shows (see Frame).
 const SCREENS = {
+  tokens: { label: 'Design tokens', render: () => <TokenSheet /> },
   'emergency-button': {
     label: 'Emergency button (resting)',
     render: () => <SosTrigger socket={null} getLocation={() => ME} roomCode="K7M2QX" senderName="ALPHA" />,
@@ -133,6 +133,74 @@ const SCREENS = {
   guide: { label: 'Guide (signed-out landing page)', render: () => <LocusGuide onInitialize={() => {}} /> },
 };
 
+// The tokens themselves (src/theme/tokens.css), drawn with var() so each frame shows its
+// own theme's values.
+const SWATCHES = [
+  ['bg', 'Background'], ['surface', 'Surface'], ['raised', 'Raised'], ['sunken', 'Sunken'],
+  ['border', 'Divider'], ['border-control', 'Control outline'], ['text', 'Text'], ['text-secondary', 'Supporting text'],
+  ['accent', 'Accent'], ['accent-pressed', 'Accent pressed'], ['accent-soft', 'Accent soft'], ['accent-halo', 'Accent halo'],
+  ['success', 'Success'], ['success-soft', 'Success soft'], ['warning', 'Warning'], ['warning-soft', 'Warning soft'],
+  ['danger', 'Danger'], ['danger-soft', 'Danger soft'], ['emergency', 'Emergency band'], ['backdrop', 'Backdrop'],
+  ['map-land', 'Map land'], ['map-road', 'Map road'], ['map-green', 'Map green'], ['map-water', 'Map water'],
+];
+const TYPE = ['display', 'title', 'heading', 'body', 'label', 'secondary', 'caption', 'numeric'];
+const tokenType = (name) => ({
+  fontFamily: 'var(--font-ui)',
+  fontSize: `var(--text-${name})`,
+  lineHeight: `var(--text-${name}--line-height)`,
+  fontWeight: `var(--text-${name}--font-weight)`,
+});
+
+function TokenSheet() {
+  const c = (name) => `var(--color-${name})`;
+  const section = { font: '600 11px system-ui, sans-serif', letterSpacing: 0.4, color: c('text-secondary'), margin: '20px 0 8px' };
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', background: c('bg'), color: c('text'), padding: 16, boxSizing: 'border-box', fontFamily: 'var(--font-ui)' }}>
+      <div style={{ ...tokenType('title') }}>Design tokens</div>
+      <div style={{ ...tokenType('secondary'), color: c('text-secondary') }}>
+        {document.documentElement.dataset.theme === 'dark' ? 'Dark' : 'Light'} theme, from src/theme/tokens.css
+      </div>
+
+      <p style={section}>Colour roles</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+        {SWATCHES.map(([name, label]) => (
+          <div key={name}>
+            <div style={{ height: 36, borderRadius: 'var(--radius-fill)', background: c(name), boxShadow: `inset 0 0 0 1px ${c('border')}` }} />
+            <div style={{ ...tokenType('caption'), marginTop: 4, color: c('text-secondary') }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      <p style={section}>Card on the background, with text</p>
+      <div style={{ background: c('surface'), borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-1)', padding: 16 }}>
+        <div style={tokenType('heading')}>Tech Park</div>
+        <div style={{ ...tokenType('secondary'), color: c('text-secondary') }}>180 m · 2 o&apos;clock</div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <span style={{ ...tokenType('label'), background: c('accent'), color: c('accent-on'), borderRadius: 999, padding: '10px 16px' }}>Navigate</span>
+          <span style={{ ...tokenType('label'), background: c('accent-soft'), color: c('accent'), borderRadius: 999, padding: '10px 16px' }}>AR Scan</span>
+        </div>
+        <div style={{ ...tokenType('secondary'), marginTop: 12, padding: '8px 12px', borderRadius: 'var(--radius-input)', background: c('warning-soft'), color: c('warning') }}>
+          Location is off, so your group can&apos;t see you.
+        </div>
+      </div>
+
+      <p style={section}>Type scale (Inter)</p>
+      {TYPE.map((name) => (
+        <div key={name} style={tokenType(name)}>{name === 'numeric' ? '340 m' : name[0].toUpperCase() + name.slice(1)}</div>
+      ))}
+
+      <p style={section}>Corners and shadows</p>
+      <div style={{ display: 'flex', gap: 12, paddingBottom: 24 }}>
+        {[['fill', 'shadow-1'], ['input', 'shadow-1'], ['card', 'shadow-2'], ['sheet', 'shadow-3']].map(([r, s]) => (
+          <div key={r} style={{ flex: 1, height: 56, background: c('raised'), borderRadius: `var(--radius-${r})`, boxShadow: `var(--${s})`, display: 'grid', placeItems: 'center', ...tokenType('caption') }}>
+            {r}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Stand-ins for a camera picture: a sunlit sky over a pale building, and dusk.
 const SCENES = {
   bright: 'linear-gradient(180deg, #cfe6ff 0%, #eef5fb 45%, #d9d4c7 46%, #bfb8a8 100%)',
@@ -164,16 +232,14 @@ function Frame({ id, theme }) {
   );
 }
 
-// Inside a frame: just the screen, filling the phone.
-function FrameContent({ id, theme }) {
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+// Inside a frame: just the screen, filling the phone. (Its theme is set on <html> before the
+// first render; see the bottom of this file.)
+function FrameContent({ id }) {
   return <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>{SCREENS[id].render()}</div>;
 }
 
 function Gallery() {
-  const id = SCREENS[params.get('screen')] ? params.get('screen') : 'emergency-button';
+  const id = SCREENS[params.get('screen')] ? params.get('screen') : 'tokens';
   const themes = params.get('theme') === 'light' ? ['light'] : params.get('theme') === 'dark' ? ['dark'] : ['light', 'dark'];
   const screen = SCREENS[id];
 
@@ -182,7 +248,7 @@ function Gallery() {
       <header style={{ marginBottom: 20 }}>
         <h1 style={{ font: '700 20px system-ui, sans-serif', margin: '0 0 4px' }}>LOCUS preview — {screen.label}</h1>
         <p style={{ margin: '0 0 12px', color: '#566070' }}>
-          Dev-only. Real components with sample data. Light and dark look the same until the theme piece (P1) lands.
+          Dev-only. Real components with sample data. Screens not yet converted to the design tokens look the same in light and dark.
         </p>
         <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {Object.entries(SCREENS).map(([key, s]) => (
@@ -212,9 +278,10 @@ function Gallery() {
   );
 }
 
-const frameId = SCREENS[params.get('screen')] ? params.get('screen') : 'emergency-button';
+const frameId = SCREENS[params.get('screen')] ? params.get('screen') : 'tokens';
+if (params.get('frame') === '1') document.documentElement.dataset.theme = params.get('theme') === 'light' ? 'light' : 'dark';
 createRoot(document.getElementById('preview-root')).render(
   params.get('frame') === '1'
-    ? <FrameContent id={frameId} theme={params.get('theme') === 'light' ? 'light' : 'dark'} />
+    ? <FrameContent id={frameId} />
     : <Gallery />,
 );

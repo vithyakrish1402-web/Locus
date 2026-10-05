@@ -9,6 +9,8 @@
 @import "@fontsource/inter/latin-600.css";
 @import "@fontsource/inter/latin-700.css";
 @import "tailwindcss";
+/* Light and dark design tokens (redesign). Screens move onto them one piece at a time. */
+@import "./theme/tokens.css";
 
 /* ---------------------------------------------------------------- touch feel */
 

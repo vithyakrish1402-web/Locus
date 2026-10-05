@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import { installPressFeedback } from './utils/pressFeedback.js'
+import { installTheme } from './theme/theme.js'
+
+// Light or dark: the saved choice, else the phone's own setting, followed live while the
+// choice is System (index.html already set it once, before first paint).
+installTheme()
 
 // App-wide "sonar ping" on every press (see src/utils/pressFeedback.js).
 installPressFeedback()
