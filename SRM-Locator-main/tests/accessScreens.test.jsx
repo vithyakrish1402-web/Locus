@@ -275,6 +275,7 @@ describe('joining a group', () => {
   });
 
   it("tells the truth when sharing is paused: the mode carries over from the last group", () => {
+    navigator.geolocation.getCurrentPosition = vi.fn((ok) => ok({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: LOBBY.createButton }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
@@ -288,6 +289,22 @@ describe('joining a group', () => {
     expect(youreIn.textContent).toContain(YOURE_IN.body.FROZEN);
     expect(youreIn.textContent).toContain(YOURE_IN.chip.FROZEN);
     expect(youreIn.textContent).not.toContain(YOURE_IN.chip.ACTIVE);
+  });
+
+  it("paused before any fix: says no spot has been shared, never that the group sees one", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: LOBBY.createButton }));
+    act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
+
+    joinAs('K7M2QX');
+    act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'K7M2QX' }));
+    const youreIn = screen.getByRole('dialog', { name: YOURE_IN.title });
+    expect(youreIn.textContent).toContain('no spot has been shared yet');
+    expect(youreIn.textContent).toContain('Sharing paused · no spot shared yet');
+    expect(youreIn.textContent).not.toContain('the group sees where you were');
   });
 
   it('turned down: its own screen, then Try another code goes back with the code kept', () => {

@@ -45,11 +45,15 @@ const DOT = { ACTIVE: 'live', FROZEN: 'paused', GHOST: 'hidden' };
 /**
  * The sharing chip, first in the stack under the top bar (App.jsx): your own setting, in
  * words. No button on it (the design's Pause on the chip is not in this phase). Live with no
- * fix yet (`waiting`) says so instead of "Sharing live": nothing has been shared.
- * @param {{ mode: 'ACTIVE'|'FROZEN'|'GHOST', waiting?: boolean }} props
+ * fix yet (`waiting`) says so instead of "Sharing live", and Paused when the pause took no
+ * spot (`pausedNoSpot`) says so instead of "your group sees your last spot": in both,
+ * nothing has been shared.
+ * @param {{ mode: 'ACTIVE'|'FROZEN'|'GHOST', waiting?: boolean, pausedNoSpot?: boolean }} props
  */
-export function SharingChip({ mode, waiting = false }) {
-  const key = waiting && mode === 'ACTIVE' ? 'waiting' : mode;
+export function SharingChip({ mode, waiting = false, pausedNoSpot = false }) {
+  const key = waiting && mode === 'ACTIVE' ? 'waiting'
+    : pausedNoSpot && mode === 'FROZEN' ? 'pausedNoSpot'
+      : mode;
   return (
     <div className="flex">
       <p

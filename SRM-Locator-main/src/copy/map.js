@@ -16,6 +16,8 @@ export const SHARING_CHIP = {
   GHOST: "Hidden from other members' maps",
   // Live, but no fix yet (or the location explainer still open): nothing is being shared.
   waiting: 'Waiting for your location',
+  // Paused before any fix: the pause took no spot, so the group sees nothing.
+  pausedNoSpot: 'Sharing paused · no spot shared yet',
 };
 
 // The map's right-hand controls and the meeting point button.

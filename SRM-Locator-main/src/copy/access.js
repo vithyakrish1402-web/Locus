@@ -130,12 +130,15 @@ export const YOURE_IN = {
     GHOST: "Welcome to your group. You're hidden: other members won't see you on their map. Change it any time in the Group panel.",
     // Live, before the first fix: nothing has been shared yet.
     waiting: "Welcome to your group. Your location will be shared live once it's found. You can pause or hide it any time in the Group panel.",
+    // Paused, and the pause took no spot: the group sees nothing of you.
+    pausedNoSpot: "Welcome to your group. Your sharing is paused and no spot has been shared yet, so the group won't see you on their map. Change it any time in the Group panel.",
   },
   chip: {
     ACTIVE: 'Sharing live with your group',
     FROZEN: 'Sharing paused',
     GHOST: "Other members won't see you on their map",
     waiting: 'Waiting for your location',
+    pausedNoSpot: 'Sharing paused · no spot shared yet',
   },
   openMap: 'Open the map',
 };

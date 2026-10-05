@@ -664,6 +664,9 @@ const App = () => {
   // paused: { position (positionFor's result), heading, at (epoch ms) }, or null when there
   // was no fix to take. Nothing after that moment leaves this phone as a squad position.
   const pausedPositionRef = useRef(null);
+  // Whether that paused position exists, for what the screen says: paused before any fix
+  // shares no spot at all, so it mustn't say the group sees your last spot.
+  const [pausedHasSpot, setPausedHasSpot] = useState(false);
   // WiFi Arc Stage 6: every update-location payload takes its lat/lng/positionSource from
   // positionFor(gps). Off by default (src/utils/positionSource.js), and then it is always
   // the GPS fix with positionSource 'gps'. The Kalman filter and safety-ping stay on GPS.
@@ -1452,12 +1455,16 @@ const App = () => {
     const currentLoc = liveLocationRef.current;
     // Pausing takes the position the squad keeps seeing; any other mode drops it.
     if (telemetryMode !== 'FROZEN') pausedPositionRef.current = null;
-    if (!currentLoc || !user || !hasJoinedSquad) return;
+    if (!currentLoc || !user || !hasJoinedSquad) {
+      setPausedHasSpot(pausedPositionRef.current !== null);
+      return;
+    }
 
     const position = positionFor(currentLoc);
     if (telemetryMode === 'FROZEN') {
       pausedPositionRef.current = { position, heading: headingRef.current, at: Date.now() };
     }
+    setPausedHasSpot(pausedPositionRef.current !== null);
     socket.emit('update-location', {
       name: user.displayName, photo: user.photoURL,
       ...position,
@@ -1903,7 +1910,10 @@ const App = () => {
   // is dismissed.
   const showDeclinedCard = locationDeclined && !locationReady && !declinedCardDismissed;
   // "You're in" says live only once there is a fix to share (Map batch fixes).
-  const youreInKey = telemetryMode === 'ACTIVE' && !liveLocation ? 'waiting' : telemetryMode;
+  // Paused says no spot is shared when the pause took none (Map batch fixes, owner's wording).
+  const youreInKey = telemetryMode === 'ACTIVE' && !liveLocation ? 'waiting'
+    : telemetryMode === 'FROZEN' && !pausedHasSpot ? 'pausedNoSpot'
+      : telemetryMode;
 
   // The roadmap follows the app's theme (light or dark); satellite is photos either way.
   const mapOptions = useMemo(() => ({
@@ -2505,7 +2515,7 @@ const App = () => {
         className="absolute inset-x-3 z-[850] md:z-[1000] md:left-1/2 md:right-auto md:w-[28rem] md:-translate-x-1/2 pointer-events-none flex flex-col gap-2"
         style={{ top: BELOW_TOP_BAR }}
       >
-        {!(isTargetingMode && isMobile) && !locationError && !showDeclinedCard && <SharingChip mode={telemetryMode} waiting={!liveLocation} />}
+        {!(isTargetingMode && isMobile) && !locationError && !showDeclinedCard && <SharingChip mode={telemetryMode} waiting={!liveLocation} pausedNoSpot={!pausedHasSpot} />}
         <AnimatePresence initial={false}>
           {/* Choosing a meeting point (a phone's meeting point button). */}
           {isTargetingMode && (

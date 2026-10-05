@@ -161,12 +161,34 @@ describe('the sharing chip', () => {
     expect(chip().textContent).toBe(SHARING_CHIP.ACTIVE);
   });
 
-  it.each(['FROZEN', 'GHOST'])('%s with no fix yet keeps its own words', (mode) => {
+  it('Hidden with no fix yet keeps its own words', () => {
     onTheMap();
     fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: mode }));
-    expect(chip().dataset.mode).toBe(mode);
-    expect(chip().textContent).toBe(SHARING_CHIP[mode]);
+    fireEvent.click(screen.getByRole('button', { name: 'GHOST' }));
+    expect(chip().dataset.mode).toBe('GHOST');
+    expect(chip().textContent).toBe(SHARING_CHIP.GHOST);
+  });
+
+  it('Paused before any fix: "no spot shared yet", and still so once a fix arrives (it isn\'t shared)', () => {
+    let answer;
+    navigator.geolocation.getCurrentPosition = vi.fn((ok) => { answer = ok; });
+    onTheMap();
+    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
+    expect(chip().dataset.mode).toBe('pausedNoSpot');
+    expect(chip().textContent).toBe('Sharing paused · no spot shared yet');
+    act(() => answer({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
+    expect(chip().textContent).toBe('Sharing paused · no spot shared yet');
+  });
+
+  it('Paused after a fix: the group sees that spot, and Live again drops it', () => {
+    navigator.geolocation.getCurrentPosition = vi.fn((ok) => ok({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
+    onTheMap();
+    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
+    expect(chip().textContent).toBe(SHARING_CHIP.FROZEN);
+    fireEvent.click(screen.getByRole('button', { name: 'ACTIVE' }));
+    expect(chip().textContent).toBe(SHARING_CHIP.ACTIVE);
   });
 
   it('uses the owner\'s words, never "invisible" or "nobody can see you"', () => {
@@ -175,6 +197,7 @@ describe('the sharing chip', () => {
       FROZEN: 'Sharing paused · your group sees your last spot',
       GHOST: "Hidden from other members' maps",
       waiting: 'Waiting for your location',
+      pausedNoSpot: 'Sharing paused · no spot shared yet',
     });
     Object.values(SHARING_CHIP).forEach((w) => expect(w).not.toMatch(/invisible|nobody/i));
   });
