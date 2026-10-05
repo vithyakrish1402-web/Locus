@@ -137,7 +137,8 @@ describe('the sharing chip', () => {
     ['ACTIVE', null],
     ['FROZEN', 'FROZEN'],
     ['GHOST', 'GHOST'],
-  ])('%s', (mode, button) => {
+  ])('%s (with a fix)', (mode, button) => {
+    navigator.geolocation.getCurrentPosition = vi.fn((ok) => ok({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
     onTheMap();
     if (button) {
       fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
@@ -147,11 +148,32 @@ describe('the sharing chip', () => {
     expect(chip().textContent).toBe(SHARING_CHIP[mode]);
   });
 
+  it('live with no fix yet says "Waiting for your location", then "Sharing live" once the fix arrives', () => {
+    let answer;
+    navigator.geolocation.getCurrentPosition = vi.fn((ok) => { answer = ok; });
+    onTheMap();
+    expect(chip().dataset.mode).toBe('waiting');
+    expect(chip().textContent).toBe('Waiting for your location');
+    expect(chip().textContent).not.toMatch(/live/i);
+    act(() => answer({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
+    expect(chip().dataset.mode).toBe('ACTIVE');
+    expect(chip().textContent).toBe(SHARING_CHIP.ACTIVE);
+  });
+
+  it.each(['FROZEN', 'GHOST'])('%s with no fix yet keeps its own words', (mode) => {
+    onTheMap();
+    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: mode }));
+    expect(chip().dataset.mode).toBe(mode);
+    expect(chip().textContent).toBe(SHARING_CHIP[mode]);
+  });
+
   it('uses the owner\'s words, never "invisible" or "nobody can see you"', () => {
     expect(SHARING_CHIP).toEqual({
       ACTIVE: 'Sharing live with your group',
       FROZEN: 'Sharing paused · your group sees your last spot',
       GHOST: "Hidden from other members' maps",
+      waiting: 'Waiting for your location',
     });
     Object.values(SHARING_CHIP).forEach((w) => expect(w).not.toMatch(/invisible|nobody/i));
   });

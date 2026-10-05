@@ -14,6 +14,8 @@ export const SHARING_CHIP = {
   ACTIVE: 'Sharing live with your group',
   FROZEN: 'Sharing paused · your group sees your last spot',
   GHOST: "Hidden from other members' maps",
+  // Live, but no fix yet (or the location explainer still open): nothing is being shared.
+  waiting: 'Waiting for your location',
 };
 
 // The map's right-hand controls and the meeting point button.

@@ -1887,6 +1887,8 @@ const App = () => {
   // "Location is off" after the explainer's Not now, until location is turned on or the card
   // is dismissed.
   const showDeclinedCard = locationDeclined && !locationReady && !declinedCardDismissed;
+  // "You're in" says live only once there is a fix to share (Map batch fixes).
+  const youreInKey = telemetryMode === 'ACTIVE' && !liveLocation ? 'waiting' : telemetryMode;
 
   // The roadmap follows the app's theme (light or dark); satellite is photos either way.
   const mapOptions = useMemo(() => ({
@@ -2429,14 +2431,14 @@ const App = () => {
           action={<Button block size="large" onClick={() => setJustApproved(false)}>{YOURE_IN.openMap}</Button>}
         >
           {/* Says what is actually happening to their location: the mode is kept from their
-              last group, so this isn't always "live". */}
-          <p>{YOURE_IN.body[telemetryMode]}</p>
+              last group, so this isn't always "live", and live with no fix yet shares nothing. */}
+          <p>{YOURE_IN.body[youreInKey]}</p>
           <span className="inline-flex items-center gap-2 min-h-10 px-4 rounded-full bg-surface border border-border shadow-[var(--shadow-1)] text-label text-text">
             <span
               aria-hidden="true"
-              className={`w-2.5 h-2.5 rounded-full ${telemetryMode === 'ACTIVE' ? 'bg-success' : telemetryMode === 'FROZEN' ? 'bg-warning' : 'border border-dashed border-border-control'}`}
+              className={`w-2.5 h-2.5 rounded-full ${youreInKey === 'waiting' ? 'bg-border-control' : telemetryMode === 'ACTIVE' ? 'bg-success' : telemetryMode === 'FROZEN' ? 'bg-warning' : 'border border-dashed border-border-control'}`}
             />
-            {YOURE_IN.chip[telemetryMode]}
+            {YOURE_IN.chip[youreInKey]}
           </span>
         </StatusScreen>
       )}
@@ -2485,7 +2487,7 @@ const App = () => {
         className="absolute inset-x-3 z-[850] md:z-[1000] md:left-1/2 md:right-auto md:w-[28rem] md:-translate-x-1/2 pointer-events-none flex flex-col gap-2"
         style={{ top: BELOW_TOP_BAR }}
       >
-        {!(isTargetingMode && isMobile) && !locationError && !showDeclinedCard && <SharingChip mode={telemetryMode} />}
+        {!(isTargetingMode && isMobile) && !locationError && !showDeclinedCard && <SharingChip mode={telemetryMode} waiting={!liveLocation} />}
         <AnimatePresence initial={false}>
           {/* Choosing a meeting point (a phone's meeting point button). */}
           {isTargetingMode && (

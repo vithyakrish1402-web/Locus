@@ -240,7 +240,8 @@ describe('joining a group', () => {
     expect(screen.getByRole('button', { name: /SOS beacon/ }).className).toMatch(/z-\[1150\]/);
   });
 
-  it("approved after waiting: You're in, sharing live, and Open the map closes it", () => {
+  it("approved after waiting with a fix: You're in, sharing live, and Open the map closes it", () => {
+    navigator.geolocation.getCurrentPosition = vi.fn((ok) => ok({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
     render(<App />);
     joinAs('K7M2QX');
     act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'K7M2QX' }));
@@ -250,6 +251,17 @@ describe('joining a group', () => {
 
     fireEvent.click(screen.getByRole('button', { name: YOURE_IN.openMap }));
     expect(screen.queryByRole('dialog', { name: YOURE_IN.title })).toBeNull();
+  });
+
+  it("approved with no fix yet: never says sharing is live, only that it will be once found", () => {
+    render(<App />);
+    joinAs('K7M2QX');
+    act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'K7M2QX' }));
+    const youreIn = screen.getByRole('dialog', { name: YOURE_IN.title });
+    expect(youreIn.textContent).toContain("Your location will be shared live once it's found.");
+    expect(youreIn.textContent).toContain('Waiting for your location');
+    expect(youreIn.textContent).not.toContain(YOURE_IN.chip.ACTIVE);
+    expect(youreIn.textContent).not.toMatch(/is shared live/);
   });
 
   it("not for a group you create, nor when a reconnect lets you back in", () => {

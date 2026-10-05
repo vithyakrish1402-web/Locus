@@ -29,6 +29,8 @@ const DOTS = {
   live: 'bg-success',
   paused: 'bg-warning',
   hidden: 'border border-dashed border-border-control',
+  // Live, with no fix yet: a plain grey dot, nothing claimed.
+  waiting: 'bg-border-control',
 };
 
 /** A sharing-status dot, then its words (children). */

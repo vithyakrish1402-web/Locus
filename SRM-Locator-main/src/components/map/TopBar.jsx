@@ -44,19 +44,21 @@ const DOT = { ACTIVE: 'live', FROZEN: 'paused', GHOST: 'hidden' };
 
 /**
  * The sharing chip, first in the stack under the top bar (App.jsx): your own setting, in
- * words. No button on it (the design's Pause on the chip is not in this phase).
- * @param {{ mode: 'ACTIVE'|'FROZEN'|'GHOST' }} props
+ * words. No button on it (the design's Pause on the chip is not in this phase). Live with no
+ * fix yet (`waiting`) says so instead of "Sharing live": nothing has been shared.
+ * @param {{ mode: 'ACTIVE'|'FROZEN'|'GHOST', waiting?: boolean }} props
  */
-export function SharingChip({ mode }) {
+export function SharingChip({ mode, waiting = false }) {
+  const key = waiting && mode === 'ACTIVE' ? 'waiting' : mode;
   return (
     <div className="flex">
       <p
         data-testid="sharing-chip"
-        data-mode={mode}
+        data-mode={key}
         className="inline-flex items-center min-h-11 max-w-full rounded-[1.375rem] bg-raised px-4 py-2 shadow-[var(--shadow-2)] font-ui"
       >
-        <StatusDot status={DOT[mode] ?? 'live'}>
-          <span className="text-label text-text">{SHARING_CHIP[mode] ?? SHARING_CHIP.ACTIVE}</span>
+        <StatusDot status={key === 'waiting' ? 'waiting' : DOT[mode] ?? 'live'}>
+          <span className="text-label text-text">{SHARING_CHIP[key] ?? SHARING_CHIP.ACTIVE}</span>
         </StatusDot>
       </p>
     </div>

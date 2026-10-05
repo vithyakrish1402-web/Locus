@@ -150,6 +150,12 @@ describe('the location explainer', () => {
     expect(screen.getByTestId('location-problem').dataset.kind).toBe('denied');
   });
 
+  it('while it is open, the chip says "Waiting for your location", not "Sharing live"', async () => {
+    await onTheMap();
+    expect(explainer()).toBeTruthy();
+    expect(screen.getByTestId('sharing-chip').textContent).toBe('Waiting for your location');
+  });
+
   it("doesn't show when the phone says location is already allowed", async () => {
     Object.defineProperty(navigator, 'permissions', { configurable: true, value: { query: vi.fn(async () => ({ state: 'granted' })) } });
     await onTheMap();
