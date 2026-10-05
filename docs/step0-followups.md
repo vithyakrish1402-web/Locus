@@ -179,3 +179,19 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
    - Leave members whose status is `GHOST` out of the Group Lead's Refresh locations table, out of the `users-update` sent to other members, and out of "signal lost".
    - This is a server change, so it needs a Render deploy.
    - Until it is done, a Hidden member's live position still reaches the Group Lead's table and other members' phones (not their maps), and "signal lost" shows their last spot.
+2. **Settings other than the theme reset on restart.** Only the theme is saved on the phone (`locus.theme`). Location refresh rate, AR Scan quality, AR feature overrides, Alert sounds and Map/Satellite go back to their defaults each time the app starts. Kept as it is for now (owner, 2026-10-05).
+
+## Later
+
+- **Ping with distance and direction.** The design's ping notice says how far away the sender is and in which direction. `receive-ping` carries only `senderName`, so this needs the sender's id added to `receive-ping` (a data and server change), not a match by name. Until then the notice names the sender only.
+
+## Decisions for batch 1 (owner, 2026-10-05)
+
+- Names: new accounts save the name as typed. Capitals-only names are shown as stored everywhere except the greeting's first name.
+- Avatars (member card piece): initials in a ring, display only. The stored robot picture stays and is still sent.
+- Alert sounds works: off silences the ping and signal-lost sounds. The emergency alarm always plays ("Always on", locked). Default on.
+- Settings keeps everything the design leaves out (Map/Satellite, map engine status, AR feature overrides, Send App) under "More" at the bottom.
+- Place card: "Set as meeting point" is a third, quieter button, with a confirmation. Route line (b) only if it reuses today's drawing; otherwise (a).
+- Camera explainer: shown only until camera permission is granted. AR Scan's own start screen stays, restyled.
+- Location explainer: in the Map batch, with the location-off state.
+- Guide: shown once on first run, remembered on the phone; Skip and Get started both count. Always reachable from Settings › About. "Check for updates" moves to Settings › About. Stealth goes only if it is purely a map look.
