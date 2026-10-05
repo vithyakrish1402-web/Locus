@@ -684,3 +684,27 @@ describe('the members list: heading, loading, empty, no match', () => {
     expect(heading()).toBe('MembersLoading…');
   });
 });
+
+describe('the order down the panel (as the design, so the tools come high at half)', () => {
+  it('members: your location, the tools, then the search with the members', async () => {
+    await inAGroup({ members: () => member('Meera Iyer') });
+    tab(GROUP_TABS.members);
+    const order = [
+      screen.getByTestId('sharing-control'),
+      screen.getByTestId('lead-tools'),
+      screen.getByTestId('members-heading'),
+      screen.getByRole('searchbox', { name: GROUP_TABS.searchMembers }),
+      screen.getAllByTestId('member-row')[0],
+    ];
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
+  it('buildings: the search heads the list', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.buildings);
+    const search = screen.getByRole('searchbox', { name: GROUP_TABS.searchBuildings });
+    expect(search.compareDocumentPosition(screen.getAllByTestId('building-row')[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});

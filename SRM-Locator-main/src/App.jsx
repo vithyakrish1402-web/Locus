@@ -1978,6 +1978,20 @@ const App = () => {
   }, [panelTarget, panelY, reduceMotion]);
   // Whose options sheet is open: an id, so it follows their live updates and closes if they go.
   const optionsMember = optionsMemberId ? users.find((u) => u.id === optionsMemberId) ?? null : null;
+  // The group panel's search box: at the head of the buildings list, and above the members.
+  const groupSearch = (
+    <label className="relative block">
+      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" size={18} aria-hidden="true" />
+      <input
+        type="search"
+        aria-label={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
+        placeholder={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
+        className="w-full min-h-11 rounded-full bg-sunken pl-11 pr-4 font-ui text-body text-text placeholder:text-text-secondary focus:outline-2 focus:outline-offset-2 focus:outline-accent"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+      />
+    </label>
+  );
   // The group panel's search, for members as for buildings (it used to filter buildings only).
   const matchesSearch = (name) => (name || '').toLowerCase().includes(searchQuery.trim().toLowerCase());
   // "You're in" says live only once there is a fix to share (Map batch fixes).
@@ -2309,17 +2323,9 @@ const App = () => {
               { value: 'buildings', label: GROUP_TABS.buildings },
             ]}
           />
-          <label className="relative block">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" size={18} aria-hidden="true" />
-            <input
-              type="search"
-              aria-label={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
-              placeholder={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
-              className="w-full min-h-11 rounded-full bg-sunken pl-11 pr-4 font-ui text-body text-text placeholder:text-text-secondary focus:outline-2 focus:outline-offset-2 focus:outline-accent"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </label>
+          {/* Buildings: the search heads the list. (Members: it sits above the members list,
+              under the controls, so a Group Lead's tools come higher at half height.) */}
+          {activeTab === 'buildings' && groupSearch}
           {/* Your location: Live, Paused or Hidden (components/group/SharingControl.jsx). */}
           {activeTab === 'users' && (
             <SharingControl
@@ -2352,6 +2358,7 @@ const App = () => {
           {activeTab === 'users' && (
             <MembersHeading count={users.filter(u => !blockedUserIds.includes(u.id)).length + ghostMembers.length + 1} updatedAt={rosterAt} />
           )}
+          {activeTab === 'users' && groupSearch}
           {activeTab === 'users' && rosterAt === null && <MembersLoading />}
           {activeTab === 'users' && rosterAt !== null && !users.some(u => !blockedUserIds.includes(u.id)) && ghostMembers.length === 0 && (
             <MembersEmpty code={squadCode} isLead={squadRole === 'OWNER'} />
