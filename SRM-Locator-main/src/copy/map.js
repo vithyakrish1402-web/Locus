@@ -15,3 +15,13 @@ export const SHARING_CHIP = {
   FROZEN: 'Sharing paused · your group sees your last spot',
   GHOST: "Hidden from other members' maps",
 };
+
+// The map's right-hand controls and the meeting point button.
+export const MAP_CONTROLS = {
+  satellite: 'Satellite view',
+  locate: 'Show where you are',
+  campus: 'Show the whole campus',
+  settings: 'Settings',
+  placeMeetingPoint: 'Place a meeting point',
+  cancelMeetingPoint: 'Cancel placing a meeting point',
+};

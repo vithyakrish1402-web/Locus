@@ -8,11 +8,11 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } fr
 import { motion, AnimatePresence, useDragControls, useReducedMotion } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
 import {
-  MapPin, Users, Search, Settings, Navigation, ShieldCheck,
+  Users, Search, Settings, Navigation, ShieldCheck,
   Building2, MessageSquare, Send, Loader2,
   BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
-  AlertCircle, Check, Target, Sliders, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
+  AlertCircle, Check, Target, Sliders, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Layers
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
@@ -30,6 +30,7 @@ import { ROUTE } from './copy/place';
 import { SETTINGS } from './copy/settings';
 import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen';
 import { SharingChip, TopBar } from './components/map/TopBar';
+import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
 import CameraExplainer from './components/CameraExplainer';
 import { cameraKnownAllowed, cameraPermissionGranted, rememberCameraAllowed } from './utils/cameraPermission';
@@ -144,7 +145,6 @@ const TELEMETRY_SYNC_REFUSALS = {
 };
 // A telemetry value that is a real number, or null (never something toFixed() throws on).
 // The square glass buttons down the map's right edge (recenter, locate, satellite, settings).
-const MAP_CONTROL = 'p-3 bg-black/70 backdrop-blur-md border border-white/15 text-white shadow-[0_8px_24px_rgba(0,0,0,0.5)] hover:bg-white/10 hover:border-white/30';
 const finiteOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 // A member's battery for the telemetry matrix: the first real reading of the heartbeat's
 // `batteryLevel` ("77%") or update-location's `battery` (77). With neither there is no
@@ -2764,51 +2764,14 @@ const App = () => {
       {/* Owner-only field-test readout: every scan cycle's numbers, for judging the estimates. */}
       {WIFI_POSITIONING_ENABLED && isAdmin && <WifiReadout lastCycle={lastCycle} active={wifiActive} />}
 
-      {/* Right-side Action Column */}
-      <div className="absolute right-4 top-1/3 flex flex-col gap-2.5 z-40 pointer-events-auto">
-
-        <button
-          onClick={() => handleFocus(SRM_KTR_COORDS, null)}
-          className={MAP_CONTROL}
-          title="Recenter Campus"
-        >
-          <MapPin size={20} />
-        </button>
-
-        {selfMarkerAt && (
-          <button
-            onClick={() => handleFocus(selfMarkerAt, null)}
-            className={`${MAP_CONTROL} relative !text-red-500 !border-red-500/50 shadow-[0_0_12px_rgba(239,68,68,0.35)]`}
-            title="Locate Signal"
-          >
-            {/* One soft radar ring, instead of the icon pulsing without end. */}
-            <span className="absolute inset-0 border border-red-500/60 locus-soft-ring" aria-hidden="true" />
-            <LocateFixed size={20} />
-          </button>
-        )}
-
-        {/* Satellite Recon Toggle Button */}
-        <button
-          onClick={() => setIsSatellite(!isSatellite)}
-          className={`${MAP_CONTROL} ${isSatellite ? '!bg-emerald-500/15 !text-emerald-400 !border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.35)]' : ''}`}
-          title={isSatellite ? "Switch to Tactical Grid" : "Switch to Satellite Recon"}
-        >
-          {/* The globe turns half a revolution each way as the map style flips. */}
-          <motion.span className="flex" animate={{ rotate: isSatellite ? 180 : 0 }} transition={reduceMotion ? { duration: 0 } : PANEL_SPRING}>
-            <Globe size={20} />
-          </motion.span>
-        </button>
-
-        {/* The gear opens Settings */}
-        <button
-          onClick={() => setShowSettingsModal(true)}
-          className={MAP_CONTROL}
-          title={SETTINGS.open}
-          aria-label={SETTINGS.open}
-        >
-          <Settings size={20} />
-        </button>
-      </div>
+      {/* Right-hand map controls (components/map/MapControls.jsx) */}
+      <MapControls
+        onCampus={() => handleFocus(SRM_KTR_COORDS, null)}
+        onLocate={selfMarkerAt ? () => handleFocus(selfMarkerAt, null) : null}
+        isSatellite={isSatellite}
+        onToggleSatellite={() => setIsSatellite(!isSatellite)}
+        onSettings={() => setShowSettingsModal(true)}
+      />
 
       {/* The place card (components/PlaceCard.jsx). On a phone it sits above the floating SOS
           button (80 px tall, 80 px up, plus the safe area): it used to start at 96 px, so SOS -
@@ -3302,34 +3265,9 @@ const App = () => {
         }}
       />
 
-      {/* ========== RALLY POINT FAB (Two-Step Targeting) ========== */}
+      {/* The meeting point button (two steps: tap it, then tap the map) */}
       {!(selectedItem && activeTab === 'buildings') && (
-        <button
-          onClick={() => setIsTargetingMode(!isTargetingMode)}
-          className={`md:hidden fixed bottom-20 right-4 p-4 rounded-full z-[1050] pointer-events-auto ${
-            isTargetingMode
-              ? 'bg-yellow-500 text-black border-2 border-yellow-300 shadow-[0_0_25px_rgba(234,179,8,0.6)]'
-              : 'bg-red-600 text-black border-2 border-red-400 shadow-[0_0_20px_rgba(220,38,38,0.6)]'
-          }`}
-          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
-          title={isTargetingMode ? 'Cancel Targeting' : 'Deploy Rally Point'}
-        >
-          {/* Targeting: a dashed ring orbits the button while a spot is being chosen, and the
-              crosshair spins into an X (and back), instead of the whole button blinking. */}
-          {isTargetingMode && <span className="absolute -inset-2 rounded-full border-2 border-dashed border-yellow-400/80 locus-orbit" aria-hidden="true" />}
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.span
-              key={isTargetingMode ? 'cancel' : 'target'}
-              className="flex"
-              initial={reduceMotion ? { opacity: 0 } : { rotate: -90, scale: 0.6, opacity: 0 }}
-              animate={{ rotate: 0, scale: 1, opacity: 1 }}
-              exit={reduceMotion ? { opacity: 0 } : { rotate: 90, scale: 0.6, opacity: 0 }}
-              transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
-            >
-              {isTargetingMode ? <X className="w-6 h-6" /> : <Crosshair className="w-6 h-6" />}
-            </motion.span>
-          </AnimatePresence>
-        </button>
+        <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
       )}
 
       {/* The camera explainer, before AR Scan opens, only until the camera has been allowed.

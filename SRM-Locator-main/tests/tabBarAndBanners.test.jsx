@@ -137,7 +137,7 @@ describe('the bottom bar', () => {
 
   it('leaves satellite to the globe button, and says so on the tab', () => {
     onTheMap();
-    fireEvent.click(screen.getByTitle('Switch to Satellite Recon'));
+    fireEvent.click(screen.getByRole('button', { name: 'Satellite view' }));
     expect(mapStyle()).toBe('satellite');
     expect(tabBar().getByRole('button', { name: /ORBITAL/ })).toBeTruthy();
 
@@ -159,7 +159,7 @@ describe('the banner stack', () => {
   it('stacks the targeting banner with the location banner instead of over it', () => {
     geolocationError = { code: 1, message: 'User denied Geolocation' };
     onTheMap();
-    fireEvent.click(screen.getByTitle('Deploy Rally Point'));
+    fireEvent.click(screen.getByRole('button', { name: 'Place a meeting point' }));
 
     const targeting = screen.getByText('TARGETING MODE ACTIVE');
     const location = screen.getByText(/LOCATION ACCESS DENIED/);

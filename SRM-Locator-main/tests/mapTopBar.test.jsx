@@ -161,3 +161,53 @@ describe('the sharing chip', () => {
     expect(within(chip()).queryByRole('button')).toBeNull();
   });
 });
+
+describe('the map controls', () => {
+  const controls = () => within(screen.getByTestId('map-controls'));
+
+  it('keep every control: satellite, the whole campus and Settings (and locate once there is a fix)', () => {
+    onTheMap();
+    expect(controls().getByRole('button', { name: 'Satellite view' })).toBeTruthy();
+    expect(controls().getByRole('button', { name: 'Show the whole campus' })).toBeTruthy();
+    expect(controls().getByRole('button', { name: SETTINGS.open })).toBeTruthy();
+    expect(controls().queryByRole('button', { name: 'Show where you are' })).toBeNull();
+  });
+
+  it('satellite is a toggle that says when it is on', () => {
+    onTheMap();
+    const satellite = controls().getByRole('button', { name: 'Satellite view' });
+    expect(satellite.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(satellite);
+    expect(satellite.getAttribute('aria-pressed')).toBe('true');
+    expect(bar().getByText(TOP_BAR.satelliteView)).toBeTruthy();
+  });
+
+  it('the gear opens Settings', () => {
+    onTheMap();
+    fireEvent.click(controls().getByRole('button', { name: SETTINGS.open }));
+    expect(screen.getByTestId('settings')).toBeTruthy();
+  });
+
+  it('the meeting point button turns into Cancel while choosing, never red', () => {
+    onTheMap();
+    const button = screen.getByTestId('meeting-point-button');
+    expect(button.getAttribute('aria-label')).toBe('Place a meeting point');
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-label')).toBe('Cancel placing a meeting point');
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(button.outerHTML).not.toMatch(/red-|danger|yellow-/);
+  });
+
+  it('no control is red', () => {
+    onTheMap();
+    expect(screen.getByTestId('map-controls').outerHTML).not.toMatch(/red-|danger/);
+  });
+});
+
+describe('the locate control', () => {
+  it('appears once there is a fix', async () => {
+    navigator.geolocation.getCurrentPosition = vi.fn((ok) => ok({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
+    onTheMap();
+    expect(await within(screen.getByTestId('map-controls')).findByRole('button', { name: 'Show where you are' })).toBeTruthy();
+  });
+});
