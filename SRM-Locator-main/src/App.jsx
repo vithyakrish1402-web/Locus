@@ -2316,8 +2316,11 @@ const App = () => {
           </div>
         </div>
         {/* List Content */}
-        {/* pb-28 on a phone: room to scroll the last rows clear of the floating SOS and targeting buttons, which used to cover them. */}
-        <div className={`flex-1 overflow-y-auto p-4 pb-28 md:pb-4 space-y-3 custom-scrollbar ${activeTab === 'buildings' ? 'bg-bg' : 'bg-black'}`}>
+        {/* Room at the bottom on a phone to scroll the last rows clear of the Emergency and
+            meeting point buttons: they stand 10 rem above the screen's bottom edge plus the
+            gesture bar's inset, and this panel ends 4 rem up without that inset. 8 rem plus the
+            inset leaves 2 rem between the last row and the buttons on any phone. */}
+        <div data-testid="group-panel-list" className={`flex-1 overflow-y-auto p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 space-y-3 custom-scrollbar ${activeTab === 'buildings' ? 'bg-bg' : 'bg-black'}`}>
           <AnimatePresence mode="popLayout">
             {activeTab === 'buildings' ? (
               SRM_MASTER_DATABASE.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).map(building => (
