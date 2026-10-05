@@ -26,29 +26,45 @@ const H = 800;
 const ribbon = (path, where, heading = 0) => buildRoadRibbon({ origin: where, heading, path, screenWidth: W, screenHeight: H });
 const alongEnd = (r) => r.points[r.points.length - 1].along;
 
+// Your own destination's route when you have one, otherwise the meeting point's (owner's rule,
+// AR Scan batch); drawn only when AR Scan is aimed at where that route leads.
 describe('arRoutePathFor', () => {
   const waypoint = { lat: 1, lng: 2, name: 'RALLY' };
   const route = { path: [pt(0), pt(100)], isRealRoute: true };
+  const mine = { lat: 5, lng: 6, name: 'TECH PARK' };
+  const myRoute = { path: [pt(0), pt(50), pt(200)], isRealRoute: true };
+  const both = { personalTarget: mine, personalRoute: myRoute, activeWaypoint: waypoint, walkingRoute: route };
 
-  it('gives the route when AR Scan is on the Rally Point', () => {
-    expect(arRoutePathFor({ lat: 1, lng: 2, name: 'RALLY' }, waypoint, route)).toBe(route.path);
+  it('with your own destination: its route, when AR Scan is aimed at it', () => {
+    expect(arRoutePathFor({ ...mine }, both)).toBe(myRoute.path);
   });
 
-  it('gives nothing for a squad member, even one standing on the Rally Point', () => {
-    expect(arRoutePathFor({ lat: 1, lng: 2, name: 'B', memberUid: 'u-b' }, waypoint, route)).toBeNull();
-    expect(arRoutePathFor({ lat: 1, lng: 2, name: 'B', memberId: 's-b' }, waypoint, route)).toBeNull();
+  it('with your own destination, AR Scan on the meeting point: no road (it would lead elsewhere)', () => {
+    expect(arRoutePathFor({ ...waypoint }, both)).toBeNull();
   });
 
-  it('gives nothing for any other target, or with no Rally Point', () => {
-    expect(arRoutePathFor({ lat: 3, lng: 4, name: 'SRM_HQ' }, waypoint, route)).toBeNull();
-    expect(arRoutePathFor({ lat: 1, lng: 2 }, null, route)).toBeNull();
-    expect(arRoutePathFor(null, waypoint, route)).toBeNull();
+  it('with no destination of your own: the meeting point\'s route, when AR Scan is on it', () => {
+    expect(arRoutePathFor({ lat: 1, lng: 2, name: 'RALLY' }, { activeWaypoint: waypoint, walkingRoute: route })).toBe(route.path);
   });
 
-  it('gives nothing until a real route exists', () => {
-    expect(arRoutePathFor(waypoint, waypoint, { ...route, isRealRoute: false })).toBeNull();
-    expect(arRoutePathFor(waypoint, waypoint, null)).toBeNull();
-    expect(arRoutePathFor(waypoint, waypoint, { path: [pt(0)], isRealRoute: true })).toBeNull();
+  it('gives nothing for a group member, even one standing on the destination', () => {
+    expect(arRoutePathFor({ lat: 1, lng: 2, name: 'B', memberUid: 'u-b' }, { activeWaypoint: waypoint, walkingRoute: route })).toBeNull();
+    expect(arRoutePathFor({ lat: 5, lng: 6, name: 'B', memberId: 's-b' }, both)).toBeNull();
+  });
+
+  it('gives nothing for any other target, or with nowhere to go', () => {
+    expect(arRoutePathFor({ lat: 3, lng: 4, name: 'SRM_HQ' }, both)).toBeNull();
+    expect(arRoutePathFor({ lat: 1, lng: 2 }, { walkingRoute: route })).toBeNull();
+    expect(arRoutePathFor({ lat: 1, lng: 2 })).toBeNull();
+    expect(arRoutePathFor(null, both)).toBeNull();
+  });
+
+  it('gives nothing until a real route exists, to either', () => {
+    expect(arRoutePathFor(waypoint, { activeWaypoint: waypoint, walkingRoute: { ...route, isRealRoute: false } })).toBeNull();
+    expect(arRoutePathFor(waypoint, { activeWaypoint: waypoint, walkingRoute: null })).toBeNull();
+    expect(arRoutePathFor(waypoint, { activeWaypoint: waypoint, walkingRoute: { path: [pt(0)], isRealRoute: true } })).toBeNull();
+    expect(arRoutePathFor({ ...mine }, { ...both, personalRoute: { ...myRoute, isRealRoute: false } })).toBeNull();
+    expect(arRoutePathFor({ ...mine }, { ...both, personalRoute: null })).toBeNull();
   });
 });
 

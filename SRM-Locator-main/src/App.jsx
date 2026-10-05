@@ -1874,8 +1874,7 @@ const App = () => {
     activeWaypoint,
   });
   // The same walking route, to your own destination while you have one: the map shows that
-  // line instead of the meeting point's. AR Scan's road line still follows the meeting
-  // point's route only (walkingRoute), as before.
+  // line instead of the meeting point's, and so does AR Scan's road line (arRoutePathFor).
   const personalRoute = useWalkingRoute({
     engine: mapEngineFailed ? 'leaflet' : 'google',
     liveLocation,
@@ -3229,7 +3228,7 @@ const App = () => {
           squadMembers={users.filter(u => !blockedUserIds.includes(u.id))}
           buildings={SRM_MASTER_DATABASE}
           selfUid={user?.uid ?? null}
-          routePath={arRoutePathFor(arTarget, activeWaypoint, walkingRoute)}
+          routePath={arRoutePathFor(arTarget, { personalTarget, personalRoute, activeWaypoint, walkingRoute })}
           fidelity={sysConfig.arFidelity}
           overrides={sysConfig.arFeatureOverrides}
           onClose={() => setArTarget(null)}

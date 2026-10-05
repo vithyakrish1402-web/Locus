@@ -95,6 +95,7 @@ vi.mock('../src/utils/arArrowScene.js', () => ({
 }));
 
 const { default: App } = await import('../src/App.jsx');
+const { SRM_MASTER_DATABASE } = await import('../src/srmDatabase.js');
 const { SETTINGS } = await import('../src/copy/settings.js');
 
 beforeEach(() => {
@@ -163,23 +164,38 @@ describe('the AR road line', () => {
     expect(roadLine().querySelector('polygon').getAttribute('points').split(' ').length).toBeGreaterThan(4);
   });
 
-  // Navigate now starts your own route, drawn on the map with the same walking route. AR
-  // Scan's road line still follows the Rally Point's route only (the road to your own
-  // destination is the AR batch's job), so your own route must not take its place.
-  it('still follows the Rally Point while you are on your own route somewhere else', async () => {
+  // Your own destination drives the road line when you have one, otherwise the meeting point
+  // (owner's rule, AR Scan batch; it used to follow the meeting point only). The road is
+  // drawn only when AR Scan is aimed at where that route leads.
+  it('follows your own destination when you have one, with AR Scan aimed at it', async () => {
     const realFetch = globalThis.fetch;
-    // A real route only toward the Rally Point; anything else gets no answer.
-    globalThis.fetch = vi.fn(async (url) => (String(url).includes(`${RALLY.lng},${RALLY.lat}?`)
+    // A real route only toward the first building; anything else gets no answer.
+    const building = SRM_MASTER_DATABASE[0];
+    globalThis.fetch = vi.fn(async (url) => (String(url).includes(`${building.lng},${building.lat}?`)
       ? realFetch(url)
       : Promise.reject(new Error('offline'))));
     await onTheMapWithRally();
+    fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
+    fireEvent.click(screen.getByRole('button', { name: `Navigate to ${building.name}` }));
+    await act(async () => {});
+    expect(screen.getByTestId('route-card')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: `AR Scan to ${building.name}` }));
+    await grantAndFaceNorth();
+    expect(roadLine()).toBeTruthy();
+  });
+
+  it('with your own destination elsewhere, AR Scan on the meeting point draws no road (it would lead elsewhere)', async () => {
+    await onTheMapWithRally();
+    fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
     fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
     await act(async () => {});
     expect(screen.getByTestId('route-card')).toBeTruthy();
 
     fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
-    expect(roadLine()).toBeTruthy();
+    expect(screen.getByText('RALLY_ALPHA', { selector: 'h2' })).toBeTruthy();
+    expect(roadLine()).toBeNull();
   });
 
   it('runs up to the Rally Point tag: the tag sits on the road’s far end', async () => {
