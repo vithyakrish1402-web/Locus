@@ -229,9 +229,9 @@ describe('when the strip steps aside', () => {
       act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
       expect(strip()).toBeTruthy();
       const bar = screen.getByRole('navigation', { name: 'Main' });
-      fireEvent.click(within(bar).getByRole('button', { name: /SQUAD/ }));
+      fireEvent.click(within(bar).getByRole('button', { name: 'Group' }));
       expect(strip()).toBeNull();
-      fireEvent.click(within(bar).getByRole('button', { name: /GRID/ }));
+      fireEvent.click(within(bar).getByRole('button', { name: 'Map' }));
       expect(strip()).toBeTruthy();
     } finally {
       window.matchMedia = realMatchMedia;

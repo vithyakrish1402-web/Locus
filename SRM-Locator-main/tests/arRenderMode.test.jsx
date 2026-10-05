@@ -135,7 +135,7 @@ describe('AR Scan quality reaches AR Scan', () => {
   it('opens AR Scan with the chosen quality', async () => {
     openSettings();
     fireEvent.click(choice(Q, QO.efficient));
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: /SCAN/ }));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Scan' }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
     expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe('efficient');
   });
@@ -181,7 +181,7 @@ describe('AR Scan parts', () => {
     openSettings();
     fireEvent.click(choice(Q, QO.realistic));
     fireEvent.click(choice(PART.arrow, PO.efficient));
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: /SCAN/ }));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Scan' }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
     expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe('efficient');
     expect(screen.getByTestId('ar-arrow-3d')).toBeTruthy();

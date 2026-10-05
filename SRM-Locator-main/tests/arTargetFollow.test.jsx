@@ -111,7 +111,7 @@ const scanAtBravo = async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
   roster({ 'sock-1': member(HERE.lat + 0.001, HERE.lng) });
-  fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+  fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
   await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
 };
@@ -129,7 +129,7 @@ const cardArAtBravo = async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
   roster({ 'sock-1': member(HERE.lat + 0.001, HERE.lng) });
-  fireEvent.click(tabBar().getByRole('button', { name: /SQUAD/ }));
+  fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
   // The smallest element around Bravo's name that holds an AR Tracking button: their card.
   let card = screen.getByRole('heading', { level: 4, name: 'Bravo' });
   while (!within(card).queryByTitle('AR Tracking')) card = card.parentElement;

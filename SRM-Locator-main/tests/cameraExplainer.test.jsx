@@ -82,7 +82,7 @@ const onTheMap = async () => {
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
   await act(async () => {}); // the Permissions API answer, if any
 };
-const openArScan = () => fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: /SCAN/ }));
+const openArScan = () => fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Scan' }));
 const explainer = () => screen.queryByRole('dialog', { name: CAMERA_EXPLAINER.title });
 const arStart = () => screen.queryByTestId('ar-start');
 

@@ -32,6 +32,7 @@ import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
+import { TABS } from './copy/map';
 import CameraExplainer from './components/CameraExplainer';
 import { cameraKnownAllowed, cameraPermissionGranted, rememberCameraAllowed } from './utils/cameraPermission';
 import { NOTICES, OS_NOTICES } from './copy/notices';
@@ -3238,12 +3239,12 @@ const App = () => {
       <BottomTabBar
         activeId={mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid'}
         tabs={[
-          // GRID only navigates now. It used to toggle satellite on every tap as well, so
-          // coming back to the map from SQUAD or SCAN flipped the map style; satellite has
-          // its own globe button on the map.
-          { id: 'grid', label: isSatellite ? 'ORBITAL' : 'GRID', Icon: Map, flourish: 'lift' },
-          { id: 'scan', label: 'SCAN', Icon: Scan, flourish: 'turn' },
-          { id: 'squad', label: 'SQUAD', Icon: Users, flourish: 'pop' },
+          // Map only navigates. It used to toggle satellite on every tap as well, so coming
+          // back to the map from Group or Scan flipped the map style; satellite has its own
+          // control on the map.
+          { id: 'grid', label: TABS.map, Icon: Map, flourish: 'lift' },
+          { id: 'scan', label: TABS.scan, Icon: Scan, flourish: 'turn' },
+          { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop' },
         ]}
         onSelect={(id) => {
           const current = mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid';

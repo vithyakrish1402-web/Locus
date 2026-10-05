@@ -25,3 +25,6 @@ export const MAP_CONTROLS = {
   placeMeetingPoint: 'Place a meeting point',
   cancelMeetingPoint: 'Cancel placing a meeting point',
 };
+
+// The phone's bottom tab bar.
+export const TABS = { map: 'Map', scan: 'Scan', group: 'Group' };

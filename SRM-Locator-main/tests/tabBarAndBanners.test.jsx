@@ -121,37 +121,37 @@ const notices = () =>
 const mapStyle = () => (screen.queryByText('Satellite view') ? 'satellite' : 'grid');
 
 describe('the bottom bar', () => {
-  it('GRID takes you back to the map without flipping it to satellite', () => {
+  it('Map takes you back to the map without flipping it to satellite', () => {
     onTheMap();
     expect(mapStyle()).toBe('grid');
-    fireEvent.click(tabBar().getByRole('button', { name: /SQUAD/ }));
-    expect(currentTab()).toBe('SQUAD');
+    fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
+    expect(currentTab()).toBe('Group');
 
-    fireEvent.click(tabBar().getByRole('button', { name: /GRID/ }));
-    expect(currentTab()).toBe('GRID');
+    fireEvent.click(tabBar().getByRole('button', { name: 'Map' }));
+    expect(currentTab()).toBe('Map');
     expect(mapStyle()).toBe('grid');
 
-    fireEvent.click(tabBar().getByRole('button', { name: /GRID/ })); // again, while on it
+    fireEvent.click(tabBar().getByRole('button', { name: 'Map' })); // again, while on it
     expect(mapStyle()).toBe('grid');
   });
 
-  it('leaves satellite to the globe button, and says so on the tab', () => {
+  it('leaves satellite to its own control; the tab stays Map, the top bar says Satellite view', () => {
     onTheMap();
     fireEvent.click(screen.getByRole('button', { name: 'Satellite view' }));
     expect(mapStyle()).toBe('satellite');
-    expect(tabBar().getByRole('button', { name: /ORBITAL/ })).toBeTruthy();
+    expect(tabBar().getByRole('button', { name: 'Map' })).toBeTruthy();
 
-    fireEvent.click(tabBar().getByRole('button', { name: /SQUAD/ }));
-    fireEvent.click(tabBar().getByRole('button', { name: /ORBITAL/ }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Map' }));
     expect(mapStyle()).toBe('satellite'); // still what the user chose
   });
 
   it('marks exactly one tab as the current one, following the screen', () => {
     onTheMap();
     const marked = () => tabBar().getAllByRole('button').filter((b) => b.getAttribute('aria-current') === 'page');
-    expect(marked().map((b) => b.textContent)).toEqual(['GRID']);
-    fireEvent.click(tabBar().getByRole('button', { name: /SQUAD/ }));
-    expect(marked().map((b) => b.textContent)).toEqual(['SQUAD']);
+    expect(marked().map((b) => b.textContent)).toEqual(['Map']);
+    fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
+    expect(marked().map((b) => b.textContent)).toEqual(['Group']);
   });
 });
 
@@ -210,10 +210,18 @@ describe('the squad roster', () => {
       far: { uid: 'u-far', name: 'Faraway', roomCode: code, lat: 12.8400, lng: 80.0600, battery: 50, lastSeen: 1 },
       near: { uid: 'u-near', name: 'Nearby', roomCode: code, lat: 12.8252, lng: 80.0455, battery: 50, lastSeen: 1 },
     }));
-    fireEvent.click(tabBar().getByRole('button', { name: /SQUAD/ }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
     const names = screen.getAllByRole('heading', { level: 4 }).map((h) => h.textContent);
     expect(names.indexOf('Nearby')).toBeGreaterThan(-1);
     expect(names.indexOf('Nearby')).toBeLessThan(names.indexOf('Faraway'));
     expect(screen.getAllByText(/^BEARING (N|NE|E|SE|S|SW|W|NW)$/).length).toBe(2);
+  });
+});
+
+describe('the tab bar look', () => {
+  it('is Map, Scan and Group, in the theme, never red', () => {
+    onTheMap();
+    expect(tabBar().getAllByRole('button').map((b) => b.textContent)).toEqual(['Map', 'Scan', 'Group']);
+    expect(screen.getByRole('navigation', { name: 'Main' }).outerHTML).not.toMatch(/red-|font-dot|bg-black/);
   });
 });

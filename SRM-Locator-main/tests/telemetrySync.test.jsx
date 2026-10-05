@@ -331,7 +331,7 @@ describe('notifications and the open group panel on a phone', () => {
   const openPanel = () => {
     commanderOnSquadPanel();
     const bar = within(screen.getByRole('navigation', { name: 'Main' }));
-    if (bar.getByRole('button', { name: 'SQUAD' }).getAttribute('aria-current') !== 'page') fireEvent.click(bar.getByRole('button', { name: 'SQUAD' }));
+    if (bar.getByRole('button', { name: 'Group' }).getAttribute('aria-current') !== 'page') fireEvent.click(bar.getByRole('button', { name: 'Group' }));
   };
   const pingNotice = () => screen.getByText('Bravo is pinging you').closest('[data-severity]');
   const panelZ = () => Number(/(?:^|\s)z-\[(\d+)\]/.exec(screen.getByRole('button', { name: /SYNC_TELEMETRY/ }).closest('[class*="z-[900]"]').className)[1]);
@@ -380,7 +380,7 @@ describe('notifications and the open group panel on a phone', () => {
 
   it('with the panel closed the feed is on top again', () => {
     openPanel();
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'GRID' }));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Map' }));
     act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
     expect(Number(feed().style.zIndex)).toBe(LAYER.toast);
     expect(passesTaps(pingNotice())).toBe(false);

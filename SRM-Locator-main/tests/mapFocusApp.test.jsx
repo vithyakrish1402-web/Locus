@@ -5,7 +5,7 @@
 // a spy here. (The real two-phone delivery is still a check for a device.)
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NOTICES } from '../src/copy/notices.js';
-import { render, screen, act, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
   const handlers = new Map();
@@ -170,7 +170,7 @@ describe('a matrix building tap', () => {
       const { container } = render(<App />);
       await joinAsMember();
       const sheet = () => container.querySelector('.fixed.inset-x-0.bottom-16');
-      fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' }).at(-1)); // the bottom bar's: opens the sheet
+      fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Group' })); // the bottom bar's: opens the sheet
       fireEvent.click(screen.getAllByRole('button', { name: /MATRIX/ })[0]);
       await waitFor(() => expect(sheet().style.transform).not.toContain('100%'));
       fireEvent.click((await screen.findAllByText(SRM_MASTER_DATABASE[0].name))[0]);

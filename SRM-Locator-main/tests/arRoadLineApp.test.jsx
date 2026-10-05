@@ -212,7 +212,7 @@ describe('the AR road line', () => {
     act(() => fakeSocket.receive('users-update', {
       'sock-1': { uid: 'u-bravo', name: 'Bravo', roomCode: code, lat: RALLY.lat, lng: RALLY.lng, battery: 50, lastSeen: 1 },
     }));
-    fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
     expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
     expect(roadLine()).toBeNull();
@@ -220,7 +220,7 @@ describe('the AR road line', () => {
 
   it('is not drawn on the SRM_HQ default', async () => {
     await onTheMapWithRally();
-    fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
     expect(screen.getByText('SRM_HQ', { selector: 'h2' })).toBeTruthy();
     expect(roadLine()).toBeNull();
@@ -268,7 +268,7 @@ describe('the AR road line in REALISTIC mode', () => {
       'sock-1': { uid: 'u-bravo', name: 'Bravo', roomCode: code, lat: RALLY.lat, lng: RALLY.lng, battery: 50, lastSeen: 1 },
     }));
     chooseRealistic();
-    fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
     await settle();
     expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
@@ -280,7 +280,7 @@ describe('the AR road line in REALISTIC mode', () => {
   it('is not drawn on the SRM_HQ default', async () => {
     await onTheMapWithRally();
     chooseRealistic();
-    fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
     await settle();
     expect(screen.getByText('SRM_HQ', { selector: 'h2' })).toBeTruthy();
