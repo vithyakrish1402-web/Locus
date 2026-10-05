@@ -99,7 +99,9 @@ const { default: App } = await import('../src/App.jsx');
 
 const syncRequests = () => fakeSocket.emit.mock.calls.filter(([event]) => event === 'request-telemetry');
 const lastAck = () => fakeSocket.acks.filter((a) => a.event === 'request-telemetry').at(-1)?.ack;
-const syncButton = () => screen.getByRole('button', { name: /SYNC_TELEMETRY|SYNCING|RETRY SYNC/ });
+// The Group Lead's Refresh locations (the old SYNC_TELEMETRY), and Retry on its notice.
+const syncButton = () => screen.getByRole('button', { name: /^(Refresh locations|Refreshing…)$/ });
+const retryButton = () => within(screen.getByRole('alert')).getByRole('button', { name: 'Retry' });
 const matrixOpen = () => Boolean(screen.queryByText('SYS_TELEMETRY // MATRIX'));
 
 // Signed in -> lobby -> INITIALIZE -> the SQUAD panel, where the Commander's buttons are.
@@ -150,7 +152,7 @@ describe('SYNC_TELEMETRY', () => {
     fireEvent.click(syncButton());
 
     expect(syncRequests().at(-1)).toEqual(['request-telemetry', squadCode]);
-    expect(syncButton().textContent).toMatch(/SYNCING/);
+    expect(syncButton().textContent).toMatch(/Refreshing/);
     expect(syncButton().disabled).toBe(true);
 
     act(() => fakeSocket.receive('telemetry-sync-complete', {}));
@@ -163,9 +165,8 @@ describe('SYNC_TELEMETRY', () => {
     fireEvent.click(syncButton());
     act(() => lastAck()(new Error('operation has timed out')));
 
-    expect(screen.getByRole('alert').textContent).toMatch(/no response/i);
-    expect(syncButton().textContent).toMatch(/RETRY/);
-    fireEvent.click(syncButton());
+    expect(screen.getByRole('alert').textContent).toMatch(/no answer from the server/i);
+    fireEvent.click(retryButton());
     expect(syncRequests()).toHaveLength(2);
   });
 
@@ -173,11 +174,11 @@ describe('SYNC_TELEMETRY', () => {
     commanderOnSquadPanel();
     fireEvent.click(syncButton());
     act(() => lastAck()(null, { ok: false, reason: 'not-owner' }));
-    expect(screen.getByRole('alert').textContent).toMatch(/only the squad commander/i);
+    expect(screen.getByRole('alert').textContent).toMatch(/only the group lead/i);
 
     fireEvent.click(syncButton());
     act(() => lastAck()(null, { ok: false, reason: 'not-in-squad' }));
-    expect(screen.getByRole('alert').textContent).toMatch(/no record of this squad/i);
+    expect(screen.getByRole('alert').textContent).toMatch(/no record of this group/i);
   });
 
   it('says so straight away when there is no connection, instead of queueing the request', () => {
@@ -347,7 +348,7 @@ describe('notifications and the open group panel on a phone', () => {
     if (bar.getByRole('button', { name: 'Group' }).getAttribute('aria-current') !== 'page') fireEvent.click(bar.getByRole('button', { name: 'Group' }));
   };
   const pingNotice = () => screen.getByText('Bravo is pinging you').closest('[data-severity]');
-  const panelZ = () => Number(/(?:^|\s)z-\[(\d+)\]/.exec(screen.getByRole('button', { name: /SYNC_TELEMETRY/ }).closest('[class*="z-[900]"]').className)[1]);
+  const panelZ = () => Number(/(?:^|\s)z-\[(\d+)\]/.exec(screen.getByRole('button', { name: /Refresh locations/ }).closest('[class*="z-[900]"]').className)[1]);
   const passesTaps = (el) => {
     for (let node = el; node; node = node.parentElement) {
       if (/(?:^|\s)pointer-events-auto\b/.test(node.className)) return false;
@@ -369,7 +370,7 @@ describe('notifications and the open group panel on a phone', () => {
     // Both buttons still do their job with the ping up.
     fireEvent.click(syncButton());
     expect(syncRequests()).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: /NODE_ACCESS/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Join requests/ }));
     expect(screen.getByText(/INBOUND/)).toBeTruthy();
   });
 

@@ -116,13 +116,15 @@ const joinSquad = (code = 'KTR7X9') => {
 };
 
 const openSquadTab = () => fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
-// The squad panel's own DISCONNECT (leave the squad), not the header's log-out.
+// The group panel's own Leave group (and its confirmation), not the header's sign-out.
 const leaveSquad = () => {
   openSquadTab();
-  fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
+  fireEvent.click(screen.getByTestId('leave-group'));
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Leave the group?' })).getByRole('button', { name: 'Leave group' }));
 };
 const inLobby = () => Boolean(screen.queryByText(LOBBY.title));
-const nodeAccessButton = () => screen.queryByRole('button', { name: /NODE_ACCESS/ });
+// The Group Lead's Join requests (the old NODE_ACCESS).
+const nodeAccessButton = () => screen.queryByRole('button', { name: /^Join requests/ });
 
 let alertSpy;
 

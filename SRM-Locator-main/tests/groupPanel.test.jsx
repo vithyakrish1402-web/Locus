@@ -279,3 +279,112 @@ describe("a member's options", () => {
     expect(red.map((b) => b.textContent)).toEqual(['Remove and block']);
   });
 });
+
+describe("the Group Lead's tools", () => {
+  const tools = () => within(screen.getByTestId('lead-tools'));
+  const emitted = (event) => fakeSocket.emit.mock.calls.filter(([e]) => e === event);
+
+  it('only for the Group Lead: Join requests, Refresh locations and Meeting point', async () => {
+    await inAGroup({ lead: false });
+    tab(GROUP_TABS.members);
+    expect(screen.queryByTestId('lead-tools')).toBeNull();
+    cleanup();
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    expect(tools().getByRole('button', { name: /^Join requests/ })).toBeTruthy();
+    expect(tools().getByRole('button', { name: 'Refresh locations' })).toBeTruthy();
+    expect(tools().getByRole('button', { name: 'Meeting point' })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/NODE_ACCESS|SYNC_TELEMETRY|RALLY POINT|DISCONNECT|ACTIVE_CHANNEL/);
+  });
+
+  it('Join requests shows how many are waiting', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    act(() => fakeSocket.receive('access-request', { targetId: 's-kavya', name: 'Kavya Nair', roomCode: code }));
+    act(() => fakeSocket.receive('access-request', { targetId: 's-vikram', name: 'Vikram Rao', roomCode: code }));
+    expect(tools().getByRole('button', { name: /^Join requests/ }).textContent).toContain('2');
+    expect(tools().getByLabelText('2 waiting')).toBeTruthy();
+  });
+
+  it("Refresh locations asks the server, and a failure says why in amber, with Retry", async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    fakeSocket.connected = false;
+    fireEvent.click(tools().getByRole('button', { name: 'Refresh locations' }));
+    const notice = screen.getByTestId('refresh-failed');
+    expect(notice.textContent).toContain("Couldn't refresh locations.");
+    expect(notice.className).toMatch(/warning/);
+    expect(notice.outerHTML).not.toMatch(/red-|danger/);
+    fakeSocket.connected = true;
+    fireEvent.click(within(notice).getByRole('button', { name: 'Retry' }));
+    expect(screen.queryByTestId('refresh-failed')).toBeNull();
+  });
+
+  it('Meeting point: choose a spot on the map, as the map button does', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    const button = tools().getByRole('button', { name: 'Meeting point' });
+    fireEvent.click(button);
+    expect(tools().getByRole('button', { name: 'Cancel' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('meeting-point-button').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(tools().getByRole('button', { name: 'Cancel' }));
+    expect(tools().getByRole('button', { name: 'Meeting point' }).getAttribute('aria-pressed')).toBe('false');
+    expect(emitted('publish-waypoint')).toEqual([]);
+  });
+
+  it('Remove meeting point while one is set', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    expect(tools().queryByRole('button', { name: 'Remove meeting point' })).toBeNull();
+    act(() => fakeSocket.receive('new-waypoint', { lat: 12.8231, lng: 80.0442, name: 'RALLY POINT', setBy: 'u-other' }));
+    fireEvent.click(tools().getByRole('button', { name: 'Remove meeting point' }));
+    expect(emitted('clear-waypoint')).toHaveLength(1);
+  });
+});
+
+describe('Leave group', () => {
+  const confirm = () => screen.getByRole('dialog', { name: 'Leave the group?' });
+  const emitted = (event) => fakeSocket.emit.mock.calls.filter(([e]) => e === event);
+
+  it('asks everyone first; Stay in the group leaves no one', async () => {
+    await inAGroup({ lead: false });
+    tab(GROUP_TABS.members);
+    fireEvent.click(screen.getByTestId('leave-group'));
+    expect(emitted('leave-squad')).toEqual([]);
+    expect(confirm().textContent).toContain('To come back, ask to join again with the code');
+    expect(confirm().textContent).not.toMatch(/Group Lead/);
+    fireEvent.click(within(confirm()).getByRole('button', { name: 'Stay in the group' }));
+    expect(emitted('leave-squad')).toEqual([]);
+  });
+
+  it('then leaves', async () => {
+    await inAGroup({ lead: false });
+    tab(GROUP_TABS.members);
+    fireEvent.click(screen.getByTestId('leave-group'));
+    fireEvent.click(within(confirm()).getByRole('button', { name: 'Leave group' }));
+    expect(emitted('leave-squad')).toHaveLength(1);
+  });
+
+  it('tells a Group Lead that leadership passes to another member', async () => {
+    await inAGroup({ members: () => member('Meera Iyer') });
+    tab(GROUP_TABS.members);
+    fireEvent.click(screen.getByTestId('leave-group'));
+    expect(confirm().textContent).toContain("You're the Group Lead: leadership passes to another member of the group.");
+  });
+
+  it('and a Group Lead alone that the group ends', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    fireEvent.click(screen.getByTestId('leave-group'));
+    expect(confirm().textContent).toContain("You're the only one in it, so the group ends when you leave.");
+    expect(confirm().textContent).not.toMatch(/passes|ask to join again/);
+  });
+
+  it('is red, and the only red in the panel', async () => {
+    await inAGroup({ members: () => member('Meera Iyer') });
+    tab(GROUP_TABS.members);
+    const list = screen.getByTestId('group-panel-list');
+    const red = [...list.querySelectorAll('*')].filter((el) => /(^|\s)(text|bg|border)-(danger|red-)/.test(el.getAttribute('class') || ''));
+    expect(red.map((el) => el.closest('button')?.dataset.testid)).toEqual(['leave-group']);
+  });
+});

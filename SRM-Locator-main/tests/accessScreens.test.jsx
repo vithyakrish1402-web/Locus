@@ -8,7 +8,7 @@
 // Renders the real App.jsx; only the socket, Firebase, native plugins, maps and the update
 // hooks are stubbed.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
   const handlers = new Map();
@@ -281,7 +281,8 @@ describe('joining a group', () => {
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Paused' }));
-    fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
+    fireEvent.click(screen.getByTestId('leave-group'));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Leave the group?' })).getByRole('button', { name: 'Leave group' }));
 
     joinAs('K7M2QX');
     act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'K7M2QX' }));
@@ -297,7 +298,8 @@ describe('joining a group', () => {
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Paused' }));
-    fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
+    fireEvent.click(screen.getByTestId('leave-group'));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Leave the group?' })).getByRole('button', { name: 'Leave group' }));
 
     joinAs('K7M2QX');
     act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'K7M2QX' }));

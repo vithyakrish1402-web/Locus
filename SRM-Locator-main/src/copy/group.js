@@ -73,3 +73,38 @@ export const REMOVE_AND_BLOCK = {
 
 /** A member's first name, for "Ping Meera" ("Someone" when they have no name). */
 export const firstName = (name) => ((typeof name === 'string' && name.trim()) ? name.trim().split(/\s+/)[0] : 'Someone');
+
+// The Group Lead's tools: Join requests, Refresh locations and Meeting point.
+export const LEAD_TOOLS = {
+  joinRequests: 'Join requests',
+  waiting: (count) => `${count} waiting`,
+  refresh: 'Refresh locations',
+  refreshing: 'Refreshing…',
+  meetingPoint: 'Meeting point',
+  cancelMeetingPoint: 'Cancel',
+  removeMeetingPoint: 'Remove meeting point',
+};
+
+// Refresh locations that didn't work: an amber notice with Retry, never red.
+export const REFRESH_FAILED = {
+  title: "Couldn't refresh locations.",
+  retry: 'Retry',
+  notConnected: "You're not connected to the server. It's reconnecting, so try again in a moment.",
+  noResponse: 'No answer from the server. Check your connection and try again.',
+  notLead: 'Only the Group Lead can refresh locations.',
+  notInGroup: 'The server has no record of this group for this phone. Leave the group and join it again.',
+  refused: "The server didn't refresh the locations.",
+};
+
+// Leaving, for everyone, behind a confirmation. A Group Lead is told what happens to the
+// group: leadership passes to another member, or, alone, the group ends (the server deletes
+// an empty group).
+export const LEAVE_GROUP = {
+  button: 'Leave group',
+  title: 'Leave the group?',
+  body: (code) => `You'll stop sharing your location with the group and won't see its members on your map. To come back, ask to join again with the code ${spacedCode(code)}.`,
+  leadPasses: "You're the Group Lead: leadership passes to another member of the group.",
+  leadAlone: "You're the only one in it, so the group ends when you leave.",
+  confirm: 'Leave group',
+  cancel: 'Stay in the group',
+};

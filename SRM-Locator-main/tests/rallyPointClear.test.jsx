@@ -198,7 +198,8 @@ describe('a Rally Point leaving the map', () => {
     await screen.findByTitle('Find with AR Scan');
 
     openSquadTab();
-    fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
+    fireEvent.click(screen.getByTestId('leave-group'));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Leave the group?' })).getByRole('button', { name: 'Leave group' }));
     await joinAsMember('OTHER1');
     await waitFor(() => expect(rallyPointOnMap()).toBeNull());
   });
@@ -310,23 +311,23 @@ describe('Navigate and the meeting point', () => {
     expect(leaflet.props.activeWaypoint).toMatchObject({ lat: RALLY.lat, lng: RALLY.lng });
   });
 
-  it("the Group Lead's CLEAR in the group panel still clears it", async () => {
+  it("the Group Lead's Remove meeting point in the group panel still clears it", async () => {
     render(<App />);
     await createAsCommander();
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-other' }));
     openSquadTab();
-    fireEvent.click(screen.getByRole('button', { name: /^CLEAR$/ }));
+    fireEvent.click(within(screen.getByTestId('lead-tools')).getByRole('button', { name: 'Remove meeting point' }));
     expect(emitted('clear-waypoint')).toHaveLength(1);
   });
 });
 
-describe("the Commander's RALLY POINT button", () => {
+describe("the Group Lead's Meeting point in the group panel", () => {
   it('drops a Rally Point for any Commander, not only the admin account', async () => {
     render(<App />);
     await createAsCommander();
     openSquadTab();
 
-    fireEvent.click(screen.getByRole('button', { name: /RALLY POINT/ }));
+    fireEvent.click(within(screen.getByTestId('lead-tools')).getByRole('button', { name: 'Meeting point' }));
     act(() => leaflet.props.onMapClick({ lat: 12.82, lng: 80.04 }));
     expect(emitted('publish-waypoint')).toEqual([
       [{ roomCode: expect.stringMatching(/^[A-Z0-9]{6}$/), waypoint: { lat: 12.82, lng: 80.04, name: 'RALLY POINT' } }],

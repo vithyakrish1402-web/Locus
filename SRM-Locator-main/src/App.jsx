@@ -36,7 +36,9 @@ import BuildingRow from './components/map/BuildingRow';
 import GroupHeader from './components/group/GroupHeader';
 import SharingControl from './components/group/SharingControl';
 import MemberOptions from './components/group/MemberOptions';
-import { GROUP_TABS, MEMBERS as GROUP_MEMBERS } from './copy/group';
+import LeadTools from './components/group/LeadTools';
+import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
+import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, REFRESH_FAILED } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -154,8 +156,8 @@ const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
 const TELEMETRY_SYNC_TIMEOUT_MS = 8000;
 // What the server's refusals ('request-telemetry' in backend/server.js) mean to the Commander.
 const TELEMETRY_SYNC_REFUSALS = {
-  'not-owner': 'ONLY THE SQUAD COMMANDER CAN SYNC TELEMETRY.',
-  'not-in-squad': 'THE SERVER HAS NO RECORD OF THIS SQUAD FOR THIS DEVICE. DISCONNECT AND REJOIN IT.',
+  'not-owner': REFRESH_FAILED.notLead,
+  'not-in-squad': REFRESH_FAILED.notInGroup,
 };
 // A telemetry value that is a real number, or null (never something toFixed() throws on).
 // The square glass buttons down the map's right edge (recenter, locate, satellite, settings).
@@ -350,6 +352,7 @@ const App = () => {
   // Controls which panel is active on mobile bottom HUD: 'grid' | 'matrix' | 'squad' | 'cmd'
   const [mobileView, setMobileView] = useState('grid');
   const [optionsMemberId, setOptionsMemberId] = useState(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   // Phone layout and the squad/matrix sheet (see the Sidebar Panel below).
   const isMobile = useIsMobile();
   const reduceMotion = useReducedMotion();
@@ -358,7 +361,6 @@ const App = () => {
   const sheetRef = useRef(null);
   const sheetDraggedRef = useRef(false);
   // --- TACTICAL WAYPOINT STATE ---
-  const [isDroppingWaypoint, setIsDroppingWaypoint] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
   // Squad-wide SOS beacons this client hasn't acknowledged yet: a queue, one overlay
   // on screen at a time (see useIncomingSos). Live beacons arrive as 'sos-received';
@@ -769,7 +771,7 @@ const App = () => {
   const requestTelemetrySync = useCallback(() => {
     if (!socket.connected) {
       pendingSyncRef.current = null;
-      setTelemetrySync({ status: 'error', message: 'NOT CONNECTED TO THE SERVER. RECONNECTING — TRY AGAIN IN A MOMENT.' });
+      setTelemetrySync({ status: 'error', message: REFRESH_FAILED.notConnected });
       return;
     }
     const attempt = {};
@@ -779,11 +781,11 @@ const App = () => {
       if (pendingSyncRef.current !== attempt) return; // already settled by the telemetry itself
       pendingSyncRef.current = null;
       if (err) {
-        setTelemetrySync({ status: 'error', message: 'NO RESPONSE FROM THE SERVER. CHECK YOUR CONNECTION AND TRY AGAIN.' });
+        setTelemetrySync({ status: 'error', message: REFRESH_FAILED.noResponse });
       } else if (reply?.ok) {
         setTelemetrySync({ status: 'idle', message: null });
       } else {
-        setTelemetrySync({ status: 'error', message: TELEMETRY_SYNC_REFUSALS[reply?.reason] || 'THE SERVER REFUSED THE SYNC.' });
+        setTelemetrySync({ status: 'error', message: TELEMETRY_SYNC_REFUSALS[reply?.reason] || REFRESH_FAILED.refused });
       }
     });
   }, [squadCode]);
@@ -1708,17 +1710,6 @@ const App = () => {
       return;
     }
 
-    // 1. COMMANDER RALLY POINT OVERRIDE (the squad panel's RALLY POINT button). Shown to
-    // every Commander, so it isn't gated on isAdmin here: it was, so for any Commander but
-    // the admin account the button switched to "SELECT MAP..." and the tap did nothing.
-    if (isDroppingWaypoint) {
-      const waypoint = { lat, lng, name: "RALLY POINT" };
-      setActiveWaypoint(waypoint);
-      socket.emit('publish-waypoint', { roomCode: squadCode, waypoint });
-      setIsDroppingWaypoint(false);
-      return;
-    }
-
     // 1. If Admin is recording a path, save the coordinate and draw it
     if (isAdmin && isRecordingPath) {
       const newCoords = [...recordedCoords, { lat, lng }];
@@ -2234,75 +2225,6 @@ const App = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </label>
-          {/* --- ONLY THE COMMANDER SEES THESE BUTTONS --- */}
-          {activeTab === 'users' && squadRole === 'OWNER' && (
-            <div className="flex flex-col gap-2 mb-4">
-              <button onClick={() => setShowRequestsModal(true)} className="w-full px-4 py-3 border border-red-500 text-sm font-dot uppercase tracking-widest flex items-center justify-between hover:bg-red-500 hover:text-white transition-colors text-red-500">
-                <div className="flex items-center gap-2"><ShieldCheck size={18} /> NODE_ACCESS</div>
-                {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
-              </button>
-
-              {/* --- NEW: TELEMETRY SYNC BUTTON --- */}
-              {/* Always answers the tap: SYNCING while it waits, then the matrix, or what went
-                  wrong and a retry (see requestTelemetrySync). */}
-              <button
-                onClick={requestTelemetrySync}
-                disabled={telemetrySync.status === 'pending'}
-                className={`w-full px-4 py-3 border text-sm font-dot uppercase tracking-widest flex items-center justify-center gap-2 transition-colors disabled:cursor-wait disabled:opacity-70 ${telemetrySync.status === 'error'
-                  ? 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'
-                  : 'border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black shadow-[0_0_15px_rgba(234,179,8,0.2)]'}`}
-              >
-                {telemetrySync.status === 'pending' ? (
-                  <><Loader2 size={18} className="animate-spin" /> SYNCING...</>
-                ) : telemetrySync.status === 'error' ? (
-                  <><RefreshCw size={18} /> RETRY SYNC</>
-                ) : (
-                  <><Activity size={18} /> SYNC_TELEMETRY</>
-                )}
-              </button>
-              {telemetrySync.status === 'error' && (
-                <p role="alert" className="px-3 py-2 border border-red-500/50 bg-red-500/10 font-dot text-[10px] text-red-400 uppercase tracking-widest leading-relaxed">
-                  {telemetrySync.message}
-                </p>
-              )}
-
-              <div className="flex gap-2 w-full">
-                <button
-                  onClick={() => setIsDroppingWaypoint(!isDroppingWaypoint)}
-                  className={`flex-1 px-2 py-3 border text-[10px] font-dot uppercase tracking-widest flex items-center justify-center gap-1 transition-colors ${isDroppingWaypoint ? 'bg-red-500 text-white border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'}`}
-                >
-                  <Crosshair size={14} /> {isDroppingWaypoint ? 'SELECT MAP...' : 'RALLY POINT'}
-                </button>
-                {activeWaypoint && (
-                  <button
-                    onClick={() => socket.emit('clear-waypoint', squadCode)}
-                    className="flex-1 px-2 py-3 border border-zinc-500 text-[10px] font-dot uppercase tracking-widest flex items-center justify-center gap-1 hover:bg-zinc-800 transition-colors text-zinc-400"
-                  >
-                    <Trash2 size={14} /> CLEAR
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'users' && (
-            <div className="mb-4 flex items-center justify-between border border-red-500/30 bg-red-500/5 p-3">
-              <div className="flex flex-col">
-                {/* --- UPGRADED: DISPLAYS YOUR EXACT ROLE IN THE HUD --- */}
-                <span className="text-[10px] text-zinc-500 font-dot uppercase tracking-widest">
-                  ACTIVE_CHANNEL // <span className={squadRole === 'OWNER' ? 'text-yellow-500' : 'text-blue-400'}>{squadRole || 'MEMBER'}</span>
-                </span>
-                <span className="font-dot text-sm text-red-500 tracking-widest">{squadCode}</span>
-              </div>
-              <button
-                onClick={handleLeaveSquad}
-                className="text-[10px] border border-red-500 text-red-500 hover:bg-red-500 hover:text-white px-3 py-2 transition-colors font-dot uppercase tracking-widest"
-              >
-                DISCONNECT
-              </button>
-            </div>
-          )}
-
           {/* Your location: Live, Paused or Hidden (components/group/SharingControl.jsx). */}
           {activeTab === 'users' && (
             <SharingControl
@@ -2311,6 +2233,24 @@ const App = () => {
               waiting={!liveLocation}
               pausedNoSpot={!pausedHasSpot}
               polling={sysConfig.polling}
+            />
+          )}
+          {/* The Group Lead's tools (components/group/LeadTools.jsx). */}
+          {activeTab === 'users' && squadRole === 'OWNER' && (
+            <LeadTools
+              requests={pendingRequests.length}
+              onRequests={() => setShowRequestsModal(true)}
+              refresh={telemetrySync}
+              onRefresh={requestTelemetrySync}
+              choosing={isTargetingMode}
+              onMeetingPoint={() => {
+                const choosing = !isTargetingMode;
+                setIsTargetingMode(choosing);
+                // On a phone the open panel covers the map the spot is chosen on.
+                if (choosing && isMobile) setMobileView('grid');
+              }}
+              hasMeetingPoint={Boolean(activeWaypoint)}
+              onRemoveMeetingPoint={() => socket.emit('clear-waypoint', squadCode)}
             />
           )}
           <AnimatePresence mode="popLayout">
@@ -2385,7 +2325,7 @@ const App = () => {
               ]
             )}
           </AnimatePresence>
-
+          {activeTab === 'users' && <LeaveGroupButton onClick={() => setShowLeaveConfirm(true)} />}
         </div>
       </motion.div>
 
@@ -3247,6 +3187,16 @@ const App = () => {
       {!(selectedItem && activeTab === 'buildings') && (
         <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
       )}
+
+      {/* Leaving, confirmed (components/group/LeaveGroup.jsx). */}
+      <LeaveGroupConfirm
+        open={showLeaveConfirm && hasJoinedSquad}
+        code={squadCode}
+        isLead={squadRole === 'OWNER'}
+        alone={users.length === 0 && ghostMembers.length === 0}
+        onCancel={() => setShowLeaveConfirm(false)}
+        onLeave={() => { setShowLeaveConfirm(false); handleLeaveSquad(); }}
+      />
 
       {/* A member's options (components/group/MemberOptions.jsx): Ping, Show on map, Find with
           AR Scan, and the Group Lead's Remove and block behind its confirmation. */}
