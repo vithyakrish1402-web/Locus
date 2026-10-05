@@ -82,3 +82,23 @@ describe('actions', () => {
     expect(row.textContent).not.toMatch(/PING|TRACK|AWAITING|KM\/H|LIVE/);
   });
 });
+
+describe('low battery', () => {
+  it.each([
+    [19, true],
+    [24, true],
+    [25, false],
+    [80, false],
+    [0, false], // no reading
+    [undefined, false],
+  ])('%s%% → a warning: %s', (battery, warned) => {
+    renderRow({ member: { ...bravo, battery } });
+    const icon = screen.queryByTestId('member-low-battery');
+    expect(Boolean(icon)).toBe(warned);
+    if (warned) {
+      expect(icon.getAttribute('aria-label')).toBe(`Low battery, ${battery}%`);
+      expect(icon.getAttribute('class')).toMatch(/text-warning/);
+      expect(icon.getAttribute('class')).not.toMatch(/red|danger/);
+    }
+  });
+});

@@ -52,6 +52,7 @@ export const MEMBERS = {
   lastSeen: (elapsed) => `Last seen ${elapsed} ago`,
   options: (name) => `Options for ${name}`,
   battery: (percent) => `Battery ${percent}%`,
+  lowBattery: (percent) => `Low battery, ${percent}%`,
   speed: (kmh) => `${kmh} km/h`,
 };
 

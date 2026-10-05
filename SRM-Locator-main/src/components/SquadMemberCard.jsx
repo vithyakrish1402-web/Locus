@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.div>, which this config can't see
 import { motion, useReducedMotion, useMotionValue, animate } from 'framer-motion';
-import { MoreVertical, Navigation } from 'lucide-react';
+import { BatteryLow, MoreVertical, Navigation } from 'lucide-react';
 import { Avatar, IconButton } from './ui';
 import { continuousAngle } from '../utils/direction';
 import { PANEL_SPRING } from '../utils/motion';
@@ -28,6 +28,9 @@ function useNow(ms) {
   }, [ms]);
   return now;
 }
+
+/** Below 25 %, the old row's red line (0 is no reading). */
+const lowBattery = (battery) => Number.isFinite(battery) && battery > 0 && battery < 25;
 
 function PointingArrow({ angle, reduceMotion }) {
   // The arrow's live rotation. Each new angle is put on the same unwrapped scale as where
@@ -66,7 +69,14 @@ export default function SquadMemberCard({ member, me, heading, headingLive, onOp
     <div data-testid="member-row" className="flex items-center gap-3 py-3 border-b border-border font-ui text-text">
       <Avatar name={name} dashed={member.status === 'FROZEN' || !member.hasFix} />
       <div className="flex-1 min-w-0">
-        <h4 className="text-heading break-words">{name}</h4>
+        <h4 className="text-heading break-words">
+          {name}
+          {/* Low battery, as the old row's bar warned below 25 %: amber, never red. 0 is no
+              reading at all, so it shows nothing. */}
+          {lowBattery(member.battery) && (
+            <BatteryLow size={16} className="inline-block ml-1.5 -mt-0.5 text-warning" role="img" aria-label={MEMBERS.lowBattery(member.battery)} data-testid="member-low-battery" />
+          )}
+        </h4>
         <p className="mt-0.5 flex items-center gap-2 text-secondary text-text-secondary" data-testid="member-status">
           <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${MEMBER_DOTS[status.dot]}`} aria-hidden="true" />
           {status.text}
