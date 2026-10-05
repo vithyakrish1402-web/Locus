@@ -83,6 +83,7 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 });
 
 const { default: App } = await import('../src/App.jsx');
+const { LIVE_UPDATE } = await import('../src/copy/updates.js');
 const { LiveUpdateStatus } = await import('../src/hooks/useLiveUpdate.js');
 const { BOOT, LOBBY } = await import('../src/copy/access.js');
 
@@ -98,7 +99,7 @@ const ready = () => ({
 // The strip is one of possibly several live regions (the boot screen's loader is one too),
 // so it is found by what it says rather than by being the only role="status".
 const strip = () =>
-  screen.queryAllByRole('status').find((el) => /UPDATE (READY|BLOCKED)/.test(el.textContent)) ?? null;
+  screen.queryAllByRole('status').find((el) => el.textContent.startsWith(LIVE_UPDATE.ready.title) || el.textContent.startsWith(LIVE_UPDATE.blocked.title)) ?? null;
 
 // The guide opens on an animated intro; its skip button goes straight to the guide.
 const skipIntro = async () => {
@@ -161,7 +162,7 @@ describe('the JS update strip is offered on every screen', () => {
     render(<App />);
     expect(screen.getByText(LOBBY.title)).toBeTruthy();
     expect(strip()).toBeTruthy();
-    expect(screen.getByText('Version 1.0.5 is ready. Restart to use it.')).toBeTruthy();
+    expect(screen.getByText(LIVE_UPDATE.ready.body('1.0.5'))).toBeTruthy();
   });
 
   it('on the map, exactly once', () => {
@@ -169,7 +170,7 @@ describe('the JS update strip is offered on every screen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     expect(screen.queryByText(LOBBY.title)).toBeNull(); // on the map now
-    expect(screen.getAllByText('Version 1.0.5 is ready. Restart to use it.')).toHaveLength(1);
+    expect(screen.getAllByText(LIVE_UPDATE.ready.body('1.0.5'))).toHaveLength(1);
   });
 });
 
@@ -269,10 +270,10 @@ describe('a building card on a phone', () => {
 });
 
 describe('the strip itself', () => {
-  it('says READY, not APPLIED, and RESTART applies it', () => {
+  it('says ready, not applied, and Restart applies it', () => {
     render(<App />);
-    expect(screen.getByText('UPDATE READY')).toBeTruthy();
-    expect(screen.queryByText('UPDATE APPLIED')).toBeNull();
+    expect(screen.getByText(LIVE_UPDATE.ready.title)).toBeTruthy();
+    expect(screen.queryByText(/applied/i)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Restart' }));
     expect(live.current.applyNow).toHaveBeenCalledTimes(1);
   });
@@ -280,7 +281,7 @@ describe('the strip itself', () => {
   it('shows a blocked bundle outside the map too', () => {
     live.current = { ...ready(), status: LiveUpdateStatus.BLOCKED, manifest: { version: '1.0.5', minNative: '1.1.0' } };
     render(<App />);
-    expect(screen.getByText('UPDATE BLOCKED')).toBeTruthy();
+    expect(screen.getByText(LIVE_UPDATE.blocked.title)).toBeTruthy();
     expect(screen.getByText(/needs app version 1\.1\.0 or newer/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Restart' })).toBeNull();
   });

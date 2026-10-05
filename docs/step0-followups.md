@@ -184,6 +184,7 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
 ## Later
 
 - **Ping with distance and direction.** The design's ping notice says how far away the sender is and in which direction. `receive-ping` carries only `senderName`, so this needs the sender's id added to `receive-ping` (a data and server change), not a match by name. Until then the notice names the sender only.
+- **Hide on the update download sheet.** The design has a Hide button while a full update downloads. Today the download and install sheets cannot be dismissed (no Later, Escape blocked while busy), and that stays for now (owner, 2026-10-05). If Hide is added, a failure after hiding must always bring the sheet back.
 
 ## Decisions for batch 1 (owner, 2026-10-05)
 

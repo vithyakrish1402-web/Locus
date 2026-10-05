@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { AlertCircle, Download, RefreshCw, X } from 'lucide-react';
 import { LiveUpdateStatus } from '../hooks/useLiveUpdate';
+import { Button, IconButton } from './ui';
+import { LIVE_UPDATE } from '../copy/updates';
 
 // Phase 2 surface: a bottom-anchored strip, not a modal. A JS bundle swap is far less
 // consequential than a full APK install, and it is already downloaded and verified by
@@ -65,17 +68,17 @@ function DownloadBar({ percent }) {
   return (
     <div
       role="progressbar"
-      aria-label="Update download"
+      aria-label={LIVE_UPDATE.bar}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={known ? percent : undefined}
-      className="relative mt-3 h-1 w-full overflow-hidden bg-white/10"
+      className="relative mt-2 h-1.5 w-full overflow-hidden rounded-full bg-sunken"
     >
       {known ? (
         // Full width, scaled from the left edge: a transform, not a width animation.
-        <div className="h-full w-full origin-left bg-red-500 transition-transform duration-300 ease-out" style={{ transform: `scaleX(${percent / 100})` }} />
+        <div className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-300 ease-out" style={{ transform: `scaleX(${percent / 100})` }} />
       ) : (
-        <div data-testid="download-sweep" className="locus-download-sweep absolute inset-y-0 w-1/3 bg-red-500" />
+        <div data-testid="download-sweep" className="locus-download-sweep absolute inset-y-0 w-1/3 rounded-full bg-accent" />
       )}
     </div>
   );
@@ -93,67 +96,55 @@ const LiveUpdateToast = ({ live, aboveTabBar = false, hidden = false }) => {
   const failed = live.status === LiveUpdateStatus.ERROR;
   const version = live.manifest?.version;
   const percent = live.download?.percent;
-  const title = downloading ? 'UPDATING' : failed ? 'UPDATE FAILED' : blocked ? 'UPDATE BLOCKED' : 'UPDATE READY';
+  const look = downloading ? LIVE_UPDATE.downloading : failed ? LIVE_UPDATE.failed : blocked ? LIVE_UPDATE.blocked : LIVE_UPDATE.ready;
+  const body = downloading
+    ? look.body(version)
+    : failed
+      ? look.body(version, live.error?.message)
+      : blocked
+        ? look.body(live.manifest?.version, live.manifest?.minNative)
+        : look.body(live.manifest?.version);
+  const Icon = failed || blocked ? AlertCircle : downloading ? Download : RefreshCw;
+  const tone = failed || blocked ? 'bg-warning-soft text-warning' : 'bg-accent-soft text-accent';
 
   return (
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-0 z-[6500] flex justify-center px-4 pb-6 pointer-events-none ${
+      className={`fixed inset-x-0 z-[6500] flex justify-center px-3 pb-4 pointer-events-none ${
         aboveTabBar ? 'bottom-[calc(10.5rem+env(safe-area-inset-bottom))] md:bottom-0' : 'bottom-0'
       }`}
     >
-      <div className="pointer-events-auto flex w-full max-w-md flex-wrap items-center gap-3 border border-white/20 bg-black px-5 py-4">
+      <div className="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-card border border-border bg-raised text-text font-ui shadow-[var(--shadow-2)] py-3 pl-3 pr-1">
+        <span className={`flex items-center justify-center w-10 h-10 rounded-full shrink-0 ${tone}`} aria-hidden="true">
+          <Icon size={20} />
+        </span>
         <div className="min-w-0 flex-1">
-          <div className="font-dot text-[10px] uppercase tracking-widest text-red-500">
-            {/* Nothing is applied until RESTART is tapped. */}
-            {title}
+          <p className="text-heading">
+            {/* Nothing is applied until Restart is tapped. */}
+            {look.title}
             {downloading && (
-              <span className="ml-2 text-zinc-500">
-                {Number.isFinite(percent) ? `${percent}%` : 'PREPARING'} · {elapsed}S
+              <span className="ml-2 text-secondary text-text-secondary">
+                {Number.isFinite(percent) ? `${percent}%` : LIVE_UPDATE.downloading.preparing} · {LIVE_UPDATE.downloading.elapsed(elapsed)}
               </span>
             )}
-          </div>
-          <p className="mt-1 font-inter text-[12px] leading-snug text-zinc-400">
-            {downloading ? (
-              <>Downloading version {version}. Keep LOCUS open until it&apos;s ready - closing it stops the download.</>
-            ) : failed ? (
-              <>
-                Version {version} didn&apos;t install{live.error?.message ? ` (${live.error.message})` : ''}. LOCUS
-                will try again next time you open it.
-              </>
-            ) : blocked ? (
-              <>
-                Bundle {live.manifest?.version} needs app version {live.manifest?.minNative} or newer. Install the
-                full update first.
-              </>
-            ) : (
-              <>Version {live.manifest?.version} is ready. Restart to use it.</>
-            )}
           </p>
+          <p className="text-secondary text-text-secondary">{body}</p>
           {downloading && <DownloadBar percent={percent} />}
         </div>
         {live.status === LiveUpdateStatus.READY && (
-          <button
-            type="button"
+          <Button
             disabled={restarting}
             onClick={() => {
               setRestarting(true);
               live.applyNow();
             }}
-            className="font-dot text-[10px] uppercase tracking-widest px-4 py-2.5 border border-red-500 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-60"
+            className="shrink-0"
           >
-            {restarting ? 'Restarting...' : 'Restart'}
-          </button>
+            {restarting ? LIVE_UPDATE.restarting : LIVE_UPDATE.restart}
+          </Button>
         )}
-        <button
-          type="button"
-          onClick={live.dismiss}
-          aria-label="Dismiss update notice"
-          className="font-dot text-[10px] uppercase tracking-widest px-3 py-2.5 border border-white/20 text-zinc-500 hover:border-white/40 hover:text-white transition-colors"
-        >
-          ✕
-        </button>
+        <IconButton label={LIVE_UPDATE.dismiss} icon={X} size={20} onClick={live.dismiss} className="shrink-0" />
       </div>
     </div>
   );

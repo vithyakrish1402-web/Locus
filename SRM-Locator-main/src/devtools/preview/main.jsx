@@ -107,15 +107,27 @@ const SCREENS = {
   },
   'update-safety-check-failed': {
     label: 'Update safety check failed',
-    render: () => <UpdateModal update={appUpdate(UpdateStatus.ERROR, { error: { message: 'The download did not match its published checksum.' } })} />,
+    render: () => <UpdateModal update={appUpdate(UpdateStatus.ERROR, { error: { code: 'CHECKSUM_MISMATCH', message: 'raw' } })} />,
+  },
+  'update-network-failed': {
+    label: "Couldn't check for updates (no connection)",
+    render: () => <UpdateModal update={appUpdate(UpdateStatus.ERROR, { error: { code: 'NETWORK', message: 'raw' } })} />,
   },
   'update-mandatory': {
     label: 'Mandatory update',
     render: () => <UpdateModal update={appUpdate(UpdateStatus.AVAILABLE, { mandatory: true })} />,
   },
+  'update-mandatory-downloading': {
+    label: 'Mandatory update downloading',
+    render: () => <UpdateModal update={appUpdate(UpdateStatus.DOWNLOADING, { mandatory: true })} />,
+  },
   'update-strip-ready': {
     label: 'Small update ready (strip)',
     render: () => <LiveUpdateToast live={liveUpdate(LiveUpdateStatus.READY)} />,
+  },
+  'update-strip-failed': {
+    label: "Small update didn't install (strip)",
+    render: () => <LiveUpdateToast live={liveUpdate(LiveUpdateStatus.ERROR, { error: { message: 'checksum mismatch' } })} />,
   },
   'update-strip-downloading': {
     label: 'Small update downloading (strip)',
@@ -463,7 +475,7 @@ function Frame({ id, theme }) {
 // Inside a frame: just the screen, filling the phone. (Its theme is set on <html> before the
 // first render; see the bottom of this file.)
 function FrameContent({ id }) {
-  return <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>{SCREENS[id].render()}</div>;
+  return <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: 'var(--color-bg)' }}>{SCREENS[id].render()}</div>;
 }
 
 function Gallery() {

@@ -29,6 +29,7 @@ vi.mock('@capacitor/app', () => ({ App: { getInfo: async () => ({ version: '1.1.
 
 const { useLiveUpdate, LiveUpdateStatus, __resetLiveColdStartThrottle } = await import('../src/hooks/useLiveUpdate.js');
 const { default: LiveUpdateToast } = await import('../src/components/LiveUpdateToast.jsx');
+const { LIVE_UPDATE } = await import('../src/copy/updates.js');
 
 const SHA = 'f'.repeat(64);
 const RELEASES = [
@@ -149,16 +150,16 @@ describe('the strip', () => {
   });
   const strip = () => screen.getByRole('status');
 
-  it('while waiting for the first byte: UPDATING, PREPARING, a moving bar, and keep LOCUS open', () => {
+  it('while waiting for the first byte: Updating LOCUS, Preparing, a moving bar, and keep LOCUS open', () => {
     vi.useFakeTimers();
     render(<LiveUpdateToast live={live({ download: { startedAt: Date.now(), percent: null } })} />);
-    expect(strip().textContent).toMatch(/UPDATING/);
-    expect(strip().textContent).toMatch(/PREPARING · 0S/);
+    expect(strip().textContent).toMatch(LIVE_UPDATE.downloading.title);
+    expect(strip().textContent).toMatch(/Preparing · 0 s/);
     expect(strip().textContent).toMatch(/Keep LOCUS open/);
     expect(screen.getByTestId('download-sweep')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /restart/i })).toBeNull();
     act(() => vi.advanceTimersByTime(12_000));
-    expect(strip().textContent).toMatch(/PREPARING · 12S/);
+    expect(strip().textContent).toMatch(/Preparing · 12 s/);
   });
 
   it('with progress: the percent, and a bar filled to it', () => {
@@ -171,21 +172,23 @@ describe('the strip', () => {
     expect(screen.queryByTestId('download-sweep')).toBeNull();
   });
 
-  it('a failed download says what happened and that it will retry, with no RESTART', () => {
+  it('a failed download says what happened and that it will retry, with no Restart, in amber', () => {
     render(<LiveUpdateToast live={live({ status: LiveUpdateStatus.ERROR, error: { message: 'checksum mismatch' } })} />);
-    expect(strip().textContent).toMatch(/UPDATE FAILED/);
+    expect(strip().textContent).toMatch(LIVE_UPDATE.failed.title);
+    expect(strip().innerHTML).toMatch(/text-warning/);
+    expect(strip().innerHTML).not.toMatch(/danger|red-/);
     expect(strip().textContent).toMatch(/1\.1\.3 didn.t install \(checksum mismatch\)/);
     expect(strip().textContent).toMatch(/try again next time you open it/);
     expect(screen.queryByRole('button', { name: /restart/i })).toBeNull();
   });
 
-  it('RESTART answers at once, and cannot be tapped twice', () => {
+  it('Restart answers at once, and cannot be tapped twice', () => {
     const applyNow = vi.fn();
     render(<LiveUpdateToast live={live({ status: LiveUpdateStatus.READY, download: null, applyNow })} />);
     const button = screen.getByRole('button', { name: 'Restart' });
     fireEvent.click(button);
     expect(applyNow).toHaveBeenCalledTimes(1);
-    expect(button.textContent).toBe('Restarting...');
+    expect(button.textContent).toBe(LIVE_UPDATE.restarting);
     expect(button.disabled).toBe(true);
   });
 });

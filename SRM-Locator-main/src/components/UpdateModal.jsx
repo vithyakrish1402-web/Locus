@@ -1,24 +1,21 @@
 import React, { useEffect, useId, useRef } from 'react';
+import { AlertCircle, ArrowRight, Download, ShieldCheck } from 'lucide-react';
 import { UpdateStatus } from '../hooks/useAppUpdate';
 import { LAYER } from '../utils/layers';
+import { Button } from './ui';
+import { INSTALL_FAILURES, UPDATE, failureSentence } from '../copy/updates';
 
-// HUD panel for the full-APK self-updater. Two shapes, one component:
+// The full app update (redesign P10). Two shapes, one component:
 //
-//   - optional update -> a dismissable panel over whatever screen you are on
-//   - [MANDATORY]     -> a full-viewport takeover with no LATER and no Escape, the same
-//                        "there is exactly one way out" posture as SosOverlay
+//   - optional update -> a sheet over whatever screen you are on, with Later
+//   - [MANDATORY]     -> the whole screen, with no Later and no Escape: the same "there is
+//                        exactly one way out" posture as the Emergency alert
 //
-// LAYER.update (utils/layers.js): above everything in App.jsx, but deliberately below
-// SosOverlay (LAYER.emergency) - a distress beacon outranks a version bump.
-
-const CornerBrackets = () => (
-  <>
-    <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
-    <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
-    <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
-    <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
-  </>
-);
+// While downloading or installing there is no way to dismiss either shape (no Later, Escape
+// blocked), as before. The design's Hide on the download sheet is on the Later list.
+//
+// LAYER.update (utils/layers.js): above everything in App.jsx, but deliberately below a
+// received Emergency alert (LAYER.emergency) - a distress beacon outranks a version bump.
 
 const formatBytes = (bytes) => {
   if (!bytes || bytes <= 0) return null;
@@ -26,21 +23,11 @@ const formatBytes = (bytes) => {
   return `${mb.toFixed(1)} MB`;
 };
 
-const HudButton = ({ variant = 'ghost', className = '', ...props }) => {
-  const base =
-    'font-dot text-xs tracking-widest uppercase px-5 py-3 border transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
-  const skins = {
-    primary: 'border-red-500 bg-red-500/10 text-red-400 hover:bg-red-500/20',
-    ghost: 'border-white/20 text-zinc-400 hover:border-white/40 hover:text-white',
-  };
-  return <button type="button" className={`${base} ${skins[variant]} ${className}`} {...props} />;
-};
-
 const ProgressBar = ({ percent }) => {
   const indeterminate = typeof percent !== 'number' || percent < 0;
   return (
     <div
-      className="h-2 w-full border border-white/20 bg-black overflow-hidden"
+      className="h-2 w-full rounded-full bg-sunken overflow-hidden"
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}
@@ -48,11 +35,16 @@ const ProgressBar = ({ percent }) => {
     >
       {/* Full width, scaled from the left edge: a transform, not a width animation. */}
       <div
-        className="h-full w-full origin-left bg-red-500 transition-transform duration-200"
+        className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-200"
         style={{ transform: `scaleX(${indeterminate ? 1 : Math.min(100, Math.max(0, percent)) / 100})`, opacity: indeterminate ? 0.4 : 1 }}
       />
     </div>
   );
+};
+
+const TONE = {
+  accent: 'bg-accent-soft text-accent',
+  warning: 'bg-warning-soft text-warning',
 };
 
 const UpdateModal = ({ update }) => {
@@ -60,10 +52,9 @@ const UpdateModal = ({ update }) => {
   const bodyId = useId();
   const panelRef = useRef(null);
   const primaryRef = useRef(null);
-
   const { status, manifest, installedVersion, progress, error, mandatory, dismissed } = update;
-
   const busy = status === UpdateStatus.DOWNLOADING || status === UpdateStatus.READY;
+
   const visible =
     !dismissed &&
     Boolean(manifest || error) &&
@@ -75,9 +66,9 @@ const UpdateModal = ({ update }) => {
       UpdateStatus.ERROR,
     ].includes(status);
 
-  // Focus the primary action on open and hand focus back on close, mirroring
-  // SosOverlay. Without this a keyboard/screen-reader user can Tab straight past a
-  // mandatory gate into the app underneath, which is exactly what it exists to prevent.
+  // Focus the primary action on open and hand focus back on close, mirroring the Emergency
+  // alert. Without this a keyboard or screen-reader user can Tab straight past a mandatory
+  // gate into the app underneath, which is exactly what it exists to prevent.
   useEffect(() => {
     if (!visible) return undefined;
     const previouslyFocused = document.activeElement;
@@ -86,11 +77,10 @@ const UpdateModal = ({ update }) => {
     };
   }, [visible]);
 
-  // Re-focus on every status change too: each state renders a different primary button,
-  // so the previously focused node has been unmounted and focus would fall back to
-  // <body>, silently dropping the keyboard user out of the dialog.
+  // Re-focus on every status change too: each state renders a different primary button (or
+  // none while busy), so the previously focused node has been unmounted.
   useEffect(() => {
-    if (visible) primaryRef.current?.focus();
+    if (visible) (primaryRef.current ?? panelRef.current)?.focus();
   }, [visible, status]);
 
   if (!visible) return null;
@@ -119,89 +109,106 @@ const UpdateModal = ({ update }) => {
   };
 
   const size = formatBytes(manifest?.apkSize);
+  const failed = status === UpdateStatus.ERROR;
+  const installFailure = failed && INSTALL_FAILURES.has(error?.code);
 
-  const renderBody = () => {
-    if (status === UpdateStatus.ERROR) {
-      return (
-        <p id={bodyId} className="font-inter text-[13px] leading-relaxed text-red-400">
-          {error?.message}
-        </p>
-      );
-    }
-    if (status === UpdateStatus.PERMISSION_REQUIRED) {
-      return (
-        <p id={bodyId} className="font-inter text-[13px] leading-relaxed text-zinc-400">
-          Android needs one-time permission to let LOCUS install its own updates. Enable
-          &ldquo;Allow from this source&rdquo; on the next screen, then return here — the
-          download resumes by itself, and you will not be asked again.
-        </p>
-      );
-    }
-    if (busy) {
-      const loaded = formatBytes(progress.loaded);
-      const total = formatBytes(progress.total);
-      return (
-        <div id={bodyId} className="space-y-3">
-          <ProgressBar percent={status === UpdateStatus.READY ? 100 : progress.percent} />
-          <p className="font-inter text-[12px] text-zinc-500">
-            {status === UpdateStatus.READY
-              ? 'INTEGRITY VERIFIED — handing off to the Android installer...'
-              : `DOWNLOADING${loaded && total ? ` — ${loaded} / ${total}` : '...'}`}
-          </p>
-        </div>
-      );
-    }
-    return (
-      <div id={bodyId} className="space-y-3">
-        {manifest?.notes ? (
-          <pre className="font-inter text-[13px] leading-relaxed text-zinc-400 whitespace-pre-wrap max-h-52 overflow-y-auto">
-            {manifest.notes}
-          </pre>
-        ) : (
-          <p className="font-inter text-[13px] text-zinc-500">No release notes provided.</p>
-        )}
-        {size && <p className="font-dot text-[10px] tracking-widest text-zinc-600">PACKAGE SIZE: {size}</p>}
-      </div>
-    );
-  };
+  // What this state shows: icon, title, sentence, and the actions under them.
+  let icon = Download;
+  let tone = 'accent';
+  let title;
+  let body;
+  let actions = null;
+  const later = !mandatory ? <Button variant="plain" block onClick={update.dismiss}>{UPDATE.available.later}</Button> : null;
 
-  const renderActions = () => {
-    if (status === UpdateStatus.ERROR) {
-      return (
-        <>
-          <HudButton ref={primaryRef} variant="primary" onClick={update.startDownload} disabled={!manifest}>
-            Retry
-          </HudButton>
-          {!mandatory && <HudButton onClick={update.dismiss}>Later</HudButton>}
-        </>
-      );
-    }
-    if (status === UpdateStatus.PERMISSION_REQUIRED) {
-      return (
-        <>
-          <HudButton ref={primaryRef} variant="primary" onClick={update.openInstallSettings}>
-            Grant access
-          </HudButton>
-          {!mandatory && <HudButton onClick={update.dismiss}>Later</HudButton>}
-        </>
-      );
-    }
-    if (busy) {
-      return (
-        <HudButton ref={primaryRef} variant="primary" disabled>
-          {status === UpdateStatus.READY ? 'Installing' : 'Downloading'}
-        </HudButton>
-      );
-    }
-    return (
+  if (failed) {
+    icon = AlertCircle;
+    tone = 'warning';
+    title = installFailure ? UPDATE.failed.installTitle : UPDATE.failed.checkTitle;
+    body = failureSentence(error?.code);
+    actions = (
       <>
-        <HudButton ref={primaryRef} variant="primary" onClick={update.startDownload}>
-          Update now
-        </HudButton>
-        {!mandatory && <HudButton onClick={update.dismiss}>Later</HudButton>}
+        <Button ref={primaryRef} block size="large" onClick={update.startDownload} disabled={!manifest}>{UPDATE.failed.tryAgain}</Button>
+        {!mandatory && <Button variant="plain" block onClick={update.dismiss}>{UPDATE.failed.later}</Button>}
       </>
     );
-  };
+  } else if (status === UpdateStatus.PERMISSION_REQUIRED) {
+    icon = ShieldCheck;
+    title = UPDATE.permission.title;
+    body = UPDATE.permission.body;
+    actions = (
+      <>
+        <Button ref={primaryRef} block size="large" onClick={update.openInstallSettings}>{UPDATE.permission.open}</Button>
+        {!mandatory && <Button variant="plain" block onClick={update.dismiss}>{UPDATE.permission.notNow}</Button>}
+      </>
+    );
+  } else if (busy) {
+    const ready = status === UpdateStatus.READY;
+    title = mandatory ? UPDATE.mandatory.downloadingTitle : ready ? UPDATE.installing.title : UPDATE.downloading.title;
+    body = mandatory ? UPDATE.mandatory.downloadingBody : ready ? UPDATE.installing.body : UPDATE.downloading.body;
+  } else if (mandatory) {
+    title = UPDATE.mandatory.title;
+    body = UPDATE.mandatory.body;
+    actions = <Button ref={primaryRef} block size="large" onClick={update.startDownload}>{UPDATE.available.update}</Button>;
+  } else {
+    title = UPDATE.available.title;
+    body = UPDATE.available.body(manifest?.version, size);
+    actions = (
+      <>
+        <Button ref={primaryRef} block size="large" onClick={update.startDownload}>{UPDATE.available.update}</Button>
+        {later}
+      </>
+    );
+  }
+
+  const Icon = icon;
+  const loaded = formatBytes(progress?.loaded);
+  const total = formatBytes(progress?.total);
+  const progressBlock = busy && (
+    <div className="flex flex-col gap-2 w-full">
+      <ProgressBar percent={status === UpdateStatus.READY ? 100 : progress.percent} />
+      <div className="flex justify-between gap-3 text-secondary text-text-secondary">
+        <span>
+          {status === UpdateStatus.READY ? UPDATE.installing.progress : mandatory ? UPDATE.mandatory.progress : UPDATE.downloading.progress}
+        </span>
+        {status !== UpdateStatus.READY && loaded && total && <span>{UPDATE.downloading.amount(loaded, total)}</span>}
+      </div>
+    </div>
+  );
+
+  if (mandatory) {
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={bodyId}
+        onKeyDown={handleKeyDown}
+        data-testid="update-mandatory"
+        className="fixed inset-0 flex flex-col bg-bg text-text font-ui px-5"
+        style={{ zIndex: LAYER.update, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+      >
+        <div ref={panelRef} tabIndex={-1} className="flex-1 flex flex-col max-w-md w-full mx-auto outline-none">
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+            <span className={`flex items-center justify-center w-22 h-22 rounded-full ${TONE[tone]}`} aria-hidden="true"><Icon size={40} /></span>
+            <h2 id={titleId} className="text-display">{title}</h2>
+            <p id={bodyId} className="text-body text-text-secondary">{body}</p>
+            {manifest?.version && (
+              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 min-h-10 text-label text-text-secondary">
+                {installedVersion && <>{installedVersion} <ArrowRight size={16} aria-hidden="true" /></>}
+                <span className="text-text">{manifest.version}</span>
+                {size && <span className="font-normal">· {size}</span>}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-3 items-center">
+            {progressBlock}
+            {actions}
+            <p className="text-secondary text-text-secondary text-center">{UPDATE.mandatory.emergencyNote}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -210,33 +217,27 @@ const UpdateModal = ({ update }) => {
       aria-labelledby={titleId}
       aria-describedby={bodyId}
       onKeyDown={handleKeyDown}
-      className="fixed inset-0 flex items-center justify-center p-6"
-      style={{ zIndex: LAYER.update, background: mandatory ? '#000000' : 'rgba(0,0,0,0.88)' }}
+      data-testid="update-sheet"
+      className="fixed inset-0 flex items-end justify-center bg-backdrop"
+      style={{ zIndex: LAYER.update }}
     >
-      <div ref={panelRef} className="relative w-full max-w-lg border border-white/20 bg-black px-8 py-8">
-        <CornerBrackets />
-        <p className="absolute -top-2.5 left-5 bg-black px-2 font-dot text-[10px] tracking-widest text-red-500">
-          {mandatory ? 'LOCUS // UPDATE REQUIRED' : 'LOCUS // UPDATE AVAILABLE'}
-        </p>
-
-        <h2 id={titleId} className="font-dot text-xl uppercase tracking-widest text-white">
-          {mandatory ? 'Mandatory update' : 'New build available'}
-        </h2>
-
-        <p className="mt-2 font-dot text-[10px] tracking-widest text-zinc-600">
-          {installedVersion ? `INSTALLED ${installedVersion}` : 'INSTALLED —'}
-          {manifest?.version ? `  →  ${manifest.version}` : ''}
-        </p>
-
-        {mandatory && (
-          <p className="mt-4 border border-red-500/40 bg-red-500/5 px-3 py-2 font-inter text-[12px] text-red-400">
-            This release is required. LOCUS stays locked until it is installed.
-          </p>
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="w-full max-w-xl rounded-t-sheet bg-surface text-text font-ui shadow-[var(--shadow-3)] px-5 pt-3 flex flex-col gap-4 outline-none max-h-[90dvh] overflow-y-auto"
+        style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+      >
+        <span className="self-center w-9 h-1 rounded-full bg-border" aria-hidden="true" />
+        <span className={`flex items-center justify-center w-14 h-14 rounded-full ${TONE[tone]}`} aria-hidden="true"><Icon size={26} /></span>
+        <div className="flex flex-col gap-2">
+          <h2 id={titleId} className="text-title">{title}</h2>
+          <p id={bodyId} className="text-body text-text-secondary">{body}</p>
+        </div>
+        {status === UpdateStatus.AVAILABLE && manifest?.notes && (
+          <pre className="font-ui text-body text-text whitespace-pre-wrap rounded-input bg-sunken px-4 py-3 max-h-52 overflow-y-auto">{manifest.notes}</pre>
         )}
-
-        <div className="mt-5 h-px bg-white/10" />
-        <div className="mt-5">{renderBody()}</div>
-        <div className="mt-7 flex flex-wrap gap-3">{renderActions()}</div>
+        {progressBlock}
+        {actions && <div className="flex flex-col gap-2">{actions}</div>}
       </div>
     </div>
   );
