@@ -115,6 +115,12 @@ a[href]:active {
 @keyframes locus-download-sweep { from { left: -33%; } to { left: 100%; } }
 @media (prefers-reduced-motion: reduce) { .locus-download-sweep { animation: none; left: 0; width: 100%; opacity: 0.4; } }
 
+/* Skeleton placeholders (src/components/ui/Skeleton.jsx): opacity 1 -> 0.55 -> 1 over 1.4 s.
+   Reduced motion: held still. */
+.locus-skeleton { animation: locus-skeleton var(--duration-skeleton) ease-in-out infinite; }
+@keyframes locus-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .locus-skeleton { animation: none; } }
+
 /* Comms feed (CommsFeed.jsx): each notice's time left, as a line draining to nothing. */
 .locus-drain { animation: locus-drain linear forwards; }
 @keyframes locus-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }

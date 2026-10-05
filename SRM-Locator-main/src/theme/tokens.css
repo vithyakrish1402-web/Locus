@@ -166,7 +166,7 @@
   --color-raised: #1E232C;
   --color-sunken: #12161C;
   --color-border: #2A303A;
-  --color-border-control: #5F6875;
+  --color-border-control: #666F7D; /* handoff #5F6875, lightened to reach 3:1 on raised */
   --color-text: #EEF1F5;
   --color-text-secondary: #A3ACB9;
 
@@ -212,7 +212,7 @@
     --color-raised: #1E232C;
     --color-sunken: #12161C;
     --color-border: #2A303A;
-    --color-border-control: #5F6875;
+    --color-border-control: #666F7D; /* handoff #5F6875, lightened to reach 3:1 on raised */
     --color-text: #EEF1F5;
     --color-text-secondary: #A3ACB9;
 

@@ -10,10 +10,15 @@
 // (src/theme/tokens.css) key off. Screens not yet converted to the tokens look the same in both.
 // An entry point that nothing imports, so react-refresh has no module boundary to keep.
 /* eslint-disable react-refresh/only-export-components */
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../index.css';
-import { Map, Scan, Users } from 'lucide-react';
+import { MotionGlobalConfig } from 'framer-motion';
+import { Ban, Map, MapPinOff, Navigation, Radio, Scan, ScanLine, Share2, ShieldCheck, Users, X } from 'lucide-react';
+import {
+  Avatar, Badge, Button, Card, Chip, IconButton, ListRow, NoticeCard, RadioList, SectionLabel,
+  SegmentedControl, Sheet, Skeleton, StatusDot, Switch, TextField,
+} from '../../components/ui';
 import SosTrigger from '../../components/SosTrigger';
 import SosOverlay from '../../components/SosOverlay';
 import CommsFeed from '../../components/CommsFeed';
@@ -31,6 +36,11 @@ import { LiveUpdateStatus } from '../../hooks/useLiveUpdate';
 import { AR_TAGS, BUILDING, ME, MEMBERS, NOTICES, SOS, appUpdate, liveUpdate } from './sampleData';
 
 const params = new URLSearchParams(window.location.search);
+
+// Frames show every screen at rest: framer-motion animations jump to their end. A screenshot
+// tool that only paints on capture (the browser pane does) would otherwise catch a sheet or a
+// notice part-way in. ?motion=1 plays them.
+if (params.get('frame') === '1' && params.get('motion') !== '1') MotionGlobalConfig.skipAnimations = true;
 
 // The SOS alarm and vibration start the moment SosOverlay mounts; silence them unless asked.
 if (params.get('sound') !== '1') {
@@ -60,6 +70,8 @@ const pad = { padding: 16, display: 'flex', flexDirection: 'column', gap: 16 };
 // Each screen: what a frame shows (see Frame).
 const SCREENS = {
   tokens: { label: 'Design tokens', render: () => <TokenSheet /> },
+  components: { label: 'Components', render: () => <ComponentSheet /> },
+  sheet: { label: 'Sheet (member options)', render: () => <SheetDemo /> },
   'emergency-button': {
     label: 'Emergency button (resting)',
     render: () => <SosTrigger socket={null} getLocation={() => ME} roomCode="K7M2QX" senderName="ALPHA" />,
@@ -201,6 +213,126 @@ function TokenSheet() {
   );
 }
 
+// The shared parts (src/components/ui), with working state so they can be tried here.
+function ComponentSheet() {
+  const [mode, setMode] = useState('live');
+  const [rate, setRate] = useState('standard');
+  const [sounds, setSounds] = useState(true);
+  const modeHelp = { live: 'The group sees you move, updated every 5 seconds.', paused: 'Your group sees where you were when you paused.', hidden: "Other members won't see you on their map." };
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--color-bg)', padding: 16, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <Button block size="large">Sign in</Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button icon={Navigation}>Navigate</Button>
+          <Button variant="tonal" icon={ScanLine}>AR Scan</Button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Button variant="secondary">Cancel</Button>
+          <Button variant="plain">Forgot password?</Button>
+          <IconButton label="Share group code" icon={Share2} variant="tonal" />
+          <IconButton label="Close" icon={X} />
+        </div>
+        <Button variant="danger" block>Remove and block</Button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Chip icon={ShieldCheck}>You&apos;re the Group Lead</Chip>
+        <Chip tone="neutral">Planned</Chip>
+        <Badge count={2} label="2 join requests" />
+      </div>
+
+      <div>
+        <SectionLabel>Your location</SectionLabel>
+        <SegmentedControl
+          label="Location sharing"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'live', label: 'Live', leading: mode === 'live' ? <StatusDot status="live" /> : null },
+            { value: 'paused', label: 'Paused' },
+            { value: 'hidden', label: 'Hidden' },
+          ]}
+        />
+        <p className="font-ui text-secondary text-text-secondary" style={{ margin: '8px 4px 0' }}>{modeHelp[mode]}</p>
+      </div>
+
+      <div>
+        <SectionLabel>Location refresh rate</SectionLabel>
+        <Card padded={false}>
+          <RadioList
+            label="Location refresh rate"
+            value={rate}
+            onChange={setRate}
+            options={[
+              { value: 'eco', label: 'Battery saver', description: 'Every 15 seconds' },
+              { value: 'standard', label: 'Standard', description: 'Every 5 seconds' },
+              { value: 'max', label: 'Fast', description: 'Every second · uses more battery' },
+            ]}
+          />
+        </Card>
+      </div>
+
+      <Card padded={false}>
+        <div className="divide-y divide-border">
+          <Switch label="Alert sounds" checked={sounds} onChange={setSounds} />
+          <Switch label="Emergency alerts" description="Always on" checked locked />
+        </div>
+      </Card>
+
+      <TextField label="Email" type="email" defaultValue="meera.iyer@srmist.edu.in" />
+      <TextField label="Group code" defaultValue="K7M2Q" problem="No group uses this code. Check it with your Group Lead." />
+
+      <Card padded={false}>
+        <div className="divide-y divide-border">
+          <ListRow leading={<Avatar name="Meera Iyer" />} title="Meera Iyer" description={<StatusDot status="live">Live now</StatusDot>} trailing={<span className="text-body text-text tabular-nums">120 m</span>} />
+          <ListRow leading={<Avatar name="Rohan Das" dashed />} title="Rohan Das" description={<StatusDot status="paused">Paused · 6 min ago</StatusDot>} trailing={<span className="text-body text-text tabular-nums">520 m</span>} />
+          <ListRow leading={<Avatar name="Ishita Rao" dashed />} title="Ishita Rao" description={<StatusDot status="hidden">Hidden from other members&apos; maps</StatusDot>} />
+        </div>
+      </Card>
+
+      <NoticeCard tone="success" title="Meera joined the group" onDismiss={() => {}}>You approved her request.</NoticeCard>
+      <NoticeCard tone="info" icon={Radio} title="Aarav is pinging you" onDismiss={() => {}}>He is 340 m away, at 2 o&apos;clock.</NoticeCard>
+      <NoticeCard tone="warning" icon={MapPinOff} title="Location is off" action={<Button variant="tonal" block>Turn on location</Button>}>
+        Turn it on so your group can find you and you can see how far away they are.
+      </NoticeCard>
+
+      <Card>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <Skeleton className="w-10 h-10 rounded-full" />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-3 w-1/3" />
+          </div>
+        </div>
+      </Card>
+      <div style={{ height: 24 }} />
+    </div>
+  );
+}
+
+// The member options sheet, open over a stand-in for the group panel.
+function SheetDemo() {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: 'var(--color-bg)', padding: 16 }}>
+      <Button variant="secondary" onClick={() => setOpen(true)}>Open the sheet again</Button>
+      <Sheet open={open} onClose={() => setOpen(false)} label="Options for Meera Iyer">
+        <ListRow leading={<Avatar name="Meera Iyer" />} title="Meera Iyer" description="Live now · 120 m · 11 o'clock" />
+        <div className="divide-y divide-border border-t border-border">
+          <ListRow leading={<Radio size={22} />} title="Ping Meera" onClick={() => {}} />
+          <ListRow leading={<Navigation size={22} />} title="Navigate to Meera" onClick={() => {}} />
+          <ListRow leading={<ScanLine size={22} />} title="Find with AR Scan" onClick={() => {}} />
+          <ListRow leading={<Ban size={22} />} title="Remove and block" danger onClick={() => {}} />
+        </div>
+        <div className="px-4 pt-2">
+          <Button variant="secondary" block onClick={() => setOpen(false)}>Cancel</Button>
+        </div>
+      </Sheet>
+    </div>
+  );
+}
+
 // Stand-ins for a camera picture: a sunlit sky over a pale building, and dusk.
 const SCENES = {
   bright: 'linear-gradient(180deg, #cfe6ff 0%, #eef5fb 45%, #d9d4c7 46%, #bfb8a8 100%)',
@@ -225,7 +357,7 @@ function Frame({ id, theme }) {
       </figcaption>
       <iframe
         title={`${id} (${theme})`}
-        src={`?frame=1&screen=${id}&theme=${theme}${params.get('sound') === '1' ? '&sound=1' : ''}`}
+        src={`?frame=1&screen=${id}&theme=${theme}${params.get('sound') === '1' ? '&sound=1' : ''}${params.get('motion') === '1' ? '&motion=1' : ''}`}
         style={{ ...PHONE, display: 'block', border: 0, borderRadius: 28, background: '#000', boxShadow: '0 0 0 1px #c9ced6, 0 12px 32px rgba(0,0,0,0.18)' }}
       />
     </figure>

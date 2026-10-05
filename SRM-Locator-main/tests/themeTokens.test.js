@@ -29,8 +29,9 @@ const HANDOFF = [
   ['--color-raised', '#FFFFFF', '#1E232C'],
   ['--color-sunken', '#EDF0F3', '#12161C'],
   ['--color-border', '#DCE1E7', '#2A303A'],
-  // Light differs from the handoff (#8A94A3) on purpose: #808A99 reaches 3:1 on bg and sunken.
-  ['--color-border-control', '#808A99', '#5F6875'],
+  /// Both differ from the handoff on purpose (owner's decisions, docs/redesign/handoff.md):
+  // light #808A99 (was #8A94A3) and dark #666F7D (was #5F6875) reach 3:1 on every surface.
+  ['--color-border-control', '#808A99', '#666F7D'],
   ['--color-text', '#14181F', '#EEF1F5'],
   ['--color-text-secondary', '#566070', '#A3ACB9'],
   ['--color-accent', '#1F4FB8', '#8AB0FF'],
@@ -119,7 +120,7 @@ describe('contrast, both themes', () => {
     ['--color-border-control', '--color-surface', 3],
     ['--color-border-control', '--color-bg', 3],
     ['--color-border-control', '--color-sunken', 3],
-    // Not on --color-raised: dark is 2.80:1 there (kept as designed, see the handoff note).
+    ['--color-border-control', '--color-raised', 3],
   ];
   for (const [theme, values] of [['light', lightAll], ['dark', darkAll]]) {
     it.each(PAIRS)(`${theme}: %s on %s at least %s:1`, (fg, bg, min) => {
