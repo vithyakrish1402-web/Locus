@@ -41,9 +41,14 @@ export const ARROW_OUTLINE = Object.fromEntries(Object.entries(SVG_POINTS).map((
 // the two top faces lean well apart, so the light catches one and not the other.
 export const ARROW_RIDGE_PX = 12;
 
-const TOP_COLOR = 0xf04848;
-const SIDE_COLOR = 0x6b1515;
-const EDGE_COLOR = 0xfca5a5;
+// The redesign's accent blue (the light theme's #1F4FB8 family), lifted a little because the
+// lights darken it. The arrow sits over the camera, so one blue serves both themes. Never red.
+export const ARROW_TOP_COLOR = 0x2f62d8;
+export const ARROW_SIDE_COLOR = 0x13306f;
+export const ARROW_EDGE_COLOR = 0xa9c4ff;
+const TOP_COLOR = ARROW_TOP_COLOR;
+const SIDE_COLOR = ARROW_SIDE_COLOR;
+const EDGE_COLOR = ARROW_EDGE_COLOR;
 
 // A soft round shadow for the ground under the arrow: black, fading out from the middle.
 const SHADOW_TEXTURE_PX = 64;
@@ -116,7 +121,7 @@ export const buildArrowScene = () => {
 
   const geometry = buildArrowGeometry();
   const materials = [
-    new MeshStandardMaterial({ color: TOP_COLOR, roughness: 0.35, metalness: 0.05, emissive: 0x1a0303, side: DoubleSide }),
+    new MeshStandardMaterial({ color: TOP_COLOR, roughness: 0.35, metalness: 0.05, emissive: 0x030a1a, side: DoubleSide }),
     new MeshStandardMaterial({ color: SIDE_COLOR, roughness: 0.7, metalness: 0.1, side: DoubleSide }),
   ];
   const arrow = new Mesh(geometry, materials);

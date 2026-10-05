@@ -249,3 +249,17 @@ body {
 :root[data-theme="dark"] .ar-plate {
   background-color: rgb(22 26 33 / 0.86);
 }
+
+/* AR Scan's ground arrow (components/ARArrow3D.jsx), in the accent: a lit and a shaded
+   half on top, darker sides below. Never red. */
+.ar-arrow-lit { fill: var(--color-accent); }
+.ar-arrow-shaded { fill: color-mix(in srgb, var(--color-accent) 72%, black); }
+.ar-arrow-side { fill: color-mix(in srgb, var(--color-accent) 45%, black); }
+.ar-arrow-base { fill: color-mix(in srgb, var(--color-accent) 28%, black); }
+.ar-arrow-edge { stroke: color-mix(in srgb, var(--color-accent) 45%, white); }
+
+/* The faint centre mark: the exact middle of the screen, the point ALIGN measures from. */
+.ar-centre-mark {
+  background-color: rgb(255 255 255 / 0.7);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
+}

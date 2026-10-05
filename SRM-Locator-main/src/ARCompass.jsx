@@ -407,6 +407,14 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
       {ribbon && <ARRoadLine ribbon={ribbon} width={viewport.width} height={viewport.height} />}
       {strip && roadGl !== 'failed' && <ARRoadGL strip={strip} orientation={orientation} fovDeg={fovDeg} onStatus={onRoadGlStatus} />}
 
+      {/* The faint centre mark: the exact middle of the whole screen, the point ALIGN
+          lines a building up with. Under the tags; it takes no touches. */}
+      <div
+        data-testid="ar-centre-mark"
+        className="ar-centre-mark absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full pointer-events-none z-[24]"
+        aria-hidden="true"
+      />
+
       {/* Floating tags, anchored on the real buildings by the Landmark Anchor Engine.
           Above the arrow ring, below nothing tappable (they take no touches). */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-[25]" aria-hidden="true">
@@ -476,28 +484,17 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
         {/* Central Compass Area */}
         <div className="flex-1 flex flex-col items-center justify-center relative">
           
-          {/* Static Crosshair HUD */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-64 h-64 border-2 border-white/20 rounded-full relative">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-4 bg-white/50" />
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-1 h-4 bg-white/50" />
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-1 bg-white/50" />
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-4 h-1 bg-white/50" />
-            </div>
-            {/* Center dot */}
-            <div className="absolute w-2 h-2 bg-red-500 rounded-full" />
-          </div>
-
-          {/* The ring, and the destination arrow turning inside it by the same
-              wraparound-safe angle and spring as before. The arrow depends on its
-              resolved fidelity (AR_RENDER_MODE, or its override): 'efficient' and
-              'standard' (and anything unknown) get the CSS 3D wedge; 'realistic' gets
+          {/* The arrow's box, and the destination arrow turning inside it by the same
+              wraparound-safe angle and spring as before. The box draws nothing (the old red
+              ring and crosshair are gone); the realistic arrow sizes itself to it. The arrow
+              depends on its resolved fidelity (AR_RENDER_MODE, or its override): 'efficient'
+              and 'standard' (and anything unknown) get the CSS 3D wedge; 'realistic' gets
               the three.js arrow (RealisticArrow), which loads three.js only then. */}
           <div
             ref={ringRef}
             data-testid="ar-arrow-ring"
             data-fidelity={features.arrow}
-            className="w-48 h-48 rounded-full border-4 border-red-500 flex items-center justify-center relative z-30 shadow-[0_0_30px_rgba(239,68,68,0.3)] bg-black/20 backdrop-blur-sm"
+            className="w-48 h-48 flex items-center justify-center relative z-30"
           >
             {features.arrow === 'realistic' ? (
               <RealisticArrow rotation={displayRotation} spring={ARROW_SPRING} ringRef={ringRef} overlayEl={overlayEl} />

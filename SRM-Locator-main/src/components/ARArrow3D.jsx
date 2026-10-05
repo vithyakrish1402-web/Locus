@@ -15,10 +15,13 @@ import { motion } from 'framer-motion';
 // about their own centre.
 
 // Fixed viewing angle, degrees back from facing the screen. Shallower reads as flat;
-// steeper gets hard to read when pointing straight ahead or back.
-export const ARROW_BASE_TILT_DEG = 55;
+// steeper gets hard to read when pointing straight ahead or back. The redesign's
+// perspective(520px) rotateX(58deg): lying on the ground, a little less exaggerated.
+export const ARROW_BASE_TILT_DEG = 58;
 // CSS perspective distance. Smaller exaggerates the depth, larger flattens it.
-export const ARROW_PERSPECTIVE_PX = 300;
+export const ARROW_PERSPECTIVE_PX = 520;
+// Colours (index.css, .ar-arrow-*): the theme's accent, lit and shaded halves on top and
+// darker sides below, so it reads as blue in both themes and never red.
 // The wedge's thickness: side layers stacked this far below the top face.
 export const ARROW_THICKNESS_PX = 9;
 const SIDE_LAYERS = 6;
@@ -60,7 +63,7 @@ const ARArrow3D = ({ rotation, transition }) => (
             style={layer((i * ARROW_THICKNESS_PX) / SIDE_LAYERS)}
             aria-hidden="true"
           >
-            <polygon points={OUTLINE} fill={i === 0 ? '#450A0A' : '#7F1D1D'} />
+            <polygon points={OUTLINE} className={i === 0 ? 'ar-arrow-base' : 'ar-arrow-side'} />
           </svg>
         ))}
         {/* Top face, two-tone along the ridge like a bevelled wedge. */}
@@ -71,9 +74,9 @@ const ARArrow3D = ({ rotation, transition }) => (
           style={layer(ARROW_THICKNESS_PX)}
           aria-hidden="true"
         >
-          <polygon points={`${TIP} ${NOTCH} ${LEFT_WING}`} fill="#F87171" />
-          <polygon points={`${TIP} ${RIGHT_WING} ${NOTCH}`} fill="#DC2626" />
-          <polygon points={OUTLINE} fill="none" stroke="#FCA5A5" strokeWidth="1.2" strokeLinejoin="round" />
+          <polygon points={`${TIP} ${NOTCH} ${LEFT_WING}`} className="ar-arrow-lit" />
+          <polygon points={`${TIP} ${RIGHT_WING} ${NOTCH}`} className="ar-arrow-shaded" />
+          <polygon points={OUTLINE} className="ar-arrow-edge" fill="none" strokeWidth="1.2" strokeLinejoin="round" />
         </svg>
       </motion.div>
     </div>
