@@ -23,6 +23,7 @@ import BrandMark from './components/access/BrandMark';
 import BootScreen from './components/access/BootScreen';
 import StatusScreen from './components/access/StatusScreen';
 import { Button, Card, IconButton, InlineMessage, SegmentedControl, TextField } from './components/ui';
+import { NOTICES, OS_NOTICES } from './copy/notices';
 import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
 import { authProblem } from './utils/authProblems';
 import ARCompass from './ARCompass';
@@ -118,6 +119,9 @@ const socket = io(BACKEND_URL, {
 // never hardcode this. The Capacitor/Android build reads the same key separately from
 // android/local.properties (see AndroidManifest.xml's MAPS_API_KEY meta-data placeholder).
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+
+// How long the old ping and lost-connection banners stayed up; their notices keep it.
+const OLD_BANNER_MS = 6000;
 
 if (!GOOGLE_MAPS_API_KEY) {
   // Say this out loud. Without a key Google would still "work" — it just renders a
@@ -437,7 +441,6 @@ const App = () => {
 
   const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
-  const [signalLostAlerts, setSignalLostAlerts] = useState([]); // one-time auto-dismissing banners
   const ghostFadeTimersRef = useRef({}); // targetId -> timeout, guards against double-scheduling a fade-out
   // Own stable identity, readable from socket callbacks that only subscribe once. Socket
   // ids change on every reconnect; this doesn't, so it's what "is this me?" is answered with.
@@ -815,13 +818,9 @@ const App = () => {
         }
       }));
 
-      // One-time auto-dismissing banner — replaces the old blocking alert(),
-      // which froze the whole UI thread until someone clicked OK.
-      const alertId = `signal-lost-${targetId}-${Date.now()}`;
-      setSignalLostAlerts(prev => [...prev, { id: alertId, name }]);
-      setTimeout(() => {
-        setSignalLostAlerts(prev => prev.filter(a => a.id !== alertId));
-      }, 6000);
+      // A notice that clears itself (it replaced a blocking alert(), which froze the whole UI
+      // until someone clicked OK). Six seconds and no buzz, as the old banner had.
+      notify.warning(NOTICES.signalLost.body, { title: NOTICES.signalLost.title(name), duration: OLD_BANNER_MS, haptic: false });
     });
 
     return () => {
@@ -846,8 +845,8 @@ const App = () => {
   useEffect(() => {
     socket.on('exiled', ({ reason } = {}) => {
       // 1. Tell them why (a comms-feed notice; this used to be a blocking alert())
-      if (reason === 'blocked') notify.error('The Squad Commander has blocked you from this channel.', { title: 'SYS_BANNED' });
-      else notify.error('You have been exiled from the squad by majority vote.', { title: 'SYS_MUTINY' });
+      if (reason === 'blocked') notify.error(NOTICES.removedByLead);
+      else notify.error(NOTICES.removedByVote);
 
       // 2. Trigger your existing leave function to wipe local state and return to the join screen
       handleLeaveSquad();
@@ -921,12 +920,12 @@ const App = () => {
       setActiveWaypoint(waypointData);
       if (!isRepeat && !placedByMe) {
         const { lat, lng, setBy } = waypointData ?? {};
-        notify.info('A squad member designated a rally point. Tap to view it.', {
-          title: 'RALLY_POINT',
+        notify.info(NOTICES.meetingPoint.body, {
+          title: NOTICES.meetingPoint.title,
           onClick: () => focusRallyPointRef.current({ lat, lng, setBy }),
         });
       }
-      triggerSystemNotification("🎯 RALLY POINT DESIGNATED", "New tactical coordinates uploaded to map.");
+      triggerSystemNotification(OS_NOTICES.meetingPoint.title, OS_NOTICES.meetingPoint.body);
     });
 
     socket.on('remove-waypoint', () => {
@@ -1013,19 +1012,15 @@ const App = () => {
     // to be worded as an SOS and end in a blocking alert(), which froze the whole app
     // (klaxon, sockets, map) until dismissed. Now a sonar blip plus a short notice in the
     // HUD; the OS notification only when the app isn't in view to show that notice.
+    // The notice keeps the old ping banner's six seconds and, like it, doesn't buzz.
     socket.on('receive-ping', ({ senderName } = {}) => {
-      const name = (senderName || 'A squad member').toUpperCase();
       playSonarPing();
 
       if (document.hidden) {
-        triggerSystemNotification('📡 PING', `${name} is pinging you.`);
+        triggerSystemNotification(OS_NOTICES.ping.title, OS_NOTICES.ping.body(senderName));
       }
 
-      const notice = { id: `ping-${Date.now()}-${Math.random()}`, type: 'PING', userName: name };
-      setZoneAlerts(prev => [...prev, notice]);
-      setTimeout(() => {
-        setZoneAlerts(prev => prev.filter(a => a.id !== notice.id));
-      }, 6000);
+      notify.info(NOTICES.ping(senderName), { kind: 'ping', duration: OLD_BANNER_MS, haptic: false });
     });
     socket.on('new-custom-route', ({ key, data }) => {
       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
@@ -1216,7 +1211,7 @@ const App = () => {
       if (!isAboutThisSquad(payload)) return;
       setSquadRole('MEMBER');
       setPendingRequests([]);
-      notify.info('[SYS] THE SQUAD COMMANDER IS BACK. YOU ARE A SQUAD MEMBER AGAIN.');
+      notify.info(NOTICES.leadIsBack);
     });
 
     const onConnect = () => {
@@ -1606,7 +1601,7 @@ const App = () => {
   focusRallyPointRef.current = ({ lat, lng }) => {
     const live = activeWaypointRef.current;
     if (!live || live.lat !== lat || live.lng !== lng) {
-      notify.info('Rally point no longer active.', { title: 'RALLY_POINT' });
+      notify.info(NOTICES.meetingPoint.gone);
       return;
     }
     setMobileView('grid');
@@ -1891,7 +1886,10 @@ const App = () => {
         hidden={hasJoinedSquad && isMobile && (sheetOpen || Boolean(selectedItem && activeTab === 'buildings'))}
       />
       {/* Non-blocking notices (src/utils/notify.js) - what window.alert() used to be. */}
-      <CommsFeed overArScan={Boolean(arTarget)} />
+      {/* Under the open group panel on a phone, so a notice never covers or takes the taps
+          meant for the Group Lead's buttons there (as the old ping and lost-connection
+          banners did, z-[850]); everywhere else, and over AR Scan, on top. */}
+      <CommsFeed overArScan={Boolean(arTarget)} coveredBy={hasJoinedSquad && isMobile && sheetOpen ? sheetRef : null} />
     </>
   );
 
@@ -2512,24 +2510,7 @@ const App = () => {
           a banner's own dismiss button takes them. */}
       <div className="absolute top-24 right-6 z-[850] md:z-[1000] flex flex-col gap-2 w-72 pointer-events-none">
         <AnimatePresence>
-          {zoneAlerts.map(alert => alert.type === 'PING' ? (
-            <motion.div
-              key={alert.id}
-              role="status"
-              initial={{ opacity: 0, x: 50, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 50, scale: 0.9 }}
-              className="p-3 border backdrop-blur-md flex flex-col gap-1 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-zinc-900/80 border-blue-500"
-            >
-              <div className="flex items-center gap-2">
-                <Radio size={14} className="text-blue-400" />
-                <span className="text-[10px] font-dot tracking-widest uppercase text-blue-400">PING</span>
-              </div>
-              <p className="font-dot text-sm text-white uppercase tracking-widest leading-tight">
-                <span className="text-blue-400">{alert.userName}</span> is pinging you
-              </p>
-            </motion.div>
-          ) : (
+          {zoneAlerts.map(alert => (
             <motion.div
               key={alert.id}
               initial={{ opacity: 0, x: 50, scale: 0.9 }}
@@ -2553,7 +2534,7 @@ const App = () => {
           ))}
         </AnimatePresence>
       </div>
-      {/* --- 👻 SIGNAL LOST BANNER (one-time, auto-dismissing) --- */}
+      {/* --- Targeting mode and the location problem (a member's lost connection is a notice now) --- */}
       <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[850] md:z-[1000] w-[90%] max-w-md pointer-events-none flex flex-col gap-2">
         <AnimatePresence>
           {/* Targeting mode. It used to be a separate fixed banner at nearly the same height
@@ -2601,20 +2582,6 @@ const App = () => {
               </button>
             </motion.div>
           )}
-          {signalLostAlerts.map(alert => (
-            <motion.div
-              key={alert.id}
-              initial={{ opacity: 0, y: -30, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -30, scale: 0.95 }}
-              className="p-3 border border-zinc-500 bg-zinc-900/90 backdrop-blur-md flex items-center gap-2 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-            >
-              <WifiOff size={16} className="text-zinc-400 shrink-0" />
-              <p className="font-dot text-xs text-white uppercase tracking-widest leading-tight">
-                ⚠ <span className="text-zinc-300">{alert.name}</span> SIGNAL LOST — TRACKING LAST VECTOR
-              </p>
-            </motion.div>
-          ))}
         </AnimatePresence>
       </div>
       {/* FULLSCREEN MAP */}
@@ -2800,7 +2767,7 @@ const App = () => {
                     setRecordedCoords([]);
                     if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
                     recordingPolylineRef.current = null;
-                    notify.success(`[SYS] Route ${startName} -> ${endName} published.`);
+                    notify.success(NOTICES.routePublished(startName, endName));
                   }
                 }}
                 className="flex-1 p-2 bg-yellow-500 text-black font-dot text-[10px] hover:bg-yellow-400 transition-colors"
@@ -3438,7 +3405,7 @@ const App = () => {
                               setRecordedCoords([]);
                               if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
                               recordingPolylineRef.current = null;
-                              notify.success(`[SYS] Route ${startName} → ${endName} published.`);
+                              notify.success(NOTICES.routePublished(startName, endName));
                             }
                           }}
                           className="flex-1 py-3 bg-yellow-500 text-black font-dot text-[10px] uppercase tracking-widest hover:bg-yellow-400 transition-colors flex items-center justify-center gap-2"

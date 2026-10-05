@@ -55,7 +55,8 @@ const PHONE = { width: 390, height: 844 };
 function Notices() {
   useEffect(() => {
     __resetNotifications();
-    NOTICES.forEach((n) => notify[n.severity](n.message, { title: n.title, duration: 0 }));
+    // Long enough to stay up while you look, with the countdown line showing.
+    NOTICES.forEach((n) => notify[n.severity](n.message, { title: n.title, kind: n.kind, duration: 10 * 60 * 1000, haptic: false }));
   }, []);
   return <CommsFeed />;
 }
@@ -82,7 +83,10 @@ const SCREENS = {
     label: 'Emergency alert received (2 queued)',
     render: () => <SosOverlay {...SOS} onAcknowledge={() => {}} />,
   },
-  notifications: { label: 'Notifications (all four types)', render: () => <Notices /> },
+  notifications: {
+    label: 'Notifications (all four types)',
+    render: () => <div style={{ height: '100%', background: 'var(--color-bg)' }}><Notices /></div>,
+  },
   'update-available': {
     label: 'Update available',
     render: () => <UpdateModal update={appUpdate(UpdateStatus.AVAILABLE)} />,

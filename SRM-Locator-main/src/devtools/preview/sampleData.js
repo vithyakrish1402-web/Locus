@@ -1,3 +1,4 @@
+import { NOTICES as NOTICE_WORDS } from '../../copy/notices';
 // Sample data for the dev-only preview gallery (preview.html). Made-up people and numbers,
 // placed on the SRM KTR campus so distances and directions look real. Nothing here is a
 // credential or a real account.
@@ -21,11 +22,12 @@ export const BUILDING = {
   info: 'Computing and IT departments, labs and lecture halls.',
 };
 
+// One of each kind, in the app's own words (src/copy/notices.js).
 export const NOTICES = [
   { severity: 'success', message: 'Code copied.' },
-  { severity: 'info', message: 'A squad member designated a rally point. Tap to view it.', title: 'RALLY_POINT' },
-  { severity: 'warning', message: 'Could not reach the clipboard. Read the code out instead.', title: 'COPY_FAILED' },
-  { severity: 'error', message: '[SYS_AR] ALIGN: centre a building in the view first.' },
+  { severity: 'info', message: NOTICE_WORDS.ping('Aarav'), kind: 'ping' },
+  { severity: 'warning', message: NOTICE_WORDS.signalLost.body, title: NOTICE_WORDS.signalLost.title('Rohan') },
+  { severity: 'error', message: NOTICE_WORDS.removedByLead },
 ];
 
 export const SOS = { senderName: 'Meera', lat: 12.82461, lng: 80.04462, ageMs: 0, pendingCount: 1 };

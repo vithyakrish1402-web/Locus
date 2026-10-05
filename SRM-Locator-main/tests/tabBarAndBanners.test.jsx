@@ -12,6 +12,7 @@
 // Renders the real App.jsx; only the socket, Firebase, native plugins, maps and the update
 // hooks are stubbed.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NOTICES } from '../src/copy/notices.js';
 import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
@@ -175,7 +176,7 @@ describe('squad events use the comms feed, never alert()', () => {
     onTheMap();
     act(() => fakeSocket.receive('exiled', { reason: 'blocked' }));
     expect(window.alert).not.toHaveBeenCalled();
-    expect(notices()).toMatch(/SYS_BANNED.*blocked you/);
+    expect(notices()).toBe(NOTICES.removedByLead);
     expect(screen.getByText(LOBBY.title)).toBeTruthy();
   });
 
@@ -183,7 +184,7 @@ describe('squad events use the comms feed, never alert()', () => {
     onTheMap();
     act(() => fakeSocket.receive('exiled', {}));
     expect(window.alert).not.toHaveBeenCalled();
-    expect(notices()).toMatch(/SYS_MUTINY/);
+    expect(notices()).toBe(NOTICES.removedByVote);
   });
 
   it('a denied join request says so on its own screen, not in an alert()', () => {

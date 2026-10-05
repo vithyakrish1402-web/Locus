@@ -87,4 +87,15 @@ describe('the comms feed store', () => {
     notify.error('c');
     expect(vibrate.mock.calls.map(([p]) => p)).toEqual([8, [10, 40, 16], [6, 30, 10]]);
   });
+
+  it('can post without a buzz, for the notices that replaced the silent banners', () => {
+    notify.info('a', { haptic: false });
+    notify.warning('b', { haptic: false });
+    expect(vibrate).not.toHaveBeenCalled();
+  });
+
+  it('keeps a second line (body) and a ping kind', () => {
+    notify.warning('Showing where they were last.', { title: 'Aarav lost connection', body: 'extra', kind: 'ping' });
+    expect(seen[0]).toMatchObject({ title: 'Aarav lost connection', message: 'Showing where they were last.', body: 'extra', kind: 'ping' });
+  });
 });

@@ -15,7 +15,8 @@
 // Renders the real App.jsx; only the socket transport, Firebase, native plugins, maps
 // and the update hooks are stubbed.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
+import { LAYER } from '../src/utils/layers.js';
 
 const fakeSocket = vi.hoisted(() => {
   const handlers = new Map();
@@ -300,19 +301,88 @@ describe('the location banner', () => {
     expect(banner.parentElement.className).toMatch(/z-\[850\] md:z-\[1000\]/);
   });
 
-  it('is not alone: ping and perimeter notices let taps through, and sit under the sheet on a phone', () => {
-    commanderOnSquadPanel();
-    act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
-    const notice = screen.getByRole('status');
-    expect(notice.className).not.toMatch(/pointer-events-auto/);
-    expect(notice.parentElement.className).toMatch(/z-\[850\] md:z-\[1000\]/);
-    expect(notice.parentElement.className).toMatch(/pointer-events-none/);
-  });
 
   it('says ACCESS DENIED only when access was denied, and NO GPS FIX when there is just no fix', async () => {
     geolocationError = { code: 3, message: 'Timeout expired' };
     commanderOnSquadPanel();
     expect(await screen.findByText(/NO GPS FIX/)).toBeTruthy();
     expect(screen.queryByText(/ACCESS DENIED/)).toBeNull();
+  });
+});
+
+// Notifications (the ping and a member's lost connection among them) and the open group
+// panel. On a phone the open panel holds the Group Lead's Refresh locations (SYNC_TELEMETRY)
+// and Join requests (NODE_ACCESS) buttons, near the top, where notices drop in. So while it
+// is open the whole feed sits under it (LAYER.underGroupPanel, below the panel's z-[900]) and
+// takes no taps; a notice takes taps again only once it is wholly above the panel's top edge.
+// Over AR Scan, and with the panel closed, the feed is on top. (jsdom has no layout or hit
+// testing, so this checks what decides it: the feed's layer and each notice's pointer-events.)
+describe('notifications and the open group panel on a phone', () => {
+  // A phone-sized screen (useIsMobile asks matchMedia for max-width).
+  let realMatchMedia;
+  beforeEach(() => {
+    realMatchMedia = window.matchMedia;
+    window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
+  });
+  afterEach(() => { window.matchMedia = realMatchMedia; });
+
+  const feed = () => screen.getByTestId('comms-feed');
+  // The phone's bottom bar SQUAD, which opens the panel as a sheet.
+  const openPanel = () => {
+    commanderOnSquadPanel();
+    const bar = within(screen.getByRole('navigation', { name: 'Main' }));
+    if (bar.getByRole('button', { name: 'SQUAD' }).getAttribute('aria-current') !== 'page') fireEvent.click(bar.getByRole('button', { name: 'SQUAD' }));
+  };
+  const pingNotice = () => screen.getByText('Bravo is pinging you').closest('[data-severity]');
+  const panelZ = () => Number(/(?:^|\s)z-\[(\d+)\]/.exec(screen.getByRole('button', { name: /SYNC_TELEMETRY/ }).closest('[class*="z-[900]"]').className)[1]);
+  const passesTaps = (el) => {
+    for (let node = el; node; node = node.parentElement) {
+      if (/(?:^|\s)pointer-events-auto\b/.test(node.className)) return false;
+      if (/(?:^|\s)pointer-events-none\b/.test(node.className)) return true;
+    }
+    return false;
+  };
+
+  it("a ping while the panel is open sits under it and doesn't take the Group Lead's taps", () => {
+    openPanel();
+    act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
+
+    expect(Number(feed().style.zIndex)).toBe(LAYER.underGroupPanel);
+    expect(LAYER.underGroupPanel).toBeLessThan(panelZ());
+    expect(passesTaps(pingNotice())).toBe(true);
+    // Its close button too: the notice can't be seen.
+    expect(passesTaps(within(pingNotice()).getByRole('button', { name: 'Dismiss notice' }))).toBe(true);
+
+    // Both buttons still do their job with the ping up.
+    fireEvent.click(syncButton());
+    expect(syncRequests()).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /NODE_ACCESS/ }));
+    expect(screen.getByText(/INBOUND/)).toBeTruthy();
+  });
+
+  it('a notice wholly above the panel (the panel dragged down) can be closed again', () => {
+    const rects = { panel: 500, notice: [100, 180] };
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function rect() {
+      if (this.dataset?.severity) return { top: rects.notice[0], bottom: rects.notice[1], height: rects.notice[1] - rects.notice[0], left: 0, right: 0, width: 0 };
+      return { top: rects.panel, bottom: 800, height: 300, left: 0, right: 0, width: 0 };
+    });
+    openPanel();
+    act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
+    act(() => vi.advanceTimersByTime(200));
+    expect(pingNotice().dataset.reachable).toBe('true');
+    expect(passesTaps(pingNotice())).toBe(false);
+
+    // The panel comes back up over it: covered again.
+    rects.panel = 120;
+    act(() => vi.advanceTimersByTime(200));
+    expect(passesTaps(pingNotice())).toBe(true);
+  });
+
+  it('with the panel closed the feed is on top again', () => {
+    openPanel();
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'GRID' }));
+    act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
+    expect(Number(feed().style.zIndex)).toBe(LAYER.toast);
+    expect(passesTaps(pingNotice())).toBe(false);
   });
 });

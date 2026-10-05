@@ -8,6 +8,7 @@
 // Renders the real App.jsx and walks it through the real lobby into a squad; only the
 // socket transport, Firebase, native plugins, maps and the update hooks are stubbed.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NOTICES } from '../src/copy/notices.js';
 import { render, screen, act, cleanup, fireEvent, within, waitFor } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
@@ -134,18 +135,21 @@ describe('receiving a member ping', () => {
 
     expect(alertSpy).not.toHaveBeenCalled();
     const notice = screen.getByRole('status');
-    expect(within(notice).getByText('BRAVO')).toBeTruthy();
-    expect(notice.textContent).toMatch(/is pinging you/i);
+    // The name as it was sent: not put into capitals.
+    expect(within(notice).getByText(NOTICES.ping('Bravo'))).toBeTruthy();
+    expect(notice.textContent).toBe('Bravo is pinging you');
     expect(notice.textContent).not.toMatch(/sos|assistance/i);
     // And it is not the SOS takeover either.
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
-  it('clears itself after a few seconds', async () => {
+  it('clears itself after six seconds, as the old banner did', async () => {
     renderInSquad();
     act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
     expect(screen.getByRole('status')).toBeTruthy();
 
+    // Six seconds, as the old ping banner stayed (its countdown line runs that long).
+    expect(screen.getByRole('status').querySelector('.locus-drain').style.animationDuration).toBe('6000ms');
     act(() => vi.advanceTimersByTime(7000));
     await waitFor(() => expect(screen.queryByText(/is pinging you/i)).toBeNull());
   });
@@ -154,6 +158,27 @@ describe('receiving a member ping', () => {
     renderInSquad();
     act(() => fakeSocket.receive('receive-ping', {}));
     expect(alertSpy).not.toHaveBeenCalled();
-    expect(screen.getByRole('status').textContent).toMatch(/A SQUAD MEMBER/);
+    expect(screen.getByRole('status').textContent).toBe('A group member is pinging you');
+  });
+});
+
+describe('a member losing connection', () => {
+  const lost = { targetId: 'sock-aarav', uid: 'u-aarav', name: 'Aarav', lastKnownLocation: { lat: 12.8231, lng: 80.0442 }, timeDelta: 0 };
+
+  it('is an amber notice in the feed, naming them as sent, that clears after six seconds', async () => {
+    renderInSquad();
+    act(() => fakeSocket.receive('member-signal-lost', lost));
+
+    const notice = screen.getByText(NOTICES.signalLost.title('Aarav')).closest('[role="status"]');
+    expect(notice.dataset.severity).toBe('warning');
+    expect(notice.textContent).toContain(NOTICES.signalLost.body);
+    expect(notice.className).not.toMatch(/danger|red-/);
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(notice.querySelector('.locus-drain').style.animationDuration).toBe('6000ms');
+
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.queryByText(NOTICES.signalLost.title('Aarav'))).toBeTruthy();
+    act(() => vi.advanceTimersByTime(2000));
+    await waitFor(() => expect(screen.queryByText(NOTICES.signalLost.title('Aarav'))).toBeNull());
   });
 });

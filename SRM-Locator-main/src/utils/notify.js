@@ -45,10 +45,13 @@ export function dismiss(id) {
  * Posts a notification and returns its id.
  * @param {'info'|'success'|'warning'|'error'} severity
  * @param {string} message
- * @param {{title?: string, duration?: number, onClick?: () => void}} [options] duration 0 = stays
- *   until dismissed; onClick makes the notice tappable (the notice is dismissed first)
+ * @param {{title?: string, body?: string, duration?: number, onClick?: () => void,
+ *   kind?: 'ping', haptic?: boolean}} [options] duration 0 = stays until dismissed; onClick
+ *   makes the notice tappable (the notice is dismissed first); body is a second, quieter line
+ *   under the message; kind 'ping' draws an info notice with the ping icon; haptic false
+ *   posts it without a buzz (for notices that came over from the old banners, which had none)
  */
-export function post(severity, message, { title: givenTitle, duration, onClick } = {}) {
+export function post(severity, message, { title: givenTitle, body, duration, onClick, kind, haptic: buzz = true } = {}) {
   let title = givenTitle;
   const level = SEVERITIES.includes(severity) ? severity : 'info';
   let text = String(message ?? '').trim();
@@ -68,16 +71,16 @@ export function post(severity, message, { title: givenTitle, duration, onClick }
   if (twin) {
     clearTimeout(timers.get(twin.id));
     if (life > 0) timers.set(twin.id, setTimeout(() => dismiss(twin.id), life));
-    items = items.map((n) => (n.id === twin.id ? { ...n, postedAt: Date.now(), duration: life, onClick } : n));
+    items = items.map((n) => (n.id === twin.id ? { ...n, postedAt: Date.now(), duration: life, onClick, body } : n));
     emit();
     return twin.id;
   }
 
   const id = nextId++;
-  items = [...items, { id, severity: level, title, message: text, postedAt: Date.now(), duration: life, onClick }];
+  items = [...items, { id, severity: level, title, message: text, body, kind, postedAt: Date.now(), duration: life, onClick }];
   while (items.length > MAX_VISIBLE) dismiss(items[0].id);
   if (life > 0) timers.set(id, setTimeout(() => dismiss(id), life));
-  haptic(HAPTICS[level]);
+  if (buzz) haptic(HAPTICS[level]);
   emit();
   return id;
 }

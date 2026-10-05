@@ -10,6 +10,7 @@
 //
 // Renders the real App.jsx against a fake socket.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NOTICES } from '../src/copy/notices.js';
 import { render, screen, act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
@@ -129,7 +130,7 @@ describe('a stand-in Commander, when the Commander comes back', () => {
     expect(screen.queryByText('Stranger')).toBeNull();
     expect(nodeAccess()).toBeNull();
     expect(screen.queryByRole('button', { name: /SYNC_TELEMETRY/ })).toBeNull();
-    await screen.findByText(/COMMANDER IS BACK/);
+    await screen.findByText(NOTICES.leadIsBack);
   });
 
   it('rejoins as a member on its next reconnect, not as the squad\'s Commander', async () => {

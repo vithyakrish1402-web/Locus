@@ -4,6 +4,7 @@
 // notice a squadmate gets. The glide itself is tested in mapFocus.test.js, so focusMapOn is
 // a spy here. (The real two-phone delivery is still a check for a device.)
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NOTICES } from '../src/copy/notices.js';
 import { render, screen, act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
@@ -91,7 +92,7 @@ const joinAsMember = async () => {
   act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'KTR7X9' }));
   await screen.findByTestId('map');
 };
-const notice = () => screen.queryByText(/designated a rally point/i);
+const notice = () => screen.queryByText(NOTICES.meetingPoint.body);
 
 beforeEach(() => {
   fakeSocket.handlers.clear();
@@ -113,7 +114,7 @@ describe("a squadmate's rally-point notice", () => {
     render(<App />);
     await joinAsMember();
     act(() => fakeSocket.receive('new-waypoint', RALLY));
-    fireEvent.click(await screen.findByText(/designated a rally point/i));
+    fireEvent.click(await screen.findByText(NOTICES.meetingPoint.body));
     expect(focus.spy).toHaveBeenCalledTimes(1);
     expect(focus.spy.mock.calls[0][0]).toEqual({ lat: RALLY.lat, lng: RALLY.lng, zoom: 19 });
     await waitFor(() => expect(notice()).toBeNull()); // after its exit animation
@@ -130,7 +131,7 @@ describe("a squadmate's rally-point notice", () => {
     render(<App />);
     await joinAsMember();
     act(() => fakeSocket.receive('new-waypoint', RALLY));
-    fireEvent.click(await screen.findByText(/designated a rally point/i));
+    fireEvent.click(await screen.findByText(NOTICES.meetingPoint.body));
     await waitFor(() => expect(notice()).toBeNull());
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY }));
     expect(notice()).toBeNull();
@@ -140,10 +141,10 @@ describe("a squadmate's rally-point notice", () => {
     render(<App />);
     await joinAsMember();
     act(() => fakeSocket.receive('new-waypoint', RALLY));
-    const tap = await screen.findByText(/designated a rally point/i);
+    const tap = await screen.findByText(NOTICES.meetingPoint.body);
     act(() => fakeSocket.receive('remove-waypoint'));
     fireEvent.click(tap);
-    expect(await screen.findByText(/no longer active/i)).toBeTruthy();
+    expect(await screen.findByText(NOTICES.meetingPoint.gone)).toBeTruthy();
     expect(focus.spy).not.toHaveBeenCalled();
   });
 });
