@@ -20,22 +20,22 @@
 /* Every control answers on press-down, not on release. The standalone `scale` property
    composes with Tailwind v4's `translate` and with framer-motion's `transform`, so a
    centred button (-translate-x-1/2) or an animated one keeps its position while pressed.
-   Quick in, slower out: the press is felt at once and the release settles.
-   Unlayered on purpose, so it beats Tailwind's layered transition-* utilities: the list
-   is the union of what those animated (colours, shadow, opacity, transforms, filter)
-   plus `scale`, so no control loses a transition it had. */
+   Quick in, slower out: the press is felt at once and the release settles (the redesign's
+   press: 70 ms in, 220 ms out, to 0.97).
+   Unlayered on purpose, so it beats Tailwind's layered transition-* utilities. Only
+   transform and opacity move (the redesign's motion rule): colour, shadow and filter
+   changes on a control are instant, never animated. */
 button, [role="button"], a[href], summary, label[for] {
-  transition-property: scale, color, background-color, border-color, outline-color, box-shadow,
-    opacity, transform, translate, filter, text-shadow;
-  transition-duration: 220ms;
-  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-property: scale, transform, translate, opacity;
+  transition-duration: var(--duration-press-out);
+  transition-timing-function: var(--ease-standard);
   touch-action: manipulation; /* no 300 ms double-tap-zoom wait */
 }
 button:not(:disabled):active,
 [role="button"]:active,
 a[href]:active {
-  scale: 0.95;
-  transition-duration: 70ms;
+  scale: var(--press-scale);
+  transition-duration: var(--duration-press-in);
 }
 /* Map markers and anything else that must not shrink under a finger opts out. */
 [data-no-press]:active,
@@ -49,9 +49,10 @@ a[href]:active {
   height: 14px;
   margin: -7px 0 0 -7px;
   border-radius: 9999px;
-  /* A light core with a red glow: readable on the red buttons as well as the black ones. */
-  border: 1.5px solid rgba(255, 235, 235, 0.95);
-  box-shadow: 0 0 12px 1px rgba(239, 68, 68, 0.75), inset 0 0 6px rgba(239, 68, 68, 0.5);
+  /* An accent ring with a soft halo, in the theme's accent. It grows well past the control
+     it starts on, so it still shows around an accent-coloured button. */
+  border: 1.5px solid var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-halo);
   pointer-events: none;
   z-index: 20000;
   animation: locus-ping 520ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -62,7 +63,7 @@ a[href]:active {
   position: absolute;
   inset: -1.5px;
   border-radius: inherit;
-  border: 1px solid rgba(239, 68, 68, 0.5);
+  border: 1px solid var(--color-accent);
   animation: locus-ping-echo 520ms cubic-bezier(0.16, 1, 0.3, 1) 90ms both;
 }
 @keyframes locus-ping {
@@ -74,7 +75,8 @@ a[href]:active {
   to { transform: scale(1.9); opacity: 0; }
 }
 
-/* Boot screen radar (BootScreen in App.jsx): a wedge of light sweeping the rings. */
+/* Boot screen radar (BootScreen in App.jsx): a wedge of light sweeping the rings.
+   Retired by the redesign: deleted with the loading screen's piece (P3). */
 .locus-radar-sweep {
   background: conic-gradient(from 0deg, rgba(239, 68, 68, 0.55), rgba(239, 68, 68, 0) 70deg, transparent 360deg);
   mask: radial-gradient(circle, transparent 0 18%, #000 19%);
@@ -111,9 +113,11 @@ a[href]:active {
 
 /* Update strip (LiveUpdateToast.jsx): a sweep across the bar while a download has not
    reported any progress yet. Reduced motion: a still, half-lit bar. */
-.locus-download-sweep { animation: locus-download-sweep 1.4s ease-in-out infinite; }
-@keyframes locus-download-sweep { from { left: -33%; } to { left: 100%; } }
-@media (prefers-reduced-motion: reduce) { .locus-download-sweep { animation: none; left: 0; width: 100%; opacity: 0.4; } }
+/* A third-wide bar sliding from just off the left edge to just off the right, by translate in
+   steps of its own width rather than by animating `left` (which re-lays-out every frame). */
+.locus-download-sweep { left: 0; animation: locus-download-sweep 1.4s ease-in-out infinite; }
+@keyframes locus-download-sweep { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .locus-download-sweep { animation: none; transform: none; width: 100%; opacity: 0.4; } }
 
 /* Skeleton placeholders (src/components/ui/Skeleton.jsx): opacity 1 -> 0.55 -> 1 over 1.4 s.
    Reduced motion: held still. */
@@ -255,7 +259,8 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Glitch title effect: needs a `data-text` attribute mirroring the element's
+/* Retired by the redesign: deleted with the guide's piece (P11).
+   Glitch title effect: needs a `data-text` attribute mirroring the element's
    text content so the two offset ::before/::after layers have something to
    render — Tailwind has no equivalent for content-from-attribute. */
 .locus-glitch { position: relative; display: inline-block; }

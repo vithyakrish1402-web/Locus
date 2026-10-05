@@ -29,8 +29,8 @@ function Notice({ item, reduceMotion }) {
     <motion.div
       layout={!reduceMotion}
       role={item.severity === 'error' ? 'alert' : 'status'}
-      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -24, scale: 0.96, filter: 'blur(4px)' }}
-      animate={{ opacity: 1, y: 0, x: 0, scale: 1, filter: 'blur(0px)' }}
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -24, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: exitX, y: exitX ? 0 : -16, scale: 0.96, transition: { duration: 0.2 } }}
       transition={reduceMotion ? { duration: 0.15 } : PANEL_SPRING}
       drag={reduceMotion ? false : 'x'}

@@ -72,7 +72,8 @@ function DownloadBar({ percent }) {
       className="relative mt-3 h-1 w-full overflow-hidden bg-white/10"
     >
       {known ? (
-        <div className="h-full bg-red-500 transition-[width] duration-300 ease-out" style={{ width: `${percent}%` }} />
+        // Full width, scaled from the left edge: a transform, not a width animation.
+        <div className="h-full w-full origin-left bg-red-500 transition-transform duration-300 ease-out" style={{ transform: `scaleX(${percent / 100})` }} />
       ) : (
         <div data-testid="download-sweep" className="locus-download-sweep absolute inset-y-0 w-1/3 bg-red-500" />
       )}

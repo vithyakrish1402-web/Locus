@@ -40,21 +40,20 @@ export const modalBackdrop = () => ({
 });
 
 /**
- * Every modal's card "materializes": it rises a little, sharpens out of a slight blur and
- * settles on one spring, then leaves along the same path it came in by. With reduced
- * motion it only cross-fades.
+ * Every modal's card rises a little and settles on one spring, then leaves along the same
+ * path it came in by. Transform and opacity only: it used to sharpen out of a blur too, and
+ * a blur is a filter, which is repainted every frame. With reduced motion it only fades.
  * @param {boolean} reduceMotion
  */
 export const modalCard = (reduceMotion) =>
   reduceMotion
-    ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.15 } }
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: REDUCED_MOTION_S } }
     : {
-        initial: { opacity: 0, y: 24, scale: 0.96, filter: 'blur(6px)' },
-        animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
-        exit: { opacity: 0, y: 24, scale: 0.96, filter: 'blur(6px)' },
+        initial: { opacity: 0, y: 24, scale: 0.96 },
+        animate: { opacity: 1, y: 0, scale: 1 },
+        exit: { opacity: 0, y: 24, scale: 0.96 },
         transition: PANEL_SPRING,
       };
-
 
 // The redesign's timings (docs/redesign/handoff.md, "Motion"), in seconds as framer-motion
 // takes them. The same values are CSS variables in src/theme/tokens.css (--duration-*).

@@ -37,8 +37,8 @@ function Tile({ char, settled, active, reduceMotion }) {
       {char ? (
         <motion.span
           key={settled ? `set-${char}` : 'scramble'}
-          initial={settled && !reduceMotion ? { y: -6, opacity: 0.4, filter: 'blur(3px)' } : false}
-          animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
+          initial={settled && !reduceMotion ? { y: -6, opacity: 0.4 } : false}
+          animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
         >
           {char}

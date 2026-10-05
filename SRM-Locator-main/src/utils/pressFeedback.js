@@ -1,5 +1,5 @@
-// "Sonar ping": wherever a control is pressed, a red ring leaves the exact point of contact,
-// like a radar return, and a light haptic tick lands on the same frame. One listener for
+// Tap ring: wherever a control is pressed, a ring in the theme's accent leaves the exact
+// point of contact, and a light haptic tick lands on the same frame. One listener for
 // the whole app instead of a wrapper around each of its many buttons.
 //
 // The ring lives in a fixed overlay at the pointer's coordinates, never inside the control,

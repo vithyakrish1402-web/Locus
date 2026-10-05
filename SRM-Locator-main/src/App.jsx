@@ -269,8 +269,8 @@ const AuthTerminal = ({
       </div>
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
-        animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
         className="w-full max-w-md p-7 sm:p-10 border border-white/20 bg-black relative pointer-events-auto z-10 shadow-[0_0_50px_rgba(255,255,255,0.05)]"
       >

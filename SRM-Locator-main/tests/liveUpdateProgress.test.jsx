@@ -166,7 +166,8 @@ describe('the strip', () => {
     expect(strip().textContent).toMatch(/60%/);
     const bar = screen.getByRole('progressbar');
     expect(bar.getAttribute('aria-valuenow')).toBe('60');
-    expect(bar.firstChild.style.width).toBe('60%');
+    // Filled to 60 % by scaling a full-width bar (a transform, never a width animation).
+    expect(bar.firstChild.style.transform).toBe('scaleX(0.6)');
     expect(screen.queryByTestId('download-sweep')).toBeNull();
   });
 

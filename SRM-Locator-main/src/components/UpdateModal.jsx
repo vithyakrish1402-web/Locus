@@ -46,9 +46,10 @@ const ProgressBar = ({ percent }) => {
       aria-valuemax={100}
       {...(indeterminate ? {} : { 'aria-valuenow': percent })}
     >
+      {/* Full width, scaled from the left edge: a transform, not a width animation. */}
       <div
-        className="h-full bg-red-500 transition-[width] duration-200"
-        style={{ width: indeterminate ? '100%' : `${Math.min(100, Math.max(0, percent))}%`, opacity: indeterminate ? 0.4 : 1 }}
+        className="h-full w-full origin-left bg-red-500 transition-transform duration-200"
+        style={{ transform: `scaleX(${indeterminate ? 1 : Math.min(100, Math.max(0, percent)) / 100})`, opacity: indeterminate ? 0.4 : 1 }}
       />
     </div>
   );
