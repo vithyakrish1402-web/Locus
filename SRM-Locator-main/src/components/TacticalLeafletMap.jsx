@@ -10,6 +10,7 @@ import GhostMemberMarker from '../GhostMemberMarker';
 import WaypointMarker from './WaypointMarker';
 import BuildingMarker from './BuildingMarker';
 import LeafletReactMarker from './LeafletReactMarker';
+import MemberMarker from './MemberMarker';
 import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
 import { registerMapDriver } from '../utils/mapFocus';
 
@@ -138,6 +139,12 @@ const TacticalLeafletMap = ({
   onArTrack,
   isSatellite,
   highlightBuildingId,
+  // The theme's line colours (App.jsx reads them; Leaflet's path options take literals), a
+  // member's distance for their plate, and what a lost-connection member's card says.
+  routeColor = '#1F4FB8',
+  lastKnownColor = '#8A94A3',
+  memberDistance = () => null,
+  ghostFocusItem = (ghost) => ({ name: ghost.name }),
 }) => {
   const tiles = isSatellite ? SATELLITE_TILES : DARK_TILES;
 
@@ -170,7 +177,7 @@ const TacticalLeafletMap = ({
           {/* The wrapper gives the halo a positioned parent at the anchor; see IndoorMarkers. */}
           <div style={{ position: 'relative' }}>
             {WIFI_POSITIONING_ENABLED && liveIndoor && <ConfidenceHalo confidence={liveIndoor.confidence} color="#10B981" />}
-            <LiveLocationMarker zoom={currentZoom} isNavigating={liveIsNavigating} heading={liveHeading} color="#10B981" />
+            <LiveLocationMarker zoom={currentZoom} isNavigating={liveIsNavigating} heading={liveHeading} />
           </div>
         </LeafletReactMarker>
       )}
@@ -206,8 +213,8 @@ const TacticalLeafletMap = ({
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
           pathOptions={
             walkingRoute.isRealRoute
-              ? { color: '#EF4444', dashArray: '6 8', weight: 2, opacity: 0.8 }
-              : { color: '#EF4444', dashArray: '2 12', weight: 2, opacity: 0.45 }
+              ? { color: routeColor, dashArray: '6 8', weight: 4, opacity: 0.9 }
+              : { color: routeColor, dashArray: '2 12', weight: 4, opacity: 0.5 }
           }
         />
       )}
@@ -225,11 +232,12 @@ const TacticalLeafletMap = ({
                 ...(SHOW_INDOOR_POSITION_TO_SQUAD && isOnOtherFloor(u, indoorView) ? { opacity: 0.35 } : {}),
               }}
             >
-              <LiveLocationMarker
-                zoom={currentZoom}
+              <MemberMarker
+                name={u.name}
+                paused={u.status === 'FROZEN'}
                 isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
                 heading={u.heading}
-                color="#EF4444"
+                distance={memberDistance(u)}
               />
               {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
             </div>
@@ -242,7 +250,7 @@ const TacticalLeafletMap = ({
           <Polyline
             key={`ghost-line-${ghost.id}-${i}`}
             positions={[[segment.from.lat, segment.from.lng], [segment.to.lat, segment.to.lng]]}
-            pathOptions={{ color: '#A1A1AA', opacity: segment.opacity, weight: 2, dashArray: '4 6' }}
+            pathOptions={{ color: lastKnownColor, opacity: segment.opacity, weight: 2, dashArray: '4 6' }}
           />
         ));
       })}
@@ -252,10 +260,10 @@ const TacticalLeafletMap = ({
           key={`ghost-${ghost.id}`}
           lat={ghost.position.lat}
           lng={ghost.position.lng}
-          onClick={() => onFocus(ghost.position, { name: `${ghost.phase === 'expired' ? 'LAST KNOWN' : 'SIGNAL LOST'}: ${ghost.name}`, info: `Last seen with ${ghost.battery ?? 0}% battery.` })}
+          onClick={() => onFocus(ghost.position, ghostFocusItem(ghost))}
         >
           <div style={{ opacity: ghost.fading ? 0 : 1, transition: `opacity ${GHOST_FADE_MS}ms ease` }}>
-            <GhostMemberMarker phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} color="#A1A1AA" />
+            <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} />
           </div>
         </LeafletReactMarker>
       ))}

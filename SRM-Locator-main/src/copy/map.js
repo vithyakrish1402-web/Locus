@@ -28,3 +28,19 @@ export const MAP_CONTROLS = {
 
 // The phone's bottom tab bar.
 export const TABS = { map: 'Map', scan: 'Scan', group: 'Group' };
+
+// Markers on the map. Names as they were sent (never put into capitals).
+export const MARKERS = {
+  memberPlate: (name, distance) => (distance ? `${name} · ${distance}` : name),
+  memberPaused: (name) => `${name} · paused`,
+  lostConnection: (name, elapsed) => `${name} · lost connection ${elapsed} ago`,
+  lastSeen: (name, elapsed) => `${name} · last seen ${elapsed} ago`,
+  lostConnectionTitle: (name) => `Lost connection: ${name}`,
+  lastSeenTitle: (name) => `Last seen: ${name}`,
+  lastBattery: (battery) => `Last seen with ${battery}% battery.`,
+  someone: 'A group member',
+  meetingPoint: 'Meeting point',
+  meetingPointPlate: (name) => (name && name !== 'RALLY POINT' ? `Meeting point · ${name}` : 'Meeting point'),
+  findWithAr: 'Find with AR Scan',
+  removeMeetingPoint: 'Remove meeting point',
+};

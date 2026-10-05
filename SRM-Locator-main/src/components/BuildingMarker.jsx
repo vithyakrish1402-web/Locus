@@ -7,19 +7,20 @@ import React from 'react';
 // accurate: overhead satellite imagery here is captured off-nadir, so a roof
 // is visually displaced from the ground footprint OSM traces, and a polygon
 // exposes that displacement in a way a single point never can.
+//
+// Redesign (Map batch, piece 5): a quiet 12 px slate dot on a light casing, and the chosen
+// building (selected, or your destination) a larger accent dot with a soft halo. No pulse.
 const BuildingMarker = ({ onClick, highlighted = false }) => (
   <div
     onClick={onClick}
+    data-testid="building-marker"
+    data-highlighted={highlighted || undefined}
     className="relative flex items-center justify-center cursor-pointer z-40 group -ml-3 -mt-3 w-6 h-6 pointer-events-auto"
   >
-    {/* Outer pulsing radar ring */}
-    <div className={`absolute w-6 h-6 rounded-full animate-ping pointer-events-none ${highlighted ? 'bg-white/50' : 'bg-red-500/40'}`} />
-    {/* Inner glowing dot — white when this is the selected/waypointed building, matching
-        the white-on-red highlight convention used elsewhere (e.g. the old footprint
-        highlight style), red otherwise. */}
+    {highlighted && <div className="absolute w-8 h-8 rounded-full bg-accent-halo pointer-events-none" />}
     <div
-      className={`rounded-full border-2 shadow-[0_0_12px_rgba(239,68,68,0.9)] group-hover:scale-125 transition-transform duration-200 ${
-        highlighted ? 'w-4 h-4 bg-white border-red-500' : 'w-3.5 h-3.5 bg-red-500 border-white/90'
+      className={`rounded-full border-[3px] border-[var(--color-map-casing)] shadow-[var(--shadow-1)] group-hover:scale-125 transition-transform duration-200 ${
+        highlighted ? 'w-[18px] h-[18px] bg-accent' : 'w-3.5 h-3.5 bg-[var(--color-map-building)]'
       }`}
     />
   </div>

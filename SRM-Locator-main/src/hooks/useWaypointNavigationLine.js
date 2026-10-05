@@ -17,9 +17,9 @@ import { useEffect, useRef } from 'react';
 //
 // Leaflet-fallback rendering is separate — TacticalLeafletMap.jsx renders the
 // same path declaratively via react-leaflet's <Polyline>.
-export function useWaypointNavigationLine(map, path, isRealRoute, color = '#EF4444') {
+export function useWaypointNavigationLine(map, path, isRealRoute, color = '#1F4FB8') {
   const lineRef = useRef(null);
-  const styleRef = useRef(null); // which isRealRoute value the current instance was built with
+  const styleRef = useRef(null); // which isRealRoute and colour the current instance was built with
 
   useEffect(() => {
     if (!map || !window.google || !path || path.length < 2) {
@@ -31,7 +31,8 @@ export function useWaypointNavigationLine(map, path, isRealRoute, color = '#EF44
       return;
     }
 
-    if (lineRef.current && styleRef.current !== isRealRoute) {
+    const style = `${isRealRoute}|${color}`; // a theme change rebuilds the line in its new colour
+    if (lineRef.current && styleRef.current !== style) {
       lineRef.current.setMap(null);
       lineRef.current = null;
     }
@@ -52,7 +53,7 @@ export function useWaypointNavigationLine(map, path, isRealRoute, color = '#EF44
           repeat: isRealRoute ? '14px' : '22px', // sparser dash = "best effort", not a real route
         }],
       });
-      styleRef.current = isRealRoute;
+      styleRef.current = style;
     } else {
       lineRef.current.setPath(path);
     }

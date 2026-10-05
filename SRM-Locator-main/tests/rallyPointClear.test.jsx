@@ -109,8 +109,8 @@ const RALLY = { lat: 12.8231, lng: 80.0442, name: 'RALLY POINT' };
 const FIX = { coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } };
 
 const emitted = (event) => fakeSocket.emit.mock.calls.filter(([e]) => e === event).map(([, ...args]) => args);
-const clearButton = () => screen.queryByTitle('Clear Rally Point');
-const rallyPointOnMap = () => screen.queryByTitle('AR Track Rally Point');
+const clearButton = () => screen.queryByTitle('Remove meeting point');
+const rallyPointOnMap = () => screen.queryByTitle('Find with AR Scan');
 
 const joinAsMember = async (code = 'KTR7X9') => {
   fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
@@ -160,7 +160,7 @@ describe('the clear control on the Rally Point', () => {
     await joinAsMember('KTR7X9');
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-self' }));
 
-    fireEvent.click(await screen.findByTitle('Clear Rally Point'));
+    fireEvent.click(await screen.findByTitle('Remove meeting point'));
     expect(emitted('clear-waypoint')).toEqual([['KTR7X9']]);
   });
 
@@ -168,7 +168,7 @@ describe('the clear control on the Rally Point', () => {
     render(<App />);
     await joinAsMember();
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-other' }));
-    await screen.findByTitle('AR Track Rally Point');
+    await screen.findByTitle('Find with AR Scan');
     expect(clearButton()).toBeNull();
   });
 
@@ -176,7 +176,7 @@ describe('the clear control on the Rally Point', () => {
     render(<App />);
     await createAsCommander();
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-other' }));
-    expect(await screen.findByTitle('Clear Rally Point')).toBeTruthy();
+    expect(await screen.findByTitle('Remove meeting point')).toBeTruthy();
   });
 });
 
@@ -185,7 +185,7 @@ describe('a Rally Point leaving the map', () => {
     render(<App />);
     await joinAsMember();
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-other' }));
-    await screen.findByTitle('AR Track Rally Point');
+    await screen.findByTitle('Find with AR Scan');
 
     act(() => fakeSocket.receive('remove-waypoint'));
     await waitFor(() => expect(rallyPointOnMap()).toBeNull());
@@ -195,7 +195,7 @@ describe('a Rally Point leaving the map', () => {
     render(<App />);
     await joinAsMember('KTR7X9');
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-other' }));
-    await screen.findByTitle('AR Track Rally Point');
+    await screen.findByTitle('Find with AR Scan');
 
     openSquadTab();
     fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
@@ -349,7 +349,7 @@ describe('the clear control on the Google engine (used whenever a Maps key is co
       act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-self' }));
 
       expect(leaflet.props).toBeNull(); // really the Google engine
-      fireEvent.click(await screen.findByTitle('Clear Rally Point'));
+      fireEvent.click(await screen.findByTitle('Remove meeting point'));
       expect(emitted('clear-waypoint')).toEqual([['KTR7X9']]);
     } finally {
       vi.unstubAllEnvs();

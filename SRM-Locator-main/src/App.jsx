@@ -34,6 +34,10 @@ import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
+import { cssColor } from './utils/cssColor';
+import MemberMarker from './components/MemberMarker';
+import { MARKERS } from './copy/map';
+import { distanceLabel } from './copy/place';
 import { useResolvedTheme } from './theme/useResolvedTheme';
 import CameraExplainer from './components/CameraExplainer';
 import { cameraKnownAllowed, cameraPermissionGranted, rememberCameraAllowed } from './utils/cameraPermission';
@@ -63,7 +67,7 @@ import BottomTabBar from './components/BottomTabBar';
 import CommsFeed from './components/CommsFeed';
 import { CodeTiles, CodeInput } from './components/SquadCode';
 import SquadMemberCard from './components/SquadMemberCard';
-import { sortByDistance } from './utils/direction';
+import { locateTarget, sortByDistance } from './utils/direction';
 import { notify } from './utils/notify';
 import { mapEngineStatus } from './utils/mapEngineStatus';
 import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
@@ -1751,6 +1755,21 @@ const App = () => {
   const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
   // --- LIVE LOCATION MARKER STATE ---
+  // The theme on screen, and the colours the map's lines are drawn in: Google's Polyline and
+  // Leaflet's path options take literal colours, so they are read from the theme here.
+  const resolvedTheme = useResolvedTheme();
+  const routeColor = useMemo(() => cssColor('--color-map-route', '#1F4FB8'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastKnownColor = useMemo(() => cssColor('--color-map-last-known', '#8A94A3'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+  // How far a member is from you, for their plate on the map ("Meera · 120 m").
+  const memberDistance = (u) => {
+    const where = locateTarget(liveLocation, u);
+    return where && !where.here ? distanceLabel(where.shownDistance) : null;
+  };
+  // A lost-connection member, tapped: their card says who and when they were last seen.
+  const ghostFocusItem = (ghost) => ({
+    name: ghost.phase === 'expired' ? MARKERS.lastSeenTitle(ghost.name) : MARKERS.lostConnectionTitle(ghost.name),
+    info: MARKERS.lastBattery(ghost.battery ?? 0),
+  });
   // Movement alone (no waypoint needed) already counts as "navigating" —
   // drop the speed clause here if that should require an explicit waypoint instead.
   // Your own destination (Navigate, from where you are), or null. Building-to-building routes
@@ -1768,7 +1787,7 @@ const App = () => {
   // no-ops when the Leaflet fallback is active (mapRef only holds a Google
   // map instance) or before the map's finished mounting. TacticalLeafletMap
   // renders the Leaflet-engine equivalent itself, declaratively.
-  useGhostProjectionLines(!mapEngineFailed && isMapReady ? mapRef.current : null, ghostMembers);
+  useGhostProjectionLines(!mapEngineFailed && isMapReady ? mapRef.current : null, ghostMembers, lastKnownColor);
 
   // Live walking route to the active squad waypoint — real routed path from
   // Google Directions (or OSRM on the Leaflet fallback) when available,
@@ -1797,7 +1816,7 @@ const App = () => {
     !mapEngineFailed && isMapReady ? mapRef.current : null,
     shownRoute?.path,
     shownRoute?.isRealRoute,
-    '#EF4444'
+    routeColor
   );
 
   // The ACTIVE_WAYPOINT_TRACKING panel prefers the real route's distance/
@@ -1827,7 +1846,6 @@ const App = () => {
   // a full restyle — on every render, which is what made the map flicker and feel
   // unresponsive to drags while the compass was ticking.
   // The roadmap follows the app's theme (light or dark); satellite is photos either way.
-  const resolvedTheme = useResolvedTheme();
   const mapOptions = useMemo(() => ({
     ...(isSatellite ? SATELLITE_MAP_OPTIONS : BASE_MAP_OPTIONS),
     ...(isSatellite ? {} : { styles: mapStylesFor(resolvedTheme) }),
@@ -2567,6 +2585,10 @@ const App = () => {
               onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}
               onArTrack={setArTarget}
               isSatellite={isSatellite}
+              routeColor={routeColor}
+              lastKnownColor={lastKnownColor}
+              memberDistance={memberDistance}
+              ghostFocusItem={ghostFocusItem}
             />
           </Suspense>
         ) : (
@@ -2611,7 +2633,6 @@ const App = () => {
                 zoom={currentZoom}
                 isNavigating={isNavigating}
                 heading={liveHeading}
-                color="#10B981"
               />
             </div>
           )}
@@ -2667,11 +2688,12 @@ const App = () => {
                 ...(SHOW_INDOOR_POSITION_TO_SQUAD && isOnOtherFloor(u, indoorView) ? { opacity: 0.35 } : {}),
               }}
             >
-              <LiveLocationMarker
-                zoom={currentZoom}
+              <MemberMarker
+                name={u.name}
+                paused={u.status === 'FROZEN'}
                 isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
                 heading={u.heading}
-                color="#EF4444"
+                distance={memberDistance(u)}
               />
               {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
             </div>
@@ -2685,10 +2707,10 @@ const App = () => {
               key={`ghost-${ghost.id}`}
               lat={ghost.position.lat}
               lng={ghost.position.lng}
-              onClick={() => handleFocus(ghost.position, { name: `${ghost.phase === 'expired' ? 'LAST KNOWN' : 'SIGNAL LOST'}: ${ghost.name}`, info: `Last seen with ${ghost.battery ?? 0}% battery.` })}
+              onClick={() => handleFocus(ghost.position, ghostFocusItem(ghost))}
               style={{ cursor: 'pointer', opacity: ghost.fading ? 0 : 1, transition: `opacity ${GHOST_FADE_MS}ms ease` }}
             >
-              <GhostMemberMarker phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} color="#A1A1AA" />
+              <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} />
             </div>
           ))}
 

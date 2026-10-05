@@ -41,13 +41,29 @@ describe('the Rally Point marker on the Leaflet engine', () => {
   it('offers the clear control when App.jsx says this user may clear it', async () => {
     const onClearWaypoint = vi.fn();
     renderMap({ canClearWaypoint: true, onClearWaypoint });
-    fireEvent.click(await screen.findByTitle('Clear Rally Point'));
+    fireEvent.click(await screen.findByTitle('Remove meeting point'));
     expect(onClearWaypoint).toHaveBeenCalledTimes(1);
   });
 
   it('withholds it otherwise', async () => {
     renderMap({ canClearWaypoint: false, onClearWaypoint: () => {} });
-    await screen.findByTitle('AR Track Rally Point');
-    expect(screen.queryByTitle('Clear Rally Point')).toBeNull();
+    await screen.findByTitle('Find with AR Scan');
+    expect(screen.queryByTitle('Remove meeting point')).toBeNull();
+  });
+});
+
+// The walking line in the theme's route colour (redesign Map batch, piece 5), never red.
+describe('the walking line on the Leaflet engine', () => {
+  const route = { path: [{ lat: 12.8231, lng: 80.0442 }, { lat: 12.8240, lng: 80.0450 }], isRealRoute: true };
+
+  it("is drawn in the route colour it is given (App.jsx reads the theme's)", () => {
+    const { container } = renderMap({ walkingRoute: route, routeColor: '#123456' });
+    expect(container.querySelector('path[stroke="#123456"]')).toBeTruthy();
+  });
+
+  it('defaults to the light accent, not red', () => {
+    const { container } = renderMap({ walkingRoute: route });
+    expect(container.querySelector('path[stroke="#1F4FB8"]')).toBeTruthy();
+    expect(container.querySelector('path[stroke="#EF4444"]')).toBeNull();
   });
 });

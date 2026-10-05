@@ -53,7 +53,7 @@ vi.mock('@capacitor/app', () => ({
 vi.mock('google-map-react', () => ({ default: () => null }));
 vi.mock('../src/components/TacticalLeafletMap.jsx', () => ({
   default: ({ activeWaypoint, onArTrack }) => (activeWaypoint
-    ? <button title="AR Track Rally Point" onClick={() => onArTrack({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })} />
+    ? <button title="Find with AR Scan" onClick={() => onArTrack({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })} />
     : null),
 }));
 vi.mock('../src/hooks/useLiveUpdate.js', () => ({
@@ -156,7 +156,7 @@ describe('the AR road line', () => {
   it('is drawn when AR Scan is on the Rally Point', async () => {
     await onTheMapWithRally();
     expect(globalThis.fetch).toHaveBeenCalled();
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     expect(screen.getByText('RALLY_ALPHA', { selector: 'h2' })).toBeTruthy();
     expect(roadLine()).toBeTruthy();
@@ -177,14 +177,14 @@ describe('the AR road line', () => {
     await act(async () => {});
     expect(screen.getByText('ACTIVE_WAYPOINT_TRACKING')).toBeTruthy();
 
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     expect(roadLine()).toBeTruthy();
   });
 
   it('runs up to the Rally Point tag: the tag sits on the road’s far end', async () => {
     await onTheMapWithRally();
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     // The tag glides to a new spot (the Landmark Anchor Engine's easing); let it land.
     await act(() => new Promise((r) => setTimeout(r, 800)));
@@ -202,7 +202,7 @@ describe('the AR road line', () => {
   it('is not drawn before a real route arrives', async () => {
     globalThis.fetch = vi.fn(() => new Promise(() => {})); // still fetching
     await onTheMapWithRally();
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     expect(roadLine()).toBeNull();
   });
@@ -241,7 +241,7 @@ describe('the AR road line in REALISTIC mode', () => {
   it('is drawn in three.js when AR Scan is on the Rally Point', async () => {
     await onTheMapWithRally();
     chooseRealistic();
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     await settle();
     expect(roadGl()).toBeTruthy();
@@ -254,7 +254,7 @@ describe('the AR road line in REALISTIC mode', () => {
     globalThis.fetch = vi.fn(() => new Promise(() => {}));
     await onTheMapWithRally();
     chooseRealistic();
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     await settle();
     expect(roadGl()).toBeNull();
@@ -298,7 +298,7 @@ describe('the AR road line override, with the main dial on REALISTIC', () => {
     fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
     fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.arQuality })).getByRole('radio', { name: SETTINGS.arQualityOptions.realistic }));
     fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.arPartNames.roadLine })).getByRole('radio', { name: SETTINGS.arPartOptions[roadLine.toLowerCase()] }));
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     await act(async () => {});
   };
