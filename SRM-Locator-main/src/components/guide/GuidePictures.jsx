@@ -8,15 +8,16 @@ import { GUIDE } from '../../copy/guide';
 // and sentence say what they show.
 
 const P = GUIDE.picture;
+const DISC = 'inline-flex items-center justify-center w-[4.5rem] h-[4.5rem] rounded-full text-heading font-semibold';
 
 /** Step 1: you and two others, and a group code. */
 export function GroupPicture() {
   return (
     <div className="flex flex-col items-center gap-6">
       <div className="flex items-center">
-        <Avatar name="Meera Iyer" className="w-16 h-16 text-title bg-surface" />
-        <span className="-mx-3 z-10 inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent text-accent-on text-label border-2 border-surface">{P.you}</span>
-        <Avatar name="Aarav Shah" className="w-16 h-16 text-title bg-surface" />
+        <span className={`${DISC} bg-surface text-accent border-[3px] border-accent`}>MI</span>
+        <span className={`${DISC} -mx-2 z-10 bg-accent text-accent-on border-[3px] border-accent-soft`}>{P.you}</span>
+        <span className={`${DISC} bg-surface text-accent border-[3px] border-accent`}>AS</span>
       </div>
       <div className="flex gap-2">
         {P.code.split('').map((c, i) => (
@@ -30,24 +31,24 @@ export function GroupPicture() {
 /** Step 2: a small map with you, two members, one paused, a meeting point and your route. */
 export function MapPicture() {
   return (
-    <svg viewBox="0 0 350 340" className="w-full h-full" role="presentation">
-      <rect width="350" height="340" fill="var(--map-land)" />
-      <rect x="165" y="95" width="120" height="80" rx="14" fill="var(--map-green)" />
-      <path d="M0 225 L350 205" stroke="var(--map-road)" strokeWidth="16" />
-      <path d="M135 0 L135 340" stroke="var(--map-road)" strokeWidth="16" />
-      <path d="M30 0 L30 340" stroke="var(--map-road)" strokeWidth="12" />
-      <rect x="160" y="250" width="70" height="40" rx="6" fill="var(--map-block)" />
-      <rect x="250" y="250" width="70" height="40" rx="6" fill="var(--map-block)" />
-      <rect x="55" y="40" width="60" height="45" rx="6" fill="var(--map-block)" />
+    <svg viewBox="0 0 350 340" preserveAspectRatio="xMidYMid slice" className="w-full h-full" role="presentation">
+      <rect width="350" height="340" fill="var(--color-map-land)" />
+      <rect x="165" y="95" width="120" height="80" rx="14" fill="var(--color-map-green)" />
+      <path d="M0 225 L350 205" stroke="var(--color-map-road)" strokeWidth="16" />
+      <path d="M135 0 L135 340" stroke="var(--color-map-road)" strokeWidth="16" />
+      <path d="M30 0 L30 340" stroke="var(--color-map-road)" strokeWidth="12" />
+      <rect x="160" y="250" width="70" height="40" rx="6" fill="var(--color-map-block)" />
+      <rect x="250" y="250" width="70" height="40" rx="6" fill="var(--color-map-block)" />
+      <rect x="55" y="40" width="60" height="45" rx="6" fill="var(--color-map-block)" />
       {/* Your route to the meeting point. */}
-      <path d="M135 205 L135 72 L245 10" fill="none" stroke="var(--map-casing)" strokeWidth="9" strokeLinejoin="round" />
+      <path d="M135 205 L135 72 L245 10" fill="none" stroke="var(--color-map-casing)" strokeWidth="9" strokeLinejoin="round" />
       <path d="M135 205 L135 72 L245 10" fill="none" stroke="var(--color-accent)" strokeWidth="5" strokeLinejoin="round" />
       <circle cx="135" cy="205" r="32" fill="var(--color-accent-halo)" />
-      <circle cx="135" cy="205" r="11" fill="var(--color-accent)" stroke="var(--map-casing)" strokeWidth="3" />
+      <circle cx="135" cy="205" r="11" fill="var(--color-accent)" stroke="var(--color-map-casing)" strokeWidth="3" />
       <foreignObject x="0" y="0" width="350" height="340">
         <div className="relative w-full h-full font-ui">
           <span className="absolute" style={{ left: 197, top: 100 }}>
-            <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[var(--map-meeting)] text-bg"><Flag size={16} /></span>
+            <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[var(--color-map-meeting)] text-bg"><Flag size={16} /></span>
           </span>
           <span className="absolute flex flex-col items-center gap-1" style={{ left: 60, top: 92 }}>
             <Avatar name="Meera Iyer" size="map" />
@@ -58,7 +59,7 @@ export function MapPicture() {
           <span className="absolute flex flex-col items-center gap-1" style={{ left: 60, top: 250 }}>
             <Avatar name="Rohan Das" size="map" dashed />
           </span>
-          <span className="absolute rounded-full bg-[var(--map-plate)] px-2 py-0.5 text-caption text-text shadow-[var(--shadow-1)]" style={{ left: 150, top: 145 }}>{P.meetingPoint}</span>
+          <span className="absolute rounded-full bg-[var(--color-map-plate)] px-2 py-0.5 text-caption text-text shadow-[var(--shadow-1)]" style={{ left: 150, top: 145 }}>{P.meetingPoint}</span>
         </div>
       </foreignObject>
     </svg>
