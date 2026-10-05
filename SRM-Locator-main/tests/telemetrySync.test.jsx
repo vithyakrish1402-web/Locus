@@ -243,7 +243,7 @@ describe('the telemetry matrix', () => {
     expect(power('Delta').textContent).toMatch(/77%$/);
     expect(power('Delta').className).toContain('text-emerald-500');
     expect(power('Echo').textContent).toMatch(/15%$/);
-    expect(power('Echo').className).toContain('text-red-500');
+    expect(power('Echo').className).toContain('text-warning'); // low: amber, never red
   });
 
   it('says so when nobody else is in the squad yet, rather than showing an empty table', () => {

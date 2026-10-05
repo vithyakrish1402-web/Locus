@@ -175,7 +175,7 @@ const batteryReading = (cacheData) => {
   for (const raw of [cacheData?.batteryLevel, cacheData?.battery]) {
     const percent = typeof raw === 'number' ? raw : parseInt(raw, 10);
     if (Number.isFinite(percent)) {
-      return { text: `${percent}%`, color: percent < 20 ? 'text-red-500' : 'text-emerald-500' };
+      return { text: `${percent}%`, color: percent < 20 ? 'text-warning' : 'text-emerald-500' }; // low: amber, never red
     }
   }
   return { text: 'UNKNOWN', color: 'text-zinc-500' };
@@ -459,12 +459,12 @@ const App = () => {
 
   // Calculates exactly how stale a node's GPS signal is
   const getSignalFreshness = (isoString) => {
-    if (!isoString) return { text: "NO_SIGNAL", color: "text-red-500" };
+    if (!isoString) return { text: "NO_SIGNAL", color: "text-warning" }; // ordinary problems: amber, never red
     const seconds = Math.floor((new Date() - new Date(isoString)) / 1000);
     if (seconds < 10) return { text: "OPTIMAL (< 10s)", color: "text-emerald-500" };
     if (seconds < 60) return { text: `GOOD (${seconds}s ago)`, color: "text-blue-400" };
     if (seconds < 300) return { text: `WARN (${Math.floor(seconds / 60)}m ago)`, color: "text-yellow-500" };
-    return { text: `STALE (> 5m)`, color: "text-red-500 animate-pulse" };
+    return { text: `STALE (> 5m)`, color: "text-warning animate-pulse" };
   };
   // --- PRECOGNITION TRACKERS ---
   const localPrecognition = useRef(new PrecognitionFilter());
@@ -2958,7 +2958,7 @@ const App = () => {
               {/* Footer */}
               <div className="p-4 border-t border-yellow-500/30 flex justify-between items-center bg-black">
                 {telemetrySync.status === 'error' ? (
-                  <span className="font-dot text-[10px] text-red-400 uppercase tracking-widest pr-4">{telemetrySync.message}</span>
+                  <span className="font-dot text-[10px] text-warning uppercase tracking-widest pr-4">{telemetrySync.message}</span>
                 ) : (
                   <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">AUTO-REFRESHING EVERY 5 SECONDS</span>
                 )}
