@@ -1,0 +1,163 @@
+// @vitest-environment jsdom
+//
+// The map screen's top bar and sharing chip (redesign Map batch), through the real App.jsx:
+// the bar names the map that is showing and signs out; the chip says your own setting in the
+// owner's words, and never "invisible".
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
+
+const fakeSocket = vi.hoisted(() => {
+  const handlers = new Map();
+  return {
+    id: 'self-socket',
+    connected: true,
+    handlers,
+    on: (event, fn) => {
+      if (!handlers.has(event)) handlers.set(event, new Set());
+      handlers.get(event).add(fn);
+    },
+    off: (event, fn) => {
+      if (!fn) handlers.delete(event);
+      else handlers.get(event)?.delete(fn);
+    },
+    emit: vi.fn(),
+    receive: (event, payload) => handlers.get(event)?.forEach((fn) => fn(payload)),
+  };
+});
+const auth = vi.hoisted(() => ({ signOut: null }));
+
+vi.mock('socket.io-client', () => ({ io: () => fakeSocket }));
+vi.mock('../src/firebase.js', () => ({ auth: { currentUser: null }, googleProvider: {}, db: {} }));
+vi.mock('firebase/auth', () => {
+  auth.signOut = vi.fn(() => Promise.resolve());
+  return {
+    onAuthStateChanged: (_auth, callback) => {
+      callback({ uid: 'u-self', displayName: 'Alpha', photoURL: null });
+      return () => {};
+    },
+    signInWithPopup: vi.fn(),
+    signOut: auth.signOut,
+    signInWithEmailAndPassword: vi.fn(),
+    createUserWithEmailAndPassword: vi.fn(),
+    updateProfile: vi.fn(),
+    sendPasswordResetEmail: vi.fn(),
+  };
+});
+vi.mock('@capacitor/core', () => ({
+  Capacitor: { isNativePlatform: () => false, getPlatform: () => 'web' },
+  registerPlugin: () => ({}),
+}));
+vi.mock('@capacitor/app', () => ({
+  App: { addListener: () => Promise.resolve({ remove: () => {} }), minimizeApp: vi.fn() },
+}));
+vi.mock('google-map-react', () => ({ default: () => null }));
+vi.mock('../src/components/TacticalLeafletMap.jsx', () => ({ default: () => null }));
+vi.mock('../src/hooks/useLiveUpdate.js', () => ({
+  useLiveUpdate: () => ({ status: 'idle', supported: false, restart: vi.fn() }),
+}));
+vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useAppUpdate: () => ({
+      supported: false,
+      status: actual.UpdateStatus.IDLE,
+      manifest: null,
+      installedVersion: null,
+      progress: { percent: -1, loaded: 0, total: 0 },
+      error: null,
+      mandatory: false,
+      dismissed: false,
+      check: vi.fn(),
+      startDownload: vi.fn(),
+      openInstallSettings: vi.fn(),
+      dismiss: vi.fn(),
+    }),
+  };
+});
+
+const { default: App } = await import('../src/App.jsx');
+const { SHARING_CHIP, TOP_BAR } = await import('../src/copy/map.js');
+const { SETTINGS } = await import('../src/copy/settings.js');
+
+const onTheMap = () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
+  act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
+};
+const bar = () => within(screen.getByTestId('top-bar'));
+const chip = () => screen.getByTestId('sharing-chip');
+
+beforeEach(() => {
+  fakeSocket.handlers.clear();
+  vi.spyOn(window, 'alert').mockImplementation(() => {});
+  Object.defineProperty(navigator, 'geolocation', {
+    configurable: true,
+    value: { getCurrentPosition: vi.fn(), watchPosition: vi.fn(() => 1), clearWatch: vi.fn() },
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  delete navigator.geolocation;
+});
+
+describe('the top bar', () => {
+  it('names LOCUS and the map showing, without the old tactical words', () => {
+    onTheMap();
+    expect(bar().getByText(TOP_BAR.name)).toBeTruthy();
+    expect(bar().getByText(TOP_BAR.mapView)).toBeTruthy();
+    expect(screen.getByTestId('top-bar').textContent).not.toMatch(/TACTICAL|ORBITAL|GRID/);
+  });
+
+  it('says Satellite view once the map is satellite', () => {
+    onTheMap();
+    fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.mapView })).getByRole('radio', { name: SETTINGS.mapViewOptions.satellite }));
+    expect(bar().getByText(TOP_BAR.satelliteView)).toBeTruthy();
+  });
+
+  it('signs out', () => {
+    onTheMap();
+    fireEvent.click(bar().getByRole('button', { name: TOP_BAR.signOut }));
+    expect(auth.signOut).toHaveBeenCalled();
+  });
+
+  it('keeps the gear in the map controls as Settings on a phone (no new top-bar button there)', () => {
+    onTheMap();
+    const inBar = bar().getByRole('button', { name: SETTINGS.open });
+    expect(inBar.parentElement.className).toMatch(/(^| )hidden md:flex/);
+    expect(screen.getAllByRole('button', { name: SETTINGS.open }).length).toBe(2);
+  });
+});
+
+describe('the sharing chip', () => {
+  it.each([
+    ['ACTIVE', null],
+    ['FROZEN', 'FROZEN'],
+    ['GHOST', 'GHOST'],
+  ])('%s', (mode, button) => {
+    onTheMap();
+    if (button) {
+      fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+      fireEvent.click(screen.getByRole('button', { name: button }));
+    }
+    expect(chip().dataset.mode).toBe(mode);
+    expect(chip().textContent).toBe(SHARING_CHIP[mode]);
+  });
+
+  it('uses the owner\'s words, never "invisible" or "nobody can see you"', () => {
+    expect(SHARING_CHIP).toEqual({
+      ACTIVE: 'Sharing live with your group',
+      FROZEN: 'Sharing paused · your group sees your last spot',
+      GHOST: "Hidden from other members' maps",
+    });
+    Object.values(SHARING_CHIP).forEach((w) => expect(w).not.toMatch(/invisible|nobody/i));
+  });
+
+  it('has no button on it (Pause on the chip is not in this phase)', () => {
+    onTheMap();
+    expect(within(chip()).queryByRole('button')).toBeNull();
+  });
+});

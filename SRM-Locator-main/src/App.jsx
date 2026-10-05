@@ -29,6 +29,8 @@ import MeetingPointConfirm from './components/MeetingPointConfirm';
 import { ROUTE } from './copy/place';
 import { SETTINGS } from './copy/settings';
 import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen';
+import { SharingChip, TopBar } from './components/map/TopBar';
+import { BELOW_TOP_BAR } from './utils/mapChrome';
 import CameraExplainer from './components/CameraExplainer';
 import { cameraKnownAllowed, cameraPermissionGranted, rememberCameraAllowed } from './utils/cameraPermission';
 import { NOTICES, OS_NOTICES } from './copy/notices';
@@ -2050,63 +2052,15 @@ const App = () => {
   return (
     <div className="h-screen w-full bg-black flex overflow-hidden text-white font-inter selection:bg-red-500/30 bg-dots">
 
-      {/* Blocky Header Panel — PURGED: Only Logo + Logout remain */}
-      <motion.nav
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="absolute top-0 left-0 z-[1000] w-full px-6 bg-black/95 backdrop-blur-md border-b border-white/20 flex items-center justify-between pointer-events-auto"
-        style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' , paddingBottom: '0.75rem' }}
-      >
-        <div className="flex items-center gap-4">
-          <div className="p-2 border border-white text-white">
-            <Navigation className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="font-dot tracking-widest uppercase text-xl">LOCUS</h1>
-            <p className="font-dot text-[8px] text-zinc-600 uppercase tracking-[0.3em] -mt-0.5">{isSatellite ? 'ORBITAL RECON' : 'TACTICAL GRID'}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Desktop-only profile badge */}
-          <div className="hidden md:flex items-center gap-3 px-4 py-2 border border-white/20 bg-black font-dot text-xs uppercase tracking-widest">
-            {user.photoURL ? (
-              <img src={user.photoURL} className="w-6 h-6 rounded-full border border-white/50" alt="profile" />
-            ) : (
-              <div className="w-2 h-2 bg-red-500"></div>
-            )}
-            {user.displayName || "GUEST_NODE"}
-          </div>
-          {/* Desktop-only: Admin Settings */}
-          {isAdmin && (
-            <button
-              onClick={() => setShowAdminSettings(true)}
-              className="hidden md:flex p-2 border border-yellow-500/60 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors shadow-[0_0_10px_rgba(234,179,8,0.2)]"
-              title="Admin Settings"
-            >
-              <ShieldAlert size={18} />
-            </button>
-          )}
-          {/* Desktop-only: SYS_CONFIG */}
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            className="hidden md:flex p-2 border border-white/20 hover:bg-white hover:text-black transition-colors"
-            title={SETTINGS.open}
-            aria-label={SETTINGS.open}
-          >
-            <Sliders size={18} />
-          </button>
-          {/* Logout — visible on all screens */}
-          <button
-            onClick={handleLogout}
-            className="p-2 border border-white/20 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors"
-            title="Disconnect"
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
-      </motion.nav>
+      {/* Top bar and sharing chip (components/map/TopBar.jsx) */}
+      <TopBar
+        isSatellite={isSatellite}
+        onSignOut={handleLogout}
+        onSettings={() => setShowSettingsModal(true)}
+        isAdmin={isAdmin}
+        onAdmin={() => setShowAdminSettings(true)}
+      />
+      <SharingChip mode={telemetryMode} />
 
       {/* --- ACTIVE ROUTE HUD --- */}
       <AnimatePresence>
@@ -2179,7 +2133,7 @@ const App = () => {
         }`}
         // Starts under the header instead of behind it (it used to start at the very top, so
         // its handle and MATRIX/SQUAD indicator were hidden under the header).
-        style={isMobile ? { top: 'calc(max(1rem, env(safe-area-inset-top)) + 3.2rem)' } : undefined}
+        style={isMobile ? { top: BELOW_TOP_BAR } : undefined}
         onTouchStart={(e) => { e.currentTarget._touchStartX = e.touches[0].clientX; }}
         onTouchEnd={(e) => {
           const startX = e.currentTarget._touchStartX;

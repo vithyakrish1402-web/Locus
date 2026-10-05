@@ -193,9 +193,9 @@ describe('Settings', () => {
   it('Map view switches the map to satellite and back', () => {
     openSettings();
     fireEvent.click(radio(SETTINGS.mapView, SETTINGS.mapViewOptions.satellite));
-    expect(screen.getByText('ORBITAL RECON')).toBeTruthy();
+    expect(within(screen.getByTestId('top-bar')).getByText('Satellite view')).toBeTruthy();
     fireEvent.click(radio(SETTINGS.mapView, SETTINGS.mapViewOptions.map));
-    expect(screen.getByText('TACTICAL GRID')).toBeTruthy();
+    expect(within(screen.getByTestId('top-bar')).getByText('Map view')).toBeTruthy();
   });
 });
 

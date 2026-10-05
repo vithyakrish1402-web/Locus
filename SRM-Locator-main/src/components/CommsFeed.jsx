@@ -5,6 +5,7 @@ import { AlertCircle, AlertTriangle, Check, Info, Radio, X } from 'lucide-react'
 import { subscribe, dismiss } from '../utils/notify';
 import { PANEL_SPRING, projectMomentum } from '../utils/motion';
 import { LAYER } from '../utils/layers';
+import { BELOW_TOP_BAR } from '../utils/mapChrome';
 import IconButton from './ui/IconButton';
 
 // Renders the notifications (src/utils/notify.js): the app's non-blocking replacement for
@@ -109,13 +110,12 @@ function Notice({ item, reduceMotion, coveredBy }) {
   );
 }
 
-// Where the feed starts: under the map's top bar (TOP_BAR_REM, from the top of the safe
-// area), so a notice never covers Sign out or the screen's name. Over AR Scan it drops below
+// Where the feed starts: under the map's top bar (utils/mapChrome.js), over the sharing
+// chip, so a notice never covers Sign out or the screen's name. Over AR Scan it drops below
 // AR's header (its ALIGN, RESET and close buttons end about 6.5rem down, and the compass
 // calibration notice under them about 9.5rem; AR Scan is drawn from the very top, without
 // the safe-area inset), so a notice never covers those or moves them.
-export const TOP_BAR_REM = 4.5;
-const TOP = `calc(max(1rem, env(safe-area-inset-top)) + ${TOP_BAR_REM}rem)`;
+const TOP = BELOW_TOP_BAR;
 export const TOP_OVER_AR_SCAN = '10rem';
 
 /**

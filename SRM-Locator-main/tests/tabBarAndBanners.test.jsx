@@ -118,7 +118,7 @@ const currentTab = () => tabBar().getAllByRole('button').find((b) => b.getAttrib
 // Comms-feed notices' text (other role="alert" elements, like the lobby notice, excluded).
 const notices = () =>
   screen.queryAllByRole('alert').filter((el) => el.closest('[aria-live="polite"]')).map((el) => el.textContent).join(' || ');
-const mapStyle = () => (screen.queryByText('ORBITAL RECON') ? 'satellite' : 'grid');
+const mapStyle = () => (screen.queryByText('Satellite view') ? 'satellite' : 'grid');
 
 describe('the bottom bar', () => {
   it('GRID takes you back to the map without flipping it to satellite', () => {
