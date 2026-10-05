@@ -258,6 +258,10 @@ body {
 .ar-arrow-base { fill: color-mix(in srgb, var(--color-accent) 28%, black); }
 .ar-arrow-edge { stroke: color-mix(in srgb, var(--color-accent) 45%, white); }
 
+/* AR Scan's road line (components/ARRoadLine.jsx): a band in the accent. */
+.ar-road-stop { stop-color: var(--color-accent); }
+.ar-road-fill { fill: var(--color-accent); }
+
 /* The faint centre mark: the exact middle of the screen, the point ALIGN measures from. */
 .ar-centre-mark {
   background-color: rgb(255 255 255 / 0.7);

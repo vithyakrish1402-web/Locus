@@ -18,8 +18,9 @@ import { AR_CAMERA_HEIGHT_M, verticalFovDeg } from './arCamera';
 // Nothing here fakes perspective: the strip is one real-world width all along
 // (buildRoadStrip) and the camera narrows it into the distance.
 
-// The app's tactical red (Tailwind red-500), as the Stage 3 ribbon uses.
-const ROAD_COLOR = [0xef / 255, 0x44 / 255, 0x44 / 255];
+// The accent blue, as the arrow (arArrowScene.js ARROW_TOP_COLOR) and the Stage 3 ribbon use.
+// Never red.
+export const ROAD_COLOR = [0x2f / 255, 0x62 / 255, 0xd8 / 255];
 
 // The strip from buildRoadStrip as a mesh geometry, with each vertex's fade as the
 // alpha of its colour.

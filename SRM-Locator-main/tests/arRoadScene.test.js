@@ -289,7 +289,7 @@ describe('the road seen through the camera', () => {
     const { geometry, material } = view.road;
     const color = geometry.getAttribute('color');
     expect(color.itemSize).toBe(4);
-    expect([color.getX(0), color.getY(0), color.getZ(0)].map((c) => Math.round(c * 255))).toEqual([0xef, 0x44, 0x44]);
+    expect([color.getX(0), color.getY(0), color.getZ(0)].map((c) => Math.round(c * 255))).toEqual([0x2f, 0x62, 0xd8]); // the accent blue, never red
     expect(color.getW(0)).toBeCloseTo(ROAD_LINE_NEAR_OPACITY, 6);
     expect(material.vertexColors).toBe(true);
     expect(material.transparent).toBe(true);
