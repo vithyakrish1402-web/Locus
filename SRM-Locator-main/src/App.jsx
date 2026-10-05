@@ -39,9 +39,10 @@ import MemberOptions from './components/group/MemberOptions';
 import LeadTools from './components/group/LeadTools';
 import JoinRequests from './components/group/JoinRequests';
 import PeekLines from './components/group/PeekLines';
+import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { panelStops, snapPanel } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, REFRESH_FAILED } from './copy/group';
+import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -356,6 +357,8 @@ const App = () => {
   const [mobileView, setMobileView] = useState('grid');
   const [optionsMemberId, setOptionsMemberId] = useState(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  // When the member list last came in from the server; null until it has, in this group.
+  const [rosterAt, setRosterAt] = useState(null);
   // Phone layout and the squad/matrix sheet (see the Sidebar Panel below).
   const isMobile = useIsMobile();
   const reduceMotion = useReducedMotion();
@@ -1013,6 +1016,8 @@ const App = () => {
     });
 
     socket.on('users-update', (activeUsers) => {
+      // When the list last came in, for the panel's "Updated just now" (and its loading state).
+      setRosterAt(Date.now());
       // When each member was last heard from, on THIS phone's clock: the moment their
       // server-side lastSeen changed. Using the server's timestamp directly would carry any
       // clock difference between the two into every "12s AGO" on the roster. Done here,
@@ -1184,6 +1189,7 @@ const App = () => {
     setHasJoinedSquad(false);
     setSquadCode(nextCode);
     setUsers([]);
+    setRosterAt(null);
     setOfflineNodes({});
     // Cancel in-flight ghost fade-outs so a stray one can't fire after the squad's gone.
     Object.values(ghostFadeTimersRef.current).forEach(clearTimeout);
@@ -2341,6 +2347,17 @@ const App = () => {
               hasMeetingPoint={Boolean(activeWaypoint)}
               onRemoveMeetingPoint={() => socket.emit('clear-waypoint', squadCode)}
             />
+          )}
+          {/* The members list's heading and its states (components/group/MembersHeading.jsx). */}
+          {activeTab === 'users' && (
+            <MembersHeading count={users.filter(u => !blockedUserIds.includes(u.id)).length + ghostMembers.length + 1} updatedAt={rosterAt} />
+          )}
+          {activeTab === 'users' && rosterAt === null && <MembersLoading />}
+          {activeTab === 'users' && rosterAt !== null && !users.some(u => !blockedUserIds.includes(u.id)) && ghostMembers.length === 0 && (
+            <MembersEmpty code={squadCode} isLead={squadRole === 'OWNER'} />
+          )}
+          {activeTab === 'users' && searchQuery.trim() && !users.some(u => !blockedUserIds.includes(u.id) && matchesSearch(u.name)) && !ghostMembers.some(g => matchesSearch(g.name)) && (users.length > 0 || ghostMembers.length > 0) && (
+            <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="members-no-match">{GROUP_MEMBERS_LIST.noMatch(searchQuery.trim())}</p>
           )}
           <AnimatePresence mode="popLayout">
             {activeTab === 'buildings' ? (

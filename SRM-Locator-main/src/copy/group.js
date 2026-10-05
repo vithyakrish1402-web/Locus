@@ -133,3 +133,19 @@ export const PEEK = {
     lost && `${lost} lost connection`,
   ].filter(Boolean).join(' · '),
 };
+
+// The members list's heading and states: loading, empty, and a search that finds no one.
+export const MEMBERS_LIST = {
+  // Everyone in the group, you included (the empty group is "Members · 1": just you).
+  heading: (count) => `Members · ${count}`,
+  loadingHeading: 'Members',
+  loading: 'Loading…',
+  updatedJustNow: 'Updated just now',
+  updated: (minutes) => `Updated ${minutes} min ago`,
+  emptyTitle: 'Just you so far',
+  emptyLead: (code) => `Share the code ${spacedCode(code)}. You approve each person before they can see the group.`,
+  emptyMember: (code) => `Share the code ${spacedCode(code)}. The Group Lead approves each person before they can see the group.`,
+  copyCode: 'Copy code',
+  codeCopied: 'Code copied',
+  noMatch: (query) => `No one called "${query}"`,
+};

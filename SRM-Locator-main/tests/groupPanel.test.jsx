@@ -613,3 +613,74 @@ describe('the three heights, on a phone', () => {
     expect(Number(screen.getByTestId('comms-feed').style.zIndex)).toBe(LAYER.underGroupPanel);
   });
 });
+
+describe('the members list: heading, loading, empty, no match', () => {
+  const heading = () => screen.getByTestId('members-heading').textContent;
+  const roster = (members) => act(() => fakeSocket.receive('users-update', members));
+
+  it('loads first: "Loading…" and placeholder rows, then how many and when', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    expect(heading()).toBe('MembersLoading…');
+    expect(screen.getByTestId('members-loading')).toBeTruthy();
+    roster({ ...member('Meera Iyer'), ...member('Aarav Shah') });
+    expect(screen.queryByTestId('members-loading')).toBeNull();
+    // Everyone in the group, you included.
+    expect(heading()).toBe('Members · 3Updated just now');
+  });
+
+  it('says how long ago the list came in', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], shouldAdvanceTime: true });
+    try {
+      await inAGroup({ members: () => member('Meera Iyer') });
+      tab(GROUP_TABS.members);
+      act(() => { vi.advanceTimersByTime(3 * 60000); });
+      expect(heading()).toBe('Members · 2Updated 3 min ago');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('just you: says so, with the code to copy, in words for the Group Lead', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    roster({});
+    const empty = within(screen.getByTestId('members-empty'));
+    expect(empty.getByText('Just you so far')).toBeTruthy();
+    expect(screen.getByTestId('members-empty').textContent).toContain('You approve each person before they can see the group.');
+    expect(heading()).toBe('Members · 1Updated just now');
+    await act(async () => { fireEvent.click(empty.getByRole('button', { name: 'Copy code' })); });
+    expect(writeText).toHaveBeenCalledWith(code);
+    expect(empty.getByRole('button', { name: 'Code copied' })).toBeTruthy();
+    delete navigator.clipboard;
+  });
+
+  it('and in words for a member', async () => {
+    await inAGroup({ lead: false });
+    tab(GROUP_TABS.members);
+    roster({});
+    expect(screen.getByTestId('members-empty').textContent).toContain('The Group Lead approves each person');
+  });
+
+  it('a search that finds no one says so', async () => {
+    await inAGroup({ members: () => member('Meera Iyer') });
+    tab(GROUP_TABS.members);
+    fireEvent.change(panel().getByRole('searchbox', { name: GROUP_TABS.searchMembers }), { target: { value: 'zed' } });
+    expect(screen.getByTestId('members-no-match').textContent).toBe('No one called "zed"');
+    expect(screen.queryByTestId('members-empty')).toBeNull();
+  });
+
+  it('leaving the group forgets the list: the next group loads afresh', async () => {
+    await inAGroup({ lead: false, members: () => member('Meera Iyer') });
+    tab(GROUP_TABS.members);
+    fireEvent.click(screen.getByTestId('leave-group'));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Leave the group?' })).getByRole('button', { name: 'Leave group' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
+    act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
+    await act(async () => {});
+    tab(GROUP_TABS.members);
+    expect(heading()).toBe('MembersLoading…');
+  });
+});
