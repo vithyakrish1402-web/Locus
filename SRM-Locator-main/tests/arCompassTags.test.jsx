@@ -34,7 +34,7 @@ const tagsOnScreen = () =>
 
 const openAr = async (props) => {
   render(<ARCompass liveLocation={HERE} onClose={() => {}} {...props} />);
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   act(() => faceNorth());
 };
 

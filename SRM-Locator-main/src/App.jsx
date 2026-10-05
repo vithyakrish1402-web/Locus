@@ -28,6 +28,8 @@ import MeetingPointConfirm from './components/MeetingPointConfirm';
 import { ROUTE } from './copy/place';
 import { SETTINGS } from './copy/settings';
 import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen';
+import CameraExplainer from './components/CameraExplainer';
+import { cameraKnownAllowed, cameraPermissionGranted, rememberCameraAllowed } from './utils/cameraPermission';
 import { NOTICES, OS_NOTICES } from './copy/notices';
 import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
 import { authProblem } from './utils/authProblems';
@@ -386,6 +388,23 @@ const App = () => {
   // otherwise it behaves normally. See useBackButtonGuard.
   useBackButtonGuard(Boolean(incomingSos) || appUpdate.mandatory);
   const [arTarget, setArTarget] = useState(null);
+  // The camera explainer (components/CameraExplainer.jsx) shows before AR Scan only until the
+  // camera has been allowed: known from this phone's note or the Permissions API. Continue
+  // lets AR Scan open this time; the note is made once the camera actually starts.
+  const [cameraAllowed, setCameraAllowed] = useState(cameraKnownAllowed);
+  const [cameraExplained, setCameraExplained] = useState(false);
+  const arScanReady = cameraAllowed || cameraExplained;
+  useEffect(() => {
+    let live = true;
+    cameraPermissionGranted().then((granted) => {
+      if (!live || !granted) return;
+      rememberCameraAllowed();
+      setCameraAllowed(true);
+    });
+    return () => { live = false; };
+  }, []);
+  // Each opening of AR Scan asks again until the camera is allowed.
+  useEffect(() => { if (!arTarget) setCameraExplained(false); }, [arTarget]);
   // --- TARGETING MODE (Two-step Rally Point) ---
   const [isTargetingMode, setIsTargetingMode] = useState(false);
   // --- SYS_CONFIG STATE ---
@@ -635,7 +654,7 @@ const App = () => {
   // Start listening for compass heading as soon as we're signed in — on Android
   // this needs no user gesture. On iOS 13+ this call is a silent no-op (that
   // platform requires the permission request to originate from a click handler,
-  // which ARCompass's own "GRANT_ACCESS" button still provides separately).
+  // which AR Scan's own "Start AR Scan" button still provides separately).
   useEffect(() => {
     if (user) requestHeadingPermission();
   }, [user, requestHeadingPermission]);
@@ -1886,7 +1905,7 @@ const App = () => {
       {/* Under the open group panel on a phone, so a notice never covers or takes the taps
           meant for the Group Lead's buttons there (as the old ping and lost-connection
           banners did, z-[850]); everywhere else, and over AR Scan, on top. */}
-      <CommsFeed overArScan={Boolean(arTarget)} coveredBy={hasJoinedSquad && isMobile && sheetOpen ? sheetRef : null} />
+      <CommsFeed overArScan={Boolean(arTarget) && arScanReady} coveredBy={hasJoinedSquad && isMobile && sheetOpen ? sheetRef : null} />
     </>
   );
 
@@ -3366,7 +3385,15 @@ const App = () => {
         </button>
       )}
 
-      {arTarget && (
+      {/* The camera explainer, before AR Scan opens, only until the camera has been allowed.
+          Not now leaves AR Scan closed, as AR Scan's own Cancel does. */}
+      <CameraExplainer
+        open={Boolean(arTarget) && !arScanReady}
+        onContinue={() => setCameraExplained(true)}
+        onNotNow={() => setArTarget(null)}
+      />
+
+      {arTarget && arScanReady && (
         <ARCompass
           target={arTarget}
           liveLocation={liveLocation}
@@ -3378,6 +3405,7 @@ const App = () => {
           fidelity={sysConfig.arFidelity}
           overrides={sysConfig.arFeatureOverrides}
           onClose={() => setArTarget(null)}
+          onCameraStarted={() => { rememberCameraAllowed(); setCameraAllowed(true); }}
         />
       )}
 

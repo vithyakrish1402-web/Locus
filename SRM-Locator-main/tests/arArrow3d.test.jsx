@@ -60,7 +60,7 @@ describe('ARCompass arrow by AR_RENDER_MODE', () => {
   const HERE = { lat: 12.8230, lng: 80.0440 };
   const open = async (fidelity) => {
     render(<ARCompass target={{ name: 'X', lat: 12.8240, lng: 80.0440 }} liveLocation={HERE} fidelity={fidelity} onClose={() => {}} />);
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   };
 
   // 'realistic' has its own arrow since Stage 5a: see arArrowRealistic.test.jsx.

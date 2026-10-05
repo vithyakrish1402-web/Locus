@@ -98,6 +98,8 @@ const { default: App } = await import('../src/App.jsx');
 const { SETTINGS } = await import('../src/copy/settings.js');
 
 beforeEach(() => {
+  // The camera was allowed before, so AR Scan opens without its explainer (see cameraExplainer.test.jsx).
+  try { localStorage.setItem('locus.cameraAllowed', '1'); } catch { /* no storage */ }
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
     value: {
@@ -146,7 +148,7 @@ const onTheMapWithRally = async () => {
   await act(async () => {}); // the route fetch resolves
 };
 const grantAndFaceNorth = async () => {
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   faceNorth();
 };
 

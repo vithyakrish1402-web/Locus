@@ -77,6 +77,8 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 const { default: App } = await import('../src/App.jsx');
 
 beforeEach(() => {
+  // The camera was allowed before, so AR Scan opens without its explainer (see cameraExplainer.test.jsx).
+  try { localStorage.setItem('locus.cameraAllowed', '1'); } catch { /* no storage */ }
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
     value: {
@@ -101,7 +103,7 @@ let code;
 const member = (lat, lng, extra = {}) => ({ uid: 'u-bravo', name: 'Bravo', roomCode: code, lat, lng, battery: 50, lastSeen: 1, ...extra });
 const roster = (entries) => act(() => fakeSocket.receive('users-update', entries));
 
-// On the map, with Bravo ~110 m north, then SCAN (which aims at Bravo) and GRANT_ACCESS.
+// On the map, with Bravo ~110 m north, then SCAN (which aims at Bravo) and Start AR Scan.
 const scanAtBravo = async () => {
   navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: HERE.lat, longitude: HERE.lng, speed: 0 } });
   render(<App />);
@@ -110,7 +112,7 @@ const scanAtBravo = async () => {
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
   roster({ 'sock-1': member(HERE.lat + 0.001, HERE.lng) });
   fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
 };
 
@@ -132,7 +134,7 @@ const cardArAtBravo = async () => {
   let card = screen.getByRole('heading', { level: 4, name: 'Bravo' });
   while (!within(card).queryByTitle('AR Tracking')) card = card.parentElement;
   fireEvent.click(within(card).getByTitle('AR Tracking'));
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
 };
 

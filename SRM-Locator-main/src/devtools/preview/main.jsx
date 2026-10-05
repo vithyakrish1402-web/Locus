@@ -33,6 +33,8 @@ import SettingsScreen from '../../components/settings/SettingsScreen';
 import { DEFAULT_AR_FEATURE_OVERRIDES } from '../../utils/arFeatures';
 import { SRM_MASTER_DATABASE } from '../../srmDatabase';
 import ARTag from '../../components/ARTag';
+import ARCompass from '../../ARCompass';
+import CameraExplainer from '../../components/CameraExplainer';
 import LocusGuide from '../../LocusGuide';
 import BootScreen from '../../components/access/BootScreen';
 import { notify, __resetNotifications } from '../../utils/notify';
@@ -146,6 +148,19 @@ const SCREENS = {
   'place-card-more': { label: 'Place card, more about this place', render: () => <PlaceOnMap place={campusPlace(2)} expanded /> },
   'place-card-no-details': { label: 'Place card, no more details', render: () => <PlaceOnMap place={campusPlace(39)} expanded /> },
   'place-card-second-step': { label: 'Place card, choosing a destination (no GPS)', render: () => <PlaceOnMap place={campusPlace(2)} me={null} choosingDestination /> },
+  'camera-explainer': {
+    label: 'Allow the camera for AR Scan',
+    render: () => (
+      <>
+        <PlaceOnMap place={campusPlace(2)} />
+        <CameraExplainer open onContinue={() => {}} onNotNow={() => {}} />
+      </>
+    ),
+  },
+  'ar-start': {
+    label: "AR Scan's start screen",
+    render: () => <ARCompass target={{ lat: campusPlace(2).lat, lng: campusPlace(2).lng, name: campusPlace(2).name }} liveLocation={ME} onClose={() => {}} />,
+  },
   settings: { label: 'Settings', render: () => <SettingsDemo /> },
   'settings-about': { label: 'Settings, Notifications and About (scrolled)', render: () => <SettingsDemo scrollTo="Notifications" /> },
   'settings-more': { label: 'Settings, More (scrolled)', render: () => <SettingsDemo scrollTo="More" /> },

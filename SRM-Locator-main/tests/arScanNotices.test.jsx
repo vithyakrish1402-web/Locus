@@ -90,7 +90,7 @@ const { UpdateStatus } = await import('../src/hooks/useAppUpdate.js');
 const z = (el) => Number(el.style.zIndex);
 const feed = () => screen.getByTestId('comms-feed');
 // AR Scan's root: its permission screen, which is where it opens.
-const arScan = () => screen.getByRole('button', { name: /GRANT_ACCESS/ }).closest('div.fixed');
+const arScan = () => screen.getByRole('button', { name: /^Start AR Scan$/ }).closest('div.fixed');
 
 const onMapWithArScanOpen = () => {
   render(<App />);
@@ -100,6 +100,8 @@ const onMapWithArScanOpen = () => {
 };
 
 beforeEach(() => {
+  // The camera was allowed before, so AR Scan opens without its explainer (see cameraExplainer.test.jsx).
+  try { localStorage.setItem('locus.cameraAllowed', '1'); } catch { /* no storage */ }
   fakeSocket.handlers.clear();
   fakeSocket.emit.mockClear();
   __resetNotifications();
@@ -129,9 +131,9 @@ describe('notices during AR Scan', () => {
   it('go back to the top of the screen once AR Scan closes', () => {
     onMapWithArScanOpen();
     expect(feed().dataset.overArScan).toBe('true');
-    fireEvent.click(screen.getByRole('button', { name: 'ABORT' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    expect(screen.queryByRole('button', { name: /GRANT_ACCESS/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Start AR Scan$/ })).toBeNull();
     // (jsdom can't parse the max()/env() top used outside AR Scan, so check the switch.)
     expect(feed().dataset.overArScan).toBeUndefined();
   });

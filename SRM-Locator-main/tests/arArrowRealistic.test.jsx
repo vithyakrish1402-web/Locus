@@ -40,7 +40,7 @@ const TARGET = { name: 'X', lat: 12.8240, lng: 80.0440 };
 const compass = (fidelity) => <ARCompass target={TARGET} liveLocation={HERE} fidelity={fidelity} onClose={() => {}} />;
 const open = async (fidelity) => {
   const view = render(compass(fidelity));
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   await act(async () => {}); // the dynamic import settles
   return view;
 };
@@ -86,7 +86,7 @@ describe('realistic mode', () => {
     try {
       // Target due east, phone facing north (no compass reading yet): 90 degrees.
       render(<ARCompass target={{ name: 'E', lat: HERE.lat, lng: 80.0460 }} liveLocation={HERE} fidelity="realistic" onClose={() => {}} />);
-      await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
       await act(async () => {});
       const calls = gl.views.at(-1).setRotation.mock.calls;
       expect(calls.at(-1)[0]).toBeCloseTo(90, 0);

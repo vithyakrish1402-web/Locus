@@ -68,7 +68,7 @@ const tagTop = (name) => parseFloat(tagEl(name).style.top);
 
 const openAr = async (props = {}) => {
   const view = render(<ARCompass target={TARGET} liveLocation={HERE} buildings={[TOWER]} onClose={() => {}} {...props} />);
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   return view;
 };
 

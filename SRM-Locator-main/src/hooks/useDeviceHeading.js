@@ -225,7 +225,7 @@ export function useDeviceHeading({ camera = false, tilt: wantTilt = false } = {}
   }, [camera, ingest]);
 
   // iOS 13+ requires this to run inside a user gesture (a click handler),
-  // so callers on iOS must invoke it from one (e.g. ARCompass's "GRANT_ACCESS"
+  // so callers on iOS must invoke it from one (e.g. AR Scan's "Start AR Scan"
   // button). On Android there's no such gate — safe to call on mount.
   const requestHeadingPermission = useCallback(async () => {
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {

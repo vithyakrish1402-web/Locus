@@ -70,7 +70,7 @@ const rotation = () => {
 
 const openAr = async (props = {}) => {
   const view = render(<ARCompass target={TARGET} liveLocation={HERE} onClose={() => {}} {...props} />);
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   return view;
 };
 

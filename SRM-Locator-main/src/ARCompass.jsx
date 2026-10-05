@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { notify } from './utils/notify';
-import { X, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { X, AlertTriangle, ScanLine } from 'lucide-react';
+import { Button } from './components/ui';
+import { AR_START } from './copy/permissions';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { calculateBearing, calculateDistanceMeters as calculateDistance, normalizeRotationDelta } from './utils/geoMath';
@@ -78,7 +80,9 @@ const sessionStore = () => {
 //     finding the way, as the arrow is.
 // Every tag is placed by the Landmark Anchor Engine (utils/landmarkAnchorEngine.js),
 // rendered by ARLandmarkLayer; this component only gathers its inputs.
-const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', overrides, onClose }) => {
+// onCameraStarted: called once the camera has actually started (App notes it, so the camera
+// explainer stops showing).
+const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', overrides, onClose, onCameraStarted }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
   const features = resolveArFeatures(fidelity, overrides);
@@ -131,6 +135,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
         videoRef.current.srcObject = stream;
       }
       setCameraError(false);
+      onCameraStarted?.();
     } catch (err) {
       console.warn("[SYS_AR] Optics offline. Switching to Instrument Flight Rules (IFR).", err);
       setCameraError(true);
@@ -353,27 +358,22 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
     setDisplayRotation(next);
   }, [bearing, heading]);
 
+  // AR Scan's own start screen, every time it opens: its tap is what starts the compass and
+  // the camera (a sensor permission must come from a tap). Shown in the app's theme.
   if (!permissionsGranted) {
     return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-6 text-center text-white" style={{ zIndex: LAYER.arScan }}>
-        <ShieldAlert size={48} className="text-red-500 mb-6 animate-pulse" />
-        <h2 className="font-dot text-2xl tracking-widest uppercase mb-4 text-white">SYS_AR // OPTICS_SYNC</h2>
-        <p className="font-inter text-sm text-zinc-400 mb-8 max-w-sm">
-          Tracking target: <span className="text-red-500 font-bold">{target.name}</span>.<br/><br/>
-          Augmented Reality requires access to your device camera and compass sensors.
-        </p>
-        <button 
-          onClick={requestPermissions}
-          className="w-full max-w-sm py-4 bg-red-500 text-white font-dot uppercase tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.4)] mb-4 hover:bg-red-600 transition-colors"
-        >
-          GRANT_ACCESS & INITIATE
-        </button>
-        <button 
-          onClick={onClose}
-          className="w-full max-w-sm py-4 border border-zinc-700 text-zinc-500 font-dot uppercase tracking-widest hover:bg-white hover:text-black transition-colors"
-        >
-          ABORT
-        </button>
+      <div data-testid="ar-start" className="fixed inset-0 bg-bg text-text font-ui flex flex-col px-5" style={{ zIndex: LAYER.arScan, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
+        <div className="flex-1 flex flex-col items-center justify-center text-center max-w-md w-full mx-auto gap-3">
+          <span className="flex items-center justify-center w-22 h-22 rounded-full bg-accent-soft text-accent mb-3" aria-hidden="true">
+            <ScanLine size={40} />
+          </span>
+          <h2 className="text-display">{AR_START.title}</h2>
+          <p className="text-body text-text-secondary">{AR_START.body(target.name)}</p>
+        </div>
+        <div className="max-w-md w-full mx-auto flex flex-col gap-2">
+          <Button block size="large" onClick={requestPermissions}>{AR_START.start}</Button>
+          <Button variant="plain" block onClick={onClose}>{AR_START.cancel}</Button>
+        </div>
       </div>
     );
   }

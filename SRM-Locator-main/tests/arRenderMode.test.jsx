@@ -78,6 +78,8 @@ const { default: App } = await import('../src/App.jsx');
 const { SETTINGS } = await import('../src/copy/settings.js');
 
 beforeEach(() => {
+  // The camera was allowed before, so AR Scan opens without its explainer (see cameraExplainer.test.jsx).
+  try { localStorage.setItem('locus.cameraAllowed', '1'); } catch { /* no storage */ }
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
     value: {
@@ -134,7 +136,7 @@ describe('AR Scan quality reaches AR Scan', () => {
     openSettings();
     fireEvent.click(choice(Q, QO.efficient));
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: /SCAN/ }));
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
     expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe('efficient');
   });
 });
@@ -180,7 +182,7 @@ describe('AR Scan parts', () => {
     fireEvent.click(choice(Q, QO.realistic));
     fireEvent.click(choice(PART.arrow, PO.efficient));
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: /SCAN/ }));
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
     expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe('efficient');
     expect(screen.getByTestId('ar-arrow-3d')).toBeTruthy();
   });
