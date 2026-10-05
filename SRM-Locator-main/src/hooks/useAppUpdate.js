@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { LocusUpdater, isUpdaterAvailable } from '../utils/locusUpdater';
 import { APK_ASSET_NAME, isUpdateAvailable, selectLatestApkRelease } from '../utils/updateManifest';
+import { UPDATES_OFF } from '../utils/buildMode';
 
 // GitHub repo the updater reads releases from. Overridable at build time so a fork or a
 // test repo can be pointed at without touching source.
@@ -78,7 +79,8 @@ export function useAppUpdate() {
   statusRef.current = status;
   manifestRef.current = manifest;
 
-  const supported = isUpdaterAvailable();
+  // Never in the side-by-side test build (utils/buildMode.js): it would offer the release APK.
+  const supported = !UPDATES_OFF && isUpdaterAvailable();
 
   /**
    * @param {{manual?: boolean}} options manual checks report "you are up to date" and

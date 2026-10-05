@@ -417,3 +417,25 @@ per process, so a swiped-away app will not pick up a new bundle.
   time someone fully relaunches, not while they are using the app.
 - The Render backend is **not** in this path. Bundles come from GitHub's CDN, so a sleeping
   free-tier service can never stall or break an update check.
+
+# The side-by-side test build ("LOCUS Test")
+
+To try unreleased work on a phone without publishing anything, `npm run sidetest:install`
+installs the real app as a second app, **LOCUS Test** (app ID `com.locus.app.sidetest`),
+next to LOCUS. LOCUS itself is not touched. Connect one phone by USB with USB debugging on.
+
+- **A separate app.** The `sidetest` build type in `android/app/build.gradle` adds the
+  `.sidetest` suffix and a debug signature, and `android/app/src/sidetest/res` names it.
+  `defaultConfig` and `release` are unchanged: a release APK has the same app ID, name,
+  manifest and signature as before.
+- **No updates.** Its web build is Vite's `sidetest` mode, where both updaters are off
+  (`src/utils/buildMode.js`): no live bundle can replace its JavaScript and no full update
+  is offered. In every other build that switch is the constant `false`, compiled out.
+- **Never shipped.** Every web build writes its mode to `dist/locus-build.json`. The script
+  puts a production build back when it finishes; `npm run release` and
+  `npm run release:bundle` refuse anything but a production build made by that same run; and
+  the Android release build (`preReleaseBuild`) refuses web assets that aren't production,
+  even when Gradle is run by hand.
+- **Sign in separately.** It keeps its own storage. Use a second account if both apps are in
+  the same group at once: the server treats a newer connection on the same account as that
+  person and detaches the other.

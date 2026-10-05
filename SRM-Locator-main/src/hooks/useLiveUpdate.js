@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { CapacitorUpdater, isLiveUpdaterAvailable, notifyAppReady } from '../utils/liveUpdater';
 import { BUNDLE_TAG_PREFIX, selectLatestBundleRelease, shouldApplyBundle } from '../utils/liveUpdateManifest';
+import { UPDATES_OFF } from '../utils/buildMode';
 
 // Phase 2: JS-only live updates. Sits on top of Phase 1 and is deliberately separable —
 // delete this hook, LiveUpdateToast, liveUpdater.js, liveUpdateManifest.js,
@@ -54,7 +55,8 @@ export function useLiveUpdate() {
   const statusRef = useRef(status);
   statusRef.current = status;
 
-  const supported = isLiveUpdaterAvailable();
+  // Never in the side-by-side test build (utils/buildMode.js): it would swap its JavaScript.
+  const supported = !UPDATES_OFF && isLiveUpdaterAvailable();
 
   // Disarm the rollback timer as early as possible. If this bundle is a downloaded one
   // and this never runs, the plugin reverts to the previous bundle on next launch.

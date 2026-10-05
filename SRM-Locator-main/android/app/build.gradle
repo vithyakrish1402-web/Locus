@@ -56,6 +56,16 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        // The side-by-side test build (npm run sidetest:install): the real app as a separate
+        // app, "LOCUS Test" (src/sidetest/res), installed next to LOCUS rather than over it.
+        // Debug-signed, so it can never update or replace the release app. Its web build
+        // (Vite mode 'sidetest') has both updaters switched off (src/utils/buildMode.js).
+        // defaultConfig and release above are untouched by it.
+        sidetest {
+            initWith debug
+            applicationIdSuffix ".sidetest"
+            matchingFallbacks = ['debug']
+        }
     }
 }
 
