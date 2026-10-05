@@ -194,6 +194,9 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
 
 - **"Invalid attribute name $hover" console errors.** On the Google map, google-map-react hands its own props ($hover, $geoService, $getDimensions and more) to every marker child, and the children that are plain <div>s pass them on to the page, so React logs hundreds of errors. Harmless to how the map works, but it floods the console. Fix: wrap those children in a component that drops the $ props (owner, 2026-10-06).
 
+- **Join requests tile under the Emergency button on phones 640 px tall or less.** At half height the Group Lead's Join requests tile sits clear above the Emergency button on screens 720 px tall or more (77 px at 360 x 780). On a 360 x 640 phone it is under the button until the list is scrolled (owner, 2026-10-06).
+- **"Open phone settings" for the camera.** AR Scan's camera-off notice gives the steps in words; a link straight to LOCUS's settings needs a native call, so a full APK update (owner, 2026-10-06).
+
 ## Decisions for batch 1 (owner, 2026-10-05)
 
 - Names: new accounts save the name as typed. Capitals-only names are shown as stored everywhere except the greeting's first name.
