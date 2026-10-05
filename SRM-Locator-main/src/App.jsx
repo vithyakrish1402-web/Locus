@@ -596,7 +596,10 @@ const App = () => {
   const onGeolocationError = (err) => {
     // Anything but a refusal (a timeout indoors, no position) means Android allowed location:
     // noted like a fix, so the explainer doesn't come back next time for want of one.
-    if (err?.code !== 1) noteRealFix();
+    if (err?.code !== 1) {
+      rememberLocationAllowed();
+      setLocationAllowed(true);
+    }
     setLocationError(err?.code === 1 ? 'denied' : 'no-fix');
   };
 
