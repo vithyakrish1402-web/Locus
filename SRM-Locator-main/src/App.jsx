@@ -99,6 +99,7 @@ import WifiReadout from './components/WifiReadout';
 import { useIsMobile } from './hooks/useIsMobile';
 import { haptic } from './utils/haptics';
 import { SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard, fade } from './utils/motion';
+import { LAYER } from './utils/layers';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { PrecognitionFilter } from './utils/precognition';
@@ -3238,6 +3239,8 @@ const App = () => {
 
       {/* ========== SOS TRIGGER (double press-and-hold confirm) ========== */}
       <SosTrigger
+        // Above AR Scan while it is open (same spot, same two holds), below an incoming alert.
+        layer={arTarget ? LAYER.emergencyButtonOverArScan : null}
         socket={socket}
         getLocation={() => liveLocationRef.current}
         roomCode={squadCode}

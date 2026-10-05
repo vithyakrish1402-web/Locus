@@ -82,6 +82,10 @@ const SosTrigger = ({
   roomCode = null,
   senderName = null,
   className = '',
+  // A layer (z-index) to stand on instead of its own z-[1150]: App passes
+  // LAYER.emergencyButtonOverArScan while AR Scan is open, so the button stays reachable
+  // there, in the same spot, with the same two holds.
+  layer = null,
 }) => {
   const [phase, setPhase] = useState('idle');
 
@@ -188,6 +192,7 @@ const SosTrigger = ({
       className={`fixed bottom-20 left-4 md:bottom-6 md:left-[23rem] z-[1150] w-20 h-20 rounded-full select-none touch-none pointer-events-auto flex items-center justify-center border-2 bg-red-600 text-white active:scale-95 transition-[border-color,box-shadow] duration-200 ${PHASE_STYLES[phase]} ${className}`}
       style={{
         marginBottom: 'env(safe-area-inset-bottom)',
+        ...(layer === null ? {} : { zIndex: layer }),
         animation: phase === 'armed' ? 'locus-sos-pulse 0.6s ease-in-out infinite' : 'none',
       }}
     >

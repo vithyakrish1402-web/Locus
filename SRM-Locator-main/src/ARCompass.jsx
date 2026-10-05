@@ -43,6 +43,11 @@ const DEBUG_REFRESH_MS = 250;
 // when the position moves this far (in degrees of latitude/longitude, ~1 km).
 const DECLINATION_GRID_DEG = 0.01;
 
+// The Emergency button stands above AR Scan at the bottom left, 5 rem up and 5 rem tall
+// (SosTrigger: bottom-20, h-20), on the gesture bar's inset. AR Scan's own bottom content (the
+// start screen's buttons, the readout) sits above it, with 1 rem to spare.
+export const CLEAR_OF_EMERGENCY_BUTTON = 'calc(11rem + env(safe-area-inset-bottom))';
+
 const fmtDeg = (v, digits = 1) => (Number.isFinite(v) ? `${v.toFixed(digits)}°` : '--');
 const fmtSigned = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}°`;
 
@@ -362,7 +367,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   // the camera (a sensor permission must come from a tap). Shown in the app's theme.
   if (!permissionsGranted) {
     return (
-      <div data-testid="ar-start" className="fixed inset-0 bg-bg text-text font-ui flex flex-col px-5" style={{ zIndex: LAYER.arScan, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
+      <div data-testid="ar-start" className="fixed inset-0 bg-bg text-text font-ui flex flex-col px-5" style={{ zIndex: LAYER.arScan, paddingTop: 'env(safe-area-inset-top)', paddingBottom: CLEAR_OF_EMERGENCY_BUTTON }}>
         <div className="flex-1 flex flex-col items-center justify-center text-center max-w-md w-full mx-auto gap-3">
           <span className="flex items-center justify-center w-22 h-22 rounded-full bg-accent-soft text-accent mb-3" aria-hidden="true">
             <ScanLine size={40} />
@@ -442,7 +447,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
       )}
 
       {/* Tactical UI Layer */}
-      <div className="relative z-20 w-full h-full flex flex-col p-6">
+      <div data-testid="ar-ui" className="relative z-20 w-full h-full flex flex-col p-6" style={{ paddingBottom: CLEAR_OF_EMERGENCY_BUTTON }}>
         
         {/* Header */}
         <div className="flex justify-between items-start">

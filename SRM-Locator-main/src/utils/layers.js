@@ -5,6 +5,9 @@
 //   emergency  an incoming SOS (SosOverlay): over everything, a mandatory update included
 //   update     the APK update modal, optional and mandatory (UpdateModal)
 //   toast      in-app notices (CommsFeed): over AR Scan, so a notice posted there is seen
+//   emergencyButtonOverArScan  the Emergency button (SosTrigger) while AR Scan is open: in
+//              the same spot, above AR Scan, below an incoming alert. (Otherwise it keeps its
+//              own z-[1150].)
 //   arScan     AR Scan, its permission screen included (ARCompass)
 //   ...        the open group panel on a phone (z 900), then
 //   underGroupPanel  in-app notices while that panel is open: under it, letting taps
@@ -20,6 +23,7 @@ export const LAYER = {
   underGroupPanel: 850,
   sheet: 2000,
   arScan: 9500,
+  emergencyButtonOverArScan: 9550,
   toast: 9600,
   update: 10000,
   emergency: 10002,
