@@ -184,7 +184,7 @@ describe('a matrix building tap', () => {
     render(<App />);
     await joinAsMember();
     await screen.findAllByText(SRM_MASTER_DATABASE[0].name);
-    fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
     expect(focus.spy).toHaveBeenCalledTimes(1);
     const b = SRM_MASTER_DATABASE[0];
     expect(focus.spy.mock.calls[0][0]).toEqual({ lat: b.lat, lng: b.lng, zoom: 19 });

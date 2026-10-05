@@ -173,7 +173,7 @@ describe('the AR road line', () => {
       ? realFetch(url)
       : Promise.reject(new Error('offline'))));
     await onTheMapWithRally();
-    fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
     await act(async () => {});
     expect(screen.getByTestId('route-card')).toBeTruthy();
 

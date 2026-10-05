@@ -71,3 +71,13 @@ export const MAP_BANNERS = {
   dismiss: 'Dismiss',
   finding: 'Finding your location…',
 };
+
+// The buildings list (the group panel's other tab).
+export const BUILDING_LIST = {
+  away: (distance) => `${distance} away`,
+  here: 'You are here',
+  arScan: 'AR Scan',
+  arScanFor: (place) => `AR Scan to ${place}`,
+  navigate: 'Navigate',
+  navigateTo: (place) => `Navigate to ${place}`,
+};

@@ -32,6 +32,7 @@ import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
 import RouteCard from './components/map/RouteCard';
+import BuildingRow from './components/map/BuildingRow';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -91,7 +92,6 @@ import { shouldDismissSheet, SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCar
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { PrecognitionFilter } from './utils/precognition';
-import { formatTacticalDistanceBracketed as calculateDistance } from './utils/geoMath';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -2302,7 +2302,7 @@ const App = () => {
         </div>
         {/* List Content */}
         {/* pb-28 on a phone: room to scroll the last rows clear of the floating SOS and targeting buttons, which used to cover them. */}
-        <div className="flex-1 overflow-y-auto p-4 pb-28 md:pb-4 space-y-4 custom-scrollbar bg-black">
+        <div className={`flex-1 overflow-y-auto p-4 pb-28 md:pb-4 space-y-3 custom-scrollbar ${activeTab === 'buildings' ? 'bg-bg' : 'bg-black'}`}>
           <AnimatePresence mode="popLayout">
             {activeTab === 'buildings' ? (
               SRM_MASTER_DATABASE.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).map(building => (
@@ -2312,45 +2312,14 @@ const App = () => {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   key={building.id}
-                  className="p-4 mb-2 bg-gray-900 border border-gray-800 rounded-lg active:bg-gray-800 transition-colors relative group hover:border-white/40 cursor-pointer"
-                  onClick={() => handleBuildingTap(building)}
                 >
-                  <div className="absolute top-0 left-0 w-2 h-2 bg-white/20" />
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex flex-col">
-                      <span className="inline-block border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest px-2 py-0.5 mb-2 w-max">
-                        {building.category}
-                      </span>
-                      <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none mb-1">
-                        {building.name}
-                      </h4>
-
-                      {/* --- 📡 LIVE DISTANCE TRACKER RESTORED --- */}
-                      {liveLocation && (
-                        <span className="text-[10px] text-emerald-400 font-dot uppercase tracking-widest mt-1 flex items-center gap-1">
-                          <Activity size={10} className="animate-pulse" />
-                          {calculateDistance(liveLocation.lat, liveLocation.lng, building.lat, building.lng)} AWAY
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest">[{building.id}]</span>
-                  </div>
-                  <p className="font-inter text-xs text-zinc-400 mb-4 leading-relaxed">{building.info}</p>
-                  <div className="flex gap-2 w-full">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setArTarget({ lat: building.lat, lng: building.lng, name: building.name }); }}
-                      className="w-12 flex-shrink-0 flex items-center justify-center border border-white/30 hover:border-red-500 hover:text-red-500 transition-colors text-white"
-                      title="AR Tracking"
-                    >
-                      <Crosshair size={14} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleWaypointSelect(building); showBuildingOnMap(building); }}
-                      className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white"
-                    >
-                      SELECT_WAYPOINT
-                    </button>
-                  </div>
+                  <BuildingRow
+                    building={building}
+                    me={liveLocation}
+                    onOpen={() => handleBuildingTap(building)}
+                    onArScan={() => setArTarget({ lat: building.lat, lng: building.lng, name: building.name })}
+                    onNavigate={() => { handleWaypointSelect(building); showBuildingOnMap(building); }}
+                  />
                 </motion.div>
               ))
             ) : (

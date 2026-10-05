@@ -209,7 +209,7 @@ describe('a Rally Point leaving the map', () => {
     await joinAsMember('KTR7X9');
     await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
     expect(screen.getByTestId('route-card')).toBeTruthy();
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-other' }));
     act(() => fakeSocket.receive('remove-waypoint'));
@@ -252,7 +252,7 @@ describe('Navigate and the meeting point', () => {
     await joinAsMember();
     await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
     expect(screen.getByTestId('route-card')).toBeTruthy();
     expect(emitted('publish-waypoint')).toEqual([]);
   });
