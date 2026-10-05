@@ -667,6 +667,10 @@ const App = () => {
   // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
   // always read the current value — they close over the ref, not the stale state.
   const telemetryModeRef = useRef('ACTIVE');
+  // Paused (FROZEN): the position the squad keeps seeing, taken the moment sharing was
+  // paused: { position (positionFor's result), heading, at (epoch ms) }, or null when there
+  // was no fix to take. Nothing after that moment leaves this phone as a squad position.
+  const pausedPositionRef = useRef(null);
   // WiFi Arc Stage 6: every update-location payload takes its lat/lng/positionSource from
   // positionFor(gps). Off by default (src/utils/positionSource.js), and then it is always
   // the GPS fix with positionSource 'gps'. The Kalman filter and safety-ping stay on GPS.
@@ -1206,6 +1210,21 @@ const App = () => {
       if (!isAboutThisSquad(payload)) return;
       setAccessStatus('granted');
       setSquadRole(payload?.role);
+      // Paused: a reconnect gives this phone a new socket, which the server has no position
+      // for, so the squad would lose this member from map and roster. Hand it the paused
+      // position again. (Live members do this with their next heartbeat.)
+      // The position taken when they paused, never a newer one; same fields as ever.
+      const paused = telemetryModeRef.current === 'FROZEN' ? pausedPositionRef.current : null;
+      if (paused && user) {
+        socket.emit('update-location', {
+          name: user.displayName, photo: user.photoURL,
+          ...paused.position,
+          speed: 0, battery: 100,
+          status: 'FROZEN',
+          roomCode: payload?.roomCode || currentRoom,
+          heading: paused.heading,
+        });
+      }
       // Now (back) in the squad's room: catch up on any SOS fired while this client
       // was offline, reconnecting or awaiting approval. Asked for here, not pushed by
       // the server right after 'access-granted', which could arrive before this
@@ -1327,6 +1346,8 @@ const App = () => {
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
         setLocationError(null);
 
+        // Paused: this effect re-runs on a settings change too, and must not leak a new fix.
+        if (telemetryModeRef.current === 'FROZEN') return;
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
           ...positionFor(smoothed),
@@ -1359,12 +1380,20 @@ const App = () => {
         // insecure context) even in Chrome — fall back to the 100 default silently.
       }
 
-      socket.emit('safety-ping', {
-        latitude: currentLoc.lat, longitude: currentLoc.lng,
-        timestamp: new Date().toISOString(), batteryLevel: `${currentBattery}%`,
-      });
+      // Paused: the heartbeat (which feeds the Commander's telemetry matrix) carries the
+      // paused position and the time it was taken, and no GPS report goes out at all. Both
+      // used to carry the live fix every beat, so "FROZEN" never froze anything.
+      const paused = telemetryModeRef.current === 'FROZEN' ? pausedPositionRef.current : null;
+      if (telemetryModeRef.current !== 'FROZEN' || paused) {
+        socket.emit('safety-ping', {
+          latitude: paused ? paused.position.lat : currentLoc.lat,
+          longitude: paused ? paused.position.lng : currentLoc.lng,
+          timestamp: new Date(paused ? paused.at : Date.now()).toISOString(),
+          batteryLevel: `${currentBattery}%`,
+        });
+      }
 
-      if (telemetryModeRef.current !== 'GHOST') {
+      if (telemetryModeRef.current === 'ACTIVE') {
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
           ...positionFor(currentLoc),
@@ -1435,11 +1464,17 @@ const App = () => {
   // (the heartbeat/watchPosition effect above already re-broadcasts on those changes).
   useEffect(() => {
     const currentLoc = liveLocationRef.current;
+    // Pausing takes the position the squad keeps seeing; any other mode drops it.
+    if (telemetryMode !== 'FROZEN') pausedPositionRef.current = null;
     if (!currentLoc || !user || !hasJoinedSquad) return;
 
+    const position = positionFor(currentLoc);
+    if (telemetryMode === 'FROZEN') {
+      pausedPositionRef.current = { position, heading: headingRef.current, at: Date.now() };
+    }
     socket.emit('update-location', {
       name: user.displayName, photo: user.photoURL,
-      ...positionFor(currentLoc),
+      ...position,
       speed: 0, battery: 100,
       status: telemetryMode, // use state here — this effect re-runs when it changes
       roomCode: squadCode,
