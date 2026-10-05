@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
-// Keeps a marker's name plate out from under the map's right-hand controls (Map batch fix 3).
+// Keeps a marker's name plate out from under the map's right-hand controls (Map batch fix 3):
+// the meeting point's, and members' (live and lost connection).
 // The map pans and zooms without re-rendering its markers (both engines move them by
 // transform), so the plate is checked a few times a second rather than on render. Only the
 // plate moves, left, and never further than its right edge reaching the pin's centre: the
@@ -36,7 +37,9 @@ export function useClearOfControls(plateRef) {
       const next = shiftClearOf(unmoved, controls?.getBoundingClientRect() ?? null, { maxShift: r.width / 2 });
       if (next === shift) return;
       shift = next;
-      plate.style.translate = shift ? `${-shift}px 0` : '';
+      // transform, not translate: a plate centred with Tailwind's -translate-x-1/2 (the
+      // translate property) keeps that, and this moves it on from there.
+      plate.style.transform = shift ? `translateX(${-shift}px)` : '';
     };
     check();
     const id = setInterval(check, CHECK_MS);

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { initialsOf } from './ui/initials';
 import { MARKERS } from '../copy/map';
+import { useClearOfControls } from '../hooks/useClearOfControls';
 
 // A group member on the map (redesign Map batch, piece 5): their initials in a 36 px disc, a
 // solid accent ring while they share live and a dashed grey one while Paused, and a plate
@@ -20,6 +21,9 @@ const RING = 2;
 export default function MemberMarker({ name, paused = false, heading = 0, isNavigating = false, distance = null }) {
   const shown = (typeof name === 'string' && name.trim()) || MARKERS.someone;
   const plate = paused ? MARKERS.memberPaused(shown) : MARKERS.memberPlate(shown, distance);
+  // The plate slides left, out from under the map controls, when the member is near them.
+  const plateRef = useRef(null);
+  useClearOfControls(plateRef);
   return (
     <div
       data-testid="member-marker"
@@ -48,6 +52,8 @@ export default function MemberMarker({ name, paused = false, heading = 0, isNavi
         {initialsOf(shown)}
       </span>
       <span
+        ref={plateRef}
+        data-testid="member-plate"
         className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[var(--color-map-plate)] px-2 py-0.5 text-caption text-text shadow-[var(--shadow-1)]"
         style={{ top: SIZE + 4 }}
       >

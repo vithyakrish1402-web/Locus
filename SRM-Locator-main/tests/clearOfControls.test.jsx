@@ -6,6 +6,8 @@ import React from 'react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, act } from '@testing-library/react';
 import WaypointMarker from '../src/components/WaypointMarker.jsx';
+import MemberMarker from '../src/components/MemberMarker.jsx';
+import GhostMemberMarker from '../src/GhostMemberMarker.jsx';
 import { shiftClearOf } from '../src/hooks/useClearOfControls.js';
 
 // The controls column at a 412 px phone: x 345..401, y 300..520.
@@ -44,7 +46,14 @@ describe('how far the plate moves', () => {
   });
 });
 
-describe('the meeting point plate on the map', () => {
+// Each plate on the map: the meeting point's, a member's, and a lost-connection member's.
+const PLATES = [
+  ['the meeting point plate', () => <WaypointMarker name="TECH PARK" onClick={() => {}} />, 'meeting-point-plate'],
+  ["a member's plate", () => <MemberMarker name="Aarav Shah" distance="120 m" />, 'member-plate'],
+  ["a lost-connection member's plate", () => <GhostMemberMarker name="Rohan Das" elapsedLabel="0:42" />, 'ghost-plate'],
+];
+
+describe.each(PLATES)('%s on the map', (_label, element, testId) => {
   let plateRect;
   beforeEach(() => {
     vi.useFakeTimers();
@@ -61,11 +70,11 @@ describe('the meeting point plate on the map', () => {
 
   const renderAt = (r) => {
     plateRect = r;
-    render(<WaypointMarker name="TECH PARK" onClick={() => {}} />);
-    const plate = screen.getByTestId('meeting-point-plate');
+    render(element());
+    const plate = screen.getByTestId(testId);
     // Where it is drawn: where it would sit, moved by whatever shift is on it now.
     plate.getBoundingClientRect = () => {
-      const shift = Number((plate.style.translate.match(/^(-?[\d.]+)px/) || [0, 0])[1]);
+      const shift = Number((plate.style.transform.match(/^translateX\((-?[\d.]+)px\)$/) || [0, 0])[1]);
       return { ...plateRect, left: plateRect.left + shift, right: plateRect.right + shift };
     };
     act(() => vi.advanceTimersByTime(1000)); // several checks: it must hold still, not flicker
@@ -74,24 +83,26 @@ describe('the meeting point plate on the map', () => {
 
   it('stays put away from the controls', () => {
     const plate = renderAt(rect(100, 160));
-    expect(plate.style.translate).toBe('');
+    expect(plate.style.transform).toBe('');
   });
 
-  it('slides left out from under the controls', () => {
+  it('slides left out from under the controls, keeping its own centring', () => {
     const plate = renderAt(rect(250, 160));
-    expect(plate.style.translate).toBe('-73px 0');
+    expect(plate.style.transform).toBe('translateX(-73px)');
+    // Centred by a translate class or by nothing: never overwritten inline.
+    expect(plate.style.translate).toBe('');
   });
 
   it('follows the map: slides back once the map moves the pin away', () => {
     const plate = renderAt(rect(250, 160));
-    expect(plate.style.translate).toBe('-73px 0');
+    expect(plate.style.transform).toBe('translateX(-73px)');
     plateRect = rect(60, 160);
     act(() => vi.advanceTimersByTime(1000)); // several checks: it must hold still, not flicker
-    expect(plate.style.translate).toBe('');
+    expect(plate.style.transform).toBe('');
   });
 
   it('never leaves its pin: at most half its width', () => {
     const plate = renderAt(rect(330, 160));
-    expect(plate.style.translate).toBe('-80px 0');
+    expect(plate.style.transform).toBe('translateX(-80px)');
   });
 });

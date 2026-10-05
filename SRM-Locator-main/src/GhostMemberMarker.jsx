@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { GHOST_OPACITY } from './utils/ghostProjection';
 import { initialsOf } from './components/ui/initials';
 import { MARKERS } from './copy/map';
+import { useClearOfControls } from './hooks/useClearOfControls';
 
 const SIZE = 36;
 
@@ -19,6 +20,9 @@ const SIZE = 36;
 const GhostMemberMarker = ({ name, phase = 'projecting', elapsedLabel = '0:00' }) => {
   const shown = (typeof name === 'string' && name.trim()) || MARKERS.someone;
   const plate = phase === 'expired' ? MARKERS.lastSeen(shown, elapsedLabel) : MARKERS.lostConnection(shown, elapsedLabel);
+  // The plate slides left, out from under the map controls, when the marker is near them.
+  const plateRef = useRef(null);
+  useClearOfControls(plateRef);
 
   return (
     <div
@@ -35,6 +39,8 @@ const GhostMemberMarker = ({ name, phase = 'projecting', elapsedLabel = '0:00' }
         {initialsOf(shown)}
       </span>
       <span
+        ref={plateRef}
+        data-testid="ghost-plate"
         className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[var(--color-map-plate)] px-2 py-0.5 text-caption text-text-secondary shadow-[var(--shadow-1)]"
         style={{ top: SIZE + 4 }}
       >
