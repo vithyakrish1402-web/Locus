@@ -101,10 +101,9 @@ const ready = () => ({
 const strip = () =>
   screen.queryAllByRole('status').find((el) => el.textContent.startsWith(LIVE_UPDATE.ready.title) || el.textContent.startsWith(LIVE_UPDATE.blocked.title)) ?? null;
 
-// The guide opens on an animated intro; its skip button goes straight to the guide.
-const skipIntro = async () => {
-  fireEvent.click(screen.getByRole('button', { name: /skip intro/i }));
-  await screen.findByRole('button', { name: /initialize secure link/i });
+// First run: the guide opens first; Skip goes on to sign-in.
+const skipGuide = async () => {
+  fireEvent.click(await screen.findByRole('button', { name: 'Skip' }));
 };
 
 beforeEach(() => {
@@ -139,21 +138,17 @@ describe('the JS update strip is offered on every screen', () => {
     expect(strip()).toBeTruthy();
   });
 
-  it('on the guide, from its intro onwards', async () => {
+  it('on the guide', async () => {
     authState.user = null;
     render(<App />);
-    expect(screen.getByRole('button', { name: /skip intro/i })).toBeTruthy();
-    expect(strip()).toBeTruthy();
-    await skipIntro();
-    expect(screen.getByRole('button', { name: /initialize secure link/i })).toBeTruthy();
+    expect(screen.getByTestId('guide')).toBeTruthy();
     expect(strip()).toBeTruthy();
   });
 
   it('on sign-in', async () => {
     authState.user = null;
     render(<App />);
-    await skipIntro();
-    fireEvent.click(screen.getByRole('button', { name: /initialize secure link/i }));
+    await skipGuide();
     expect(screen.queryByText(LOBBY.title)).toBeNull();
     expect(strip()).toBeTruthy();
   });

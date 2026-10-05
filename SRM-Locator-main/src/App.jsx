@@ -18,7 +18,8 @@ import {
 
 
 // 👇 ADD THIS LINE RIGHT HERE
-import LocusGuide from './LocusGuide';
+import Guide from './components/guide/Guide';
+import { guideSeen, rememberGuideSeen } from './utils/guideSeen';
 import BrandMark from './components/access/BrandMark';
 import BootScreen from './components/access/BootScreen';
 import StatusScreen from './components/access/StatusScreen';
@@ -410,7 +411,9 @@ const App = () => {
   // --- SYS_CONFIG STATE ---
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAdminSettings, setShowAdminSettings] = useState(false);
-  const [hasSeenGuide, setHasSeenGuide] = useState(false);
+  // The guide shows once, on first run, before sign-in; Skip and Get started both count, and
+  // the phone remembers it (utils/guideSeen.js). It was shown on every cold start before.
+  const [hasSeenGuide, setHasSeenGuide] = useState(guideSeen);
   const [sysConfig, setSysConfig] = useState({
     audio: true, // Settings' Alert sounds (ping and lost-connection sounds; never the Emergency alarm)
     theme: 'tactical', // 'tactical' | 'stealth'
@@ -1921,13 +1924,7 @@ const App = () => {
       return (
         <>
           {updateOverlay}
-          <LocusGuide
-            onInitialize={() => setHasSeenGuide(true)}
-            onCheckForUpdates={() => appUpdate.check({ manual: true })}
-            updateStatus={appUpdate.status}
-            updateSupported={appUpdate.supported}
-            installedVersion={appUpdate.installedVersion}
-          />
+          <Guide onDone={() => { rememberGuideSeen(); setHasSeenGuide(true); }} />
         </>
       );
     }
@@ -3188,11 +3185,7 @@ const App = () => {
         )}
       </AnimatePresence>
       {/* How LOCUS works, from Settings: the guide over Settings, until it is closed. */}
-      {guideOpen && (
-        <div className="fixed inset-0 overflow-y-auto" data-testid="guide" style={{ zIndex: SETTINGS_Z + 1 }}>
-          <LocusGuide onInitialize={() => setGuideOpen(false)} />
-        </div>
-      )}
+      {guideOpen && <Guide zIndex={SETTINGS_Z + 1} onDone={() => setGuideOpen(false)} />}
       {/* --- END OF MODALS --- */}
 
       {/* --- ADMIN_SETTINGS MODAL --- */}

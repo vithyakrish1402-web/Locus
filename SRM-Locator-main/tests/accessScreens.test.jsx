@@ -93,11 +93,11 @@ let stopNotices;
 const field = (label) => screen.getByLabelText(label);
 const type = (label, value) => fireEvent.change(field(label), { target: { value } });
 
-// Signed out: the guide opens first; its skip and its button lead to sign-in.
+// Signed out, first run: the guide opens first; Skip leads to sign-in.
 const toSignIn = async () => {
+  try { localStorage.removeItem('locus.guideSeen'); } catch { /* no storage */ }
   render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: /skip intro/i }));
-  fireEvent.click(await screen.findByRole('button', { name: /initialize secure link/i }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Skip' }));
 };
 
 const joinAs = (code) => {

@@ -9,8 +9,7 @@ import { LAYER } from '../utils/layers';
 // (Android's Back button is held off separately, in useBackButtonGuard.)
 //
 // LAYER.emergency (utils/layers.js): the top of the app's stacking order, over AR Scan,
-// the notices and UpdateModal (LocusGuide's own 10000 never coexists with this screen,
-// since it only renders pre-login). A distress beacon outranks everything else on
+// the notices and UpdateModal. A distress beacon outranks everything else on
 // screen, including a mandatory update gate. Rendered as a `fixed` sibling at the
 // top level of App.jsx's return, not nested inside the map component tree, so it
 // isn't trapped inside a Leaflet/Google Maps stacking context — those libraries

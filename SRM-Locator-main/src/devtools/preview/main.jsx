@@ -35,7 +35,7 @@ import { SRM_MASTER_DATABASE } from '../../srmDatabase';
 import ARTag from '../../components/ARTag';
 import ARCompass from '../../ARCompass';
 import CameraExplainer from '../../components/CameraExplainer';
-import LocusGuide from '../../LocusGuide';
+import Guide from '../../components/guide/Guide';
 import BootScreen from '../../components/access/BootScreen';
 import { notify, __resetNotifications } from '../../utils/notify';
 import { UpdateStatus } from '../../hooks/useAppUpdate';
@@ -187,7 +187,11 @@ const SCREENS = {
   },
   'ar-tags-bright': { label: 'AR Scan labels over a bright scene', render: () => <ArTags scene="bright" /> },
   'ar-tags-dark': { label: 'AR Scan labels over a dark scene', render: () => <ArTags scene="dark" /> },
-  guide: { label: 'Guide (signed-out landing page)', render: () => <LocusGuide onInitialize={() => {}} /> },
+  'guide-1': { label: 'Guide 1 of 5: your group', render: () => <Guide initialStep={0} onDone={() => {}} /> },
+  'guide-2': { label: 'Guide 2 of 5: the map', render: () => <Guide initialStep={1} onDone={() => {}} /> },
+  'guide-3': { label: 'Guide 3 of 5: AR Scan', render: () => <Guide initialStep={2} onDone={() => {}} /> },
+  'guide-4': { label: 'Guide 4 of 5: what the group sees', render: () => <Guide initialStep={3} onDone={() => {}} /> },
+  'guide-5': { label: 'Guide 5 of 5: Emergency alert', render: () => <Guide initialStep={4} onDone={() => {}} /> },
 };
 
 // Settings with the app's defaults, working: every choice changes what it shows. As on an

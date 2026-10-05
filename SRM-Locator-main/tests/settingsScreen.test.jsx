@@ -255,8 +255,6 @@ describe('About', () => {
   });
 
   it('How LOCUS works opens the guide over Settings', () => {
-    // The old landing-page guide watches scrolling with IntersectionObserver (TEMP: goes with it).
-    vi.stubGlobal('IntersectionObserver', class { observe() {} unobserve() {} disconnect() {} });
     openSettings();
     fireEvent.click(screen.getByRole('button', { name: new RegExp(SETTINGS.howItWorks) }));
     expect(screen.getByTestId('guide')).toBeTruthy();

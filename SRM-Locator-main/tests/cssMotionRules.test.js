@@ -42,7 +42,6 @@ describe('index.css animates only transform and opacity', () => {
 });
 
 // The same rule in the components' own animation props and Tailwind transition classes.
-// LocusGuide.jsx is left as it is until the guide's rewrite (redesign piece P11).
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,10 +52,9 @@ const sourceFiles = (dir) => readdirSync(dir).flatMap((name) => {
   if (statSync(path).isDirectory()) return name === 'devtools' ? [] : sourceFiles(path);
   return /\.(jsx?|tsx?)$/.test(name) ? [path] : [];
 });
-const NOT_YET = /LocusGuide\.jsx$/;
 
 describe('components animate only transform and opacity', () => {
-  const files = sourceFiles(SRC).filter((f) => !NOT_YET.test(f));
+  const files = sourceFiles(SRC);
   it.each(files.map((f) => [f.slice(SRC.length + 1), f]))('%s', (_name, file) => {
     const text = readFileSync(file, 'utf8');
     expect(text).not.toMatch(/filter:\s*['"`]blur/);
