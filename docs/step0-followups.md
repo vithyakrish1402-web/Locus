@@ -87,6 +87,8 @@ In every option below, the button is the same `SosTrigger` component, with the s
   - For example, the Android Back gesture closes AR Scan (today Back is only blocked during an alert or mandatory update).
   - That is still two actions before the alert can start, so it is harder to reach than on the map.
 
+**For the P12 plan (owner, 2026-10-05):** sheets stay above the Emergency button for now, as today's modals do. The P12 plan must propose whether any sheet should keep the Emergency button visible.
+
 Related, not asked: Settings, Join requests, the Group Lead's table and the update dialog also cover the Emergency button today. If E1 is chosen, the same raised layer could apply there. I suggest deciding that when the Settings piece is built.
 
 ---
