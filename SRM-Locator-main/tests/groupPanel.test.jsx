@@ -601,7 +601,7 @@ describe('the three heights, on a phone', () => {
     await drag(400, 600);
     const shown = 752 - yOf();
     expect(64 + shown - 120).toBeGreaterThanOrEqual(160);
-  });
+  }, 20000); // four slow drags
 
   it('notices stay under the panel at peek too, taking no taps from it', async () => {
     const { LAYER } = await import('../src/utils/layers.js');
@@ -685,13 +685,13 @@ describe('the members list: heading, loading, empty, no match', () => {
   });
 });
 
-describe('the order down the panel (as the design, so the tools come high at half)', () => {
-  it('members: your location, the tools, then the search with the members', async () => {
+describe("the order down the panel (so the Group Lead's tools come high at half)", () => {
+  it("members: the Group Lead's tools first (clear of the Emergency button at half on a 360 px phone), your location, then the search with the members", async () => {
     await inAGroup({ members: () => member('Meera Iyer') });
     tab(GROUP_TABS.members);
     const order = [
-      screen.getByTestId('sharing-control'),
       screen.getByTestId('lead-tools'),
+      screen.getByTestId('sharing-control'),
       screen.getByTestId('members-heading'),
       screen.getByRole('searchbox', { name: GROUP_TABS.searchMembers }),
       screen.getAllByTestId('member-row')[0],

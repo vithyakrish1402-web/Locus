@@ -2326,17 +2326,9 @@ const App = () => {
           {/* Buildings: the search heads the list. (Members: it sits above the members list,
               under the controls, so a Group Lead's tools come higher at half height.) */}
           {activeTab === 'buildings' && groupSearch}
-          {/* Your location: Live, Paused or Hidden (components/group/SharingControl.jsx). */}
-          {activeTab === 'users' && (
-            <SharingControl
-              mode={telemetryMode}
-              onChange={(mode) => { telemetryModeRef.current = mode; setTelemetryMode(mode); }}
-              waiting={!liveLocation}
-              pausedNoSpot={!pausedHasSpot}
-              polling={sysConfig.polling}
-            />
-          )}
-          {/* The Group Lead's tools (components/group/LeadTools.jsx). */}
+          {/* The Group Lead's tools come first, before Your location (the design has them after):
+              at half height on a 360 px phone they would otherwise sit under the Emergency button,
+              which stays above the panel. */}
           {activeTab === 'users' && squadRole === 'OWNER' && (
             <LeadTools
               requests={pendingRequests.length}
@@ -2352,6 +2344,16 @@ const App = () => {
               }}
               hasMeetingPoint={Boolean(activeWaypoint)}
               onRemoveMeetingPoint={() => socket.emit('clear-waypoint', squadCode)}
+            />
+          )}
+          {/* Your location: Live, Paused or Hidden (components/group/SharingControl.jsx). */}
+          {activeTab === 'users' && (
+            <SharingControl
+              mode={telemetryMode}
+              onChange={(mode) => { telemetryModeRef.current = mode; setTelemetryMode(mode); }}
+              waiting={!liveLocation}
+              pausedNoSpot={!pausedHasSpot}
+              polling={sysConfig.polling}
             />
           )}
           {/* The members list's heading and its states (components/group/MembersHeading.jsx). */}
