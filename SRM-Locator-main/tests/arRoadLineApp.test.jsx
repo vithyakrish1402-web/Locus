@@ -95,6 +95,7 @@ vi.mock('../src/utils/arArrowScene.js', () => ({
 }));
 
 const { default: App } = await import('../src/App.jsx');
+const { SETTINGS } = await import('../src/copy/settings.js');
 
 beforeEach(() => {
   Object.defineProperty(navigator, 'geolocation', {
@@ -227,8 +228,8 @@ describe('the AR road line', () => {
 describe('the AR road line in REALISTIC mode', () => {
   const roadGl = () => screen.queryByTestId('ar-road-gl');
   const chooseRealistic = () => {
-    fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
-    fireEvent.click(screen.getByRole('button', { name: /^REALISTIC$/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.arQuality })).getByRole('radio', { name: SETTINGS.arQualityOptions.realistic }));
   };
   beforeEach(() => {
     roadViews.length = 0;
@@ -292,9 +293,9 @@ describe('the AR road line override, with the main dial on REALISTIC', () => {
   const roadGl = () => screen.queryByTestId('ar-road-gl');
   const openWith = async (roadLine) => {
     await onTheMapWithRally();
-    fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
-    fireEvent.click(screen.getByRole('button', { name: /^REALISTIC$/ }));
-    fireEvent.click(screen.getByRole('button', { name: `ROAD_LINE ${roadLine}` }));
+    fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.arQuality })).getByRole('radio', { name: SETTINGS.arQualityOptions.realistic }));
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.arPartNames.roadLine })).getByRole('radio', { name: SETTINGS.arPartOptions[roadLine.toLowerCase()] }));
     fireEvent.click(screen.getByTitle('AR Track Rally Point'));
     await grantAndFaceNorth();
     await act(async () => {});

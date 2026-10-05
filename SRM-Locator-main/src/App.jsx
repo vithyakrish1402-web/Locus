@@ -12,7 +12,7 @@ import {
   Building2, MessageSquare, Send, Loader2,
   BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
-  AlertCircle, Check, Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
+  AlertCircle, Check, Target, Sliders, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
@@ -26,6 +26,8 @@ import { Button, Card, IconButton, InlineMessage, SegmentedControl, TextField } 
 import PlaceCard from './components/PlaceCard';
 import MeetingPointConfirm from './components/MeetingPointConfirm';
 import { ROUTE } from './copy/place';
+import { SETTINGS } from './copy/settings';
+import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen';
 import { NOTICES, OS_NOTICES } from './copy/notices';
 import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
 import { authProblem } from './utils/authProblems';
@@ -34,17 +36,8 @@ import { SRM_MASTER_DATABASE } from './srmDatabase';
 import { arTargetForMember, followArTarget } from './utils/arTags';
 import { arRoutePathFor } from './utils/arRoadLine';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
-import { AR_FEATURE_OPTIONS, DEFAULT_AR_FEATURE_OVERRIDES } from './utils/arFeatures';
+import { DEFAULT_AR_FEATURE_OVERRIDES } from './utils/arFeatures';
 
-// SYS_CONFIG's AR_FEATURE_OVERRIDES rows: a selected option wears its tier's colour, as
-// in AR_RENDER_MODE (AUTO is the neutral one, like STANDARD there).
-const OVERRIDE_ACTIVE_STYLE = {
-  auto: 'bg-white/10 text-white border-white',
-  off: 'bg-zinc-500/20 text-zinc-300 border-zinc-400',
-  efficient: 'bg-emerald-500/20 text-emerald-500 border-emerald-500',
-  realistic: 'bg-red-500/20 text-red-500 border-red-500',
-};
-const OVERRIDE_GRID_COLS = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' };
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
 import { useWaypointNavigationLine } from './hooks/useWaypointNavigationLine';
@@ -63,7 +56,7 @@ import { CodeTiles, CodeInput } from './components/SquadCode';
 import SquadMemberCard from './components/SquadMemberCard';
 import { sortByDistance } from './utils/direction';
 import { notify } from './utils/notify';
-import { mapEngineStatus, MAP_STATUS_LABEL, MAP_STATUS_REASON_TEXT } from './utils/mapEngineStatus';
+import { mapEngineStatus } from './utils/mapEngineStatus';
 import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
@@ -76,10 +69,9 @@ import { buildingAt, isOnOtherFloor, memberFloorTag } from './utils/indoorView';
 import { ConfidenceHalo, FloorTag } from './components/IndoorMarkers';
 import FloorPicker from './components/FloorPicker';
 import WifiReadout from './components/WifiReadout';
-import SendApp from './components/SendApp';
 import { useIsMobile } from './hooks/useIsMobile';
 import { haptic } from './utils/haptics';
-import { shouldDismissSheet, SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard } from './utils/motion';
+import { shouldDismissSheet, SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard, fade } from './utils/motion';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { PrecognitionFilter } from './utils/precognition';
@@ -401,12 +393,18 @@ const App = () => {
   const [showAdminSettings, setShowAdminSettings] = useState(false);
   const [hasSeenGuide, setHasSeenGuide] = useState(false);
   const [sysConfig, setSysConfig] = useState({
-    audio: true,
+    audio: true, // Settings' Alert sounds (ping and lost-connection sounds; never the Emergency alarm)
     theme: 'tactical', // 'tactical' | 'stealth'
     polling: 'standard', // 'eco' | 'standard' | 'max'
     arFidelity: 'standard', // 'efficient' | 'standard' | 'realistic': AR Scan's main dial (see ARCompass)
     arFeatureOverrides: DEFAULT_AR_FEATURE_OVERRIDES // per feature; 'auto' follows arFidelity (see arFeatures.js)
   });
+
+  // Alert sounds, for playSonarPing (called from socket handlers that are set up once).
+  const alertSoundsRef = useRef(sysConfig.audio);
+  alertSoundsRef.current = sysConfig.audio;
+  // How LOCUS works, opened from Settings (the guide over everything else, until closed).
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // `key` is a setting's name, or 'group.name' for one entry of a nested setting
   // (arFeatureOverrides.roadLine), merged into the rest of its group.
@@ -1411,8 +1409,12 @@ const App = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [telemetryMode]);
 
-  // --- CYBERPUNK SONAR AUDIO ENGINE ---
+  // --- PING SOUND ---
+  // The short blip for a ping (sent or received) and for someone losing connection. Settings'
+  // Alert sounds switch silences it. The Emergency alarm is SosOverlay's own (useAlertAudio)
+  // and always plays. Read through a ref: the socket handlers that call this are set up once.
   const playSonarPing = () => {
+    if (!alertSoundsRef.current) return;
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
@@ -2074,7 +2076,8 @@ const App = () => {
           <button
             onClick={() => setShowSettingsModal(true)}
             className="hidden md:flex p-2 border border-white/20 hover:bg-white hover:text-black transition-colors"
-            title="System Configuration"
+            title={SETTINGS.open}
+            aria-label={SETTINGS.open}
           >
             <Sliders size={18} />
           </button>
@@ -2826,11 +2829,12 @@ const App = () => {
           </motion.span>
         </button>
 
-        {/* Gear icon opens SYS_CONFIG modal */}
+        {/* The gear opens Settings */}
         <button
           onClick={() => setShowSettingsModal(true)}
           className={MAP_CONTROL}
-          title="System Configuration (SYS_CONFIG)"
+          title={SETTINGS.open}
+          aria-label={SETTINGS.open}
         >
           <Settings size={20} />
         </button>
@@ -3136,155 +3140,40 @@ const App = () => {
         )}
       </AnimatePresence>
 
-      {/* --- SYS_CONFIG MODAL --- */}
+      {/* --- SETTINGS (components/settings/SettingsScreen.jsx) --- */}
       <AnimatePresence>
         {showSettingsModal && (
-          <motion.div
-            {...modalBackdrop()}
-            onClick={(e) => { if (e.target === e.currentTarget) setShowSettingsModal(false); }}
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[5000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
-          >
-            <motion.div
-              {...modalCard(reduceMotion)}
-              className="bg-black w-full max-w-2xl border border-white/30 flex flex-col max-h-[85vh] relative shadow-[0_0_30px_rgba(255,255,255,0.05)]"
-            >
-              {/* Header */}
-              <div className="p-6 border-b border-white/20 flex justify-between items-center bg-black">
-                <div className="flex items-center gap-4 text-white">
-                  <Sliders className="w-6 h-6 text-zinc-400" />
-                  <div>
-                    <h3 className="font-dot text-xl tracking-widest uppercase">SYS_CONFIG</h3>
-                    <p className="font-dot text-[10px] tracking-widest uppercase text-zinc-500">LOCAL CLIENT PREFERENCES</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowSettingsModal(false)} className="p-2 border border-transparent hover:border-white transition-colors text-zinc-500 hover:text-white">
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Settings List */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-black text-white">
-
-                {/* Setting 1: Audio */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    {sysConfig.audio ? <Volume2 size={16} className="text-emerald-500" /> : <VolumeX size={16} className="text-red-500" />}
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">SONAR_AUDIO_SIGNALS</span>
-                  </div>
-                  <div className="flex gap-4">
-                    <button onClick={() => toggleConfig('audio', true)} className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${sysConfig.audio ? 'bg-white text-black border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>ENABLED</button>
-                    <button onClick={() => toggleConfig('audio', false)} className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${!sysConfig.audio ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>MUTED</button>
-                  </div>
-                </div>
-
-                {/* Setting 2: Map Theme & Satellite Mode */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Globe size={16} className="text-emerald-400" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">MAP_RENDER_MODE</span>
-                  </div>
-                  <div className="flex gap-4">
-                    <button 
-                      onClick={() => setIsSatellite(false)} 
-                      className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${!isSatellite ? 'bg-blue-500/20 text-blue-400 border-blue-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}
-                    >
-                      TACTICAL (DARK GRID)
-                    </button>
-                    <button 
-                      onClick={() => setIsSatellite(true)} 
-                      className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${isSatellite ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}
-                    >
-                      ORBITAL (SATELLITE)
-                    </button>
-                  </div>
-                  <p className="font-inter text-[10px] text-zinc-500 leading-tight" data-testid="map-engine-status">
-                    {MAP_STATUS_LABEL[mapStatus.engine]}
-                    {mapStatus.reason !== 'ok' && <><br />{MAP_STATUS_REASON_TEXT[mapStatus.reason]}</>}
-                  </p>
-                </div>
-
-                {/* Setting 3: Polling Rate */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Zap size={16} className="text-yellow-500" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">TELEMETRY_POLLING_RATE</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button onClick={() => toggleConfig('polling', 'eco')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.polling === 'eco' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Battery size={14} /> ECO (15s)
-                    </button>
-                    <button onClick={() => toggleConfig('polling', 'standard')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.polling === 'standard' ? 'bg-white/10 text-white border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Activity size={14} /> STANDARD (5s)
-                    </button>
-                    <button onClick={() => toggleConfig('polling', 'max')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.polling === 'max' ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Zap size={14} /> MAX (1s)
-                    </button>
-                  </div>
-                  <p className="font-inter text-[10px] text-zinc-500 leading-tight">Warning: MAX polling drains battery significantly faster. Use only during active pursuits.</p>
-                </div>
-
-                {/* Setting 4: AR Scan render fidelity */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Crosshair size={16} className="text-blue-400" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">AR_RENDER_MODE</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button onClick={() => toggleConfig('arFidelity', 'efficient')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.arFidelity === 'efficient' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Battery size={14} /> EFFICIENT
-                    </button>
-                    <button onClick={() => toggleConfig('arFidelity', 'standard')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.arFidelity === 'standard' ? 'bg-white/10 text-white border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Activity size={14} /> STANDARD
-                    </button>
-                    <button onClick={() => toggleConfig('arFidelity', 'realistic')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.arFidelity === 'realistic' ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Zap size={14} /> REALISTIC
-                    </button>
-                  </div>
-                  <p className="font-inter text-[10px] text-zinc-500 leading-tight">REALISTIC mode uses more battery and needs a newer phone.</p>
-                </div>
-
-                {/* Setting 5: AR Scan per-feature overrides. AUTO follows AR_RENDER_MODE;
-                    each feature offers only what it has (arFeatures.js). */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Sliders size={16} className="text-blue-400" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">AR_FEATURE_OVERRIDES</span>
-                  </div>
-                  {[['tags', 'AMBIENT_TAGS'], ['roadLine', 'ROAD_LINE'], ['arrow', 'ARROW']].map(([feature, label]) => {
-                    const options = ['auto', ...AR_FEATURE_OPTIONS[feature]];
-                    return (
-                      <div key={feature} role="group" aria-label={label} className="space-y-2">
-                        <span className="font-dot text-[10px] uppercase tracking-widest text-zinc-500">{label}</span>
-                        <div className={`grid gap-2 ${OVERRIDE_GRID_COLS[options.length]}`}>
-                          {options.map((option) => {
-                            const active = sysConfig.arFeatureOverrides[feature] === option;
-                            return (
-                              <button
-                                key={option}
-                                onClick={() => toggleConfig(`arFeatureOverrides.${feature}`, option)}
-                                aria-label={`${label} ${option.toUpperCase()}`}
-                                aria-pressed={active}
-                                className={`py-3 font-dot text-[10px] uppercase tracking-widest border transition-colors ${active ? OVERRIDE_ACTIVE_STYLE[option] : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}
-                              >
-                                {option.toUpperCase()}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <p className="font-inter text-[10px] text-zinc-500 leading-tight">AUTO follows AR_RENDER_MODE. Set a feature on its own, e.g. the road line OFF on an older phone.</p>
-                </div>
-
-                {/* Setting 6: hand the app to someone else */}
-                <SendApp />
-
-              </div>
-            </motion.div>
+          <motion.div key="settings" {...fade()}>
+            <SettingsScreen
+              onClose={() => setShowSettingsModal(false)}
+              polling={sysConfig.polling}
+              onPolling={(v) => toggleConfig('polling', v)}
+              arFidelity={sysConfig.arFidelity}
+              onArFidelity={(v) => toggleConfig('arFidelity', v)}
+              alertSounds={sysConfig.audio}
+              onAlertSounds={(on) => toggleConfig('audio', on)}
+              isSatellite={isSatellite}
+              onSatellite={setIsSatellite}
+              mapStatus={mapStatus}
+              arFeatureOverrides={sysConfig.arFeatureOverrides}
+              onArFeatureOverride={(feature, v) => toggleConfig(`arFeatureOverrides.${feature}`, v)}
+              update={{
+                installedVersion: appUpdate.installedVersion,
+                supported: appUpdate.supported,
+                status: appUpdate.status,
+                onCheck: () => appUpdate.check({ manual: true }),
+              }}
+              onOpenGuide={() => setGuideOpen(true)}
+            />
           </motion.div>
         )}
       </AnimatePresence>
+      {/* How LOCUS works, from Settings: the guide over Settings, until it is closed. */}
+      {guideOpen && (
+        <div className="fixed inset-0 overflow-y-auto" data-testid="guide" style={{ zIndex: SETTINGS_Z + 1 }}>
+          <LocusGuide onInitialize={() => setGuideOpen(false)} />
+        </div>
+      )}
       {/* --- END OF MODALS --- */}
 
       {/* --- ADMIN_SETTINGS MODAL --- */}

@@ -29,6 +29,8 @@ import { CodeTiles, CodeInput } from '../../components/SquadCode';
 import BottomTabBar from '../../components/BottomTabBar';
 import PlaceCard from '../../components/PlaceCard';
 import MeetingPointConfirm from '../../components/MeetingPointConfirm';
+import SettingsScreen from '../../components/settings/SettingsScreen';
+import { DEFAULT_AR_FEATURE_OVERRIDES } from '../../utils/arFeatures';
 import { SRM_MASTER_DATABASE } from '../../srmDatabase';
 import ARTag from '../../components/ARTag';
 import LocusGuide from '../../LocusGuide';
@@ -144,6 +146,9 @@ const SCREENS = {
   'place-card-more': { label: 'Place card, more about this place', render: () => <PlaceOnMap place={campusPlace(2)} expanded /> },
   'place-card-no-details': { label: 'Place card, no more details', render: () => <PlaceOnMap place={campusPlace(39)} expanded /> },
   'place-card-second-step': { label: 'Place card, choosing a destination (no GPS)', render: () => <PlaceOnMap place={campusPlace(2)} me={null} choosingDestination /> },
+  settings: { label: 'Settings', render: () => <SettingsDemo /> },
+  'settings-about': { label: 'Settings, Notifications and About (scrolled)', render: () => <SettingsDemo scrollTo="Notifications" /> },
+  'settings-more': { label: 'Settings, More (scrolled)', render: () => <SettingsDemo scrollTo="More" /> },
   'meeting-point-confirm': {
     label: 'Set as meeting point (confirm)',
     render: () => (
@@ -157,6 +162,40 @@ const SCREENS = {
   'ar-tags-dark': { label: 'AR Scan labels over a dark scene', render: () => <ArTags scene="dark" /> },
   guide: { label: 'Guide (signed-out landing page)', render: () => <LocusGuide onInitialize={() => {}} /> },
 };
+
+// Settings with the app's defaults, working: every choice changes what it shows. As on an
+// installed phone (version 1.1.0, up to date), so About reads as it would there.
+function SettingsDemo({ scrollTo = null }) {
+  const [polling, setPolling] = useState('standard');
+  const [arFidelity, setArFidelity] = useState('standard');
+  const [alertSounds, setAlertSounds] = useState(true);
+  const [isSatellite, setSatellite] = useState(false);
+  const [overrides, setOverrides] = useState(DEFAULT_AR_FEATURE_OVERRIDES);
+  useEffect(() => {
+    if (!scrollTo) return;
+    const screenEl = document.querySelector('[data-testid="settings"]');
+    const more = [...screenEl.querySelectorAll('h2')].find((h) => h.textContent === scrollTo);
+    screenEl.scrollTop = more.offsetTop - 16;
+  }, [scrollTo]);
+  return (
+    <SettingsScreen
+      onClose={() => {}}
+      polling={polling}
+      onPolling={setPolling}
+      arFidelity={arFidelity}
+      onArFidelity={setArFidelity}
+      alertSounds={alertSounds}
+      onAlertSounds={setAlertSounds}
+      isSatellite={isSatellite}
+      onSatellite={setSatellite}
+      mapStatus={{ engine: 'google', reason: 'ok' }}
+      arFeatureOverrides={overrides}
+      onArFeatureOverride={(feature, v) => setOverrides((o) => ({ ...o, [feature]: v }))}
+      update={{ installedVersion: '1.1.0', supported: true, status: 'up-to-date', onCheck: () => {} }}
+      onOpenGuide={() => {}}
+    />
+  );
+}
 
 // A place from the campus data, as the app has it.
 const campusPlace = (id) => SRM_MASTER_DATABASE.find((b) => b.id === id);

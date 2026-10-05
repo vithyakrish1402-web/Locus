@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Which map the app is running, as SYS_CONFIG reports it, through the real App.jsx:
+// Which map the app is running, as Settings reports it, through the real App.jsx:
 // key set + Google loads, no key, Google never loads (the 8 s watchdog), and Google
 // rejecting the key (window.gm_authFailure). Both engines are stood in for, so this
 // proves the switch and the wording, not what Google does in a WebView.
@@ -70,7 +70,7 @@ const enterMapScreen = () => {
   fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
 };
 const statusText = () => {
-  fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
   return screen.getByTestId('map-engine-status').textContent;
 };
 
@@ -93,7 +93,7 @@ afterEach(() => {
   delete window.gm_authFailure;
 });
 
-describe('the map status line in SYS_CONFIG', () => {
+describe("the map status line in Settings' More section", () => {
   it('says Google, with no reason, when the key is set and Google loads', async () => {
     const App = await loadApp('test-key');
     render(<App />);

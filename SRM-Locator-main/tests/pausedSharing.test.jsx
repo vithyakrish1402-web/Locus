@@ -84,6 +84,7 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 });
 
 const { default: App } = await import('../src/App.jsx');
+const { SETTINGS } = await import('../src/copy/settings.js');
 
 // Three spots about 150 m apart, so "close to" (about 20 m) can't confuse one with another.
 const A = { lat: 12.8230, lng: 80.0440 };
@@ -205,8 +206,8 @@ describe('Paused sharing (FROZEN)', () => {
     navigator.geolocation.getCurrentPosition.mockImplementation((ok) => ok({ coords: { latitude: C.lat, longitude: C.lng, speed: 0 } }));
     clearEmits();
 
-    fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
-    fireEvent.click(screen.getByRole('button', { name: /ECO/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
+    fireEvent.click(screen.getByRole('radio', { name: new RegExp(`^${SETTINGS.refreshOptions.eco.label}`) }));
     await act(async () => {});
 
     expect(emitted('update-location')).toEqual([]);
