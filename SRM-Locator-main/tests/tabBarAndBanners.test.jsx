@@ -156,14 +156,14 @@ describe('the bottom bar', () => {
 });
 
 describe('the banner stack', () => {
-  it('stacks the targeting banner with the location banner instead of over it', () => {
+  it('stacks the meeting point banner with the location card instead of over it', () => {
     geolocationError = { code: 1, message: 'User denied Geolocation' };
     onTheMap();
     fireEvent.click(screen.getByRole('button', { name: 'Place a meeting point' }));
 
-    const targeting = screen.getByText('TARGETING MODE ACTIVE');
-    const location = screen.getByText(/LOCATION ACCESS DENIED/);
-    const stackOf = (el) => el.closest('.flex-col.gap-2');
+    const targeting = screen.getByTestId('meeting-point-banner');
+    const location = screen.getByTestId('location-problem');
+    const stackOf = (el) => el.closest('[data-testid="map-top-stack"]');
     expect(stackOf(targeting)).toBeTruthy();
     expect(stackOf(targeting)).toBe(stackOf(location));
     // And targeting comes first, above the location banner.

@@ -211,3 +211,34 @@ describe('the locate control', () => {
     expect(await within(screen.getByTestId('map-controls')).findByRole('button', { name: 'Show where you are' })).toBeTruthy();
   });
 });
+
+describe('the stack under the top bar', () => {
+  it('choosing a meeting point (on a phone): the banner takes the chip\'s place, and Cancel ends it', () => {
+    window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
+    onTheMap();
+    fireEvent.click(screen.getByTestId('meeting-point-button'));
+    const banner = screen.getByTestId('meeting-point-banner');
+    expect(banner.textContent).toContain('Tap the map to place a meeting point');
+    expect(screen.queryByTestId('sharing-chip')).toBeNull();
+    fireEvent.click(within(banner).getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByTestId('meeting-point-button').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('sharing-chip')).toBeTruthy();
+    delete window.matchMedia;
+  });
+
+  it('"Finding your location…" until the first fix arrives', async () => {
+    let answer;
+    navigator.geolocation.getCurrentPosition = vi.fn((ok) => { answer = ok; });
+    onTheMap();
+    expect(screen.getByTestId('finding-location').textContent).toBe('Finding your location…');
+    act(() => answer({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
+    expect(screen.queryByTestId('finding-location')).toBeNull();
+  });
+
+  it('no "Finding your location…" while the location problem shows instead', () => {
+    navigator.geolocation.getCurrentPosition = vi.fn((_ok, fail) => fail({ code: 1, message: 'denied' }));
+    onTheMap();
+    expect(screen.getByTestId('location-problem')).toBeTruthy();
+    expect(screen.queryByTestId('finding-location')).toBeNull();
+  });
+});

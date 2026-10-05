@@ -290,23 +290,36 @@ describe('the location banner', () => {
   it('lets taps through to the SQUAD panel beneath it: only its dismiss button takes them', async () => {
     geolocationError = { code: 1, message: 'User denied Geolocation' };
     commanderOnSquadPanel();
-    const text = await screen.findByText(/LOCATION ACCESS DENIED/);
-    const banner = text.parentElement;
+    const banner = await screen.findByTestId('location-problem');
 
     // jsdom has no layout, so this checks the classes that decide it. (Measured in a real
     // browser at 412 px: the banner used to cover the top third of SYNC_TELEMETRY.)
     expect(banner.className).not.toMatch(/pointer-events-auto/);
     expect(screen.getByTitle('Dismiss').className).toMatch(/pointer-events-auto/);
-    // And on a phone the whole stack sits under the open SQUAD panel (z-[900]).
-    expect(banner.parentElement.className).toMatch(/z-\[850\] md:z-\[1000\]/);
+    // And on a phone the whole stack sits under the open SQUAD panel (z-[900]), letting taps
+    // through.
+    const stack = screen.getByTestId('map-top-stack');
+    expect(stack.className).toMatch(/z-\[850\] md:z-\[1000\]/);
+    expect(stack.className).toMatch(/pointer-events-none/);
   });
 
 
-  it('says ACCESS DENIED only when access was denied, and NO GPS FIX when there is just no fix', async () => {
+  it('says location is off only when it was refused, and that it can\'t find you when there is just no fix', async () => {
     geolocationError = { code: 3, message: 'Timeout expired' };
     commanderOnSquadPanel();
-    expect(await screen.findByText(/NO GPS FIX/)).toBeTruthy();
-    expect(screen.queryByText(/ACCESS DENIED/)).toBeNull();
+    const card = await screen.findByTestId('location-problem');
+    expect(card.dataset.kind).toBe('no-fix');
+    expect(card.textContent).toContain("Can't find your location");
+    expect(screen.queryByText('Location is off')).toBeNull();
+  });
+
+  it('is amber, never red', async () => {
+    geolocationError = { code: 1, message: 'User denied Geolocation' };
+    commanderOnSquadPanel();
+    const card = await screen.findByTestId('location-problem');
+    expect(card.textContent).toContain('Location is off');
+    expect(card.outerHTML).toMatch(/text-warning/);
+    expect(card.outerHTML).not.toMatch(/red-|danger/);
   });
 });
 

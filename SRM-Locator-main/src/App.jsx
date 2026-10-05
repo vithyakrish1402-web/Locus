@@ -12,7 +12,7 @@ import {
   Building2, MessageSquare, Send, Loader2,
   BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
-  AlertCircle, Check, Target, Sliders, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Layers
+  AlertCircle, Check, Sliders, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Layers
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
@@ -30,8 +30,9 @@ import { SETTINGS } from './copy/settings';
 import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen';
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
-import { BELOW_CHIP, BELOW_TOP_BAR } from './utils/mapChrome';
+import { BELOW_TOP_BAR } from './utils/mapChrome';
 import RouteCard from './components/map/RouteCard';
+import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
 import { cssColor } from './utils/cssColor';
@@ -2060,25 +2061,6 @@ const App = () => {
         isAdmin={isAdmin}
         onAdmin={() => setShowAdminSettings(true)}
       />
-      <SharingChip mode={telemetryMode} />
-
-      {/* Your own route (components/map/RouteCard.jsx), under the sharing chip. On a phone it
-          sits under an open group panel (z-[850] < 900), as before. */}
-      <AnimatePresence>
-        {(routeStart || routeData) && (
-          <motion.div
-            key="route-card"
-            initial={reduceMotion ? { opacity: 0 } : { y: -16, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={reduceMotion ? { opacity: 0 } : { y: -16, opacity: 0 }}
-            transition={reduceMotion ? { duration: 0.15 } : PANEL_SPRING}
-            className="absolute inset-x-3 z-[850] md:z-[1000] md:left-1/2 md:right-auto md:w-[28rem] md:-translate-x-1/2"
-            style={{ top: BELOW_CHIP }}
-          >
-            <RouteCard start={routeStart} end={routeEnd} data={displayedRouteData} onEnd={clearRoute} />
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Sidebar Panel — visible on desktop always; on a phone, a sheet that is open when
           mobileView is 'matrix' or 'squad' and can be dragged down by its handle strip. */}
@@ -2482,56 +2464,41 @@ const App = () => {
           ))}
         </AnimatePresence>
       </div>
-      {/* --- Targeting mode and the location problem (a member's lost connection is a notice now) --- */}
-      <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[850] md:z-[1000] w-[90%] max-w-md pointer-events-none flex flex-col gap-2">
-        <AnimatePresence>
-          {/* Targeting mode. It used to be a separate fixed banner at nearly the same height
-              as this stack, so it landed on top of the location banner below and hid it. */}
+      {/* The stack under the top bar (redesign Map batch, pieces 1, 6 and 7): the sharing chip,
+          or a banner in its place (choosing a meeting point, the location problem), then your
+          route. One column, so none of them lands on another. On a phone it sits under the
+          open group panel (z-[850] < 900) and lets taps through except on its own buttons:
+          the location banner used to cover the Group Lead's buttons there. */}
+      <div
+        data-testid="map-top-stack"
+        className="absolute inset-x-3 z-[850] md:z-[1000] md:left-1/2 md:right-auto md:w-[28rem] md:-translate-x-1/2 pointer-events-none flex flex-col gap-2"
+        style={{ top: BELOW_TOP_BAR }}
+      >
+        {!(isTargetingMode && isMobile) && !locationError && <SharingChip mode={telemetryMode} />}
+        <AnimatePresence initial={false}>
+          {/* Choosing a meeting point (a phone's meeting point button). */}
           {isTargetingMode && (
-            <motion.div
-              key="targeting-mode"
-              initial={{ y: -30, opacity: 0, scale: 0.97 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: -30, opacity: 0, scale: 0.97 }}
-              transition={reduceMotion ? { duration: 0 } : PANEL_SPRING}
-              className="md:hidden bg-yellow-500/10 border border-yellow-500/50 backdrop-blur-xl p-3 flex items-center gap-3 pointer-events-auto"
-            >
-              <Target size={18} className="text-yellow-500 flex-shrink-0" />
-              <div>
-                <p className="font-dot text-[10px] text-yellow-500 uppercase tracking-widest leading-tight">TARGETING MODE ACTIVE</p>
-                <p className="font-dot text-[9px] text-yellow-500/60 uppercase tracking-widest">TAP ANYWHERE ON MAP TO DEPLOY RALLY POINT</p>
-              </div>
-              <button onClick={() => setIsTargetingMode(false)} className="ml-auto text-yellow-500 hover:text-white p-1 flex-shrink-0">
-                <X size={16} />
-              </button>
+            <motion.div key="choosing-meeting-point" className="md:hidden" {...fade()}>
+              <MeetingPointBanner onCancel={() => setIsTargetingMode(false)} />
             </motion.div>
           )}
-          {/* Persistent (not auto-dismissing) — the underlying problem doesn't go away
-              on its own, so this stays until either a real GPS fix clears it or the
-              operative dismisses it themselves. Without this, a friend testing LOCUS
-              with location denied just sees no marker anywhere, with zero indication
-              of why — the exact silent failure this is meant to replace. */}
+          {/* Persistent (not auto-dismissing): the problem doesn't go away on its own, so this
+              stays until a real fix clears it or it is dismissed. Without it, someone with
+              location refused just sees no marker anywhere, with no word of why. */}
           {locationError && (
-            <motion.div
-              key="location-access-denied"
-              initial={{ opacity: 0, y: -30, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -30, scale: 0.95 }}
-              className="p-3 border border-red-500 bg-red-950/90 backdrop-blur-md flex items-center gap-2 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
-            >
-              <ShieldAlert size={16} className="text-red-500 shrink-0" />
-              <p className="font-dot text-xs text-white uppercase tracking-widest leading-tight flex-1">
-                {locationError === 'denied'
-                  ? '⚠ LOCATION ACCESS DENIED — SQUAD CANNOT SEE YOU'
-                  : '⚠ NO GPS FIX — SQUAD CANNOT SEE YOU'}
-              </p>
-              <button onClick={() => setLocationError(null)} className="text-red-400 hover:text-white shrink-0 pointer-events-auto" title="Dismiss">
-                <X size={14} />
-              </button>
+            <motion.div key="location-problem" {...fade()}>
+              <LocationProblemCard kind={locationError} onDismiss={() => setLocationError(null)} />
+            </motion.div>
+          )}
+          {(routeStart || routeData) && (
+            <motion.div key="route-card" className="pointer-events-auto" {...fade()}>
+              <RouteCard start={routeStart} end={routeEnd} data={displayedRouteData} onEnd={clearRoute} />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+      {/* "Finding your location…" while the first fix is on its way. */}
+      {!liveLocation && !locationError && <FindingLocation />}
       {/* FULLSCREEN MAP */}
       <div className="absolute inset-0 z-0 bg-[var(--color-map-land)]">
         {mapEngineFailed ? (

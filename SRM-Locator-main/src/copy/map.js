@@ -54,3 +54,20 @@ export const ROUTE_CARD = {
   choosingHelp: (start) => (start ? `From ${start}. Pick a place, then Set as destination.` : 'Pick a place, then Set as destination.'),
   end: 'End route',
 };
+
+// Banners on the map.
+export const MAP_BANNERS = {
+  placeMeetingPoint: 'Tap the map to place a meeting point',
+  cancel: 'Cancel',
+  locationOff: {
+    title: 'Location is off',
+    body: 'Turn it on so your group can find you and you can see how far away they are.',
+  },
+  noFix: {
+    title: "Can't find your location",
+    body: "Your group can't see you until your phone finds where you are. LOCUS keeps trying.",
+  },
+  turnOn: 'Turn on location',
+  dismiss: 'Dismiss',
+  finding: 'Finding your location…',
+};

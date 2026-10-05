@@ -3,7 +3,7 @@ import { LogOut, ShieldAlert, Sliders } from 'lucide-react';
 import BrandMark from '../access/BrandMark';
 import { IconButton, StatusDot } from '../ui';
 import { SHARING_CHIP, TOP_BAR } from '../../copy/map';
-import { BELOW_TOP_BAR, TOP_BAR_HEIGHT, TOP_BAR_TOP } from '../../utils/mapChrome';
+import { TOP_BAR_HEIGHT, TOP_BAR_TOP } from '../../utils/mapChrome';
 import { SETTINGS } from '../../copy/settings';
 
 // The map screen's top bar (redesign Map batch): the LOCUS mark, "LOCUS" and which map is
@@ -43,13 +43,13 @@ export function TopBar({ isSatellite, onSignOut, onSettings, isAdmin = false, on
 const DOT = { ACTIVE: 'live', FROZEN: 'paused', GHOST: 'hidden' };
 
 /**
- * The sharing chip under the top bar: your own setting, in words. No button on it (the
- * design's Pause on the chip is not in this phase).
+ * The sharing chip, first in the stack under the top bar (App.jsx): your own setting, in
+ * words. No button on it (the design's Pause on the chip is not in this phase).
  * @param {{ mode: 'ACTIVE'|'FROZEN'|'GHOST' }} props
  */
 export function SharingChip({ mode }) {
   return (
-    <div className="absolute left-3 right-3 z-[840] flex pointer-events-none" style={{ top: BELOW_TOP_BAR }}>
+    <div className="flex">
       <p
         data-testid="sharing-chip"
         data-mode={mode}
