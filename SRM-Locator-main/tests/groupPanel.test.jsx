@@ -388,3 +388,54 @@ describe('Leave group', () => {
     expect(red.map((el) => el.closest('button')?.dataset.testid)).toEqual(['leave-group']);
   });
 });
+
+describe('join requests', () => {
+  const sheet = () => within(screen.getByRole('dialog', { name: 'Join requests' }));
+  const emitted = (event) => fakeSocket.emit.mock.calls.filter(([e]) => e === event).map(([, d]) => d);
+  const ask = (id, name) => act(() => fakeSocket.receive('access-request', { targetId: id, name, roomCode: code }));
+  const open = () => fireEvent.click(within(screen.getByTestId('lead-tools')).getByRole('button', { name: /^Join requests/ }));
+
+  it('lists who is waiting, Waiting only: no Blocked tab and no unblock anywhere', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    ask('s-kavya', 'Kavya Nair');
+    ask('s-vikram', 'Vikram Rao');
+    open();
+    expect(sheet().getAllByTestId('join-request').map((r) => r.querySelector('p').textContent)).toEqual(['Kavya Nair', 'Vikram Rao']);
+    expect(sheet().getByText('Approved people can see the group on the map and are seen by it.')).toBeTruthy();
+    expect(screen.queryByRole('radio', { name: /Blocked/ })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Join requests' }).textContent).not.toMatch(/block|BLACKLIST|REVOKE|INBOUND/i);
+  });
+
+  it('Approve and Decline answer exactly as before, and the person leaves the list', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    ask('s-kavya', 'Kavya Nair');
+    ask('s-vikram', 'Vikram Rao');
+    open();
+    fireEvent.click(sheet().getByRole('button', { name: 'Approve Kavya Nair' }));
+    fireEvent.click(sheet().getByRole('button', { name: 'Decline Vikram Rao' }));
+    expect(emitted('resolve-access')).toEqual([
+      { targetId: 's-kavya', roomCode: code, approved: true },
+      { targetId: 's-vikram', roomCode: code, approved: false },
+    ]);
+    expect(sheet().getByTestId('join-requests-empty').textContent).toContain('No one is waiting');
+  });
+
+  it('a request withdrawn while the sheet is open leaves it', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    ask('s-kavya', 'Kavya Nair');
+    open();
+    act(() => fakeSocket.receive('access-request-withdrawn', { targetId: 's-kavya', roomCode: code }));
+    expect(sheet().queryByText('Kavya Nair')).toBeNull();
+  });
+
+  it('nothing in it is red', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    ask('s-kavya', 'Kavya Nair');
+    open();
+    expect(screen.getByTestId('join-requests').outerHTML).not.toMatch(/red-|danger/);
+  });
+});

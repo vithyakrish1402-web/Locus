@@ -108,3 +108,17 @@ export const LEAVE_GROUP = {
   confirm: 'Leave group',
   cancel: 'Stay in the group',
 };
+
+// The Group Lead's join requests: Waiting only (there is no Unblock, so no Blocked tab).
+export const JOIN_REQUESTS = {
+  title: 'Join requests',
+  help: 'Approved people can see the group on the map and are seen by it.',
+  // A request carries no time ("Asked 1 min ago" is on the Later list).
+  wants: 'Wants to join',
+  approve: 'Approve',
+  decline: 'Decline',
+  approveFor: (name) => `Approve ${name}`,
+  declineFor: (name) => `Decline ${name}`,
+  emptyTitle: 'No one is waiting',
+  emptyBody: (code) => `When someone asks to join with the code ${spacedCode(code)}, they show here for you to approve.`,
+};

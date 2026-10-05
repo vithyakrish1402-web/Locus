@@ -371,7 +371,7 @@ describe('notifications and the open group panel on a phone', () => {
     fireEvent.click(syncButton());
     expect(syncRequests()).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: /^Join requests/ }));
-    expect(screen.getByText(/INBOUND/)).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Join requests' })).toBeTruthy();
   });
 
   it('a notice wholly above the panel (the panel dragged down) can be closed again', () => {

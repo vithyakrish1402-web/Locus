@@ -334,7 +334,7 @@ describe("the Commander's queue", () => {
     act(() => fakeSocket.receive('access-request', { targetId: 't1', name: 'X', photo: null, roomCode: code }));
 
     fireEvent.click(nodeAccessButton());
-    fireEvent.click(screen.getByRole('button', { name: 'GRANT_ACCESS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve X' }));
     expect(emitted('resolve-access')).toEqual([{ targetId: 't1', roomCode: code, approved: true }]);
   });
 

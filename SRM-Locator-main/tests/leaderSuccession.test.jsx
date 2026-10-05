@@ -127,10 +127,10 @@ describe('a stand-in Commander, when the Commander comes back', () => {
     act(() => fakeSocket.receive('demoted-to-member', { roomCode: CODE }));
 
     // The join queue closes, rather than staying up with every GRANT refused.
-    await waitFor(() => expect(screen.queryByText(/INBOUND/)).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Join requests' })).toBeNull());
     expect(screen.queryByText('Stranger')).toBeNull();
     expect(nodeAccess()).toBeNull();
-    expect(screen.queryByRole('button', { name: /SYNC_TELEMETRY/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Refresh locations/ })).toBeNull();
     await screen.findByText(NOTICES.leadIsBack);
   });
 
@@ -152,7 +152,7 @@ describe('a stand-in Commander, when the Commander comes back', () => {
 
     act(() => fakeSocket.receive('promoted-to-owner', { roomCode: CODE }));
     fireEvent.click(await waitFor(() => { const b = nodeAccess(); expect(b).not.toBeNull(); return b; }));
-    await screen.findByText(/INBOUND/);
+    await screen.findByRole('dialog', { name: 'Join requests' });
     expect(screen.queryByText('Stranger')).toBeNull();
   });
 
