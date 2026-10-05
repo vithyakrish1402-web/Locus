@@ -439,3 +439,177 @@ describe('join requests', () => {
     expect(screen.getByTestId('join-requests').outerHTML).not.toMatch(/red-|danger/);
   });
 });
+
+// The panel's three heights on a phone (utils/panelHeights.js for where each rests). jsdom has
+// no layout, so the panel and its header are given a 412 × 892 phone's heights.
+describe('the three heights, on a phone', () => {
+  let realMatchMedia;
+  let realInner;
+  beforeEach(() => {
+    realMatchMedia = window.matchMedia;
+    realInner = window.innerHeight;
+    window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 892 });
+  });
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: realInner });
+  });
+
+  const sheet = () => screen.getByTestId('group-panel-list').closest('[data-height]');
+  const bar = () => within(screen.getByRole('navigation', { name: 'Main' }));
+  const openPanel = () => fireEvent.click(bar().getByRole('button', { name: 'Group' }));
+  const handle = () => screen.getByTestId('group-header').parentElement;
+  const sized = (el, px) => Object.defineProperty(el, 'offsetHeight', { configurable: true, value: px });
+  const layOut = () => {
+    sized(sheet(), 752);
+    sized(handle(), 120);
+    act(() => { window.dispatchEvent(new Event('resize')); });
+  };
+  const yOf = () => Number(/translateY\((-?[\d.]+)px\)/.exec(sheet().style.transform)?.[1] ?? 0);
+  // jsdom's pointer events carry no pageX/pageY, which framer-motion's drag reads.
+  const pointer = (type, y) => {
+    const event = new PointerEvent(type, { bubbles: true, clientX: 200, clientY: y, pointerId: 1, isPrimary: true, button: 0, pointerType: 'touch' });
+    Object.defineProperty(event, 'pageX', { value: 200 });
+    Object.defineProperty(event, 'pageY', { value: y });
+    return event;
+  };
+  /** A tap on the header: press, let go where it was pressed, click. */
+  const tapHeader = async () => {
+    await act(async () => {
+      handle().dispatchEvent(pointer('pointerdown', 300));
+      window.dispatchEvent(pointer('pointerup', 300));
+    });
+    fireEvent.click(handle());
+  };
+  /** A drag on the handle strip from y0 to y1 (px), then let go. */
+  const drag = async (y0, y1, { flick = false } = {}) => {
+    const target = handle();
+    await act(async () => {
+      target.dispatchEvent(pointer('pointerdown', y0));
+    });
+    for (let i = 1; i <= 6; i++) {
+      await act(async () => {
+        window.dispatchEvent(pointer('pointermove', y0 + ((y1 - y0) * i) / 6));
+        await new Promise((r) => setTimeout(r, flick ? 16 : 120));
+      });
+    }
+    // The finger rests a moment before letting go (a slow let-go: no throw), unless flicked.
+    if (!flick) await act(async () => { await new Promise((r) => setTimeout(r, 300)); });
+    await act(async () => {
+      window.dispatchEvent(pointer('pointerup', y1));
+      await new Promise((r) => setTimeout(r, 50));
+    });
+  };
+
+  it('the Group tab opens it at half', async () => {
+    await inAGroup();
+    expect(sheet().dataset.height).toBe('closed');
+    openPanel();
+    expect(sheet().dataset.height).toBe('half');
+  });
+
+  it('a slow drag down from half rests at peek, and a tap on its header opens it to half again', async () => {
+    await inAGroup({ members: () => ({ ...member('Meera Iyer'), ...member('Aarav Shah', { status: 'FROZEN' }) }) });
+    openPanel();
+    layOut();
+    await drag(400, 600);
+    expect(sheet().dataset.height).toBe('peek');
+    await tapHeader();
+    expect(sheet().dataset.height).toBe('half');
+  });
+  it('a quick flick down from half closes it; a drag up from half opens it full', async () => {
+    await inAGroup();
+    openPanel();
+    layOut();
+    await drag(400, 900, { flick: true });
+    expect(sheet().dataset.height).toBe('closed');
+    openPanel();
+    layOut();
+    await drag(400, 90);
+    expect(sheet().dataset.height).toBe('full');
+    // Closed from full, it opens at half again next time.
+    await tapHeader();
+    expect(sheet().dataset.height).toBe('closed');
+    openPanel();
+    expect(sheet().dataset.height).toBe('half');
+  });
+
+  it('at half, the list has room to scroll its last rows up into view', async () => {
+    await inAGroup();
+    openPanel();
+    layOut();
+    const list = screen.getByTestId('group-panel-list');
+    // Half rests 325 px below full on this phone (its top at 45 % of 892 px).
+    expect(list.lastElementChild.style.height).toBe('325px');
+  });
+
+  it('a tap on the header at half closes it, as the handle did', async () => {
+    await inAGroup();
+    openPanel();
+    await tapHeader();
+    expect(sheet().dataset.height).toBe('closed');
+  });
+
+  it('at peek: the header and who is where, and nothing of the list under the buttons', async () => {
+    await inAGroup({ members: () => ({ ...member('Meera Iyer'), ...member('Aarav Shah', { status: 'FROZEN' }), ...member('Rohan Das', { lat: null, lng: null }) }) });
+    openPanel();
+    expect(screen.getByTestId('peek-lines').closest('[aria-hidden]').getAttribute('aria-hidden')).toBe('true');
+    layOut();
+    await drag(400, 600);
+    expect(sheet().dataset.height).toBe('peek');
+    expect(screen.getByTestId('peek-summary').textContent).toBe('1 live · 1 paused · 1 waiting for location');
+    expect(screen.getByTestId('peek-lines').closest('[aria-hidden]').getAttribute('aria-hidden')).toBe('false');
+    expect(screen.getByTestId('group-panel-list').className).toMatch(/(^|\s)invisible(\s|$)/);
+  });
+
+  it('at peek, a Group Lead with requests waiting sees how many, and it opens them', async () => {
+    await inAGroup();
+    act(() => fakeSocket.receive('access-request', { targetId: 's-kavya', name: 'Kavya Nair', roomCode: code }));
+    act(() => fakeSocket.receive('access-request', { targetId: 's-vikram', name: 'Vikram Rao', roomCode: code }));
+    openPanel();
+    layOut();
+    await drag(400, 600);
+    const pill = screen.getByTestId('peek-requests');
+    expect(pill.textContent).toBe('2 join requests');
+    fireEvent.click(pill);
+    expect(screen.getByRole('dialog', { name: 'Join requests' })).toBeTruthy();
+    expect(sheet().dataset.height).toBe('peek');
+  });
+
+  it('no requests pill with none waiting, nor for a member', async () => {
+    await inAGroup({ lead: false });
+    act(() => fakeSocket.receive('access-request', { targetId: 's-kavya', name: 'Kavya Nair', roomCode: code }));
+    openPanel();
+    expect(screen.queryByTestId('peek-requests')).toBeNull();
+  });
+
+  it('the Emergency button stays above the panel at every height, and peek leaves it room', async () => {
+    await inAGroup();
+    openPanel();
+    layOut();
+    const sos = screen.getByRole('button', { name: /SOS beacon/ });
+    const z = (el) => Number(/(?:^|\s)z-\[(\d+)\]/.exec(el.className)[1]);
+    for (const [from, to, height] of [[400, 600, 'peek'], [600, 90, 'full'], [90, 400, 'half']]) {
+      await drag(from, to);
+      expect(sheet().dataset.height).toBe(height);
+      expect(z(sos)).toBeGreaterThan(z(sheet()));
+      expect(sheet().contains(sos)).toBe(false);
+    }
+    // At peek the header ends above the Emergency button's top (5 rem above the 4 rem tab bar,
+    // and 5 rem tall: 160 px from the bottom on this phone).
+    await drag(400, 600);
+    const shown = 752 - yOf();
+    expect(64 + shown - 120).toBeGreaterThanOrEqual(160);
+  });
+
+  it('notices stay under the panel at peek too, taking no taps from it', async () => {
+    const { LAYER } = await import('../src/utils/layers.js');
+    await inAGroup();
+    openPanel();
+    layOut();
+    await drag(400, 600);
+    act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
+    expect(Number(screen.getByTestId('comms-feed').style.zIndex)).toBe(LAYER.underGroupPanel);
+  });
+});

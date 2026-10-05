@@ -122,3 +122,14 @@ export const JOIN_REQUESTS = {
   emptyTitle: 'No one is waiting',
   emptyBody: (code) => `When someone asks to join with the code ${spacedCode(code)}, they show here for you to approve.`,
 };
+
+// The peek height's summary line under the header.
+export const PEEK = {
+  justYou: 'Just you so far',
+  summary: ({ live = 0, paused = 0, waiting = 0, lost = 0 }) => [
+    live && `${live} live`,
+    paused && `${paused} paused`,
+    waiting && `${waiting} waiting for location`,
+    lost && `${lost} lost connection`,
+  ].filter(Boolean).join(' · '),
+};

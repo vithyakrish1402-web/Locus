@@ -66,7 +66,7 @@ export default function SquadMemberCard({ member, me, heading, headingLive, onOp
     <div data-testid="member-row" className="flex items-center gap-3 py-3 border-b border-border font-ui text-text">
       <Avatar name={name} dashed={member.status === 'FROZEN' || !member.hasFix} />
       <div className="flex-1 min-w-0">
-        <h4 className="text-heading truncate">{name}</h4>
+        <h4 className="text-heading break-words">{name}</h4>
         <p className="mt-0.5 flex items-center gap-2 text-secondary text-text-secondary" data-testid="member-status">
           <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${MEMBER_DOTS[status.dot]}`} aria-hidden="true" />
           {status.text}

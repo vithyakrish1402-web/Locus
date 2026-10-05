@@ -172,9 +172,9 @@ describe('a matrix building tap', () => {
       const sheet = () => container.querySelector('.fixed.inset-x-0.bottom-16');
       fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Group' })); // the bottom bar's: opens the sheet
       fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
-      await waitFor(() => expect(sheet().style.transform).not.toContain('100%'));
+      await waitFor(() => expect(sheet().dataset.height).toBe('half'));
       fireEvent.click((await screen.findAllByText(SRM_MASTER_DATABASE[0].name))[0]);
-      await waitFor(() => expect(sheet().style.transform).toContain('100%'));
+      await waitFor(() => expect(sheet().dataset.height).toBe('closed'));
     } finally {
       window.matchMedia = original;
     }

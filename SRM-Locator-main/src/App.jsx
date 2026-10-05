@@ -1,11 +1,11 @@
 import { io } from "socket.io-client";
 import { Capacitor } from '@capacitor/core';
-import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 // `motion` is used throughout via <motion.div>/<motion.nav> JSX member expressions.
 // This project's eslint config has no eslint-plugin-react (only react-hooks/react-refresh),
 // so core no-unused-vars can't see through JSXMemberExpression tag names — false positive.
 // eslint-disable-next-line no-unused-vars
-import { motion, AnimatePresence, useDragControls, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls, useReducedMotion, useMotionValue, animate as animateMotion } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
 import {
   Users, Search, Settings, Navigation, ShieldCheck,
@@ -38,6 +38,8 @@ import SharingControl from './components/group/SharingControl';
 import MemberOptions from './components/group/MemberOptions';
 import LeadTools from './components/group/LeadTools';
 import JoinRequests from './components/group/JoinRequests';
+import PeekLines from './components/group/PeekLines';
+import { panelStops, snapPanel } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
 import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, REFRESH_FAILED } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
@@ -95,7 +97,7 @@ import FloorPicker from './components/FloorPicker';
 import WifiReadout from './components/WifiReadout';
 import { useIsMobile } from './hooks/useIsMobile';
 import { haptic } from './utils/haptics';
-import { shouldDismissSheet, SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard, fade } from './utils/motion';
+import { SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard, fade } from './utils/motion';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { PrecognitionFilter } from './utils/precognition';
@@ -360,6 +362,15 @@ const App = () => {
   const sheetOpen = mobileView === 'matrix' || mobileView === 'squad';
   const sheetDragControls = useDragControls();
   const sheetRef = useRef(null);
+  // The panel's resting height on a phone (utils/panelHeights.js): it opens at half.
+  const [panelHeight, setPanelHeight] = useState('half');
+  const panelY = useMotionValue(0);
+  const panelDragStartRef = useRef(0);
+  const [panelGeometry, setPanelGeometry] = useState(null);
+  const panelHeaderRef = useRef(null);
+  const peekWrapRef = useRef(null);
+  const peekLinesRef = useRef(null);
+  const insetProbeRef = useRef(null);
   const sheetDraggedRef = useRef(false);
   // --- TACTICAL WAYPOINT STATE ---
   const [activeWaypoint, setActiveWaypoint] = useState(null);
@@ -1904,6 +1915,61 @@ const App = () => {
   // "Location is off" after the explainer's Not now, until location is turned on or the card
   // is dismissed.
   const showDeclinedCard = locationDeclined && !locationReady && !declinedCardDismissed;
+  // The group panel's heights (utils/panelHeights.js). Until it has been measured (and in
+  // tests, with no layout) closed is the screen's height and every open height is full.
+  const atPeek = isMobile && sheetOpen && panelHeight === 'peek';
+  const panelStopsNow = panelGeometry ?? { full: 0, half: 0, peek: 0, closed: typeof window === 'undefined' ? 1000 : window.innerHeight };
+  const panelTarget = !isMobile ? 0 : sheetOpen ? panelStopsNow[panelHeight] : panelStopsNow.closed;
+  // The peek line's counts: who is live, paused, waiting for a location, or lost.
+  const peekCounts = (() => {
+    const listed = users.filter(u => !blockedUserIds.includes(u.id));
+    return {
+      live: listed.filter(u => u.status !== 'FROZEN' && u.hasFix).length,
+      paused: listed.filter(u => u.status === 'FROZEN' && u.hasFix).length,
+      waiting: listed.filter(u => !u.hasFix).length,
+      lost: ghostMembers.length,
+    };
+  })();
+  // Measures the heights: the panel at full height, and how much shows at peek, which is its
+  // header with the peek lines plus room under them for the Emergency button (5 rem tall,
+  // standing 5 rem above the tab bar's 4 rem, plus the gesture bar's inset), so the buttons
+  // that float above the panel never cover any of it.
+  useLayoutEffect(() => {
+    if (!isMobile || !hasJoinedSquad) return undefined;
+    const measure = () => {
+      const panel = sheetRef.current;
+      const header = panelHeaderRef.current;
+      if (!panel || !header || !panel.offsetHeight) return;
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const inset = insetProbeRef.current?.offsetHeight ?? 0;
+      const tabBar = 4 * rem;
+      const room = 10 * rem + inset - tabBar + 0.5 * rem;
+      const headerAtPeek = header.offsetHeight - (peekWrapRef.current?.offsetHeight ?? 0) + (peekLinesRef.current?.scrollHeight ?? 0);
+      const next = panelStops({ viewport: window.innerHeight, panelHeight: panel.offsetHeight, peekHeight: headerAtPeek + room, tabBar });
+      setPanelGeometry((prev) => (prev && ['full', 'half', 'peek', 'closed'].every((k) => prev[k] === next[k]) ? prev : next));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(panelHeaderRef.current);
+    observer?.observe(sheetRef.current);
+    return () => {
+      window.removeEventListener('resize', measure);
+      observer?.disconnect();
+    };
+  }, [isMobile, hasJoinedSquad]);
+  // Moves the panel to its resting height on the sheet spring (placed at once the first time,
+  // and with reduced motion).
+  const panelPlacedRef = useRef(false);
+  useEffect(() => {
+    if (!panelPlacedRef.current || reduceMotion) {
+      panelY.set(panelTarget);
+      panelPlacedRef.current = true;
+      return undefined;
+    }
+    const controls = animateMotion(panelY, panelTarget, SHEET_SPRING);
+    return () => controls.stop();
+  }, [panelTarget, panelY, reduceMotion]);
   // Whose options sheet is open: an id, so it follows their live updates and closes if they go.
   const optionsMember = optionsMemberId ? users.find((u) => u.id === optionsMemberId) ?? null : null;
   // The group panel's search, for members as for buildings (it used to filter buildings only).
@@ -2133,27 +2199,28 @@ const App = () => {
       {/* Sidebar Panel — visible on desktop always; on a phone, a sheet that is open when
           mobileView is 'matrix' or 'squad' and can be dragged down by its handle strip. */}
       <motion.div
-        initial={false}
-        animate={{ y: isMobile ? (sheetOpen ? 0 : '100%') : 0, x: 0, opacity: 1 }}
-        transition={reduceMotion ? { duration: 0 } : SHEET_SPRING}
+        // Its y is panelY, moved to the resting height by the effect on panelTarget, and by
+        // the finger while dragged (the handle strip and header start the drag).
+        data-height={isMobile ? (sheetOpen ? panelHeight : 'closed') : undefined}
         drag={isMobile ? 'y' : false}
         dragListener={false}
         dragControls={sheetDragControls}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        // Follows the finger almost 1:1 downwards, and rubber-bands upwards: the sheet is
-        // already fully open, so pulling it higher resists instead of moving.
-        dragElastic={{ top: 0.06, bottom: 0.95 }}
+        dragConstraints={{ top: 0, bottom: panelStopsNow.closed }}
+        // Follows the finger almost 1:1 between the heights, and rubber-bands above full.
+        dragElastic={{ top: 0.06, bottom: 0.2 }}
         dragMomentum={false}
-        onDragStart={() => { sheetDraggedRef.current = true; }}
+        onDragStart={() => { sheetDraggedRef.current = true; panelDragStartRef.current = panelTarget; }}
         onDragEnd={(_event, info) => {
           // Decide from where the throw is GOING, not where the finger let go: project the
-          // release velocity forward (Apple's scroll-deceleration projection), so a short
-          // quick flick closes the sheet and a slow long drag that stops early doesn't.
-          const height = sheetRef.current?.offsetHeight || window.innerHeight;
-          if (shouldDismissSheet(info.offset.y, info.velocity.y, height)) {
-            haptic('snap');
-            setMobileView('grid');
-          }
+          // release velocity forward (Apple's scroll-deceleration projection), and settle at
+          // the nearest height to that: peek, half, full, or closed. Where it was let go is
+          // where the drag started plus how far it went, kept on the panel.
+          const letGo = Math.min(panelStopsNow.closed, Math.max(0, panelDragStartRef.current + info.offset.y));
+          const next = snapPanel(letGo, info.velocity.y, panelStopsNow);
+          haptic('snap');
+          animateMotion(panelY, panelStopsNow[next], reduceMotion ? { duration: 0 } : SHEET_SPRING);
+          if (next === 'closed') setMobileView('grid');
+          else setPanelHeight(next);
         }}
         ref={sheetRef}
         className={`${
@@ -2163,7 +2230,7 @@ const App = () => {
         }`}
         // Starts under the header instead of behind it (it used to start at the very top, so
         // its handle and MATRIX/SQUAD indicator were hidden under the header).
-        style={isMobile ? { top: BELOW_TOP_BAR } : undefined}
+        style={isMobile ? { top: BELOW_TOP_BAR, y: panelY } : undefined}
         onTouchStart={(e) => { e.currentTarget._touchStartX = e.touches[0].clientX; }}
         onTouchEnd={(e) => {
           const startX = e.currentTarget._touchStartX;
@@ -2188,10 +2255,33 @@ const App = () => {
           data-no-ping
           onPointerDown={(e) => { if (!isMobile) return; sheetDraggedRef.current = false; sheetDragControls.start(e); }}
           // A drag that snapped back still ends in a click; only a real tap closes.
-          onClick={() => { if (isMobile && !sheetDraggedRef.current) setMobileView('grid'); }}
+          // At peek a tap opens it to half; at half or full it closes, as the handle did.
+          onClick={() => {
+            if (!isMobile || sheetDraggedRef.current) return;
+            if (panelHeight === 'peek') setPanelHeight('half');
+            else setMobileView('grid');
+          }}
+          ref={panelHeaderRef}
         >
           <div className="md:hidden w-9 h-1 rounded-full bg-border mx-auto mb-3" aria-hidden="true" />
-          <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode} />
+          <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode}>
+            {/* The peek height's lines: laid out always on a phone (so peek's height is known
+                at every height), shown only at peek. */}
+            {isMobile && (
+              <div ref={peekWrapRef} className="grid" style={{ gridTemplateRows: atPeek ? '1fr' : '0fr' }} inert={!atPeek} aria-hidden={!atPeek}>
+                <div ref={peekLinesRef} className="overflow-hidden min-h-0">
+                  <PeekLines
+                    requests={pendingRequests.length}
+                    onRequests={squadRole === 'OWNER' ? () => setShowRequestsModal(true) : null}
+                    names={users.filter(u => !blockedUserIds.includes(u.id)).map(u => u.name || '?')}
+                    counts={peekCounts}
+                  />
+                </div>
+              </div>
+            )}
+          </GroupHeader>
+          {/* Measures the gesture bar's inset, for the room left under the buttons at peek. */}
+          <div ref={insetProbeRef} aria-hidden="true" className="absolute w-0 invisible pointer-events-none" style={{ height: 'env(safe-area-inset-bottom)' }} />
         </div>
 
 
@@ -2200,7 +2290,7 @@ const App = () => {
             meeting point buttons: they stand 10 rem above the screen's bottom edge plus the
             gesture bar's inset, and this panel ends 4 rem up without that inset. 8 rem plus the
             inset leaves 2 rem between the last row and the buttons on any phone. */}
-        <div data-testid="group-panel-list" className={`flex-1 overflow-y-auto p-4 pt-1 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}>
+        <div data-testid="group-panel-list" className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto p-4 pt-1 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}>
           <SegmentedControl
             label={GROUP_TABS.label}
             value={activeTab === 'buildings' ? 'buildings' : 'users'}
@@ -2325,6 +2415,9 @@ const App = () => {
             )}
           </AnimatePresence>
           {activeTab === 'users' && <LeaveGroupButton onClick={() => setShowLeaveConfirm(true)} />}
+          {/* The panel rests lower than full by this much: room to scroll the last rows up into
+              view at half. */}
+          {isMobile && sheetOpen && panelStopsNow[panelHeight] > 0 && <div aria-hidden="true" style={{ height: panelStopsNow[panelHeight] }} />}
         </div>
       </motion.div>
 
@@ -3054,7 +3147,7 @@ const App = () => {
               ? arTargetForMember(scanNode)
               : { lat: SRM_KTR_COORDS.lat, lng: SRM_KTR_COORDS.lng, name: 'SRM_HQ' });
           } else {
-            setMobileView('squad'); setActiveTab('users'); setSelectedItem(null);
+            setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); setPanelHeight('half');
           }
         }}
       />
