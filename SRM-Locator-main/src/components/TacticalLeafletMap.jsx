@@ -20,13 +20,14 @@ import { registerMapDriver } from '../utils/mapFocus';
 // diagonally across every tile served to an unregistered caller — so the fallback
 // advertised as keyless was quietly rendering a watermarked map.
 //
-// OpenStreetMap's standard raster tiles need no key and go to z19, but they're light.
-// The `locus-dark-tiles` filter in index.css inverts them into the dark tactical palette
-// client-side, so the look survives without a paid basemap account.
+// OpenStreetMap's standard raster tiles need no key and go to z19. The `locus-map-tiles`
+// filter in index.css calms them in the light theme and inverts them into the app's dark
+// map colours in the dark theme (it follows <html data-theme>), so both looks survive
+// without a paid basemap account.
 const OSM_DARK_TILES = {
   url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   attribution: '&copy; OpenStreetMap contributors',
-  className: 'locus-dark-tiles',
+  className: 'locus-map-tiles',
   maxNativeZoom: 19,
 };
 
@@ -145,7 +146,7 @@ const TacticalLeafletMap = ({
       center={[center?.lat || SRM_KTR_COORDS.lat, center?.lng || SRM_KTR_COORDS.lng]}
       zoom={zoom || 17}
       zoomControl={false}
-      className="w-full h-full bg-black"
+      className="w-full h-full bg-[var(--color-map-land)]"
     >
       <TileLayer
         key={tiles.url}

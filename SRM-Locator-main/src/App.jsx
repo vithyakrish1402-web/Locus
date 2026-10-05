@@ -33,6 +33,8 @@ import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
 import { TABS } from './copy/map';
+import { mapStylesFor } from './utils/mapStyles';
+import { useResolvedTheme } from './theme/useResolvedTheme';
 import CameraExplainer from './components/CameraExplainer';
 import { cameraKnownAllowed, cameraPermissionGranted, rememberCameraAllowed } from './utils/cameraPermission';
 import { NOTICES, OS_NOTICES } from './copy/notices';
@@ -182,29 +184,7 @@ const SATELLITE_MAP_OPTIONS = {
   styles: [], // Clear custom styles so the photos show up
 };
 
-// Standard Cyberpunk Dark Theme
-const TACTICAL_MAP_STYLES = [
-  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
-];
-
-// Ultra-Minimal Stealth Theme (Pitch black, no POI icons, dark grey roads)
-const STEALTH_MAP_STYLES = [
-  { elementType: "geometry", stylers: [{ color: "#000000" }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#333333" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#000000" }] },
-  { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#0a0a0a" }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#111111" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] }
-];
+// The roadmap's light and dark styles are in utils/mapStyles.js, chosen by the app's theme.
 
 // --- LOADING AND SIGN-IN (redesign P3; words in src/copy/access.js) ---
 // The loading screen is src/components/access/BootScreen.jsx.
@@ -419,7 +399,6 @@ const App = () => {
   const [hasSeenGuide, setHasSeenGuide] = useState(guideSeen);
   const [sysConfig, setSysConfig] = useState({
     audio: true, // Settings' Alert sounds (ping and lost-connection sounds; never the Emergency alarm)
-    theme: 'tactical', // 'tactical' | 'stealth'
     polling: 'standard', // 'eco' | 'standard' | 'max'
     arFidelity: 'standard', // 'efficient' | 'standard' | 'realistic': AR Scan's main dial (see ARCompass)
     arFeatureOverrides: DEFAULT_AR_FEATURE_OVERRIDES // per feature; 'auto' follows arFidelity (see arFeatures.js)
@@ -1847,9 +1826,11 @@ const App = () => {
   // freshly-built `styles` array) on every render made it call map.setOptions() —
   // a full restyle — on every render, which is what made the map flicker and feel
   // unresponsive to drags while the compass was ticking.
+  // The roadmap follows the app's theme (light or dark); satellite is photos either way.
+  const resolvedTheme = useResolvedTheme();
   const mapOptions = useMemo(() => ({
     ...(isSatellite ? SATELLITE_MAP_OPTIONS : BASE_MAP_OPTIONS),
-    ...(isSatellite ? {} : { styles: sysConfig.theme === 'stealth' ? STEALTH_MAP_STYLES : TACTICAL_MAP_STYLES }),
+    ...(isSatellite ? {} : { styles: mapStylesFor(resolvedTheme) }),
     // Google renders its own clickable POI icons (hospitals, colleges, etc.)
     // straight onto the map tiles. Tapping one pops up Google's native white
     // InfoWindow on top of this app's own custom SYS_NODE panel — two
@@ -1858,7 +1839,7 @@ const App = () => {
     // built-in POI layer is pure UI collision here, not a needed feature.
     clickableIcons: false,
     draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : 'grab',
-  }), [isSatellite, sysConfig.theme, isAdmin, isRecordingPath]);
+  }), [isSatellite, resolvedTheme, isAdmin, isRecordingPath]);
 
   // Incoming SOS (stays up until acknowledged). Built once here because two branches
   // render it: the map below, and the mandatory-update gate. It used to live only in
@@ -2554,7 +2535,7 @@ const App = () => {
         </AnimatePresence>
       </div>
       {/* FULLSCREEN MAP */}
-      <div className="absolute inset-0 z-0 bg-black">
+      <div className="absolute inset-0 z-0 bg-[var(--color-map-land)]">
         {mapEngineFailed ? (
           <Suspense
             fallback={

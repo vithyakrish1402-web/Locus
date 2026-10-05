@@ -12,7 +12,7 @@ const fakeSocket = vi.hoisted(() => ({
   on: () => {}, off: () => {}, emit: vi.fn(),
 }));
 // Whether the stand-in Google map reports itself loaded.
-const google = vi.hoisted(() => ({ loads: true }));
+const google = vi.hoisted(() => ({ loads: true, options: null }));
 
 vi.mock('socket.io-client', () => ({ io: () => fakeSocket }));
 vi.mock('../src/firebase.js', () => ({ auth: { currentUser: null }, googleProvider: {}, db: {} }));
@@ -34,7 +34,8 @@ vi.mock('@capacitor/app', () => ({
 vi.mock('google-map-react', async () => {
   const React = await import('react');
   return {
-    default: function FakeGoogleMap({ onGoogleApiLoaded }) {
+    default: function FakeGoogleMap({ onGoogleApiLoaded, options }) {
+      google.options = options;
       React.useEffect(() => {
         if (google.loads) onGoogleApiLoaded?.({ map: { setTilt() {}, getDiv() {}, getCenter: () => ({ lat: () => 0, lng: () => 0 }), getZoom: () => 17 } });
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -78,6 +79,8 @@ let warnSpy;
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
   google.loads = true;
+  google.options = null;
+  try { localStorage.removeItem('locus.theme'); } catch { /* no storage */ }
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
@@ -161,5 +164,36 @@ describe("the map status line in Settings' More section", () => {
     expect(window.gm_authFailure).not.toBe(theirs);
     act(() => window.gm_authFailure());
     expect(window.gm_authFailure).toBe(theirs);
+  });
+});
+
+// The roadmap follows the app's theme (redesign Map batch, piece 4). The styles themselves
+// are untested against a live Google map; this checks the right set reaches it.
+describe('the Google map style', () => {
+  it('is the light style in the light theme', async () => {
+    const { LIGHT_MAP_STYLES } = await import('../src/utils/mapStyles.js');
+    try { localStorage.setItem('locus.theme', 'light'); } catch { /* no storage */ }
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    expect(google.options.styles).toEqual(LIGHT_MAP_STYLES);
+  });
+
+  it('is the dark style in the dark theme', async () => {
+    const { DARK_MAP_STYLES } = await import('../src/utils/mapStyles.js');
+    try { localStorage.setItem('locus.theme', 'dark'); } catch { /* no storage */ }
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    expect(google.options.styles).toEqual(DARK_MAP_STYLES);
+  });
+
+  it('has no style over satellite photos', async () => {
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Satellite view' }));
+    expect(google.options.styles).toEqual([]);
+    expect(google.options.mapTypeId).toBe('hybrid');
   });
 });
