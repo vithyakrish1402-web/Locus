@@ -192,6 +192,8 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
 - **Hidden rows for the Group Lead.** The design lists Hidden members to the Group Lead ("Hidden from group", "Not shared"). Today every phone, the Group Lead's included, drops Hidden members from the list and the map. No change for now (owner, 2026-10-05).
 - **"Asked 1 min ago" on join requests.** A join request carries no time (server `addPendingRequest` stores uid, name and photo), so showing when someone asked needs a data change. Until then the card says the person wants to join, with no time.
 
+- **"Invalid attribute name $hover" console errors.** On the Google map, google-map-react hands its own props ($hover, $geoService, $getDimensions and more) to every marker child, and the children that are plain <div>s pass them on to the page, so React logs hundreds of errors. Harmless to how the map works, but it floods the console. Fix: wrap those children in a component that drops the $ props (owner, 2026-10-06).
+
 ## Decisions for batch 1 (owner, 2026-10-05)
 
 - Names: new accounts save the name as typed. Capitals-only names are shown as stored everywhere except the greeting's first name.
