@@ -59,6 +59,20 @@ android {
     }
 }
 
+// A release APK takes only a production web build: never the test build's JavaScript
+// (mode 'sidetest') or a device check, even from a hand-run `gradlew assembleRelease`.
+// Every Vite build writes its mode to locus-build.json (vite.config.js); cap sync copies it
+// here. scripts/release.mjs checks the same, and that the build is its own.
+def webBuildMarker = file('src/main/assets/public/locus-build.json')
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
+    doFirst {
+        def mode = webBuildMarker.exists() ? new groovy.json.JsonSlurper().parse(webBuildMarker).mode : null
+        if (mode != 'production') {
+            throw new GradleException("Release refused: the web assets are a '${mode ?: 'unknown'}' build, not production. Run `npm run build` and `npx cap sync android` first.")
+        }
+    }
+}
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
