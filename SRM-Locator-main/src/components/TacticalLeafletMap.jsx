@@ -13,6 +13,7 @@ import LeafletReactMarker from './LeafletReactMarker';
 import MemberMarker from './MemberMarker';
 import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
 import { registerMapDriver } from '../utils/mapFocus';
+import { ROUTE_CASING_WIDTH, ROUTE_WIDTH } from '../hooks/useWaypointNavigationLine';
 
 // This engine exists precisely because there is no Google Maps key (see App.jsx's
 // mapEngineFailed / the "keyless Leaflet/OSM engine" warning), so its own basemap must
@@ -142,6 +143,7 @@ const TacticalLeafletMap = ({
   // The theme's line colours (App.jsx reads them; Leaflet's path options take literals), a
   // member's distance for their plate, and what a lost-connection member's card says.
   routeColor = '#1F4FB8',
+  casingColor = '#FFFFFF',
   lastKnownColor = '#8A94A3',
   memberDistance = () => null,
   ghostFocusItem = (ghost) => ({ name: ghost.name }),
@@ -205,15 +207,21 @@ const TacticalLeafletMap = ({
           Polyline (see App.jsx's useWaypointNavigationLine). walkingRoute is
           computed once in App.jsx (useWalkingRoute) and shared with the
           Google engine so there's a single throttling clock, not two.
-          Sparser/lighter dash when it's the straight-line "best effort"
-          fallback rather than a real routed path, so it visually reads as
-          less certain. */}
+          A real route is solid, 5 px on a 9 px casing, as the Google line;
+          the straight-line "best effort" fallback stays a sparse, light dash
+          with no casing, so it visually reads as less certain. */}
+      {walkingRoute && walkingRoute.isRealRoute && (
+        <Polyline
+          positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
+          pathOptions={{ color: casingColor, weight: ROUTE_CASING_WIDTH, opacity: 1 }}
+        />
+      )}
       {walkingRoute && (
         <Polyline
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
           pathOptions={
             walkingRoute.isRealRoute
-              ? { color: routeColor, dashArray: '6 8', weight: 4, opacity: 0.9 }
+              ? { color: routeColor, weight: ROUTE_WIDTH, opacity: 1 }
               : { color: routeColor, dashArray: '2 12', weight: 4, opacity: 0.5 }
           }
         />

@@ -13,6 +13,8 @@ const fakeSocket = vi.hoisted(() => ({
 }));
 // Whether the stand-in Google map reports itself loaded.
 const google = vi.hoisted(() => ({ loads: true, options: null }));
+const leaflet = vi.hoisted(() => ({ props: null }));
+const googleLine = vi.hoisted(() => ({ args: null }));
 
 vi.mock('socket.io-client', () => ({ io: () => fakeSocket }));
 vi.mock('../src/firebase.js', () => ({ auth: { currentUser: null }, googleProvider: {}, db: {} }));
@@ -44,7 +46,17 @@ vi.mock('google-map-react', async () => {
     },
   };
 });
-vi.mock('../src/components/TacticalLeafletMap.jsx', () => ({ default: () => <div data-testid="leaflet-map" /> }));
+vi.mock('../src/components/TacticalLeafletMap.jsx', () => ({
+  default: (props) => {
+    leaflet.props = props;
+    return <div data-testid="leaflet-map" />;
+  },
+}));
+// The Google walking line's colours, as App.jsx hands them over.
+vi.mock('../src/hooks/useWaypointNavigationLine.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useWaypointNavigationLine: (...args) => { googleLine.args = args; },
+}));
 vi.mock('../src/hooks/useLiveUpdate.js', () => ({
   useLiveUpdate: () => ({ status: 'idle', supported: false, restart: vi.fn() }),
 }));
@@ -195,5 +207,35 @@ describe('the Google map style', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Satellite view' }));
     expect(google.options.styles).toEqual([]);
     expect(google.options.mapTypeId).toBe('hybrid');
+  });
+});
+
+// The walking line's colours come from the theme (Map batch fix 5): the line in the route
+// colour on a casing in the map's casing colour, so a dark map never gets a white casing.
+describe('the walking line colours reaching the map', () => {
+  afterEach(() => {
+    document.documentElement.style.removeProperty('--color-map-route');
+    document.documentElement.style.removeProperty('--color-map-casing');
+  });
+
+  it("are the theme's route and casing colours", async () => {
+    document.documentElement.style.setProperty('--color-map-route', '#8FB1FF');
+    document.documentElement.style.setProperty('--color-map-casing', '#0E1116');
+    const App = await loadApp('');
+    render(<App />);
+    enterMapScreen();
+    await screen.findByTestId('leaflet-map');
+    expect(leaflet.props.routeColor).toBe('#8FB1FF');
+    expect(leaflet.props.casingColor).toBe('#0E1116');
+  });
+
+  it('reach the Google line too', async () => {
+    document.documentElement.style.setProperty('--color-map-route', '#8FB1FF');
+    document.documentElement.style.setProperty('--color-map-casing', '#0E1116');
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    await screen.findByTestId('google-map');
+    expect(googleLine.args.slice(3)).toEqual(['#8FB1FF', '#0E1116']);
   });
 });

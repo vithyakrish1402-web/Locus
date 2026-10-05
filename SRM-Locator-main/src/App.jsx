@@ -1812,6 +1812,7 @@ const App = () => {
   const resolvedTheme = useResolvedTheme();
   const routeColor = useMemo(() => cssColor('--color-map-route', '#1F4FB8'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
   const lastKnownColor = useMemo(() => cssColor('--color-map-last-known', '#8A94A3'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+  const casingColor = useMemo(() => cssColor('--color-map-casing', '#FFFFFF'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
   // How far a member is from you, for their plate on the map ("Meera · 120 m").
   const memberDistance = (u) => {
     const where = locateTarget(liveLocation, u);
@@ -1868,7 +1869,8 @@ const App = () => {
     !mapEngineFailed && isMapReady ? mapRef.current : null,
     shownRoute?.path,
     shownRoute?.isRealRoute,
-    routeColor
+    routeColor,
+    casingColor
   );
 
   // The ACTIVE_WAYPOINT_TRACKING panel prefers the real route's distance/
@@ -2579,6 +2581,7 @@ const App = () => {
               onArTrack={setArTarget}
               isSatellite={isSatellite}
               routeColor={routeColor}
+              casingColor={casingColor}
               lastKnownColor={lastKnownColor}
               memberDistance={memberDistance}
               ghostFocusItem={ghostFocusItem}

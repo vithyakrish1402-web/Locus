@@ -61,6 +61,23 @@ describe('the walking line on the Leaflet engine', () => {
     expect(container.querySelector('path[stroke="#123456"]')).toBeTruthy();
   });
 
+  it('a real route: solid, 5 px, on a 9 px casing in the casing colour', () => {
+    const { container } = renderMap({ walkingRoute: route, routeColor: '#123456', casingColor: '#ABCDEF' });
+    const line = container.querySelector('path[stroke="#123456"]');
+    const casing = container.querySelector('path[stroke="#ABCDEF"]');
+    expect(line.getAttribute('stroke-width')).toBe('5');
+    expect(line.getAttribute('stroke-dasharray')).toBeNull();
+    expect(casing.getAttribute('stroke-width')).toBe('9');
+    // The casing is drawn first, so the line sits on it.
+    expect(casing.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('the best-effort straight line stays a sparse dash, with no casing', () => {
+    const { container } = renderMap({ walkingRoute: { ...route, isRealRoute: false }, routeColor: '#123456', casingColor: '#ABCDEF' });
+    expect(container.querySelector('path[stroke="#123456"]').getAttribute('stroke-dasharray')).toBe('2 12');
+    expect(container.querySelector('path[stroke="#ABCDEF"]')).toBeNull();
+  });
+
   it('defaults to the light accent, not red', () => {
     const { container } = renderMap({ walkingRoute: route });
     expect(container.querySelector('path[stroke="#1F4FB8"]')).toBeTruthy();
