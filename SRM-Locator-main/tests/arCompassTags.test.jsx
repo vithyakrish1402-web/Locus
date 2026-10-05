@@ -30,7 +30,12 @@ const faceNorth = () => {
 };
 
 const tagsOnScreen = () =>
-  screen.queryAllByTestId('ar-tag').map((el) => ({ text: el.textContent, variant: el.dataset.variant, left: parseFloat(el.style.left) }));
+  screen.queryAllByTestId('ar-tag').map((el) => ({
+    // The tag's words: its name and distance (not a member's initials, which are decoration).
+    text: [...el.querySelectorAll('span')].filter((sp) => sp.getAttribute('aria-hidden') !== 'true' && sp.children.length === 0).map((sp) => sp.textContent).join(''),
+    variant: el.dataset.variant,
+    left: parseFloat(el.style.left),
+  }));
 
 const openAr = async (props) => {
   render(<ARCompass liveLocation={HERE} onClose={() => {}} {...props} />);
@@ -39,7 +44,7 @@ const openAr = async (props) => {
 };
 
 describe('ARCompass floating tags', () => {
-  it('tags what is in front, in red for the destination, and nothing behind or of yourself', async () => {
+  it('tags what is in front, marking the destination, and nothing behind or of yourself', async () => {
     const ahead = { id: 'a', uid: 'u-a', name: 'ALPHA', hasFix: true, ...at(10, 120) };
     await openAr({
       target: { name: 'SRM_HQ', ...at(-5, 300) },
