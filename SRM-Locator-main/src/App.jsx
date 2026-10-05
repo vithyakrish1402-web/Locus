@@ -33,6 +33,8 @@ import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
 import RouteCard from './components/map/RouteCard';
 import BuildingRow from './components/map/BuildingRow';
+import GroupHeader from './components/group/GroupHeader';
+import { GROUP_TABS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -1909,6 +1911,8 @@ const App = () => {
   // "Location is off" after the explainer's Not now, until location is turned on or the card
   // is dismissed.
   const showDeclinedCard = locationDeclined && !locationReady && !declinedCardDismissed;
+  // The group panel's search, for members as for buildings (it used to filter buildings only).
+  const matchesSearch = (name) => (name || '').toLowerCase().includes(searchQuery.trim().toLowerCase());
   // "You're in" says live only once there is a fix to share (Map batch fixes).
   // Paused says no spot is shared when the pause took none (Map batch fixes, owner's wording).
   const youreInKey = telemetryMode === 'ACTIVE' && !liveLocation ? 'waiting'
@@ -2159,8 +2163,8 @@ const App = () => {
         ref={sheetRef}
         className={`${
           isMobile
-            ? 'fixed inset-x-0 bottom-16 z-[900] flex flex-col bg-black/95 backdrop-blur-lg pointer-events-auto border-t border-white/10 shadow-[0_-24px_48px_rgba(0,0,0,0.6)]'
-            : 'hidden md:flex w-80 bg-black border-r border-red-900/50 fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
+            ? 'fixed inset-x-0 bottom-16 z-[900] flex flex-col bg-surface text-text rounded-t-sheet shadow-[var(--shadow-3)] pointer-events-auto'
+            : 'hidden md:flex w-80 bg-surface text-text border border-border rounded-card shadow-[var(--shadow-2)] fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
         }`}
         // Starts under the header instead of behind it (it used to start at the very top, so
         // its handle and MATRIX/SQUAD indicator were hidden under the header).
@@ -2181,158 +2185,145 @@ const App = () => {
           }
         }}
       >
-        {/* Mobile drag strip: the handle and the MATRIX/SQUAD indicator. Pressing anywhere
-            here starts the drag; a plain tap still closes the sheet, as the handle did. */}
+        {/* The header (components/group/GroupHeader.jsx): "Your group", your role, the code and
+            Copy. On a phone it is the panel's drag handle too: pressing anywhere on it starts the
+            drag, and a plain tap still closes the panel, as the handle did. */}
         <div
-          className="md:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
+          className="shrink-0 select-none pt-3 md:pt-4 touch-none md:touch-auto cursor-grab active:cursor-grabbing md:cursor-auto"
           data-no-ping
-          onPointerDown={(e) => { sheetDraggedRef.current = false; sheetDragControls.start(e); }}
+          onPointerDown={(e) => { if (!isMobile) return; sheetDraggedRef.current = false; sheetDragControls.start(e); }}
           // A drag that snapped back still ends in a click; only a real tap closes.
-          onClick={() => { if (!sheetDraggedRef.current) setMobileView('grid'); }}
+          onClick={() => { if (isMobile && !sheetDraggedRef.current) setMobileView('grid'); }}
         >
-        <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-3 mb-1" />
-
-        {/* Gesture Dot Indicators (mobile) + Desktop Tabs */}
-        <div className="md:hidden flex items-center justify-center gap-3 py-3">
-          <div className={`w-2 h-2 rounded-full transition-all duration-300 ${activeTab === 'buildings' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-125' : 'bg-zinc-700'}`} />
-          <span className="font-dot text-[9px] text-zinc-500 uppercase tracking-widest">{activeTab === 'buildings' ? 'MATRIX' : 'SQUAD'}</span>
-          <div className={`w-2 h-2 rounded-full transition-all duration-300 ${activeTab === 'users' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-125' : 'bg-zinc-700'}`} />
-        </div>
+          <div className="md:hidden w-9 h-1 rounded-full bg-border mx-auto mb-3" aria-hidden="true" />
+          <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode} />
         </div>
 
-        {/* Desktop Tabs (hidden on mobile) */}
-        <div className="hidden md:flex border-b border-white/20">
-          <button
-            onClick={() => { setActiveTab('buildings'); setSelectedItem(null); }}
-            className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors ${activeTab === 'buildings' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
-              }`}
-          >
-            <Building2 size={16} /> MATRIX
-          </button>
-          <button
-            onClick={() => { setActiveTab('users'); setSelectedItem(null); }}
-            className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors border-l border-white/20 ${activeTab === 'users' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
-              }`}
-          >
-            <Users size={16} /> SQUAD
-          </button>
-        </div>
 
-        {/* Search */}
-        <div className="p-4 border-b border-white/20 bg-black">
-
-          {/* --- ONLY THE COMMANDER SEES THESE BUTTONS --- */}
-          {activeTab === 'users' && squadRole === 'OWNER' && (
-            <div className="flex flex-col gap-2 mb-4">
-              <button onClick={() => setShowRequestsModal(true)} className="w-full px-4 py-3 border border-red-500 text-sm font-dot uppercase tracking-widest flex items-center justify-between hover:bg-red-500 hover:text-white transition-colors text-red-500">
-                <div className="flex items-center gap-2"><ShieldCheck size={18} /> NODE_ACCESS</div>
-                {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
-              </button>
-
-              {/* --- NEW: TELEMETRY SYNC BUTTON --- */}
-              {/* Always answers the tap: SYNCING while it waits, then the matrix, or what went
-                  wrong and a retry (see requestTelemetrySync). */}
-              <button
-                onClick={requestTelemetrySync}
-                disabled={telemetrySync.status === 'pending'}
-                className={`w-full px-4 py-3 border text-sm font-dot uppercase tracking-widest flex items-center justify-center gap-2 transition-colors disabled:cursor-wait disabled:opacity-70 ${telemetrySync.status === 'error'
-                  ? 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'
-                  : 'border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black shadow-[0_0_15px_rgba(234,179,8,0.2)]'}`}
-              >
-                {telemetrySync.status === 'pending' ? (
-                  <><Loader2 size={18} className="animate-spin" /> SYNCING...</>
-                ) : telemetrySync.status === 'error' ? (
-                  <><RefreshCw size={18} /> RETRY SYNC</>
-                ) : (
-                  <><Activity size={18} /> SYNC_TELEMETRY</>
-                )}
-              </button>
-              {telemetrySync.status === 'error' && (
-                <p role="alert" className="px-3 py-2 border border-red-500/50 bg-red-500/10 font-dot text-[10px] text-red-400 uppercase tracking-widest leading-relaxed">
-                  {telemetrySync.message}
-                </p>
-              )}
-
-              <div className="flex gap-2 w-full">
-                <button
-                  onClick={() => setIsDroppingWaypoint(!isDroppingWaypoint)}
-                  className={`flex-1 px-2 py-3 border text-[10px] font-dot uppercase tracking-widest flex items-center justify-center gap-1 transition-colors ${isDroppingWaypoint ? 'bg-red-500 text-white border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'}`}
-                >
-                  <Crosshair size={14} /> {isDroppingWaypoint ? 'SELECT MAP...' : 'RALLY POINT'}
-                </button>
-                {activeWaypoint && (
-                  <button
-                    onClick={() => socket.emit('clear-waypoint', squadCode)}
-                    className="flex-1 px-2 py-3 border border-zinc-500 text-[10px] font-dot uppercase tracking-widest flex items-center justify-center gap-1 hover:bg-zinc-800 transition-colors text-zinc-400"
-                  >
-                    <Trash2 size={14} /> CLEAR
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'users' && (
-            <div className="mb-4 flex items-center justify-between border border-red-500/30 bg-red-500/5 p-3">
-              <div className="flex flex-col">
-                {/* --- UPGRADED: DISPLAYS YOUR EXACT ROLE IN THE HUD --- */}
-                <span className="text-[10px] text-zinc-500 font-dot uppercase tracking-widest">
-                  ACTIVE_CHANNEL // <span className={squadRole === 'OWNER' ? 'text-yellow-500' : 'text-blue-400'}>{squadRole || 'MEMBER'}</span>
-                </span>
-                <span className="font-dot text-sm text-red-500 tracking-widest">{squadCode}</span>
-              </div>
-              <button
-                onClick={handleLeaveSquad}
-                className="text-[10px] border border-red-500 text-red-500 hover:bg-red-500 hover:text-white px-3 py-2 transition-colors font-dot uppercase tracking-widest"
-              >
-                DISCONNECT
-              </button>
-            </div>
-          )}
-
-          {/* --- NEW: TELEMETRY CONTROL PANEL --- */}
-          {activeTab === 'users' && (
-            <div className="mb-4 flex flex-col gap-2 border border-white/20 p-2 bg-black">
-              <span className="text-[10px] font-dot uppercase tracking-widest text-zinc-500 text-center">TELEMETRY_CONTROL</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { telemetryModeRef.current = 'ACTIVE'; setTelemetryMode('ACTIVE'); }}
-                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'ACTIVE' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                >
-                  <Activity size={14} /> ACTIVE
-                </button>
-                <button
-                  onClick={() => { telemetryModeRef.current = 'FROZEN'; setTelemetryMode('FROZEN'); }}
-                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'FROZEN' ? 'bg-blue-500/20 border-blue-500 text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                >
-                  <LocateFixed size={14} /> FROZEN
-                </button>
-                <button
-                  onClick={() => { telemetryModeRef.current = 'GHOST'; setTelemetryMode('GHOST'); }}
-                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'GHOST' ? 'bg-zinc-800 border-zinc-500 text-zinc-300 shadow-[0_0_10px_rgba(113,113,122,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                >
-                  <EyeOff size={14} /> GHOST
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white" size={16} />
-            <input
-              type="text"
-              placeholder={activeTab === 'buildings' ? "SEARCH_MATRIX..." : "SEARCH_SQUAD..."}
-              className="w-full bg-transparent border border-white/30 py-3 pl-12 pr-4 text-xs font-dot uppercase focus:outline-none focus:border-white transition-colors placeholder:text-zinc-600"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
         {/* List Content */}
         {/* Room at the bottom on a phone to scroll the last rows clear of the Emergency and
             meeting point buttons: they stand 10 rem above the screen's bottom edge plus the
             gesture bar's inset, and this panel ends 4 rem up without that inset. 8 rem plus the
             inset leaves 2 rem between the last row and the buttons on any phone. */}
-        <div data-testid="group-panel-list" className={`flex-1 overflow-y-auto p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 space-y-3 custom-scrollbar ${activeTab === 'buildings' ? 'bg-bg' : 'bg-black'}`}>
+        <div data-testid="group-panel-list" className="flex-1 overflow-y-auto p-4 pt-1 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 space-y-3 custom-scrollbar">
+          <SegmentedControl
+            label={GROUP_TABS.label}
+            value={activeTab === 'buildings' ? 'buildings' : 'users'}
+            onChange={(tab) => {
+              setActiveTab(tab); setSelectedItem(null);
+              if (isMobile) setMobileView(tab === 'buildings' ? 'matrix' : 'squad');
+            }}
+            options={[
+              { value: 'users', label: GROUP_TABS.members },
+              { value: 'buildings', label: GROUP_TABS.buildings },
+            ]}
+          />
+          <label className="relative block">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" size={18} aria-hidden="true" />
+            <input
+              type="search"
+              aria-label={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
+              placeholder={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
+              className="w-full min-h-11 rounded-full bg-sunken pl-11 pr-4 font-ui text-body text-text placeholder:text-text-secondary focus:outline-2 focus:outline-offset-2 focus:outline-accent"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </label>
+          {/* --- ONLY THE COMMANDER SEES THESE BUTTONS --- */}
+          {activeTab === 'users' && squadRole === 'OWNER' && (
+            <div className="flex flex-col gap-2 mb-4">
+              <button onClick={() => setShowRequestsModal(true)} className="w-full px-4 py-3 border border-red-500 text-sm font-dot uppercase tracking-widest flex items-center justify-between hover:bg-red-500 hover:text-white transition-colors text-red-500">
+                <div className="flex items-center gap-2"><ShieldCheck size={18} /> NODE_ACCESS</div>
+                {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
+              </button>
+
+              {/* --- NEW: TELEMETRY SYNC BUTTON --- */}
+              {/* Always answers the tap: SYNCING while it waits, then the matrix, or what went
+                  wrong and a retry (see requestTelemetrySync). */}
+              <button
+                onClick={requestTelemetrySync}
+                disabled={telemetrySync.status === 'pending'}
+                className={`w-full px-4 py-3 border text-sm font-dot uppercase tracking-widest flex items-center justify-center gap-2 transition-colors disabled:cursor-wait disabled:opacity-70 ${telemetrySync.status === 'error'
+                  ? 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'
+                  : 'border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black shadow-[0_0_15px_rgba(234,179,8,0.2)]'}`}
+              >
+                {telemetrySync.status === 'pending' ? (
+                  <><Loader2 size={18} className="animate-spin" /> SYNCING...</>
+                ) : telemetrySync.status === 'error' ? (
+                  <><RefreshCw size={18} /> RETRY SYNC</>
+                ) : (
+                  <><Activity size={18} /> SYNC_TELEMETRY</>
+                )}
+              </button>
+              {telemetrySync.status === 'error' && (
+                <p role="alert" className="px-3 py-2 border border-red-500/50 bg-red-500/10 font-dot text-[10px] text-red-400 uppercase tracking-widest leading-relaxed">
+                  {telemetrySync.message}
+                </p>
+              )}
+
+              <div className="flex gap-2 w-full">
+                <button
+                  onClick={() => setIsDroppingWaypoint(!isDroppingWaypoint)}
+                  className={`flex-1 px-2 py-3 border text-[10px] font-dot uppercase tracking-widest flex items-center justify-center gap-1 transition-colors ${isDroppingWaypoint ? 'bg-red-500 text-white border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'}`}
+                >
+                  <Crosshair size={14} /> {isDroppingWaypoint ? 'SELECT MAP...' : 'RALLY POINT'}
+                </button>
+                {activeWaypoint && (
+                  <button
+                    onClick={() => socket.emit('clear-waypoint', squadCode)}
+                    className="flex-1 px-2 py-3 border border-zinc-500 text-[10px] font-dot uppercase tracking-widest flex items-center justify-center gap-1 hover:bg-zinc-800 transition-colors text-zinc-400"
+                  >
+                    <Trash2 size={14} /> CLEAR
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'users' && (
+            <div className="mb-4 flex items-center justify-between border border-red-500/30 bg-red-500/5 p-3">
+              <div className="flex flex-col">
+                {/* --- UPGRADED: DISPLAYS YOUR EXACT ROLE IN THE HUD --- */}
+                <span className="text-[10px] text-zinc-500 font-dot uppercase tracking-widest">
+                  ACTIVE_CHANNEL // <span className={squadRole === 'OWNER' ? 'text-yellow-500' : 'text-blue-400'}>{squadRole || 'MEMBER'}</span>
+                </span>
+                <span className="font-dot text-sm text-red-500 tracking-widest">{squadCode}</span>
+              </div>
+              <button
+                onClick={handleLeaveSquad}
+                className="text-[10px] border border-red-500 text-red-500 hover:bg-red-500 hover:text-white px-3 py-2 transition-colors font-dot uppercase tracking-widest"
+              >
+                DISCONNECT
+              </button>
+            </div>
+          )}
+
+          {/* --- NEW: TELEMETRY CONTROL PANEL --- */}
+          {activeTab === 'users' && (
+            <div className="mb-4 flex flex-col gap-2 border border-white/20 p-2 bg-black">
+              <span className="text-[10px] font-dot uppercase tracking-widest text-zinc-500 text-center">TELEMETRY_CONTROL</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { telemetryModeRef.current = 'ACTIVE'; setTelemetryMode('ACTIVE'); }}
+                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'ACTIVE' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
+                >
+                  <Activity size={14} /> ACTIVE
+                </button>
+                <button
+                  onClick={() => { telemetryModeRef.current = 'FROZEN'; setTelemetryMode('FROZEN'); }}
+                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'FROZEN' ? 'bg-blue-500/20 border-blue-500 text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
+                >
+                  <LocateFixed size={14} /> FROZEN
+                </button>
+                <button
+                  onClick={() => { telemetryModeRef.current = 'GHOST'; setTelemetryMode('GHOST'); }}
+                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'GHOST' ? 'bg-zinc-800 border-zinc-500 text-zinc-300 shadow-[0_0_10px_rgba(113,113,122,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
+                >
+                  <EyeOff size={14} /> GHOST
+                </button>
+              </div>
+            </div>
+          )}
           <AnimatePresence mode="popLayout">
             {activeTab === 'buildings' ? (
               SRM_MASTER_DATABASE.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).map(building => (
@@ -2362,7 +2353,7 @@ const App = () => {
                 /* Persistent per-row ghost badge — independent of the transient
                     top-of-screen banner, so anyone opening the Squad panel later
                    still sees who's dark, not just whoever was looking when it fired. */
-                ...ghostMembers.map(ghost => (
+                ...ghostMembers.filter(g => matchesSearch(g.name)).map(ghost => (
                   <motion.div
                     layout
                     initial={{ opacity: 0 }}
@@ -2393,7 +2384,7 @@ const App = () => {
                 )),
                 // Nearest first (by straight-line distance from this phone); members with no
                 // fix yet go last. See SquadMemberCard for the dial and freshness line.
-                ...sortByDistance(users.filter(u => !blockedUserIds.includes(u.id)), liveLocation).map(user => (
+                ...sortByDistance(users.filter(u => !blockedUserIds.includes(u.id) && matchesSearch(u.name)), liveLocation).map(user => (
                 <motion.div
                   layout
                   initial={{ opacity: 0 }}

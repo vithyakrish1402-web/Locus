@@ -171,7 +171,7 @@ describe('a matrix building tap', () => {
       await joinAsMember();
       const sheet = () => container.querySelector('.fixed.inset-x-0.bottom-16');
       fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Group' })); // the bottom bar's: opens the sheet
-      fireEvent.click(screen.getAllByRole('button', { name: /MATRIX/ })[0]);
+      fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
       await waitFor(() => expect(sheet().style.transform).not.toContain('100%'));
       fireEvent.click((await screen.findAllByText(SRM_MASTER_DATABASE[0].name))[0]);
       await waitFor(() => expect(sheet().style.transform).toContain('100%'));

@@ -279,7 +279,7 @@ describe('joining a group', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: LOBBY.createButton }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
     fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
 
@@ -295,7 +295,7 @@ describe('joining a group', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: LOBBY.createButton }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
     fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
 

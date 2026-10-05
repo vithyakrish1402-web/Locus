@@ -109,7 +109,7 @@ const commanderOnSquadPanel = () => {
   squadCode = document.querySelector('.sr-only').textContent;
   fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: squadCode }));
-  fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+  fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
 };
 
 const withMember = (id, extra = {}) =>

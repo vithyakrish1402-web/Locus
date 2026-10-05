@@ -115,7 +115,7 @@ const joinSquad = (code = 'KTR7X9') => {
   return code;
 };
 
-const openSquadTab = () => fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+const openSquadTab = () => fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
 // The squad panel's own DISCONNECT (leave the squad), not the header's log-out.
 const leaveSquad = () => {
   openSquadTab();

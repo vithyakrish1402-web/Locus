@@ -117,7 +117,7 @@ const inSquadAt = async (spot) => {
   fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: squadCode }));
   await act(async () => {});
-  fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+  fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
 };
 const setMode = (mode) => fireEvent.click(screen.getByRole('button', { name: mode }));
 
@@ -235,7 +235,7 @@ describe('Paused sharing (FROZEN)', () => {
     squadCode = undefined;
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     await act(async () => {});
-    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     setMode('FROZEN');
 
     await moveToAndSettle(C);

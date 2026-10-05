@@ -234,7 +234,7 @@ describe.each(['google', 'leaflet'])('on the %s engine', (engine) => {
       const App = await loadApp({ share: false, engine });
       await joinSquad(App);
       squadUpdate([BRAVO]);
-      fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+      fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
       await screen.findAllByText('Bravo');
       expect(pill('BRAVO · F7')).toBeNull();
       expect(screen.queryByTestId('member-floor-chip')).toBeNull();
@@ -299,7 +299,7 @@ describe.each(['google', 'leaflet'])('on the %s engine', (engine) => {
       await waitFor(() => expect(screen.getByText('BRAVO · F7').parentElement.style.opacity).toBe(''));
 
       // Roster: a floor chip on Bravo's card only, beside the direction finder.
-      fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+      fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
       const chips = await screen.findAllByTestId('member-floor-chip');
       expect(chips.map((c) => c.textContent)).toEqual(['TECH PARK · F7']);
 
@@ -339,7 +339,7 @@ describe("a squadmate's floor chip", () => {
     const App = await loadApp({ share: true, engine: 'leaflet' });
     await joinSquad(App);
     squadUpdate([BRAVO]);
-    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     await screen.findByText('AWAITING_GPS_FIX');
     expect(screen.getByTestId('member-floor-chip').textContent).toBe('TECH PARK · F7');
   });

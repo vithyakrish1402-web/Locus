@@ -84,7 +84,7 @@ const { default: App } = await import('../src/App.jsx');
 const CODE = 'KTR7X9';
 const emitted = (event) => fakeSocket.emit.mock.calls.filter(([e]) => e === event).map(([, ...args]) => args);
 const nodeAccess = () => screen.queryByRole('button', { name: /NODE_ACCESS/ });
-const openSquadTab = () => fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+const openSquadTab = () => fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
 
 // Joined as a member, then promoted to stand in while the Commander is away, with a
 // stranger's request waiting and the join queue open.

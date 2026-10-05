@@ -142,7 +142,7 @@ describe('the sharing chip', () => {
     navigator.geolocation.getCurrentPosition = vi.fn((ok) => ok({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
     onTheMap();
     if (button) {
-      fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+      fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
       fireEvent.click(screen.getByRole('button', { name: button }));
     }
     expect(chip().dataset.mode).toBe(mode);
@@ -163,7 +163,7 @@ describe('the sharing chip', () => {
 
   it('Hidden with no fix yet keeps its own words', () => {
     onTheMap();
-    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     fireEvent.click(screen.getByRole('button', { name: 'GHOST' }));
     expect(chip().dataset.mode).toBe('GHOST');
     expect(chip().textContent).toBe(SHARING_CHIP.GHOST);
@@ -173,7 +173,7 @@ describe('the sharing chip', () => {
     let answer;
     navigator.geolocation.getCurrentPosition = vi.fn((ok) => { answer = ok; });
     onTheMap();
-    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
     expect(chip().dataset.mode).toBe('pausedNoSpot');
     expect(chip().textContent).toBe('Sharing paused · no spot shared yet');
@@ -184,7 +184,7 @@ describe('the sharing chip', () => {
   it('Paused after a fix: the group sees that spot, and Live again drops it', () => {
     navigator.geolocation.getCurrentPosition = vi.fn((ok) => ok({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
     onTheMap();
-    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
     expect(chip().textContent).toBe(SHARING_CHIP.FROZEN);
     fireEvent.click(screen.getByRole('button', { name: 'ACTIVE' }));
@@ -260,7 +260,7 @@ describe('the group panel list on a phone', () => {
   it('scrolls its last rows clear of the Emergency and meeting point buttons, gesture bar included', () => {
     window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
     onTheMap();
-    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     const list = screen.getByTestId('group-panel-list');
     const panel = list.parentElement;
     const sos = screen.getByRole('button', { name: /SOS beacon/ });

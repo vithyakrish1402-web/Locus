@@ -125,7 +125,7 @@ const createAsCommander = async () => {
   await waitFor(() => expect(leaflet.props).not.toBeNull());
 };
 
-const openSquadTab = () => fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+const openSquadTab = () => fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
 
 let alertSpy;
 let gpsFix = null;
