@@ -30,14 +30,14 @@ import ARArrow3D from './components/ARArrow3D';
 import { RealisticArrow } from './components/ARArrowGL';
 import { resolveArFeatures } from './utils/arFeatures';
 import { LAYER } from './utils/layers';
+import ArTopBar from './components/ar/ArTopBar';
 
 const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 
 // The debug overlay (raw and smoothed heading, accuracies, declination) opens and closes
-// with a long-press on the AR_TRACKER title; hidden by default. The tuning constants it
-// helps with live at the top of utils/arHeading.js, utils/arPosition.js and
-// utils/landmarkAnchorEngine.js.
-const DEBUG_LONG_PRESS_MS = 700;
+// with a long press on the "Finding" pill (ArTopBar); hidden by default, and a tap never
+// opens it. The tuning constants it helps with live at the top of utils/arHeading.js,
+// utils/arPosition.js and utils/landmarkAnchorEngine.js.
 const DEBUG_REFRESH_MS = 250;
 // Declination changes by well under 0.1 deg over a few km, so it is worked out again only
 // when the position moves this far (in degrees of latitude/longitude, ~1 km).
@@ -314,13 +314,6 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   // sensor event, so reading them doesn't re-render AR Scan 60 times a second).
   const [debugOpen, setDebugOpen] = useState(false);
   const [debugSnapshot, setDebugSnapshot] = useState(null);
-  const longPressRef = useRef(null);
-  const startLongPress = () => {
-    clearTimeout(longPressRef.current);
-    longPressRef.current = setTimeout(() => setDebugOpen((open) => !open), DEBUG_LONG_PRESS_MS);
-  };
-  const cancelLongPress = () => clearTimeout(longPressRef.current);
-  useEffect(() => () => clearTimeout(longPressRef.current), []);
   useEffect(() => {
     if (!debugOpen) return undefined;
     const copy = () => {
@@ -449,50 +442,16 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
       {/* Tactical UI Layer */}
       <div data-testid="ar-ui" className="relative z-20 w-full h-full flex flex-col p-6" style={{ paddingBottom: CLEAR_OF_EMERGENCY_BUTTON }}>
         
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h3
-              className="font-dot text-xl text-red-500 uppercase tracking-widest leading-none mb-1 select-none"
-              onPointerDown={startLongPress}
-              onPointerUp={cancelLongPress}
-              onPointerLeave={cancelLongPress}
-              onPointerCancel={cancelLongPress}
-              onContextMenu={(e) => e.preventDefault()}
-            >
-              AR_TRACKER
-            </h3>
-            <p className="font-dot text-[10px] text-white uppercase tracking-widest bg-red-500 px-2 py-0.5 inline-block">
-              {cameraError ? 'INSTRUMENT FLIGHT RULES (IFR)' : 'OPTICS ONLINE'}
-            </p>
-          </div>
-          <div className="flex items-start gap-2">
-            <div className="flex flex-col items-end gap-1">
-              <button
-                onClick={align}
-                aria-label="ALIGN"
-                className="h-[50px] px-3 border border-red-500/50 text-red-500 bg-black/50 backdrop-blur-md font-dot text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-colors"
-              >
-                ALIGN
-              </button>
-              {aligned && (
-                <button
-                  onClick={() => changeAlignment(NO_ALIGNMENT)}
-                  aria-label="RESET ALIGN"
-                  className="px-2 py-0.5 bg-black/50 border border-white/20 text-zinc-400 font-dot text-[9px] uppercase tracking-widest hover:text-white"
-                >
-                  RESET {fmtSigned(alignment.headingOffsetDeg)}
-                </button>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              className="p-3 border border-red-500/50 text-red-500 bg-black/50 backdrop-blur-md hover:bg-red-500 hover:text-white transition-colors"
-            >
-              <X size={24} />
-            </button>
-          </div>
-        </div>
+        {/* Close, what AR Scan is finding, and ALIGN (components/ar/ArTopBar.jsx). A long press
+            on the pill opens the debug overlay; a tap never does. */}
+        <ArTopBar
+          targetName={target.name}
+          onClose={onClose}
+          onAlign={align}
+          aligned={aligned}
+          onReset={() => changeAlignment(NO_ALIGNMENT)}
+          onDebug={() => setDebugOpen((open) => !open)}
+        />
 
         {/* Calibration banner: only while the compass looks unreliable (useDeviceHeading's
             calibrationNeeded, which already has its own show/hide hysteresis), fading in

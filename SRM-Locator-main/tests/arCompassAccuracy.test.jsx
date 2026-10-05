@@ -112,13 +112,13 @@ describe('the calibration banner', () => {
 });
 
 describe('the debug overlay', () => {
-  it('is hidden until a long-press on the title, and a second long-press hides it', async () => {
+  it('is hidden until a long press on the Finding pill, and a second long press hides it', async () => {
     installGeolocation();
     await openAr();
     compass(30);
     fix(HERE, 6);
     expect(screen.queryByTestId('ar-debug-overlay')).toBeNull();
-    const title = screen.getByText('AR_TRACKER');
+    const title = screen.getByTestId('ar-target-pill');
     // A tap doesn't open it.
     fireEvent.pointerDown(title);
     act(() => vi.advanceTimersByTime(200));
