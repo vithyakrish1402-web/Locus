@@ -16,3 +16,11 @@ export const AR_START = {
   start: 'Start AR Scan',
   cancel: 'Cancel',
 };
+
+// Before LOCUS first asks Android for location, once you are in a group (Map batch, piece 8).
+export const LOCATION_EXPLAINER = {
+  title: 'Allow location',
+  body: 'LOCUS uses your location to show you on the map and share it with your group. You can switch between Live, Paused and Hidden at any time.',
+  continue: 'Continue',
+  notNow: 'Not now',
+};

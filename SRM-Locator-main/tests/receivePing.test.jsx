@@ -134,7 +134,7 @@ describe('receiving a member ping', () => {
     act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
 
     expect(alertSpy).not.toHaveBeenCalled();
-    const notice = screen.getByRole('status');
+    const notice = within(screen.getByTestId('comms-feed')).getByRole('status');
     // The name as it was sent: not put into capitals.
     expect(within(notice).getByText(NOTICES.ping('Bravo'))).toBeTruthy();
     expect(notice.textContent).toBe('Bravo is pinging you');
@@ -146,10 +146,10 @@ describe('receiving a member ping', () => {
   it('clears itself after six seconds, as the old banner did', async () => {
     renderInSquad();
     act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
-    expect(screen.getByRole('status')).toBeTruthy();
+    expect(within(screen.getByTestId('comms-feed')).getByRole('status')).toBeTruthy();
 
     // Six seconds, as the old ping banner stayed (its countdown line runs that long).
-    expect(screen.getByRole('status').querySelector('.locus-drain').style.animationDuration).toBe('6000ms');
+    expect(within(screen.getByTestId('comms-feed')).getByRole('status').querySelector('.locus-drain').style.animationDuration).toBe('6000ms');
     act(() => vi.advanceTimersByTime(7000));
     await waitFor(() => expect(screen.queryByText(/is pinging you/i)).toBeNull());
   });
@@ -158,7 +158,7 @@ describe('receiving a member ping', () => {
     renderInSquad();
     act(() => fakeSocket.receive('receive-ping', {}));
     expect(alertSpy).not.toHaveBeenCalled();
-    expect(screen.getByRole('status').textContent).toBe('A group member is pinging you');
+    expect(within(screen.getByTestId('comms-feed')).getByRole('status').textContent).toBe('A group member is pinging you');
   });
 });
 

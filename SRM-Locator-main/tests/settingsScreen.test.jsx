@@ -119,7 +119,7 @@ beforeEach(() => {
   sounds = 0;
   window.AudioContext = FakeAudioContext;
   Object.assign(updater, { supported: false, status: 'idle', installedVersion: null, check: vi.fn() });
-  try { localStorage.clear(); } catch { /* no storage here */ }
+  try { localStorage.clear(); localStorage.setItem('locus.locationAllowed', '1'); } catch { /* no storage here */ }
   __resetTheme();
   vi.spyOn(window, 'alert').mockImplementation(() => {});
   Object.defineProperty(navigator, 'geolocation', {

@@ -41,6 +41,8 @@ import { MARKERS } from './copy/map';
 import { distanceLabel } from './copy/place';
 import { useResolvedTheme } from './theme/useResolvedTheme';
 import CameraExplainer from './components/CameraExplainer';
+import LocationExplainer from './components/LocationExplainer';
+import { locationKnownAllowed, locationPermissionGranted, rememberLocationAllowed } from './utils/locationPermission';
 import { cameraKnownAllowed, cameraPermissionGranted, rememberCameraAllowed } from './utils/cameraPermission';
 import { NOTICES, OS_NOTICES } from './copy/notices';
 import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
@@ -554,6 +556,38 @@ const App = () => {
   // for anything else (a timeout indoors, no position available): the banner used to say
   // ACCESS DENIED for both, which sent people hunting for a permission that was granted.
   const [locationError, setLocationError] = useState(null);
+  // The location explainer (components/LocationExplainer.jsx), before LOCUS first asks
+  // Android for location, shown only until location is known to be allowed: from this
+  // phone's note of a real fix, or the Permissions API. Until Continue, nothing asks for or
+  // shares a location. Not now leaves it off, with the "Location is off" card to turn it on.
+  const [locationAllowed, setLocationAllowed] = useState(locationKnownAllowed);
+  const [locationExplained, setLocationExplained] = useState(false);
+  const [locationDeclined, setLocationDeclined] = useState(false);
+  const [declinedCardDismissed, setDeclinedCardDismissed] = useState(false);
+  // Bumped by "Turn on location": the location effect runs again and asks once more.
+  const [locationRetry, setLocationRetry] = useState(0);
+  const locationReady = locationAllowed || locationExplained;
+  useEffect(() => {
+    let live = true;
+    locationPermissionGranted().then((granted) => {
+      if (!live || !granted) return;
+      rememberLocationAllowed();
+      setLocationAllowed(true);
+    });
+    return () => { live = false; };
+  }, []);
+  const noteRealFix = () => {
+    if (locationKnownAllowed()) return;
+    rememberLocationAllowed();
+    setLocationAllowed(true);
+  };
+  const turnOnLocation = () => {
+    setLocationDeclined(false);
+    setDeclinedCardDismissed(false);
+    setLocationExplained(true);
+    setLocationError(null);
+    setLocationRetry((n) => n + 1);
+  };
   const onGeolocationError = (err) => setLocationError(err?.code === 1 ? 'denied' : 'no-fix');
 
   const [squadCode, setSquadCode] = useState('');
@@ -1258,6 +1292,8 @@ const App = () => {
   // 2. Broadcast your live GPS data to the network
   useEffect(() => {
     if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
+    // Not before the location explainer's Continue (or a known permission): see above.
+    if (!locationReady) return;
 
     // --- ⏱️ DYNAMIC POLLING TRANSLATOR ---
     const getPollingMs = () => {
@@ -1280,6 +1316,7 @@ const App = () => {
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
         setLocationError(null);
+        noteRealFix();
 
         // Paused: this effect re-runs on a settings change too, and must not leak a new fix.
         if (telemetryModeRef.current === 'FROZEN') return;
@@ -1350,6 +1387,7 @@ const App = () => {
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
         setLiveSpeed(speed || 0);
         setLocationError(null);
+        noteRealFix();
 
         let batteryLevel = 100;
         try {
@@ -1390,7 +1428,7 @@ const App = () => {
     // headingRef is a ref (stable identity, never triggers a re-run) — listed only
     // to satisfy exhaustive-deps now that it comes from useDeviceHeading rather
     // than a local useRef the lint rule can recognise on its own.
-  }, [user, hasJoinedSquad, squadCode, accessStatus, sysConfig.polling, headingRef, positionFor]); // <-- CRITICAL: ADDED TO DEPENDENCIES
+  }, [user, hasJoinedSquad, squadCode, accessStatus, sysConfig.polling, headingRef, positionFor, locationReady, locationRetry]); // <-- CRITICAL: ADDED TO DEPENDENCIES
   // --- ⚡ INSTANT MODE OVERRIDE ---
   // Fires the moment a telemetry button is clicked so the server gets the new
   // status immediately, without waiting for the next watchPosition tick.
@@ -1846,6 +1884,10 @@ const App = () => {
   // freshly-built `styles` array) on every render made it call map.setOptions() —
   // a full restyle — on every render, which is what made the map flicker and feel
   // unresponsive to drags while the compass was ticking.
+  // "Location is off" after the explainer's Not now, until location is turned on or the card
+  // is dismissed.
+  const showDeclinedCard = locationDeclined && !locationReady && !declinedCardDismissed;
+
   // The roadmap follows the app's theme (light or dark); satellite is photos either way.
   const mapOptions = useMemo(() => ({
     ...(isSatellite ? SATELLITE_MAP_OPTIONS : BASE_MAP_OPTIONS),
@@ -2474,7 +2516,7 @@ const App = () => {
         className="absolute inset-x-3 z-[850] md:z-[1000] md:left-1/2 md:right-auto md:w-[28rem] md:-translate-x-1/2 pointer-events-none flex flex-col gap-2"
         style={{ top: BELOW_TOP_BAR }}
       >
-        {!(isTargetingMode && isMobile) && !locationError && <SharingChip mode={telemetryMode} />}
+        {!(isTargetingMode && isMobile) && !locationError && !showDeclinedCard && <SharingChip mode={telemetryMode} />}
         <AnimatePresence initial={false}>
           {/* Choosing a meeting point (a phone's meeting point button). */}
           {isTargetingMode && (
@@ -2487,7 +2529,17 @@ const App = () => {
               location refused just sees no marker anywhere, with no word of why. */}
           {locationError && (
             <motion.div key="location-problem" {...fade()}>
-              <LocationProblemCard kind={locationError} onDismiss={() => setLocationError(null)} />
+              <LocationProblemCard
+                kind={locationError}
+                onDismiss={() => setLocationError(null)}
+                onTurnOn={locationError === 'denied' ? turnOnLocation : null}
+              />
+            </motion.div>
+          )}
+          {/* Location left off at the explainer (Not now). */}
+          {!locationError && showDeclinedCard && (
+            <motion.div key="location-declined" {...fade()}>
+              <LocationProblemCard kind="denied" onDismiss={() => setDeclinedCardDismissed(true)} onTurnOn={turnOnLocation} />
             </motion.div>
           )}
           {(routeStart || routeData) && (
@@ -2498,7 +2550,14 @@ const App = () => {
         </AnimatePresence>
       </div>
       {/* "Finding your location…" while the first fix is on its way. */}
-      {!liveLocation && !locationError && <FindingLocation />}
+      {locationReady && !liveLocation && !locationError && <FindingLocation />}
+
+      {/* The location explainer, once you are on the map, until location is allowed. */}
+      <LocationExplainer
+        open={!locationReady && !locationDeclined && !justApproved}
+        onContinue={() => setLocationExplained(true)}
+        onNotNow={() => setLocationDeclined(true)}
+      />
       {/* FULLSCREEN MAP */}
       <div className="absolute inset-0 z-0 bg-[var(--color-map-land)]">
         {mapEngineFailed ? (

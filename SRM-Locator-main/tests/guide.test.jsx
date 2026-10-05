@@ -88,7 +88,7 @@ const heading = () => within(guide()).getByRole('heading', { level: 1 }).textCon
 beforeEach(() => {
   authState.user = null;
   fakeSocket.handlers.clear();
-  try { localStorage.clear(); } catch { /* no storage here */ }
+  try { localStorage.clear(); localStorage.setItem('locus.locationAllowed', '1'); } catch { /* no storage here */ }
   vi.spyOn(window, 'alert').mockImplementation(() => {});
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,

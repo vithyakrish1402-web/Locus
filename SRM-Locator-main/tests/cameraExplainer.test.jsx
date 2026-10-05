@@ -91,7 +91,7 @@ let getUserMedia;
 beforeEach(() => {
   fakeSocket.handlers.clear();
   fakeSocket.emit.mockClear();
-  try { localStorage.clear(); } catch { /* no storage here */ }
+  try { localStorage.clear(); localStorage.setItem('locus.locationAllowed', '1'); } catch { /* no storage here */ }
   vi.spyOn(window, 'alert').mockImplementation(() => {});
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
