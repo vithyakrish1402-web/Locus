@@ -3232,6 +3232,8 @@ const App = () => {
           fidelity={sysConfig.arFidelity}
           overrides={sysConfig.arFeatureOverrides}
           onClose={() => setArTarget(null)}
+          onChooseTarget={setArTarget}
+          meetingPoint={activeWaypoint}
           onCameraStarted={() => { rememberCameraAllowed(); setCameraAllowed(true); }}
         />
       )}

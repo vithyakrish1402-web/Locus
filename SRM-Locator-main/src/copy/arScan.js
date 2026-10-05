@@ -10,3 +10,15 @@ export const AR_CONTROLS = {
   reset: 'Reset',
   resetLabel: 'Reset the alignment',
 };
+
+// The target picker: people in your group first, then places, with search.
+export const AR_PICKER = {
+  title: 'What do you want to find?',
+  search: 'Search places and people',
+  people: 'People in your group',
+  places: 'Places nearby',
+  meetingPoint: 'Meeting point',
+  meetingPointAt: (name) => `Meeting point · ${name}`,
+  current: 'Finding now',
+  nothing: (query) => `Nothing called "${query}"`,
+};

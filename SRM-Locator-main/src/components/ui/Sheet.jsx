@@ -21,8 +21,9 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
  * @param {{ open: boolean, onClose: () => void, title?: React.ReactNode, label?: string,
  *   dismissible?: boolean, children: React.ReactNode }} props
  *   title: drawn as the sheet's heading and names the dialog; without one, `label` names it
+ *   layer: the z-index to stand on (default LAYER.sheet); AR Scan's own sheets pass one above it
  */
-export default function Sheet({ open, onClose, title, label, dismissible = true, children }) {
+export default function Sheet({ open, onClose, title, label, dismissible = true, layer = LAYER.sheet, children }) {
   const reduceMotion = useReducedMotion();
   const dragControls = useDragControls();
   // Drives the panel in, and back open after a release: the same y the drag moves.
@@ -77,7 +78,7 @@ export default function Sheet({ open, onClose, title, label, dismissible = true,
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0" style={{ zIndex: LAYER.sheet }} onKeyDown={onKeyDown}>
+        <div className="fixed inset-0" style={{ zIndex: layer }} onKeyDown={onKeyDown}>
           <motion.div
             {...fade()}
             data-testid="sheet-backdrop"

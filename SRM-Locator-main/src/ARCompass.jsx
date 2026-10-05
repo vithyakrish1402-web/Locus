@@ -31,6 +31,7 @@ import { RealisticArrow } from './components/ARArrowGL';
 import { resolveArFeatures } from './utils/arFeatures';
 import { LAYER } from './utils/layers';
 import ArTopBar from './components/ar/ArTopBar';
+import ArTargetPicker from './components/ar/ArTargetPicker';
 
 const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 
@@ -87,7 +88,9 @@ const sessionStore = () => {
 // rendered by ARLandmarkLayer; this component only gathers its inputs.
 // onCameraStarted: called once the camera has actually started (App notes it, so the camera
 // explainer stops showing).
-const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', overrides, onClose, onCameraStarted }) => {
+// onChooseTarget: aims AR Scan somewhere else, from its target picker; meetingPoint: the
+// group's meeting point, offered first among the picker's places.
+const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', overrides, onClose, onCameraStarted, onChooseTarget = null, meetingPoint = null }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
   const features = resolveArFeatures(fidelity, overrides);
@@ -313,6 +316,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   // compass hook's diagnostics a few times a second (they live in a ref, updated per
   // sensor event, so reading them doesn't re-render AR Scan 60 times a second).
   const [debugOpen, setDebugOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [debugSnapshot, setDebugSnapshot] = useState(null);
   useEffect(() => {
     if (!debugOpen) return undefined;
@@ -447,6 +451,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
         <ArTopBar
           targetName={target.name}
           onClose={onClose}
+          onPick={onChooseTarget ? () => setPickerOpen(true) : null}
           onAlign={align}
           aligned={aligned}
           onReset={() => changeAlignment(NO_ALIGNMENT)}
@@ -518,6 +523,21 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
         </div>
 
       </div>
+
+      {/* What to find (components/ar/ArTargetPicker.jsx), from the Finding pill. */}
+      {onChooseTarget && (
+        <ArTargetPicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          me={liveLocation}
+          target={target}
+          members={squadMembers}
+          buildings={buildings}
+          meetingPoint={meetingPoint}
+          selfUid={selfUid}
+          onChoose={onChooseTarget}
+        />
+      )}
     </div>
   );
 };

@@ -5,7 +5,7 @@
 // are stubbed (socket transport, Firebase, native plugins, maps, the update hooks).
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent, within, waitFor } from '@testing-library/react';
 import { MotionGlobalConfig } from 'framer-motion';
 
 MotionGlobalConfig.skipAnimations = true;
@@ -153,5 +153,72 @@ describe('the Emergency button and AR Scan', () => {
     expect(ar.match(/paddingBottom: CLEAR_OF_EMERGENCY_BUTTON/g)).toHaveLength(2);
     const trigger = readFileSync(`${process.cwd()}/src/components/SosTrigger.jsx`, 'utf8');
     expect(trigger).toMatch(/bottom-20 left-4 [^"]*w-20 h-20/);
+  });
+});
+
+describe('the target picker', () => {
+  const pill = () => screen.getByTestId('ar-target-pill');
+  const picker = () => within(screen.getByRole('dialog', { name: 'What do you want to find?' }));
+  const rows = () => picker().getAllByTestId('ar-picker-row').map((r) => r.textContent);
+  const twoMembers = () => ({ ...member('Bravo', { lat: HERE.lat + 0.003 }), ...member('Charlie', { lat: HERE.lat + 0.001 }), ...member('Delta', { lat: null, lng: null }) });
+
+  it("keeps today's starting target: the Scan tab aims at the first member with a location", async () => {
+    await scanning(twoMembers);
+    await startArScan();
+    expect(pill().textContent).toContain('Bravo');
+  });
+
+  it('opens from the pill: people first (nearest first, with a location), then places', async () => {
+    await scanning(twoMembers);
+    await startArScan();
+    fireEvent.click(pill());
+    const all = rows();
+    expect(all[0]).toMatch(/^CCharlie/);
+    expect(all[1]).toMatch(/^BBravo/);
+    expect(all.join('|')).not.toMatch(/Delta/);
+    expect(within(picker().getByRole('region', { name: 'Places nearby' })).getAllByTestId('ar-picker-row').length).toBeGreaterThan(5);
+    // The one being found is marked.
+    expect(picker().getAllByTestId('ar-picker-row').find((r) => r.getAttribute('aria-current')).textContent).toMatch(/Bravo/);
+  });
+
+  it('search narrows people and places', async () => {
+    await scanning(twoMembers);
+    await startArScan();
+    fireEvent.click(pill());
+    fireEvent.change(picker().getByRole('searchbox', { name: 'Search places and people' }), { target: { value: 'tech' } });
+    expect(rows().every((r) => /TECH/i.test(r))).toBe(true);
+    fireEvent.change(picker().getByRole('searchbox', { name: 'Search places and people' }), { target: { value: 'zzz' } });
+    expect(picker().getByTestId('ar-picker-nothing').textContent).toBe('Nothing called "zzz"');
+  });
+
+  it('choosing a place aims AR Scan at it and closes the picker', async () => {
+    await scanning(twoMembers);
+    await startArScan();
+    fireEvent.click(pill());
+    fireEvent.click(picker().getAllByTestId('ar-picker-row').find((r) => /TECH PARK$|TECH PARK\d/.test(r.textContent) || r.textContent.includes('TECH PARK')));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'What do you want to find?' })).toBeNull());
+    expect(pill().textContent).toContain('TECH PARK');
+  });
+
+  it('choosing a person aims AR Scan at them, and it follows them as they move', async () => {
+    await scanning(twoMembers);
+    await startArScan();
+    fireEvent.click(pill());
+    fireEvent.click(picker().getAllByTestId('ar-picker-row').find((r) => r.textContent.includes('Charlie')));
+    expect(pill().textContent).toContain('Charlie');
+  });
+
+  it('offers the meeting point first among places when there is one', async () => {
+    await scanning(twoMembers);
+    act(() => fakeSocket.receive('new-waypoint', { lat: HERE.lat + 0.002, lng: HERE.lng, name: 'RALLY POINT', setBy: 'u-x' }));
+    await startArScan();
+    fireEvent.click(pill());
+    const places = within(picker().getByRole('region', { name: 'Places nearby' })).getAllByTestId('ar-picker-row');
+    expect(places[0].textContent).toMatch(/^Meeting point/);
+  });
+
+  it('sits above AR Scan and under the Emergency button', () => {
+    expect(LAYER.arScanSheet).toBeGreaterThan(LAYER.arScan);
+    expect(LAYER.arScanSheet).toBeLessThan(LAYER.emergencyButtonOverArScan);
   });
 });

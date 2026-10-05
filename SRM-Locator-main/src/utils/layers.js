@@ -23,6 +23,8 @@ export const LAYER = {
   underGroupPanel: 850,
   sheet: 2000,
   arScan: 9500,
+  // AR Scan's own sheets (the target picker): over AR Scan, under the Emergency button.
+  arScanSheet: 9520,
   emergencyButtonOverArScan: 9550,
   toast: 9600,
   update: 10000,
