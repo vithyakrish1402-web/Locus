@@ -16,3 +16,7 @@ SRM-Locator-main/tutorial 2 2.java
 SRM-Locator-main/student.java
 SRM-Locator-main/Untitled-1.c
 SRM-Locator-main/Untitled-1.exe
+
+# Redesign screen exports (21 MB of PNGs): kept locally, too large for the repo.
+# docs/screens/README.md, which lists them, is tracked.
+docs/screens/*/
