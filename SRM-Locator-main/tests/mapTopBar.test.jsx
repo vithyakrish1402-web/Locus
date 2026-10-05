@@ -143,7 +143,7 @@ describe('the sharing chip', () => {
     onTheMap();
     if (button) {
       fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
-      fireEvent.click(screen.getByRole('button', { name: button }));
+      fireEvent.click(screen.getByRole('radio', { name: { FROZEN: 'Paused', GHOST: 'Hidden' }[button] }));
     }
     expect(chip().dataset.mode).toBe(mode);
     expect(chip().textContent).toBe(SHARING_CHIP[mode]);
@@ -164,7 +164,7 @@ describe('the sharing chip', () => {
   it('Hidden with no fix yet keeps its own words', () => {
     onTheMap();
     fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
-    fireEvent.click(screen.getByRole('button', { name: 'GHOST' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Hidden' }));
     expect(chip().dataset.mode).toBe('GHOST');
     expect(chip().textContent).toBe(SHARING_CHIP.GHOST);
   });
@@ -174,7 +174,7 @@ describe('the sharing chip', () => {
     navigator.geolocation.getCurrentPosition = vi.fn((ok) => { answer = ok; });
     onTheMap();
     fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
-    fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Paused' }));
     expect(chip().dataset.mode).toBe('pausedNoSpot');
     expect(chip().textContent).toBe('Sharing paused · no spot shared yet');
     act(() => answer({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
@@ -185,9 +185,9 @@ describe('the sharing chip', () => {
     navigator.geolocation.getCurrentPosition = vi.fn((ok) => ok({ coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } }));
     onTheMap();
     fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
-    fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Paused' }));
     expect(chip().textContent).toBe(SHARING_CHIP.FROZEN);
-    fireEvent.click(screen.getByRole('button', { name: 'ACTIVE' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Live' }));
     expect(chip().textContent).toBe(SHARING_CHIP.ACTIVE);
   });
 

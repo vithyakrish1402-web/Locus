@@ -119,7 +119,9 @@ const inSquadAt = async (spot) => {
   await act(async () => {});
   fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
 };
-const setMode = (mode) => fireEvent.click(screen.getByRole('button', { name: mode }));
+// The sharing control's words for each mode (components/group/SharingControl.jsx).
+const MODE_LABEL = { ACTIVE: 'Live', FROZEN: 'Paused', GHOST: 'Hidden' };
+const setMode = (mode) => fireEvent.click(screen.getByRole('radio', { name: MODE_LABEL[mode] }));
 
 // The SOS button's full gesture: hold 1.2 s to arm, release, hold 1.2 s again to send.
 const sendSos = () => {
@@ -266,7 +268,7 @@ describe('an SOS while sharing is paused or hidden', () => {
     advance(5000);
     await act(async () => {});
     expect(emitted('update-location')).toEqual([]);
-    expect(screen.getByRole('button', { name: mode }).className).toMatch(/border-(blue|zinc)-500/);
+    expect(screen.getByRole('radio', { name: MODE_LABEL[mode] }).getAttribute('aria-checked')).toBe('true');
   });
 });
 

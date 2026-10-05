@@ -178,3 +178,40 @@ describe('the Members and Buildings tabs, and search', () => {
     expect(panel().getByText('Aarav')).toBeTruthy();
   });
 });
+
+describe('your location: Live, Paused or Hidden', () => {
+  const help = () => screen.getByTestId('sharing-help').textContent;
+  const mode = (name) => fireEvent.click(screen.getByRole('radio', { name }));
+  const checked = () => within(screen.getByRole('radiogroup', { name: 'Your location' })).getAllByRole('radio').find((r) => r.getAttribute('aria-checked') === 'true').textContent;
+
+  it('three modes in plain words, Live to start, never the old tactical words', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    expect(checked()).toBe('Live');
+    expect(help()).toBe('The group sees you move, updated every 5 seconds.');
+    expect(screen.getByTestId('sharing-control').textContent).not.toMatch(/ACTIVE|FROZEN|GHOST|TELEMETRY/);
+  });
+
+  it('each mode says what the group sees, and sends the same status as before', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    mode('Paused');
+    expect(checked()).toBe('Paused');
+    expect(help()).toBe('The group sees the last place you shared, not where you are now.');
+    expect(fakeSocket.emit.mock.calls.filter(([e, d]) => e === 'update-location' && d.status === 'FROZEN').length).toBeGreaterThan(0);
+    mode('Hidden');
+    expect(help()).toBe("Other members won't see you on their map.");
+    expect(fakeSocket.emit.mock.calls.filter(([e, d]) => e === 'update-location' && d.status === 'GHOST').length).toBeGreaterThan(0);
+    mode('Live');
+    expect(checked()).toBe('Live');
+  });
+
+  it('never claims more than is shared: live before a fix, and paused with no spot', async () => {
+    navigator.geolocation.getCurrentPosition = vi.fn();
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    expect(help()).toBe("Your location will be shared live once it's found.");
+    mode('Paused');
+    expect(help()).toBe("No spot has been shared yet, so the group won't see you on their map.");
+  });
+});

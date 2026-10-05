@@ -34,6 +34,7 @@ import { BELOW_TOP_BAR } from './utils/mapChrome';
 import RouteCard from './components/map/RouteCard';
 import BuildingRow from './components/map/BuildingRow';
 import GroupHeader from './components/group/GroupHeader';
+import SharingControl from './components/group/SharingControl';
 import { GROUP_TABS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
@@ -2298,31 +2299,15 @@ const App = () => {
             </div>
           )}
 
-          {/* --- NEW: TELEMETRY CONTROL PANEL --- */}
-          {activeTab === 'users' && (
-            <div className="mb-4 flex flex-col gap-2 border border-white/20 p-2 bg-black">
-              <span className="text-[10px] font-dot uppercase tracking-widest text-zinc-500 text-center">TELEMETRY_CONTROL</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { telemetryModeRef.current = 'ACTIVE'; setTelemetryMode('ACTIVE'); }}
-                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'ACTIVE' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                >
-                  <Activity size={14} /> ACTIVE
-                </button>
-                <button
-                  onClick={() => { telemetryModeRef.current = 'FROZEN'; setTelemetryMode('FROZEN'); }}
-                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'FROZEN' ? 'bg-blue-500/20 border-blue-500 text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                >
-                  <LocateFixed size={14} /> FROZEN
-                </button>
-                <button
-                  onClick={() => { telemetryModeRef.current = 'GHOST'; setTelemetryMode('GHOST'); }}
-                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'GHOST' ? 'bg-zinc-800 border-zinc-500 text-zinc-300 shadow-[0_0_10px_rgba(113,113,122,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                >
-                  <EyeOff size={14} /> GHOST
-                </button>
-              </div>
-            </div>
+          {/* Your location: Live, Paused or Hidden (components/group/SharingControl.jsx). */}
+          {activeTab === 'users' && (
+            <SharingControl
+              mode={telemetryMode}
+              onChange={(mode) => { telemetryModeRef.current = mode; setTelemetryMode(mode); }}
+              waiting={!liveLocation}
+              pausedNoSpot={!pausedHasSpot}
+              polling={sysConfig.polling}
+            />
           )}
           <AnimatePresence mode="popLayout">
             {activeTab === 'buildings' ? (

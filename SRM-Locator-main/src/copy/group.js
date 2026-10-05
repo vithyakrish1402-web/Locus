@@ -22,3 +22,19 @@ export const GROUP_TABS = {
   searchMembers: 'Search members',
   searchBuildings: 'Search buildings',
 };
+
+// Your own sharing: the segmented control and its helper line (the old ACTIVE / FROZEN / GHOST).
+const EVERY = { eco: 'every 15 seconds', standard: 'every 5 seconds', max: 'every second' };
+export const SHARING_CONTROL = {
+  label: 'Your location',
+  options: { ACTIVE: 'Live', FROZEN: 'Paused', GHOST: 'Hidden' },
+  help: {
+    ACTIVE: (polling) => `The group sees you move, updated ${EVERY[polling] ?? EVERY.standard}.`,
+    // Live, before the first fix: nothing has been shared yet.
+    waiting: "Your location will be shared live once it's found.",
+    FROZEN: 'The group sees the last place you shared, not where you are now.',
+    // Paused before any fix: the pause took no spot.
+    pausedNoSpot: "No spot has been shared yet, so the group won't see you on their map.",
+    GHOST: "Other members won't see you on their map.",
+  },
+};

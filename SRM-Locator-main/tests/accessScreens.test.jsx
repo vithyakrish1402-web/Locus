@@ -280,7 +280,7 @@ describe('joining a group', () => {
     fireEvent.click(screen.getByRole('button', { name: LOBBY.createButton }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
-    fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Paused' }));
     fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
 
     joinAs('K7M2QX');
@@ -296,7 +296,7 @@ describe('joining a group', () => {
     fireEvent.click(screen.getByRole('button', { name: LOBBY.createButton }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
-    fireEvent.click(screen.getByRole('button', { name: 'FROZEN' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Paused' }));
     fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
 
     joinAs('K7M2QX');
