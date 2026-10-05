@@ -158,19 +158,14 @@ body {
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
-  border-left: 1px dashed rgba(255, 255, 255, 0.2);
 }
+/* The thumb in the theme's control outline colour, darker on hover (it was white, then red). */
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #fff;
-  border-radius: 0;
+  background: var(--color-border-control);
+  border-radius: 9999px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #f00;
-}
-
-/* Dark mode sleek map */
-.dark-map {
-  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) sepia(10%);
+  background: var(--color-text-secondary);
 }
 
 .leaflet-div-icon { background: transparent !important; border: none !important; }
@@ -225,16 +220,6 @@ body {
   background-size: 24px 24px;
 }
 
-/* Red accents */
-.text-nothing-red {
-  color: #f00;
-}
-.bg-nothing-red {
-  background-color: #f00;
-}
-.border-nothing-red {
-  border-color: #f00;
-}
 
 /* Leaflet fallback basemap (TacticalLeafletMap): OpenStreetMap's standard tiles are the
    only raster source that still needs no API key, and they ship light. In the light theme

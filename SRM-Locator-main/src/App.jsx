@@ -2093,7 +2093,7 @@ const App = () => {
   }
 
   return (
-    <div className="h-screen w-full bg-black flex overflow-hidden text-white font-inter selection:bg-red-500/30 bg-dots">
+    <div className="h-screen w-full bg-black flex overflow-hidden text-white font-inter selection:bg-accent-soft bg-dots">
 
       {/* Top bar and sharing chip (components/map/TopBar.jsx) */}
       <TopBar

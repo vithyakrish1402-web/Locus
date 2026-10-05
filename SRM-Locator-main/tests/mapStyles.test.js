@@ -41,3 +41,15 @@ describe('the Leaflet tiles', () => {
     expect(filterOf(':root[data-theme="dark"] .locus-map-tiles')).toMatch(/invert\(1\)/);
   });
 });
+
+describe('the app stylesheet', () => {
+  const raw = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  it('has no pure red left (the scrollbar, the unused nothing-red classes)', () => {
+    expect(raw).not.toMatch(/#f00\b|nothing-red/i);
+  });
+
+  it('has no unused dark-map filter', () => {
+    expect(raw).not.toMatch(/\.dark-map/);
+  });
+});
