@@ -188,6 +188,10 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
 
 - **Shop and transit pins on satellite.** Google's satellite view shows its own shop and bus pins, because the map style arrays (which turn them off on the plain map) don't apply to satellite imagery. Left as is for now (owner, 2026-10-05).
 
+- **Share code.** The design has a share button on the group header and a "Share code" button in the empty group. Android's WebView has no share sheet, so it needs a native share plugin (a full APK update). Until then both are Copy (owner, 2026-10-05).
+- **Hidden rows for the Group Lead.** The design lists Hidden members to the Group Lead ("Hidden from group", "Not shared"). Today every phone, the Group Lead's included, drops Hidden members from the list and the map. No change for now (owner, 2026-10-05).
+- **"Asked 1 min ago" on join requests.** A join request carries no time (server `addPendingRequest` stores uid, name and photo), so showing when someone asked needs a data change. Until then the card says the person wants to join, with no time.
+
 ## Decisions for batch 1 (owner, 2026-10-05)
 
 - Names: new accounts save the name as typed. Capitals-only names are shown as stored everywhere except the greeting's first name.
