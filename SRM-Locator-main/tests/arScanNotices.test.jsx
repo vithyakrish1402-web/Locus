@@ -121,9 +121,9 @@ afterEach(() => {
 describe('notices during AR Scan', () => {
   it('are drawn over AR Scan, below its header buttons', () => {
     onMapWithArScanOpen();
-    act(() => { notify.error('[SYS_AR] ALIGN: centre a building in the view first.'); });
+    act(() => { notify.warning('Point at a building first, with its label in the middle of the view.'); });
 
-    expect(within(feed()).getByText(/centre a building/)).toBeTruthy();
+    expect(within(feed()).getByText(/Point at a building first/)).toBeTruthy();
     expect(z(feed())).toBeGreaterThan(z(arScan()));
     expect(feed().style.top).toBe(TOP_OVER_AR_SCAN);
   });

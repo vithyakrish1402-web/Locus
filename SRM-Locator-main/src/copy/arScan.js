@@ -29,3 +29,17 @@ export const AR_READOUT = {
   label: (name) => `How far to ${name}`,
   noFix: 'Waiting for your location',
 };
+
+// ALIGN's answers, and the compass refusal: plain words, as a notice. A refusal is an
+// ordinary problem (amber), never red.
+export const AR_ALIGN = {
+  refused: {
+    'no-landmark': 'Point at a building first, with its label in the middle of the view.',
+    gps: 'Your location isn’t accurate enough to align yet. Wait a moment and try again.',
+    'too-close': 'You’re too close to that building to align on it. Try one further away.',
+    'not-centred': 'That building is too far from the middle. Point straight at it and try again.',
+    walking: 'Stand still to align. While you walk, the direction comes from your movement.',
+  },
+  aligned: (name) => `Aligned on ${name}`,
+  compassRefused: 'Compass access was refused, so the arrow can’t turn as you do.',
+};

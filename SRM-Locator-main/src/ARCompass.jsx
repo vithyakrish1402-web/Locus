@@ -26,7 +26,7 @@ import ARRoadLine from './components/ARRoadLine';
 import { buildRoadRibbon, buildRoadStrip, remainingPath, remainingRouteSamples } from './utils/arRoadLine';
 import { formatMetres, relativeClock, compassPoint, HERE_METRES } from './utils/direction';
 import { directionLabel, distanceLabel, walkLabel } from './copy/place';
-import { AR_READOUT } from './copy/arScan';
+import { AR_ALIGN, AR_READOUT } from './copy/arScan';
 import { cameraQuaternion, projectGroundPoint } from './utils/arCamera';
 import ARRoadGL from './components/ARRoadGL';
 import ARArrow3D from './components/ARArrow3D';
@@ -55,14 +55,8 @@ export const CLEAR_OF_EMERGENCY_BUTTON = 'calc(11rem + env(safe-area-inset-botto
 const fmtDeg = (v, digits = 1) => (Number.isFinite(v) ? `${v.toFixed(digits)}°` : '--');
 const fmtSigned = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}°`;
 
-// Why an ALIGN tap was refused (computeAlignment's reasons), as the toast says it.
-const ALIGN_REFUSALS = {
-  'no-landmark': '[SYS_AR] ALIGN: centre a building in the view first.',
-  gps: '[SYS_AR] ALIGN: GPS fix too rough. Wait for a better signal.',
-  'too-close': '[SYS_AR] ALIGN: too close to that building for this GPS fix. Pick one further away.',
-  'not-centred': '[SYS_AR] ALIGN: that building is too far off centre. Point straight at it.',
-  walking: '[SYS_AR] ALIGN: stand still. While walking the heading comes from GPS.',
-};
+// Why an ALIGN tap was refused (computeAlignment's reasons), in plain words (copy/arScan.js).
+const ALIGN_REFUSALS = AR_ALIGN.refused;
 
 // The app session's storage, where the ALIGN correction is kept; null where it is blocked.
 const sessionStore = () => {
@@ -148,14 +142,14 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
       setCameraError(false);
       onCameraStarted?.();
     } catch (err) {
-      console.warn("[SYS_AR] Optics offline. Switching to Instrument Flight Rules (IFR).", err);
+      console.warn("AR Scan: the camera is unavailable; carrying on without it.", err);
       setCameraError(true);
     }
   };
 
   const requestPermissions = async () => {
     const granted = await requestHeadingPermission();
-    if (!granted) notify.error("[SYS_ERROR] Compass access denied.");
+    if (!granted) notify.warning(AR_ALIGN.compassRefused);
     startCamera();
   };
 
@@ -292,18 +286,18 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   // of the view is taken to be the one they mean (see computeAlignment).
   const align = () => {
     if (speedMps > GPS_HEADING_SPEED_MPS) {
-      notify.error(ALIGN_REFUSALS.walking);
+      notify.warning(ALIGN_REFUSALS.walking);
       return;
     }
     const tags = (landmarkFrameRef.current?.tags ?? []).filter((t) => t.building && t.visible);
     const tag = tags.reduce((best, t) => (!best || Math.hypot(t.camAzDeg, t.camElDeg) < Math.hypot(best.camAzDeg, best.camElDeg) ? t : best), null);
     const result = computeAlignment({ tag, accuracyM: gpsAccuracy, current: alignment });
     if (!result.ok) {
-      notify.error(ALIGN_REFUSALS[result.reason]);
+      notify.warning(ALIGN_REFUSALS[result.reason]);
       return;
     }
     changeAlignment(result.alignment);
-    notify.success(`[SYS_AR] ALIGNED ON ${tag.name}: HEADING ${fmtSigned(result.alignment.headingOffsetDeg)}, PITCH ${fmtSigned(result.alignment.pitchOffsetDeg)}`);
+    notify.success(AR_ALIGN.aligned(tag.name));
   };
   const aligned = alignment.headingOffsetDeg !== 0 || alignment.pitchOffsetDeg !== 0;
 
