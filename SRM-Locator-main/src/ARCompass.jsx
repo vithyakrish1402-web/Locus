@@ -440,9 +440,9 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
       {debugOpen && (
         <div
           data-testid="ar-debug-overlay"
-          className="absolute left-6 top-36 z-[40] whitespace-pre bg-black/80 border border-red-500/50 px-3 py-2 font-mono text-[10px] leading-4 text-zinc-300 backdrop-blur-md pointer-events-none"
+          className="ar-plate absolute left-6 top-36 z-[40] whitespace-pre rounded-input border border-border px-3 py-2 font-mono text-[10px] leading-4 text-text pointer-events-none"
         >
-          <div className="font-dot text-red-500 uppercase tracking-widest mb-1">SYS_DEBUG</div>
+          <div className="font-ui font-semibold text-[11px] text-text-secondary mb-1">Debug</div>
           <div>RAW_HDG  {fmtDeg(debugSnapshot?.raw)} MAG</div>
           <div>SMOOTH   {fmtDeg(debugSnapshot?.smoothed)} MAG{debugSnapshot?.fast ? ' FAST' : ''}</div>
           <div>TRUE_HDG {fmtDeg(heading)}</div>
