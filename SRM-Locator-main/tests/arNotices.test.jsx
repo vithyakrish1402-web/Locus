@@ -11,6 +11,7 @@ vi.mock('framer-motion', () => ({
 }));
 
 const { default: ARCompass } = await import('../src/ARCompass.jsx');
+const { notify } = await import('../src/utils/notify.js');
 
 const HERE = { lat: 12.8230, lng: 80.0440 };
 const TARGET = { name: 'TECH PARK', lat: 12.8257, lng: 80.0440 };
@@ -45,6 +46,23 @@ describe('the calibration notice', () => {
     expect(notice.className).toContain('ar-plate');
     expect(notice.querySelector('svg').getAttribute('class')).toContain('text-warning');
     expect(notice.outerHTML).not.toMatch(/red-|yellow-|font-dot|CALIBRATE/);
+  });
+});
+
+describe('compass refused', () => {
+  it('AR Scan stays on its start screen, and the notice says how to go on (in amber)', async () => {
+    const warning = vi.spyOn(notify, 'warning').mockImplementation(() => {});
+    DeviceOrientationEvent.requestPermission = async () => 'denied';
+    try {
+      await openAr();
+      expect(screen.getByTestId('ar-start')).toBeTruthy();
+      expect(screen.queryByTestId('ar-ui')).toBeNull();
+      expect(warning).toHaveBeenCalledWith(expect.stringContaining('tap Start AR Scan again'));
+      expect(warning.mock.calls[0][0]).not.toMatch(/arrow can.t turn/);
+    } finally {
+      delete DeviceOrientationEvent.requestPermission;
+      warning.mockRestore();
+    }
   });
 });
 

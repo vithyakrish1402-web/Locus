@@ -41,7 +41,8 @@ export const AR_ALIGN = {
     walking: 'Stand still to align. While you walk, the direction comes from your movement.',
   },
   aligned: (name) => `Aligned on ${name}`,
-  compassRefused: 'Compass access was refused, so the arrow can’t turn as you do.',
+  // AR Scan stays on its start screen without the compass, so this says how to go on.
+  compassRefused: 'AR Scan needs compass access to point the way. Allow it, then tap Start AR Scan again.',
 };
 
 // AR Scan's notices, under its top controls. All ordinary problems: amber, never red.
