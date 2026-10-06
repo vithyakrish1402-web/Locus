@@ -97,7 +97,7 @@ afterEach(() => {
 
 const HERE = { lat: 12.8230, lng: 80.0440 };
 const tabBar = () => within(screen.getByRole('navigation', { name: 'Main' }));
-const proximity = () => Number(screen.getByText('PROXIMITY').nextSibling.textContent.replace('M', ''));
+const proximity = () => Number(screen.getByTestId('ar-readout-distance').textContent.replace(' m', ''));
 
 let code;
 const member = (lat, lng, extra = {}) => ({ uid: 'u-bravo', name: 'Bravo', roomCode: code, lat, lng, battery: 50, lastSeen: 1, ...extra });
@@ -113,7 +113,7 @@ const scanAtBravo = async () => {
   roster({ 'sock-1': member(HERE.lat + 0.001, HERE.lng) });
   fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
   await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
-  expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
+  expect(screen.getByTestId('ar-target-pill').textContent).toContain('Bravo');
 };
 
 // Bravo walks ~550 m further north, over a few updates (the roster smooths positions).
@@ -133,7 +133,7 @@ const cardArAtBravo = async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
   fireEvent.click(within(screen.getByRole('dialog', { name: 'Options for Bravo' })).getByRole('button', { name: 'Find with AR Scan' }));
   await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
-  expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
+  expect(screen.getByTestId('ar-target-pill').textContent).toContain('Bravo');
 };
 
 describe('AR Scan on a squad member', () => {

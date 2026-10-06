@@ -20,10 +20,13 @@ import { buildArLandmarks } from './arLandmarks';
 import ARLandmarkLayer from './components/ARLandmarkLayer';
 import { GPS_HEADING_SPEED_MPS } from './LiveLocationMarker';
 import { useArPosition } from './hooks/useArPosition';
-import { formatArDistance, stickyDistance } from './utils/arPosition';
+import { stickyDistance } from './utils/arPosition';
 import { magneticDeclination } from './utils/declination';
 import ARRoadLine from './components/ARRoadLine';
-import { buildRoadRibbon, buildRoadStrip, remainingRouteSamples } from './utils/arRoadLine';
+import { buildRoadRibbon, buildRoadStrip, remainingPath, remainingRouteSamples } from './utils/arRoadLine';
+import { formatMetres, relativeClock, compassPoint, HERE_METRES } from './utils/direction';
+import { directionLabel, distanceLabel, walkLabel } from './copy/place';
+import { AR_READOUT } from './copy/arScan';
 import { cameraQuaternion, projectGroundPoint } from './utils/arCamera';
 import ARRoadGL from './components/ARRoadGL';
 import ARArrow3D from './components/ARArrow3D';
@@ -312,6 +315,26 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   const nextShownDistance = stickyDistance(shownDistance, distance);
   if (nextShownDistance !== shownDistance) setShownDistance(nextShownDistance);
 
+  // The readout's direction: a clock face ("2 o'clock") while the compass has a steady
+  // reading, otherwise compass words ("to the north-east"), which need no compass. And
+  // "about N min on foot", only along a real route (routePath is only ever a real one):
+  // what is left of it from here. Without one, distance and direction only.
+  const headingSteady = hasReading && !calibrationNeeded && Number.isFinite(heading);
+  const readoutDirection = liveLocation
+    ? directionLabel({
+      here: distance < HERE_METRES,
+      clock: headingSteady ? relativeClock(bearing, heading) : null,
+      direction: `BEARING ${compassPoint(bearing)}`,
+    })
+    : '';
+  const routeLeftM = useMemo(() => {
+    const left = remainingPath(routePath, liveLocation);
+    let metres = 0;
+    for (let i = 1; i < left.length; i++) metres += calculateDistance(left[i - 1].lat, left[i - 1].lng, left[i].lat, left[i].lng);
+    return left.length >= 2 ? metres : null;
+  }, [routePath, liveLocation]);
+  const readoutWalk = routeLeftM !== null ? walkLabel(routeLeftM) : '';
+
   // Debug overlay: hidden until a long-press on the title. While open it copies the
   // compass hook's diagnostics a few times a second (they live in a ref, updated per
   // sensor event, so reading them doesn't re-render AR Scan 60 times a second).
@@ -505,18 +528,23 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
 
         </div>
 
-        {/* Footer Target Data */}
-        <div className="bg-black/60 backdrop-blur-md border border-white/20 p-4 mt-auto">
-          <div className="flex justify-between items-end">
-            <div>
-              <p className="font-dot text-[10px] text-zinc-400 uppercase tracking-widest mb-1">TARGET_LOCK</p>
-              <h2 className="font-dot text-2xl text-white uppercase tracking-widest leading-none">{target.name}</h2>
-            </div>
-            <div className="text-right">
-              <p className="font-dot text-[10px] text-zinc-400 uppercase tracking-widest mb-1">PROXIMITY</p>
-              <p className="font-dot text-3xl text-red-500 uppercase tracking-widest leading-none">{formatArDistance(shownDistance, '')}</p>
-            </div>
-          </div>
+        {/* The readout: how far, large; which way; and the walk, only along a real route.
+            On a plate at the bottom of the HUD, which keeps clear of the Emergency button
+            (CLEAR_OF_EMERGENCY_BUTTON). The pill above already names the destination. */}
+        <div
+          data-testid="ar-readout"
+          role="status"
+          aria-label={AR_READOUT.label(target.name)}
+          className="ar-plate mt-auto self-center rounded-card border border-border shadow-[var(--shadow-2)] px-5 py-3 flex flex-col items-center text-center font-ui text-text max-w-full"
+        >
+          {liveLocation
+            ? <p data-testid="ar-readout-distance" className="text-[40px] leading-none font-semibold tabular-nums">{distanceLabel(formatMetres(shownDistance))}</p>
+            : <p data-testid="ar-readout-no-fix" className="text-body font-semibold">{AR_READOUT.noFix}</p>}
+          {(readoutDirection || readoutWalk) && (
+            <p data-testid="ar-readout-way" className="mt-1.5 text-secondary text-text-secondary">
+              {[readoutDirection, readoutWalk].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </div>
 
       </div>

@@ -22,3 +22,10 @@ export const AR_PICKER = {
   current: 'Finding now',
   nothing: (query) => `Nothing called "${query}"`,
 };
+
+// The readout at the bottom of AR Scan: how far, which way, and the walk (only along a
+// real route). The direction and walk words are the place card's (copy/place.js).
+export const AR_READOUT = {
+  label: (name) => `How far to ${name}`,
+  noFix: 'Waiting for your location',
+};

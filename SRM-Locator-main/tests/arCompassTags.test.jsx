@@ -72,8 +72,7 @@ describe('ARCompass floating tags', () => {
 
   it('still shows the destination arrow and distance as before', async () => {
     await openAr({ target: { name: 'SRM_HQ', ...at(0, 300) } });
-    expect(screen.getByText('TARGET_LOCK')).toBeTruthy();
-    expect(screen.getByText('SRM_HQ', { selector: 'h2' })).toBeTruthy();
-    expect(screen.getByText('300M')).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('SRM_HQ');
+    expect(screen.getByTestId('ar-readout-distance').textContent).toBe('300 m');
   });
 });

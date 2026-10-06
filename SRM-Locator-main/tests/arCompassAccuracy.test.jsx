@@ -61,8 +61,8 @@ const compass = (heading, ms = 16) => {
   act(() => window.dispatchEvent(event));
 };
 const banner = () => screen.getByTestId('ar-calibration-banner');
-const proximity = () => screen.getByText('PROXIMITY').nextSibling.textContent;
-const metresTo = (p) => `${calculateDistanceMeters(p.lat, p.lng, TARGET.lat, TARGET.lng)}M`;
+const proximity = () => screen.getByTestId('ar-readout-distance').textContent;
+const metresTo = (p) => `${calculateDistanceMeters(p.lat, p.lng, TARGET.lat, TARGET.lng)} m`;
 const rotation = () => {
   const r = ((Number(screen.getByTestId('ar-arrow').getAttribute('data-rotate')) % 360) + 360) % 360;
   return r > 180 ? r - 360 : r;
@@ -165,7 +165,7 @@ describe('AR Scan’s own GPS', () => {
       act(() => vi.advanceTimersByTime(1000));
       fix(north(10), 4); // walked 10 m: shown
     }
-    expect(Number(proximity().replace('M', ''))).toBeLessThanOrEqual(Number(fromHere.replace('M', '')) - 8);
+    expect(Number(proximity().replace(' m', ''))).toBeLessThanOrEqual(Number(fromHere.replace(' m', '')) - 8);
     expect(navigator.geolocation.watchPosition.mock.calls[0][2]).toMatchObject({ enableHighAccuracy: true, maximumAge: 0 });
   });
 

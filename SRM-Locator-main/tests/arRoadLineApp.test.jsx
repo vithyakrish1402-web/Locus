@@ -159,7 +159,7 @@ describe('the AR road line', () => {
     expect(globalThis.fetch).toHaveBeenCalled();
     fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
-    expect(screen.getByText('RALLY_ALPHA', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('RALLY_ALPHA');
     expect(roadLine()).toBeTruthy();
     expect(roadLine().querySelector('polygon').getAttribute('points').split(' ').length).toBeGreaterThan(4);
   });
@@ -194,7 +194,7 @@ describe('the AR road line', () => {
 
     fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
-    expect(screen.getByText('RALLY_ALPHA', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('RALLY_ALPHA');
     expect(roadLine()).toBeNull();
   });
 
@@ -223,6 +223,24 @@ describe('the AR road line', () => {
     expect(roadLine()).toBeNull();
   });
 
+  // The readout's walking time follows the same rule (AR Scan batch, piece 8): "about N min
+  // on foot" only along a real route; without one, distance and direction only.
+  it('the readout gives the walk only along a real route', async () => {
+    await onTheMapWithRally();
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
+    await grantAndFaceNorth();
+    expect(screen.getByTestId('ar-readout').textContent).toMatch(/about \d+ min on foot/);
+  });
+
+  it('no walk in the readout before a real route arrives', async () => {
+    globalThis.fetch = vi.fn(() => new Promise(() => {})); // still fetching
+    await onTheMapWithRally();
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
+    await grantAndFaceNorth();
+    expect(screen.getByTestId('ar-readout-distance')).toBeTruthy();
+    expect(screen.getByTestId('ar-readout').textContent).not.toMatch(/min on foot/);
+  });
+
   it('is not drawn when AR Scan is on a squad member, even one on the Rally Point', async () => {
     await onTheMapWithRally();
     act(() => fakeSocket.receive('users-update', {
@@ -230,7 +248,7 @@ describe('the AR road line', () => {
     }));
     fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
-    expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('Bravo');
     expect(roadLine()).toBeNull();
   });
 
@@ -238,7 +256,7 @@ describe('the AR road line', () => {
     await onTheMapWithRally();
     fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
-    expect(screen.getByText('SRM_HQ', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('SRM_HQ');
     expect(roadLine()).toBeNull();
   });
 });
@@ -287,7 +305,7 @@ describe('the AR road line in REALISTIC mode', () => {
     fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
     await settle();
-    expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('Bravo');
     expect(roadGl()).toBeNull();
     expect(roadLine()).toBeNull();
     expect(roadViews).toHaveLength(0);
@@ -299,7 +317,7 @@ describe('the AR road line in REALISTIC mode', () => {
     fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
     await settle();
-    expect(screen.getByText('SRM_HQ', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('SRM_HQ');
     expect(roadGl()).toBeNull();
     expect(roadLine()).toBeNull();
     expect(roadViews).toHaveLength(0);
