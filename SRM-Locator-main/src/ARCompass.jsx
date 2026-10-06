@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { notify } from './utils/notify';
-import { X, AlertTriangle, ScanLine } from 'lucide-react';
+import { CameraOff, Compass, ScanLine } from 'lucide-react';
 import { Button } from './components/ui';
 import { AR_START } from './copy/permissions';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
@@ -26,7 +26,8 @@ import ARRoadLine from './components/ARRoadLine';
 import { buildRoadRibbon, buildRoadStrip, remainingPath, remainingRouteSamples } from './utils/arRoadLine';
 import { formatMetres, relativeClock, compassPoint, HERE_METRES } from './utils/direction';
 import { directionLabel, distanceLabel, walkLabel } from './copy/place';
-import { AR_ALIGN, AR_READOUT } from './copy/arScan';
+import { AR_ALIGN, AR_NOTICES, AR_READOUT } from './copy/arScan';
+import ArNotice from './components/ar/ArNotice';
 import { cameraQuaternion, projectGroundPoint } from './utils/arCamera';
 import ARRoadGL from './components/ARRoadGL';
 import ARArrow3D from './components/ARArrow3D';
@@ -409,17 +410,6 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
         className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${cameraError ? 'opacity-0' : 'opacity-100'}`}
       />
 
-      {/* IFR Blackout Background */}
-      {cameraError && (
-        <div className="absolute inset-0 bg-black flex flex-col items-center justify-center z-0">
-          <div className="w-[80vw] h-[80vw] border border-white/5 rounded-full absolute" />
-          <div className="w-[60vw] h-[60vw] border border-white/10 rounded-full absolute" />
-        </div>
-      )}
-
-      {/* Grid Overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none z-10" />
-
       {/* The route to the Rally Point, on the ground: under the HUD and the tags. */}
       {ribbon && <ARRoadLine ribbon={ribbon} width={viewport.width} height={viewport.height} />}
       {strip && roadGl !== 'failed' && <ARRoadGL strip={strip} orientation={orientation} fovDeg={fovDeg} onStatus={onRoadGlStatus} />}
@@ -483,20 +473,28 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
           onDebug={() => setDebugOpen((open) => !open)}
         />
 
-        {/* Calibration banner: only while the compass looks unreliable (useDeviceHeading's
+        {/* Calibration notice: only while the compass looks unreliable (useDeviceHeading's
             calibrationNeeded, which already has its own show/hide hysteresis), fading in
             and out. It keeps its space when hidden, so the layout never jumps. */}
-        <div
-          data-testid="ar-calibration-banner"
-          data-visible={calibrationNeeded ? 'true' : 'false'}
-          aria-hidden={!calibrationNeeded}
-          className={`mt-4 inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 self-start backdrop-blur-md transition-opacity duration-500 ${calibrationNeeded ? 'opacity-100' : 'opacity-0'}`}
-        >
-          <AlertTriangle size={14} className="text-yellow-500" />
-          <span className="font-dot text-[10px] text-yellow-500 uppercase tracking-widest">
-            CALIBRATE SENSOR: PERFORM FIGURE-8 MOTION
-          </span>
-        </div>
+        <ArNotice
+          testId="ar-calibration-banner"
+          icon={Compass}
+          title={AR_NOTICES.calibrate.title}
+          body={AR_NOTICES.calibrate.body}
+          visible={calibrationNeeded}
+        />
+
+        {/* Camera off (refused, or no camera): the arrow and readout carry on over a dark
+            screen; the steps to allow it are in words. */}
+        {cameraError && (
+          <ArNotice
+            testId="ar-camera-off"
+            icon={CameraOff}
+            title={AR_NOTICES.cameraOff.title}
+            body={AR_NOTICES.cameraOff.body}
+            steps={AR_NOTICES.cameraOff.steps}
+          />
+        )}
 
         {/* Central Compass Area */}
         <div className="flex-1 flex flex-col items-center justify-center relative">

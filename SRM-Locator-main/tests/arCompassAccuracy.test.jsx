@@ -81,7 +81,7 @@ describe('the calibration banner', () => {
     expect(banner().dataset.visible).toBe('false');
     expect(banner().getAttribute('aria-hidden')).toBe('true');
     expect(banner().className).toContain('opacity-0');
-    expect(banner().textContent).toContain('CALIBRATE SENSOR: PERFORM FIGURE-8 MOTION');
+    expect(banner().textContent).toContain('Calibrate your compass');
   });
 
   it('shows after the compass has been erratic for 2 s, not at the first wobble', async () => {

@@ -43,3 +43,25 @@ export const AR_ALIGN = {
   aligned: (name) => `Aligned on ${name}`,
   compassRefused: 'Compass access was refused, so the arrow can’t turn as you do.',
 };
+
+// AR Scan's notices, under its top controls. All ordinary problems: amber, never red.
+export const AR_NOTICES = {
+  calibrate: {
+    title: 'Calibrate your compass',
+    body: 'Move your phone in a figure 8 a few times.',
+  },
+  cameraOff: {
+    title: 'Camera is off',
+    body: 'The arrow still points the way. To use the camera:',
+    steps: [
+      'Open your phone’s Settings.',
+      'Tap Apps, then LOCUS, then Permissions.',
+      'Tap Camera and choose Allow.',
+      'Close AR Scan and open it again.',
+    ],
+  },
+  tooDark: {
+    title: 'Too dark for labels',
+    body: 'Labels come back when there’s more light. The arrow still points the way.',
+  },
+};
