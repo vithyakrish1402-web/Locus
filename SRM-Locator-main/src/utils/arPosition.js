@@ -59,8 +59,9 @@ export const stickyDistance = (shown, next, band = DISTANCE_DEADBAND_M) =>
   shown === null || shown === undefined || !Number.isFinite(next) || Math.abs(next - shown) >= band ? next : shown;
 
 // One rounding rule for every distance AR Scan shows: whole metres under a kilometre,
-// tenths of a kilometre from there. `sep` goes between the number and the unit.
+// tenths of a kilometre from there, in lower-case units ("350 m", "1.5 km") like the rest of
+// the app. `sep` goes between the number and the unit.
 export const formatArDistance = (meters, sep = ' ') => {
   const m = Math.max(0, Math.round(meters || 0));
-  return m >= 1000 ? `${(m / 1000).toFixed(1)}${sep}KM` : `${m}${sep}M`;
+  return m >= 1000 ? `${(m / 1000).toFixed(1)}${sep}km` : `${m}${sep}m`;
 };

@@ -59,7 +59,7 @@ describe('ARCompass floating tags', () => {
     });
 
     const tags = tagsOnScreen();
-    expect(tags.map((t) => t.text).sort()).toEqual(['ALPHA120 M', 'SRM_HQ300 M', 'TECH PARK200 M']);
+    expect(tags.map((t) => t.text).sort()).toEqual(['ALPHA120 m', 'SRM_HQ300 m', 'TECH PARK200 m']);
     expect(tags.find((t) => t.text.startsWith('SRM_HQ')).variant).toBe('target');
     expect(tags.find((t) => t.text.startsWith('ALPHA')).variant).toBe('member');
     expect(tags.find((t) => t.text.startsWith('TECH PARK')).variant).toBe('building');
@@ -67,7 +67,7 @@ describe('ARCompass floating tags', () => {
     expect(tags.find((t) => t.text.startsWith('TECH PARK')).left).toBeLessThan(50);
     expect(tags.find((t) => t.text.startsWith('ALPHA')).left).toBeGreaterThan(50);
     // Where tags overlap the nearer one wins, so the ambient ones are drawn furthest first.
-    expect(tags.filter((t) => t.variant !== 'target').map((t) => t.text)).toEqual(['TECH PARK200 M', 'ALPHA120 M']);
+    expect(tags.filter((t) => t.variant !== 'target').map((t) => t.text)).toEqual(['TECH PARK200 m', 'ALPHA120 m']);
   });
 
   it('still shows the destination arrow and distance as before', async () => {
