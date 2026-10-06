@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { notify } from './utils/notify';
-import { CameraOff, Compass, ScanLine } from 'lucide-react';
+import { CameraOff, Compass, MoonStar, ScanLine } from 'lucide-react';
 import { Button } from './components/ui';
 import { AR_START } from './copy/permissions';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
@@ -28,6 +28,7 @@ import { formatMetres, relativeClock, compassPoint, HERE_METRES } from './utils/
 import { directionLabel, distanceLabel, walkLabel } from './copy/place';
 import { AR_ALIGN, AR_NOTICES, AR_READOUT } from './copy/arScan';
 import ArNotice from './components/ar/ArNotice';
+import { useCameraDarkness } from './hooks/useCameraDarkness';
 import { cameraQuaternion, projectGroundPoint } from './utils/arCamera';
 import ARRoadGL from './components/ARRoadGL';
 import ARArrow3D from './components/ARArrow3D';
@@ -130,6 +131,10 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
     speedMps,
     compassHeading,
   });
+
+  // Too dark for labels (hooks/useCameraDarkness.js): sampled only while the camera runs.
+  // Only the labels hide; the arrow, road line, readout and controls stay.
+  const tooDark = useCameraDarkness(videoRef, permissionsGranted && !cameraError);
 
   // 1. Initialize Camera
   const startCamera = async () => {
@@ -424,7 +429,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
 
       {/* Floating tags, anchored on the real buildings by the Landmark Anchor Engine.
           Above the arrow ring, below nothing tappable (they take no touches). */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-[25]" aria-hidden="true">
+      <div data-testid="ar-labels" data-too-dark={tooDark || undefined} className={`absolute inset-0 overflow-hidden pointer-events-none z-[25] ${tooDark ? 'invisible' : ''}`} aria-hidden="true">
         <ARLandmarkLayer landmarks={landmarks} position={enginePosition} view={engineView} frameRef={landmarkFrameRef} />
       </div>
 
@@ -493,6 +498,16 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
             title={AR_NOTICES.cameraOff.title}
             body={AR_NOTICES.cameraOff.body}
             steps={AR_NOTICES.cameraOff.steps}
+          />
+        )}
+
+        {/* Too dark: the labels are hidden until there's more light (useCameraDarkness). */}
+        {tooDark && (
+          <ArNotice
+            testId="ar-too-dark"
+            icon={MoonStar}
+            title={AR_NOTICES.tooDark.title}
+            body={AR_NOTICES.tooDark.body}
           />
         )}
 
