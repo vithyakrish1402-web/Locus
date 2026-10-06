@@ -463,53 +463,58 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
         </div>
       )}
 
-      {/* Tactical UI Layer */}
-      <div data-testid="ar-ui" className="relative z-20 w-full h-full flex flex-col p-6" style={{ paddingBottom: CLEAR_OF_EMERGENCY_BUTTON }}>
-        
-        {/* Close, what AR Scan is finding, and ALIGN (components/ar/ArTopBar.jsx). A long press
-            on the pill opens the debug overlay; a tap never does. */}
-        <ArTopBar
-          targetName={target.name}
-          onClose={onClose}
-          onPick={onChooseTarget ? () => setPickerOpen(true) : null}
-          onAlign={align}
-          aligned={aligned}
-          onReset={() => changeAlignment(NO_ALIGNMENT)}
-          onDebug={() => setDebugOpen((open) => !open)}
-        />
+      {/* The HUD. It sets no stacking order of its own, so its parts layer against the labels
+          (z-25) one by one: the controls, notices and readout above them (z-30), so a label
+          never covers words or a button; the arrow below them (z-22), as the labels have
+          always been drawn over it. */}
+      <div data-testid="ar-ui" className="relative w-full h-full flex flex-col p-6" style={{ paddingBottom: CLEAR_OF_EMERGENCY_BUTTON }}>
+        <div data-testid="ar-top" className="relative z-[30] flex flex-col">
 
-        {/* Calibration notice: only while the compass looks unreliable (useDeviceHeading's
-            calibrationNeeded, which already has its own show/hide hysteresis), fading in
-            and out. It keeps its space when hidden, so the layout never jumps. */}
-        <ArNotice
-          testId="ar-calibration-banner"
-          icon={Compass}
-          title={AR_NOTICES.calibrate.title}
-          body={AR_NOTICES.calibrate.body}
-          visible={calibrationNeeded}
-        />
-
-        {/* Camera off (refused, or no camera): the arrow and readout carry on over a dark
-            screen; the steps to allow it are in words. */}
-        {cameraError && (
-          <ArNotice
-            testId="ar-camera-off"
-            icon={CameraOff}
-            title={AR_NOTICES.cameraOff.title}
-            body={AR_NOTICES.cameraOff.body}
-            steps={AR_NOTICES.cameraOff.steps}
+          {/* Close, what AR Scan is finding, and ALIGN (components/ar/ArTopBar.jsx). A long press
+              on the pill opens the debug overlay; a tap never does. */}
+          <ArTopBar
+            targetName={target.name}
+            onClose={onClose}
+            onPick={onChooseTarget ? () => setPickerOpen(true) : null}
+            onAlign={align}
+            aligned={aligned}
+            onReset={() => changeAlignment(NO_ALIGNMENT)}
+            onDebug={() => setDebugOpen((open) => !open)}
           />
-        )}
 
-        {/* Too dark: the labels are hidden until there's more light (useCameraDarkness). */}
-        {tooDark && (
+          {/* Calibration notice: only while the compass looks unreliable (useDeviceHeading's
+              calibrationNeeded, which already has its own show/hide hysteresis), fading in
+              and out. It keeps its space when hidden, so the layout never jumps. */}
           <ArNotice
-            testId="ar-too-dark"
-            icon={MoonStar}
-            title={AR_NOTICES.tooDark.title}
-            body={AR_NOTICES.tooDark.body}
+            testId="ar-calibration-banner"
+            icon={Compass}
+            title={AR_NOTICES.calibrate.title}
+            body={AR_NOTICES.calibrate.body}
+            visible={calibrationNeeded}
           />
-        )}
+
+          {/* Camera off (refused, or no camera): the arrow and readout carry on over a dark
+              screen; the steps to allow it are in words. */}
+          {cameraError && (
+            <ArNotice
+              testId="ar-camera-off"
+              icon={CameraOff}
+              title={AR_NOTICES.cameraOff.title}
+              body={AR_NOTICES.cameraOff.body}
+              steps={AR_NOTICES.cameraOff.steps}
+            />
+          )}
+
+          {/* Too dark: the labels are hidden until there's more light (useCameraDarkness). */}
+          {tooDark && (
+            <ArNotice
+              testId="ar-too-dark"
+              icon={MoonStar}
+              title={AR_NOTICES.tooDark.title}
+              body={AR_NOTICES.tooDark.body}
+            />
+          )}
+        </div>
 
         {/* Central Compass Area */}
         <div className="flex-1 flex flex-col items-center justify-center relative">
@@ -524,7 +529,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
             ref={ringRef}
             data-testid="ar-arrow-ring"
             data-fidelity={features.arrow}
-            className="w-48 h-48 flex items-center justify-center relative z-30"
+            className="w-48 h-48 flex items-center justify-center relative z-[22]"
           >
             {features.arrow === 'realistic' ? (
               <RealisticArrow rotation={displayRotation} spring={ARROW_SPRING} ringRef={ringRef} overlayEl={overlayEl} />
@@ -542,7 +547,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
           data-testid="ar-readout"
           role="status"
           aria-label={AR_READOUT.label(target.name)}
-          className="ar-plate mt-auto self-center rounded-card border border-border shadow-[var(--shadow-2)] px-5 py-3 flex flex-col items-center text-center font-ui text-text max-w-full"
+          className="ar-plate relative z-[30] mt-auto self-center rounded-card border border-border shadow-[var(--shadow-2)] px-5 py-3 flex flex-col items-center text-center font-ui text-text max-w-full"
         >
           {liveLocation
             ? <p data-testid="ar-readout-distance" className="text-[40px] leading-none font-semibold tabular-nums">{distanceLabel(formatMetres(shownDistance))}</p>
