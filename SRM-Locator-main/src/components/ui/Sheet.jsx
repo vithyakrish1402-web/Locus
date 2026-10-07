@@ -110,7 +110,8 @@ export default function Sheet({ open, onClose, title, label, dismissible = true,
               else controls.start({ y: 0, transition: release.transition });
             }}
             className="absolute inset-x-0 bottom-0 max-h-[90dvh] overflow-y-auto rounded-t-sheet bg-surface text-text font-ui shadow-[var(--shadow-3)] outline-none"
-            style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+            // Its last buttons end above the Emergency button, which stands over every sheet.
+            style={{ paddingBottom: 'var(--emergency-clearance)' }}
           >
             {dismissible ? (
               <div

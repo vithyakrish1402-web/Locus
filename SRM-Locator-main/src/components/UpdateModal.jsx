@@ -225,7 +225,8 @@ const UpdateModal = ({ update }) => {
         ref={panelRef}
         tabIndex={-1}
         className="w-full max-w-xl rounded-t-sheet bg-surface text-text font-ui shadow-[var(--shadow-3)] px-5 pt-3 flex flex-col gap-4 outline-none max-h-[90dvh] overflow-y-auto"
-        style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+        // Its buttons end above the Emergency button, which stands over this dialog.
+        style={{ paddingBottom: 'var(--emergency-clearance)' }}
       >
         <span className="self-center w-9 h-1 rounded-full bg-border" aria-hidden="true" />
         <span className={`flex items-center justify-center w-14 h-14 rounded-full ${TONE[tone]}`} aria-hidden="true"><Icon size={26} /></span>

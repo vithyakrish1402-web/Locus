@@ -27,8 +27,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe.each([
-  ['on its own layer', {}],
-  ['standing above AR Scan', { layer: LAYER.emergencyButtonOverArScan }],
+  ['on its one layer', {}],
 ])('the two holds, %s', (_label, props) => {
   it('hold, let go, hold again: sent once, only after the second hold', () => {
     const button = renderButton(props);
@@ -161,23 +160,18 @@ describe.each([
 });
 
 describe('where it stands', () => {
-  it('on its own layer by default, in its usual spot', () => {
+  it('on its one layer, in its usual spot', () => {
     const button = renderButton();
-    expect(button.style.zIndex).toBe('');
-    expect(button.className).toMatch(/(^| )z-\[1150\]( |$)/);
+    expect(Number(button.style.zIndex)).toBe(LAYER.emergencyButton);
     expect(button.className).toMatch(/(^| )bottom-20( |$)/);
     expect(button.className).toMatch(/(^| )left-4( |$)/);
   });
 
-  it('given a layer, on that layer, in the same spot', () => {
-    const button = renderButton({ layer: LAYER.emergencyButtonOverArScan });
-    expect(Number(button.style.zIndex)).toBe(LAYER.emergencyButtonOverArScan);
-    expect(button.className).toMatch(/(^| )bottom-20( |$)/);
-    expect(button.className).toMatch(/(^| )left-4( |$)/);
-  });
-
-  it('that layer is above AR Scan and below an incoming alert', () => {
-    expect(LAYER.emergencyButtonOverArScan).toBeGreaterThan(LAYER.arScan);
-    expect(LAYER.emergencyButtonOverArScan).toBeLessThan(LAYER.emergency);
+  it('that layer is above every other screen and below an incoming alert', () => {
+    for (const [name, z] of Object.entries(LAYER)) {
+      if (name === 'emergencyButton') continue;
+      if (name === 'emergency') expect(LAYER.emergencyButton).toBeLessThan(z);
+      else expect(LAYER.emergencyButton, name).toBeGreaterThan(z);
+    }
   });
 });

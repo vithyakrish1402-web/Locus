@@ -135,7 +135,7 @@ describe('UpdateModal', () => {
 
     it('is amber, never red', () => {
       render(<UpdateModal update={failing('CHECKSUM_MISMATCH')} />);
-      expect(screen.getByRole('dialog').innerHTML).not.toMatch(/danger|emergency|red-/);
+      expect(screen.getByRole('dialog').innerHTML).not.toMatch(/danger|bg-emergency|red-/);
       expect(screen.getByRole('dialog').innerHTML).toMatch(/text-warning/);
     });
   });

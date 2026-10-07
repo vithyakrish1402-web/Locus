@@ -52,7 +52,7 @@ export default function SettingsScreen({
       aria-labelledby={titleId}
       data-testid="settings"
       className="fixed inset-0 overflow-y-auto bg-bg text-text font-ui pointer-events-auto"
-      style={{ zIndex: SETTINGS_Z, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
+      style={{ zIndex: SETTINGS_Z, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(var(--emergency-clearance) + 1rem)' }}
     >
       <div className="max-w-xl mx-auto px-4">
         <div className="pt-3 -ml-2">

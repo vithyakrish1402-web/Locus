@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, MapPin } from 'lucide-react';
 import { SOS_BUTTON, SOS_HOLD, SOS_SPOKEN } from '../copy/emergency';
+import { LAYER } from '../utils/layers';
 
 // The Emergency button (redesign Emergency batch, E2): a red circle with a casing, the
 // design's rings drawn just outside it, and a card above it that says what is happening
@@ -92,10 +93,6 @@ const SosTrigger = ({
   roomCode = null,
   senderName = null,
   className = '',
-  // A layer (z-index) to stand on instead of its own z-[1150]: App passes
-  // LAYER.emergencyButtonOverArScan while AR Scan is open, so the button stays reachable
-  // there, in the same spot, with the same two holds.
-  layer = null,
   // The way out (utils/sosOutbox.js): sends at once when the group can be reached, holds the
   // alert otherwise. Without one, the button emits on `socket` directly, as it always did.
   outbox = null,
@@ -131,6 +128,14 @@ const SosTrigger = ({
   useEffect(() => () => {
     clearAllTimers();
     clearTimeout(earlyTimeoutRef.current);
+  }, []);
+
+  // While the button is on screen, every screen keeps its bottom content clear of it
+  // (--emergency-clearance in index.css keys off this attribute).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.emergencyButton = 'on';
+    return () => { delete root.dataset.emergencyButton; };
   }, []);
 
   const emitSosBroadcast = () => {
@@ -228,8 +233,9 @@ const SosTrigger = ({
   const holding = HOLDING.includes(phase);
   const card = holding ? SOS_HOLD[phase] : null;
   const locationNote = holding && phase !== 'arming' && (sharingMode === 'FROZEN' || sharingMode === 'GHOST');
-  const layerStyle = layer === null ? {} : { zIndex: layer };
-  const layerClass = layer === null ? 'z-[1150]' : '';
+  // One layer, over every screen but an incoming alert (LAYER.emergencyButton). The scrim and
+  // the card share it, drawn before the button so the button stays on top.
+  const layerStyle = { zIndex: LAYER.emergencyButton };
 
   let content;
   if (view === 'fired') content = <Check size={34} strokeWidth={3} aria-hidden="true" />;
@@ -246,14 +252,14 @@ const SosTrigger = ({
           <div
             data-testid="sos-scrim"
             aria-hidden="true"
-            className={`fixed inset-0 bg-backdrop pointer-events-none ${layerClass}`}
+            className={`fixed inset-0 bg-backdrop pointer-events-none`}
             style={layerStyle}
           />
           <div
             data-testid="sos-hold-card"
             data-phase={phase}
             aria-hidden="true"
-            className={`fixed left-3 right-3 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:left-[23rem] md:right-auto md:w-96 md:bottom-32 rounded-card bg-raised text-text font-ui shadow-[var(--shadow-2)] border border-border p-5 pointer-events-none ${layerClass}`}
+            className={`fixed left-3 right-3 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:left-[23rem] md:right-auto md:w-96 md:bottom-32 rounded-card bg-raised text-text font-ui shadow-[var(--shadow-2)] border border-border p-5 pointer-events-none`}
             style={layerStyle}
           >
             <p className="text-heading">{card.title}</p>
@@ -300,8 +306,8 @@ const SosTrigger = ({
         //             bottom-20 clears it and mirrors the Rally Point FAB on the right.
         //   desktop - the squad sidebar is fixed left-6 w-80 (ends ~344px in), so
         //             left-4 overlapped it; left-[23rem] sits just clear of its edge.
-        // z-[1150] keeps it above both regardless, so it can never be buried again.
-        className={`fixed bottom-20 left-4 md:bottom-6 md:left-[23rem] ${layerClass} w-20 h-20 rounded-full select-none touch-none pointer-events-auto flex items-center justify-center text-center font-ui border-4 shadow-[var(--shadow-2)] active:scale-95 transition-colors duration-200 ${PHASE_LOOK[phase]} ${className}`}
+        // LAYER.emergencyButton keeps it above every screen but an incoming alert.
+        className={`fixed bottom-20 left-4 md:bottom-6 md:left-[23rem] w-20 h-20 rounded-full select-none touch-none pointer-events-auto flex items-center justify-center text-center font-ui border-4 shadow-[var(--shadow-2)] active:scale-95 transition-colors duration-200 ${PHASE_LOOK[phase]} ${className}`}
         style={{
           marginBottom: 'env(safe-area-inset-bottom)',
           ...layerStyle,

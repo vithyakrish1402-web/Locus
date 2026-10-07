@@ -5,8 +5,8 @@ import { ShieldAlert } from 'lucide-react';
 // a tinted round icon, a title, a sentence, and one action at the bottom.
 //
 // Drawn over the map screen, its tab bar and its floating meeting-point button (z 1100 and
-// below), and under the Emergency button (z 1150), which stays where it always is. The action
-// sits at the very bottom, under that button's spot, so the two never overlap.
+// below), and under the Emergency button (LAYER.emergencyButton), which stays where it always
+// is. The action ends above that button's spot (--emergency-clearance), so the two never overlap.
 //
 // role="dialog": focus moves to its heading when it appears, so a screen reader announces
 // where the person now is.
@@ -38,7 +38,7 @@ export default function StatusScreen({ icon, tone = 'accent', title, children, a
       aria-labelledby={titleId}
       data-testid={testId}
       className="fixed inset-0 flex flex-col bg-bg text-text font-ui px-5 pointer-events-auto"
-      style={{ zIndex: STATUS_SCREEN_Z, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+      style={{ zIndex: STATUS_SCREEN_Z, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'var(--emergency-clearance)' }}
     >
       <div className="flex-1 flex flex-col items-center justify-center text-center max-w-md w-full mx-auto">
         <span className={`flex items-center justify-center w-22 h-22 rounded-full ${TONES[tone]}`} aria-hidden="true">{icon}</span>

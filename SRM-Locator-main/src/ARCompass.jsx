@@ -52,7 +52,7 @@ const DECLINATION_GRID_DEG = 0.01;
 // The Emergency button stands above AR Scan at the bottom left, 5 rem up and 5 rem tall
 // (SosTrigger: bottom-20, h-20), on the gesture bar's inset. AR Scan's own bottom content (the
 // start screen's buttons, the readout) sits above it, with 1 rem to spare.
-export const CLEAR_OF_EMERGENCY_BUTTON = 'calc(11rem + env(safe-area-inset-bottom))';
+export const CLEAR_OF_EMERGENCY_BUTTON = 'var(--emergency-clearance)';
 
 const fmtDeg = (v, digits = 1) => (Number.isFinite(v) ? `${v.toFixed(digits)}°` : '--');
 const fmtSigned = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}°`;

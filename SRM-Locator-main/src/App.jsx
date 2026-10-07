@@ -2923,6 +2923,7 @@ const App = () => {
             {...modalBackdrop()}
             onClick={(e) => { if (e.target === e.currentTarget) setShowTelemetryModal(false); }}
             className="fixed inset-0 bg-black/95 backdrop-blur-md z-[4000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
+            style={{ paddingBottom: 'var(--emergency-clearance)' }}
           >
             <motion.div
               {...modalCard(reduceMotion)}
@@ -3076,6 +3077,7 @@ const App = () => {
           <motion.div
             {...modalBackdrop()}
             className="fixed inset-0 bg-black/95 backdrop-blur-md z-[6000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
+            style={{ paddingBottom: 'var(--emergency-clearance)' }}
           >
             <motion.div
               {...modalCard(reduceMotion)}
@@ -3294,8 +3296,6 @@ const App = () => {
       {/* Only once in the group (D3): while waiting to be let in, the server would drop an
           alert, so the waiting screen says so in the button's place instead. */}
       {accessStatus === 'granted' && <SosTrigger
-        // Above AR Scan while it is open (same spot, same two holds), below an incoming alert.
-        layer={arTarget ? LAYER.emergencyButtonOverArScan : null}
         socket={socket}
         getLocation={() => liveLocationRef.current}
         roomCode={squadCode}

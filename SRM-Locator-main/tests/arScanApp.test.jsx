@@ -126,30 +126,29 @@ describe('the Emergency button and AR Scan', () => {
   it('stands above AR Scan while it is open, its start screen included, in the same spot', async () => {
     await scanning();
     expect(screen.getByTestId('ar-start')).toBeTruthy();
-    expect(Number(sos().style.zIndex)).toBe(LAYER.emergencyButtonOverArScan);
+    expect(Number(sos().style.zIndex)).toBe(LAYER.emergencyButton);
     await startArScan();
     expect(screen.getByTestId('ar-scan')).toBeTruthy();
-    expect(Number(sos().style.zIndex)).toBe(LAYER.emergencyButtonOverArScan);
+    expect(Number(sos().style.zIndex)).toBe(LAYER.emergencyButton);
     expect(Number(sos().style.zIndex)).toBeGreaterThan(Number(screen.getByTestId('ar-scan').style.zIndex));
     expect(sos().className).toMatch(/(^| )bottom-20 left-4( |$)/);
   });
 
-  it('goes back to its own layer once AR Scan closes', async () => {
+  it('stays on the same one layer once AR Scan closes (E1: one layer for the button)', async () => {
     await scanning();
     fireEvent.click(within(screen.getByTestId('ar-start')).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByTestId('ar-start')).toBeNull();
-    expect(sos().style.zIndex).toBe('');
+    expect(Number(sos().style.zIndex)).toBe(LAYER.emergencyButton);
   });
 
   it('an incoming alert still draws over it', () => {
-    expect(LAYER.emergency).toBeGreaterThan(LAYER.emergencyButtonOverArScan);
+    expect(LAYER.emergency).toBeGreaterThan(LAYER.emergencyButton);
   });
 
   it("AR Scan's own bottom content stays clear of it: its start buttons and its readout", () => {
-    // jsdom drops env() from inline styles, so this reads the source: both use the clearance,
-    // which is the button's 5 rem up plus its 5 rem height, plus 1 rem.
+    // Both use the app's one clearance for the button (--emergency-clearance, index.css).
     const ar = readFileSync(`${process.cwd()}/src/ARCompass.jsx`, 'utf8');
-    expect(ar).toContain("export const CLEAR_OF_EMERGENCY_BUTTON = 'calc(11rem + env(safe-area-inset-bottom))';");
+    expect(ar).toContain("export const CLEAR_OF_EMERGENCY_BUTTON = 'var(--emergency-clearance)';");
     expect(ar.match(/paddingBottom: CLEAR_OF_EMERGENCY_BUTTON/g)).toHaveLength(2);
     const trigger = readFileSync(`${process.cwd()}/src/components/SosTrigger.jsx`, 'utf8');
     expect(trigger).toMatch(/bottom-20 left-4 [^"]*w-20 h-20/);
@@ -225,16 +224,19 @@ describe('the target picker', () => {
     const trigger = readFileSync(`${process.cwd()}/src/components/SosTrigger.jsx`, 'utf8');
     expect(trigger).toMatch(/bottom-20 left-4 [^"]*w-20 h-20/);
     expect(trigger).toContain("marginBottom: 'env(safe-area-inset-bottom)'");
-    // The sheet pads 1 rem plus that inset (jsdom drops env(), so read its source); the
-    // picker adds its own room. Together they leave at least 2 rem above the button.
-    const sheet = readFileSync(`${process.cwd()}/src/components/ui/Sheet.jsx`, 'utf8');
-    expect(sheet).toContain("paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))'");
-    const room = Number(/(?:^| )pb-\[(\d+)rem\]/.exec(screen.getByTestId('ar-target-picker').className)?.[1] ?? 0);
-    expect(1 + room).toBeGreaterThanOrEqual(10 + 2);
+    // The sheet pads the app's clearance for the button (11 rem plus that inset while the
+    // button is on screen); the picker adds 1 rem (pb-4), leaving 2 rem above the button.
+    const panel = screen.getByTestId('ar-target-picker').parentElement;
+    expect(panel.style.paddingBottom).toBe('var(--emergency-clearance)');
+    expect(document.documentElement.dataset.emergencyButton).toBe('on');
+    const css = readFileSync(`${process.cwd()}/src/index.css`, 'utf8');
+    expect(css).toContain(':root[data-emergency-button] { --emergency-clearance: calc(11rem + env(safe-area-inset-bottom)); }');
+    expect(screen.getByTestId('ar-target-picker').className).toMatch(/(^| )pb-4( |$)/);
+    expect(11 + 1).toBeGreaterThanOrEqual(10 + 2);
   });
 
   it('sits above AR Scan and under the Emergency button', () => {
     expect(LAYER.arScanSheet).toBeGreaterThan(LAYER.arScan);
-    expect(LAYER.arScanSheet).toBeLessThan(LAYER.emergencyButtonOverArScan);
+    expect(LAYER.arScanSheet).toBeLessThan(LAYER.emergencyButton);
   });
 });

@@ -589,7 +589,7 @@ describe('the three heights, on a phone', () => {
     openPanel();
     layOut();
     const sos = screen.getByRole('button', { name: /SOS beacon/ });
-    const z = (el) => Number(/(?:^|\s)z-\[(\d+)\]/.exec(el.className)[1]);
+    const z = (el) => Number(el.style.zIndex || /(?:^|\s)z-\[(\d+)\]/.exec(el.className)[1]);
     for (const [from, to, height] of [[400, 600, 'peek'], [600, 90, 'full'], [90, 400, 'half']]) {
       await drag(from, to);
       expect(sheet().dataset.height).toBe(height);

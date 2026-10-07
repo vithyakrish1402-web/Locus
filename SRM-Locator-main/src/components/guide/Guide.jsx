@@ -42,7 +42,7 @@ export default function Guide({ onDone, zIndex, initialStep = 0 }) {
       aria-labelledby={titleId}
       data-testid="guide"
       className="fixed inset-0 flex flex-col bg-bg text-text font-ui overflow-hidden"
-      style={{ zIndex, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+      style={{ zIndex, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'var(--emergency-clearance)' }}
     >
       <div className="flex-1 flex flex-col max-w-md w-full mx-auto px-5 min-h-0">
         <div className="flex items-center justify-between min-h-14">

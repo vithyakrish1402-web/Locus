@@ -171,6 +171,21 @@ body {
 .leaflet-div-icon { background: transparent !important; border: none !important; }
 
 /* SosTrigger ARMED-state pulse (src/components/SosTrigger.jsx) */
+/* Room every screen keeps at its bottom for the Emergency button (Emergency batch, E1). The
+   button stands over every screen but an incoming alert, so a screen's last buttons must end
+   above it: on a phone its top is 10 rem up plus the gesture bar's inset (SosTrigger: bottom-20,
+   h-20), so 11 rem leaves 1 rem; from md up it is 6.5 rem up, so 7.5 rem. Only while the button
+   is on screen (SosTrigger sets data-emergency-button on <html>); otherwise the usual 1 rem. In
+   rem, so it grows with the text size exactly as the button does. */
+:root { --emergency-clearance: calc(1rem + env(safe-area-inset-bottom)); }
+:root[data-emergency-button] { --emergency-clearance: calc(11rem + env(safe-area-inset-bottom)); }
+@media (min-width: 768px) {
+  :root[data-emergency-button] { --emergency-clearance: calc(7.5rem + env(safe-area-inset-bottom)); }
+}
+/* With the keyboard open, a focused field (and anything scrolled into view) stops clear of the
+   button rather than under it. */
+input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--emergency-clearance); }
+
 /* The Emergency button while armed (SosTrigger.jsx): a slow pulse. Reduced motion: held
    still. Its rings are not touched here: they show time, so they fill and drain either way. */
 .locus-sos-armed { animation: locus-sos-pulse 0.6s ease-in-out infinite; }
