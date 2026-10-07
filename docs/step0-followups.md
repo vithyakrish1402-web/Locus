@@ -246,3 +246,12 @@ Shown end to end against the real server: an alert sent during a network drop re
 - Online, nothing changes: the same single `sos-broadcast` at the same moment with the same payload, the same "SOS SENT" for 2 s, no extra sound, vibration or notice.
 
 **Limits that remain.** A held alert is kept only while the app is running; closing the app loses it. An alert sent through a dead connection that still looks alive can still be lost (Before real rollout, item 3).
+
+## `rallyPointClear.e2e.test.js` is flaky on `main` too (checked 2026-10-07)
+
+It failed once in the full-suite run after the Emergency batch's Stop 1. It was checked on a clean `main` (`69819b0`) in a temporary worktree:
+
+- Quiet machine, 20 runs each: `main` 0 failures, the redesign branch 0 failures.
+- Under load (another test file running alongside), 15 runs each: `main` 1 failure, the branch 1 failure, both in "not another member, whose Rally Point it isn't".
+
+So it is a timing-sensitive test that predates the redesign; `backend/` and the test are identical on both. It fails a different case each time, only when the machine is busy. Fixing it is a separate task.
