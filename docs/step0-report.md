@@ -512,7 +512,7 @@ No earlier wording inventory exists. I searched for `locus-wording-inventory.md`
 | 3402-3501 | Admin: ADMIN_OVERRIDE, CLASSIFIED // COMMANDER-LEVEL…, SECTION_01 // PATH_RECORDER, INITIATE_RECORD_PATH, RECORDING ACTIVE…, PUBLISH_ROUTE, ABORT, CLOSE_TERMINAL; HUD `2815-2845` RECORDING_NODES, PUBLISH; `prompt()` texts; `notify` "[SYS] Route … published." | Owner-only; plain wording suggested, low priority |
 | 3516 | ORBITAL / GRID | Map |
 | 3517 | SCAN | Scan |
-| 3533 | SRM_HQ (AR default target name) | SRM campus |
+| 3533 | SRM_HQ (AR default target name) | SRM campus. Seen since the AR Scan batch in the start screen ("Finding SRM_HQ…") and the "Finding" pill whenever the Scan tab opens with no member to aim at (owner, 2026-10-07: wording pass) |
 | 3550 | title Cancel Targeting / Deploy Rally Point | Cancel / Place a meeting point |
 
 ### Components and helpers

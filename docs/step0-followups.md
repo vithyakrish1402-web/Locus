@@ -196,6 +196,9 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
 
 - **Join requests tile under the Emergency button on phones 640 px tall or less.** At half height the Group Lead's Join requests tile sits clear above the Emergency button on screens 720 px tall or more (77 px at 360 x 780). On a 360 x 640 phone it is under the button until the list is scrolled (owner, 2026-10-06).
 - **"Open phone settings" for the camera.** AR Scan's camera-off notice gives the steps in words; a link straight to LOCUS's settings needs a native call, so a full APK update (owner, 2026-10-06).
+- **An AR Scan notice covers the labels behind it.** Notices sit above the labels so their words stay readable, so a label behind one (with the camera off, often the destination's own) is hidden until the notice goes (owner, 2026-10-07).
+- **AR Scan's "Align" caption can touch a nearby label.** The caption under the round Align button sits above the labels and can overlap one at the top right (owner, 2026-10-07).
+- **The debug overlay's line names** (RAW_HDG, SMOOTH, TRUE_HDG and the rest) are still technical. It is a developer view, opened only by a long press on the "Finding" pill (owner, 2026-10-07).
 
 ## Decisions for batch 1 (owner, 2026-10-05)
 
