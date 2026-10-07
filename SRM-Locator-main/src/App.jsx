@@ -390,6 +390,8 @@ const App = () => {
   const {
     current: incomingSos,
     pendingCount: pendingSosCount,
+    position: sosPosition,
+    total: sosTotal,
     acknowledge: acknowledgeSos,
     requestSync: requestSosSync,
   } = useIncomingSos(socket);
@@ -2071,7 +2073,13 @@ const App = () => {
       lat={incomingSos.lat}
       lng={incomingSos.lng}
       ageMs={incomingSos.ageMs}
+      receivedAt={incomingSos.receivedAt}
       pendingCount={pendingSosCount}
+      position={sosPosition}
+      total={sosTotal}
+      me={liveLocation}
+      heading={heading}
+      headingLive={hasHeadingReading}
       onAcknowledge={acknowledgeSos}
     />
   );

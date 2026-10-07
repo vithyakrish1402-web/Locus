@@ -1,12 +1,23 @@
 // @vitest-environment jsdom
+//
+// The received Emergency alert (SosOverlay.jsx; redesign Emergency batch, E4 and E5): who
+// needs help, how long ago, where their phone's last known location is from here (13a),
+// "1 of 2" when alerts are queued, the footer line, and Acknowledge as the only way out. The
+// alarm and vibration are unchanged.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import SosOverlay from '../src/components/SosOverlay.jsx';
+import { SOS_RECEIVED } from '../src/copy/emergency.js';
+import { LAYER } from '../src/utils/layers.js';
 
 // The klaxon itself is covered in useAlertAudio.test.jsx; here we only care that the
 // overlay starts/stops it at the right moments.
 const audio = vi.hoisted(() => ({ start: vi.fn(), stop: vi.fn() }));
 vi.mock('../src/hooks/useAlertAudio', () => ({ useAlertAudio: () => audio }));
+
+const HERE = { lat: 12.8230, lng: 80.0440 };
+// About 120 m north of HERE.
+const NORTH_120 = { lat: 12.8230 + 120 / 111320, lng: 80.0440 };
 
 const renderOverlay = (props = {}) => {
   const onAcknowledge = vi.fn();
@@ -14,6 +25,11 @@ const renderOverlay = (props = {}) => {
     <SosOverlay senderName="Bravo" lat={12.82313} lng={80.04421} onAcknowledge={onAcknowledge} {...props} />
   );
   return { onAcknowledge, ...utils };
+};
+const location = () => screen.getByTestId('sos-location').textContent;
+const description = () => {
+  const dialog = screen.getByRole('alertdialog');
+  return document.getElementById(dialog.getAttribute('aria-describedby')).textContent;
 };
 
 beforeEach(() => {
@@ -27,40 +43,99 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('SosOverlay content', () => {
-  it('shows who sent it and where, to four decimals', () => {
+describe('who and when', () => {
+  it('says who needs help, in their own name', () => {
     renderOverlay();
-    expect(screen.getByText('BRAVO')).toBeTruthy();
-    expect(screen.getByText('12.8231, 80.0442')).toBeTruthy();
-    expect(screen.getByText(/Transmitting \/\/ Unacknowledged/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Bravo needs help' })).toBeTruthy();
+    expect(screen.getByText(SOS_RECEIVED.kicker)).toBeTruthy();
   });
 
-  it('says so when there are no coordinates, and copes with no name', () => {
-    renderOverlay({ senderName: null, lat: null, lng: null });
-    expect(screen.getByText('UNKNOWN NODE')).toBeTruthy();
-    expect(screen.getByText('COORDINATES UNAVAILABLE')).toBeTruthy();
+  it('copes with no name without inventing one', () => {
+    renderOverlay({ senderName: null });
+    expect(screen.getByRole('heading', { name: 'Someone in your group needs help' })).toBeTruthy();
   });
 
-  it('says how old a replayed SOS is, but only once it is at least a minute old', () => {
-    const { unmount } = renderOverlay({ ageMs: 12 * 60000 + 5000 });
-    expect(screen.getByText(/Sent 12 min ago \/\/ Unacknowledged/)).toBeTruthy();
+  it('a live alert was sent just now; a replayed one says how old it is', () => {
+    const { unmount } = renderOverlay({ ageMs: 0, receivedAt: Date.now() });
+    expect(screen.getByTestId('sos-age').textContent).toBe('Sent just now');
     unmount();
-
-    renderOverlay({ ageMs: 45000 });
-    expect(screen.getByText(/Transmitting \/\/ Unacknowledged/)).toBeTruthy();
+    renderOverlay({ ageMs: 12 * 60000 + 5000, receivedAt: Date.now() });
+    expect(screen.getByTestId('sos-age').textContent).toBe('Sent 12 min ago');
   });
 
-  it('shows how many more SOS are queued behind this one', () => {
-    const { unmount } = renderOverlay();
-    expect(screen.queryByText(/more waiting/)).toBeNull();
-    unmount();
-
-    renderOverlay({ pendingCount: 2 });
-    expect(screen.getByText('+2 more waiting')).toBeTruthy();
+  it("goes on counting while it is up, on this phone's clock (the server's age, plus the time since it arrived)", () => {
+    vi.useFakeTimers();
+    renderOverlay({ ageMs: 30000, receivedAt: Date.now() });
+    expect(screen.getByTestId('sos-age').textContent).toBe('Sent just now');
+    act(() => { vi.advanceTimersByTime(30000); });
+    expect(screen.getByTestId('sos-age').textContent).toBe('Sent 1 min ago');
+    act(() => { vi.advanceTimersByTime(4 * 60000); });
+    expect(screen.getByTestId('sos-age').textContent).toBe('Sent 5 min ago');
   });
 });
 
-describe('SosOverlay dismissal — ACKNOWLEDGE is the only way out', () => {
+describe('where (13a)', () => {
+  it('with a location and a compass: their phone\'s last known location, about how far, and a clock direction', () => {
+    renderOverlay({ ...NORTH_120, me: HERE, heading: 0, headingLive: true });
+    expect(location()).toBe("Their phone's last known location · about 120 m · straight ahead");
+    renderOverlay({ ...NORTH_120, me: HERE, heading: 270, headingLive: true });
+    expect(screen.getAllByTestId('sos-location')[1].textContent).toBe("Their phone's last known location · about 120 m · 3 o’clock");
+  });
+
+  it('without a compass: compass words instead of a clock', () => {
+    renderOverlay({ ...NORTH_120, me: HERE });
+    expect(location()).toBe("Their phone's last known location · about 120 m · to the north");
+  });
+
+  it('with no position of our own: their coordinates', () => {
+    renderOverlay();
+    expect(location()).toBe("Their phone's last known location · 12.8231, 80.0442");
+  });
+
+  it('no location came with it: says exactly that, and invents nothing', () => {
+    renderOverlay({ lat: null, lng: null, me: HERE });
+    expect(location()).toBe('No location came with this alert');
+    expect(screen.getByTestId('sos-location').dataset.hasLocation).toBeUndefined();
+    expect(document.body.textContent).not.toMatch(/last seen|near/i);
+  });
+});
+
+describe('queued alerts', () => {
+  it('"1 of 2" only when more than one is in this run', () => {
+    const { unmount } = renderOverlay({ position: 1, total: 1 });
+    expect(screen.queryByTestId('sos-counter')).toBeNull();
+    unmount();
+    renderOverlay({ position: 1, total: 2 });
+    expect(screen.getByTestId('sos-counter').textContent).toBe('1 of 2');
+  });
+});
+
+describe('the footer', () => {
+  it('says what an alert carries, and that it stays until acknowledged', () => {
+    renderOverlay();
+    expect(screen.getByTestId('sos-footer').textContent).toBe(SOS_RECEIVED.footer);
+  });
+});
+
+describe('the look', () => {
+  it('a red band in the emergency colour; no glow, no flashing frame, no old grid', () => {
+    const { container } = renderOverlay();
+    expect(screen.getByTestId('sos-band').className).toContain('bg-emergency');
+    expect(container.innerHTML).not.toMatch(/locus-sos-strobe|box-shadow|Tactical Grid|sos-hex-pattern|font-dot|#4A0A0A|#EF4444/i);
+  });
+});
+
+describe('above everything', () => {
+  it('stands on the top layer of the app: over AR Scan, sheets, notices and the update screens', () => {
+    renderOverlay();
+    expect(Number(screen.getByRole('alertdialog').style.zIndex)).toBe(LAYER.emergency);
+    for (const [name, z] of Object.entries(LAYER)) {
+      if (name !== 'emergency') expect(LAYER.emergency, name).toBeGreaterThan(z);
+    }
+  });
+});
+
+describe('Acknowledge is the only way out', () => {
   it('exposes exactly one button, and it acknowledges (stopping the klaxon first)', () => {
     const { onAcknowledge } = renderOverlay();
     const buttons = screen.getAllByRole('button');
@@ -84,14 +159,16 @@ describe('SosOverlay dismissal — ACKNOWLEDGE is the only way out', () => {
     expect(screen.getByRole('alertdialog')).toBeTruthy();
   });
 
-  it('is not dismissed by clicking outside the content, on the backdrop or on the text', () => {
+  it('is not dismissed by tapping anywhere else on it', () => {
     const { onAcknowledge } = renderOverlay();
     const dialog = screen.getByRole('alertdialog');
     fireEvent.pointerDown(dialog);
     fireEvent.mouseDown(dialog);
-    fireEvent.click(dialog); // the full-viewport backdrop
-    fireEvent.click(screen.getByText('BRAVO'));
-    fireEvent.click(screen.getByText('SOS'));
+    fireEvent.click(dialog);
+    fireEvent.click(screen.getByRole('heading'));
+    fireEvent.click(screen.getByTestId('sos-band'));
+    fireEvent.click(screen.getByTestId('sos-location'));
+    fireEvent.click(screen.getByTestId('sos-footer'));
     expect(onAcknowledge).not.toHaveBeenCalled();
     expect(screen.getByRole('alertdialog')).toBeTruthy();
   });
@@ -99,16 +176,17 @@ describe('SosOverlay dismissal — ACKNOWLEDGE is the only way out', () => {
   it('never times out', () => {
     vi.useFakeTimers();
     const { onAcknowledge } = renderOverlay();
-    vi.advanceTimersByTime(60 * 60 * 1000); // an hour
+    act(() => { vi.advanceTimersByTime(60 * 60 * 1000); }); // an hour
     expect(onAcknowledge).not.toHaveBeenCalled();
     expect(screen.getByRole('alertdialog')).toBeTruthy();
   });
 });
 
-describe('SosOverlay alarm', () => {
-  it('starts the klaxon and vibrates on mount, and stops the klaxon on unmount', () => {
+describe('alarm and vibration, unchanged', () => {
+  it('starts the klaxon and vibrates [300,150,300,150,300] on mount, and stops the klaxon on unmount', () => {
     const { unmount } = renderOverlay();
     expect(audio.start).toHaveBeenCalled();
+    expect(navigator.vibrate).toHaveBeenCalledTimes(1);
     expect(navigator.vibrate).toHaveBeenCalledWith([300, 150, 300, 150, 300]);
     audio.stop.mockClear();
     unmount();
@@ -121,43 +199,35 @@ describe('SosOverlay alarm', () => {
   });
 });
 
-describe('SosOverlay accessibility', () => {
-  it('is a modal alert dialog, named "SOS" and described in full sentences', () => {
-    renderOverlay({ pendingCount: 1, ageMs: 3 * 60000 });
-    const dialog = screen.getByRole('alertdialog', { name: 'SOS' });
+describe('screen readers', () => {
+  it('a modal alert dialog, named by who needs help and described in full sentences', () => {
+    renderOverlay({ ...NORTH_120, me: HERE, heading: 0, headingLive: true, ageMs: 3 * 60000, receivedAt: Date.now(), position: 1, total: 2 });
+    const dialog = screen.getByRole('alertdialog', { name: 'Bravo needs help' });
     expect(dialog.getAttribute('aria-modal')).toBe('true');
-
-    const description = document.getElementById(dialog.getAttribute('aria-describedby')).textContent;
-    expect(description).toContain('Bravo has triggered an SOS beacon.');
-    expect(description).toContain('Last known position 12.8231, 80.0442.');
-    expect(description).toContain('Sent 3 minutes ago.');
-    expect(description).toContain('1 more SOS alert is waiting after this one.');
-    expect(description).toContain('Activate Acknowledge to dismiss.');
+    expect(description()).toBe("Bravo needs help. Sent 3 min ago. Their phone's last known location · about 120 m · straight ahead. Alert 1 of 2. Activate Acknowledge to dismiss.");
   });
 
-  it('describes a missing position and an unknown sender without inventing details', () => {
+  it('says plainly when no location came, and invents no sender', () => {
     renderOverlay({ senderName: '', lat: undefined, lng: undefined });
-    const dialog = screen.getByRole('alertdialog');
-    const description = document.getElementById(dialog.getAttribute('aria-describedby')).textContent;
-    expect(description).toContain('An unknown squad member has triggered an SOS beacon.');
-    expect(description).toContain('Position unavailable.');
-    expect(description).not.toContain('Sent');
+    expect(description()).toContain('Someone in your group needs help.');
+    expect(description()).toContain('No location came with this alert.');
   });
 
-  it('hides the decorative hex grid and strobing frame from assistive tech', () => {
+  it('hides its icons from assistive tech', () => {
     const { container } = renderOverlay();
-    expect(container.querySelector('svg').closest('[aria-hidden="true"]')).toBeTruthy();
-    expect(container.querySelector('.locus-sos-strobe').getAttribute('aria-hidden')).toBe('true');
+    for (const svg of container.querySelectorAll('svg')) {
+      expect(svg.closest('[aria-hidden="true"]') || svg.getAttribute('aria-hidden') === 'true').toBeTruthy();
+    }
   });
 });
 
-describe('SosOverlay focus handling', () => {
-  it('takes focus on open, on the ACKNOWLEDGE button', () => {
+describe('focus', () => {
+  it('takes focus on open, on the Acknowledge button', () => {
     renderOverlay();
     expect(document.activeElement).toBe(screen.getByRole('button'));
   });
 
-  it('keeps focus on ACKNOWLEDGE when Tab is pressed (in either direction)', () => {
+  it('keeps focus on Acknowledge when Tab is pressed (in either direction)', () => {
     renderOverlay();
     const button = screen.getByRole('button');
     expect(fireEvent.keyDown(button, { key: 'Tab' })).toBe(false); // default prevented

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-// An older server doesn't send an id; fall back to something stable enough to dedupe.
-const withId = (sos) => ({ ...sos, id: sos.id ?? `${sos.senderId}:${sos.timestamp}` });
+// An older server doesn't send an id; fall back to something stable enough to dedupe. Each
+// beacon is also stamped with when it reached THIS phone, on this phone's clock, so its age can
+// keep counting here (the server's ageMs, plus the time since) without mixing two clocks.
+const withId = (sos) => ({ ...sos, id: sos.id ?? `${sos.senderId}:${sos.timestamp}`, receivedAt: Date.now() });
 
 /**
  * Incoming squad-wide SOS beacons, as a queue the overlay works through one at a time.
@@ -21,6 +23,9 @@ const withId = (sos) => ({ ...sos, id: sos.id ?? `${sos.senderId}:${sos.timestam
 export function useIncomingSos(socket) {
   const [queue, setQueue] = useState([]);
   const queueRef = useRef(queue);
+  // How many of this run of alerts have been acknowledged, for "1 of 2": counted from the
+  // first alert of a run until the queue is empty again.
+  const [handled, setHandled] = useState(0);
 
   useEffect(() => {
     queueRef.current = queue;
@@ -47,6 +52,7 @@ export function useIncomingSos(socket) {
     if (!head) return;
     socket.emit('sos-ack', { id: head.id });
     setQueue((current) => current.filter((sos) => sos.id !== head.id));
+    setHandled((n) => (queueRef.current.length > 1 ? n + 1 : 0));
   }, [socket]);
 
   // Ask the server to replay any beacon this member hasn't acknowledged. Call it each
@@ -58,6 +64,9 @@ export function useIncomingSos(socket) {
   return {
     current: queue[0] ?? null,
     pendingCount: Math.max(0, queue.length - 1),
+    // Where this alert stands in the run: "{position} of {total}".
+    position: queue.length ? handled + 1 : 0,
+    total: queue.length ? handled + queue.length : 0,
     acknowledge,
     requestSync,
   };

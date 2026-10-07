@@ -209,7 +209,7 @@ describe('the location explainer', () => {
       expect(explainer()).toBeTruthy();
       act(() => fakeSocket.receive('sos-received', { id: 'sos-1', senderId: 'bravo-socket', senderName: 'Bravo', lat: 12.8231, lng: 80.0442, ageMs: 0 }));
       const alert = screen.getByRole('alertdialog');
-      expect(alert.textContent).toContain('BRAVO');
+      expect(alert.textContent).toContain('Bravo needs help');
       // Both are drawn, the alert on the higher layer, and not inside the explainer's sheet.
       expect(explainer()).toBeTruthy();
       expect(explainer().contains(alert)).toBe(false);

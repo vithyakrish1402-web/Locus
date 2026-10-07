@@ -141,7 +141,7 @@ describe('incoming SOS while a mandatory update gates the app', () => {
     act(() => fakeSocket.receive('sos-received', SOS));
 
     const sos = screen.getByRole('alertdialog');
-    expect(sos.textContent).toContain('BRAVO');
+    expect(sos.textContent).toContain('Bravo needs help');
     expect(sos.textContent).toContain('12.8231, 80.0442');
     // The gate is still there underneath: acknowledging an SOS must not be a way
     // around a required update.

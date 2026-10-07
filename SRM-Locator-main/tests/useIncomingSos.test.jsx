@@ -167,3 +167,51 @@ describe('useIncomingSos listener hygiene', () => {
     expect(socket.handlers['sos-received'].size).toBe(1);
   });
 });
+
+// "1 of 2" (redesign Emergency batch, E4): where this alert stands in the current run.
+describe('useIncomingSos position in the run', () => {
+  it('nothing up: 0 of 0', () => {
+    const { result } = setup();
+    expect([result.current.position, result.current.total]).toEqual([0, 0]);
+  });
+
+  it('one alert: 1 of 1', () => {
+    const { result, receive } = setup();
+    receive(sos());
+    expect([result.current.position, result.current.total]).toEqual([1, 1]);
+  });
+
+  it('counts through a run: 1 of 3, 2 of 3, 3 of 3, and starts again after the last', () => {
+    const { result, receive } = setup();
+    receive(sos({ id: 'a', senderId: 'sock-b' }));
+    receive(sos({ id: 'b', senderId: 'sock-c' }));
+    receive(sos({ id: 'c', senderId: 'sock-d' }));
+    expect([result.current.position, result.current.total]).toEqual([1, 3]);
+    act(() => result.current.acknowledge());
+    expect([result.current.position, result.current.total]).toEqual([2, 3]);
+    act(() => result.current.acknowledge());
+    expect([result.current.position, result.current.total]).toEqual([3, 3]);
+    act(() => result.current.acknowledge());
+    expect([result.current.position, result.current.total]).toEqual([0, 0]);
+    receive(sos({ id: 'd', senderId: 'sock-e' }));
+    expect([result.current.position, result.current.total]).toEqual([1, 1]);
+  });
+
+  it('one arriving mid-run joins the count', () => {
+    const { result, receive } = setup();
+    receive(sos({ id: 'a', senderId: 'sock-b' }));
+    receive(sos({ id: 'b', senderId: 'sock-c' }));
+    act(() => result.current.acknowledge());
+    receive(sos({ id: 'c', senderId: 'sock-d' }));
+    expect([result.current.position, result.current.total]).toEqual([2, 3]);
+  });
+
+  it("stamps each alert with when it reached this phone, on this phone's clock", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-07T10:00:00Z'));
+    const { result, receive } = setup();
+    receive(sos());
+    expect(result.current.current.receivedAt).toBe(Date.parse('2026-10-07T10:00:00Z'));
+    vi.useRealTimers();
+  });
+});
