@@ -520,7 +520,7 @@ No earlier wording inventory exists. I searched for `locus-wording-inventory.md`
 | File:line | Current | Proposed |
 |---|---|---|
 | `SosTrigger.jsx:17-23` | SOS / HOLD TO CONFIRM / SOS SENT | Emergency alert: hold / Hold again to send / Alert sent (+ new sent/without-location/let-go-early copy from the handoff) |
-| `SosTrigger.jsx:25-31` | aria: "…arm SOS beacon…" | "Emergency alert. Press and hold to start." etc. |
+| `SosTrigger.jsx` `ARIA_LABELS`, `HELD_ARIA_LABEL` | aria: "Press and hold to arm SOS beacon", "Keep holding to arm SOS beacon", "Armed. Press and hold again to confirm SOS beacon", "Keep holding to confirm SOS beacon", "SOS beacon sent", "…Press and hold to arm SOS beacon again" | Every "SOS beacon" becomes "Emergency alert button" (owner, 2026-10-07: wording pass), e.g. "Emergency alert button. Press and hold to arm". Tests find the button by `/SOS beacon/`, `/arm SOS beacon/`, `/confirm SOS beacon/` and must change with it. |
 | `SosOverlay.jsx:68` | UNKNOWN NODE | A group member |
 | `SosOverlay.jsx:71-72` | Sent N min ago // Unacknowledged / Transmitting // Unacknowledged | Sent {n} min ago / Just now |
 | `SosOverlay.jsx:77-83` | spoken: "…has triggered an SOS beacon. Last known position… Activate Acknowledge to dismiss." | "{Name} sent an emergency alert…" |
