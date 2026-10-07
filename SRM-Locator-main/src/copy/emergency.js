@@ -7,14 +7,68 @@ export const SOS_HELD = {
   body: "Your alert will send when you're back online. If you need help right now, call 112.",
 };
 
-// A held alert that went out once the phone was back in its group.
-export const SOS_DELIVERED = {
-  title: 'Emergency alert sent',
-  body: 'It went to your group as soon as you were back online.',
+// Sent (E3). The location line says "last known": the phone sends the latest fix it has.
+export const SOS_SENT = {
+  title: 'Emergency alert sent to your group',
+  withLocation: "Your phone's last known location was sent with it.",
+  noLocationTitle: 'Alert sent, but without your location',
+  noLocation: "Your phone couldn't get a location fix. If you can, tell your group where you are.",
+  // A held alert that went once the phone was back in its group.
+  late: 'It went as soon as you were back online.',
+  stillPaused: 'Your sharing is still paused.',
+  stillHidden: 'Your sharing is still hidden.',
 };
+// The offline fix's notice once a held alert goes: the same title.
+export const SOS_DELIVERED = { title: SOS_SENT.title, body: SOS_SENT.late };
 
 // A held alert that can never go: the group is gone from the server, or this phone left it.
 export const SOS_DROPPED = {
   gone: "Your group is no longer on the server, so your alert couldn't reach them. If you need help right now, call 112.",
   left: "You're no longer in the group, so your alert couldn't reach them. If you need help right now, call 112.",
+};
+
+// The button's own words (components/SosTrigger.jsx). It reads SOS through both holds; the
+// card above it says what is happening.
+export const SOS_BUTTON = {
+  sos: 'SOS',
+  sent: 'Sent',
+  held: 'Waiting for connection',
+  early: 'Hold longer',
+};
+
+// The card above the button while it is held, and between the two holds.
+export const SOS_HOLD = {
+  arming: { title: 'Keep holding', body: 'Release to cancel. Nothing has been sent.' },
+  armed: { title: 'Hold again to send an emergency alert', body: 'Your group will be alerted at once. Let go and wait 4 seconds to cancel.' },
+  confirming: { title: 'Keep holding to send', body: 'Release to cancel.' },
+  // While sharing is Paused or Hidden: an alert always carries the location.
+  location: 'Your location will be sent to your group with this alert.',
+  steps: ['Hold to arm', 'Hold again to send'],
+};
+
+// What a screen reader hears as the button changes (a polite live region).
+export const SOS_SPOKEN = {
+  arming: 'Keep holding.',
+  armed: 'Armed. Hold again within 4 seconds to send an emergency alert.',
+  confirming: 'Keep holding to send.',
+  fired: 'Emergency alert sent.',
+  held: 'Waiting for connection. Your alert will send when you are back online.',
+  early: 'Hold longer, until the ring fills.',
+};
+
+// The alert as it arrives (E4, components/SosOverlay.jsx).
+export const SOS_RECEIVED = {
+  kicker: 'Emergency alert',
+  needsHelp: (name) => `${name} needs help`,
+  someone: 'Someone in your group',
+  // How long ago the server got it, counted on from when it reached this phone.
+  age: (minutes) => (minutes < 1 ? 'Sent just now' : `Sent ${minutes} min ago`),
+  ofTotal: (position, total) => `${position} of ${total}`,
+  // 13a (owner, 2026-10-07): with a location, where it is from here; without, say so.
+  located: "Their phone's last known location",
+  noLocation: 'No location came with this alert',
+  about: (distance) => `about ${distance}`,
+  closeBy: 'within about 15 m of you',
+  footer: "An alert includes the sender's location whenever their phone has one, even if they paused sharing or are hidden. This stays on screen until you acknowledge it; the next alert shows after this one.",
+  acknowledge: 'Acknowledge',
 };

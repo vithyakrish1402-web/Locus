@@ -112,6 +112,9 @@ export const WAITING = {
   title: 'Waiting for approval',
   body: (code) => `We asked the Group Lead of ${spacedCode(code)} to let you in. You will join as soon as they approve.`,
   cancel: 'Cancel request',
+  // In the Emergency button's place while waiting (D3): the server drops an alert from
+  // someone not yet let in.
+  emergency: "Emergency alerts work once you're in a group.",
 };
 
 export const NOT_APPROVED = {

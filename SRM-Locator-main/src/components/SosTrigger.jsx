@@ -1,31 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Check, MapPin } from 'lucide-react';
+import { SOS_BUTTON, SOS_HOLD, SOS_SPOKEN } from '../copy/emergency';
 
-// Fixed 80x80 design grid for the progress rings (see LiveLocationMarker.jsx
-// for the same pattern) so radii/strokes stay proportional regardless of the
-// rendered button size.
-const GRID = 80;
+// The Emergency button (redesign Emergency batch, E2): a red circle with a casing, the
+// design's rings drawn just outside it, and a card above it that says what is happening
+// while it is held. Its behaviour is exactly as before: the same 80 px hit area, the same two
+// holds (holdDurationMs to arm, then a second hold started within armWindowMs to send), and
+// letting go early always goes back to the start.
+
+// The rings' own grid: 96 px, 8 px wider than the button on every side, so they sit just
+// outside it. They take no touches; the button alone is the hit area.
+const GRID = 96;
 const CENTER = GRID / 2;
 
-const HOLD_RADIUS = 34;
+const HOLD_RADIUS = 44;
 const HOLD_CIRCUMFERENCE = 2 * Math.PI * HOLD_RADIUS;
 
-const COUNTDOWN_RADIUS = 27;
+const COUNTDOWN_RADIUS = 44;
 const COUNTDOWN_CIRCUMFERENCE = 2 * Math.PI * COUNTDOWN_RADIUS;
 
 const FIRED_DISPLAY_MS = 2000;
+// "Hold longer" after letting go early: a reminder only. The button is back at rest, and a new
+// press starts a hold exactly as it would without it.
+const EARLY_DISPLAY_MS = 1500;
 
 // While an alert is held for want of a connection (utils/sosOutbox.js), the button says so
-// instead of SOS or SOS SENT: never "sent" while it is only waiting.
-const HELD_LABEL = 'WAITING FOR CONNECTION';
+// instead of SOS or Sent: never "sent" while it is only waiting.
 const HELD_ARIA_LABEL = 'Emergency alert waiting for connection. It will send when you are back online. Press and hold to arm SOS beacon again';
-
-const LABELS = {
-  idle: 'SOS',
-  arming: 'SOS',
-  armed: 'HOLD TO CONFIRM',
-  confirming: 'HOLD TO CONFIRM',
-  fired: 'SOS SENT',
-};
 
 const ARIA_LABELS = {
   idle: 'Press and hold to arm SOS beacon',
@@ -35,12 +36,14 @@ const ARIA_LABELS = {
   fired: 'SOS beacon sent',
 };
 
-const PHASE_STYLES = {
-  idle: 'border-red-400 shadow-[0_0_20px_rgba(220,38,38,0.6)]',
-  arming: 'border-red-400 shadow-[0_0_20px_rgba(220,38,38,0.6)]',
-  armed: 'border-yellow-300 shadow-[0_0_28px_rgba(220,38,38,0.75)]',
-  confirming: 'border-yellow-300 shadow-[0_0_28px_rgba(220,38,38,0.75)]',
-  fired: 'border-white shadow-[0_0_30px_rgba(220,38,38,1)]',
+// The button's look in each phase. Red with a casing at rest and while held; white with a red
+// edge once armed, so armed never relies on colour alone (the card says so too). No glow.
+const PHASE_LOOK = {
+  idle: 'bg-danger text-danger-on border-surface',
+  arming: 'bg-danger-pressed text-danger-on border-surface',
+  armed: 'bg-surface text-danger border-danger locus-sos-armed',
+  confirming: 'bg-danger-pressed text-danger-on border-surface',
+  fired: 'bg-danger text-danger-on border-surface',
 };
 
 // The hold-progress ring is reused verbatim for both the ARMING and
@@ -71,6 +74,8 @@ const countdownRingFor = (phase, armWindowMs) => {
   return { offset: 0, duration: 0, visible: false };
 };
 
+const HOLDING = ['arming', 'armed', 'confirming'];
+
 /**
  * Dedicated SOS trigger: press-and-hold to arm, then a second press-and-hold
  * within a short window to confirm. Entirely client-side state until the
@@ -96,12 +101,17 @@ const SosTrigger = ({
   outbox = null,
   // An alert is being held: the button reads "Waiting for connection" until it goes.
   held = false,
+  // The sharing mode ('ACTIVE' | 'FROZEN' | 'GHOST'). Paused or Hidden, the card says the
+  // alert carries the location anyway.
+  sharingMode = 'ACTIVE',
 }) => {
   const [phase, setPhase] = useState('idle');
+  const [early, setEarly] = useState(false);
 
   const holdTimeoutRef = useRef(null);
   const armWindowTimeoutRef = useRef(null);
   const firedTimeoutRef = useRef(null);
+  const earlyTimeoutRef = useRef(null);
 
   const clearAllTimers = () => {
     clearTimeout(holdTimeoutRef.current);
@@ -112,7 +122,16 @@ const SosTrigger = ({
     firedTimeoutRef.current = null;
   };
 
-  useEffect(() => clearAllTimers, []);
+  const clearEarly = () => {
+    clearTimeout(earlyTimeoutRef.current);
+    earlyTimeoutRef.current = null;
+    setEarly(false);
+  };
+
+  useEffect(() => () => {
+    clearAllTimers();
+    clearTimeout(earlyTimeoutRef.current);
+  }, []);
 
   const emitSosBroadcast = () => {
     const send = (coords) => {
@@ -170,6 +189,7 @@ const SosTrigger = ({
 
   const startHold = (nextPhase) => {
     clearAllTimers();
+    clearEarly();
     setPhase(nextPhase);
     holdTimeoutRef.current = setTimeout(() => {
       if (nextPhase === 'arming') enterArmed();
@@ -188,70 +208,150 @@ const SosTrigger = ({
     if (phase === 'arming' || phase === 'confirming') {
       clearAllTimers();
       setPhase('idle');
+      // A reminder that it needs the full hold. Purely words: the button is at rest.
+      clearTimeout(earlyTimeoutRef.current);
+      setEarly(true);
+      earlyTimeoutRef.current = setTimeout(() => setEarly(false), EARLY_DISPLAY_MS);
     }
   };
 
-  const showHeld = held && (phase === 'idle' || phase === 'fired');
   const holdRing = holdRingFor(phase, holdDurationMs);
   const countdownRing = countdownRingFor(phase, armWindowMs);
 
+  // What the button shows at rest: waiting for a connection, a reminder to hold longer, or SOS.
+  const resting = phase === 'idle' || phase === 'fired';
+  const showHeld = held && resting;
+  const showEarly = !showHeld && early && phase === 'idle';
+  const view = showHeld ? 'held' : showEarly ? 'early' : phase;
+  const spoken = SOS_SPOKEN[view] ?? '';
+
+  const holding = HOLDING.includes(phase);
+  const card = holding ? SOS_HOLD[phase] : null;
+  const locationNote = holding && phase !== 'arming' && (sharingMode === 'FROZEN' || sharingMode === 'GHOST');
+  const layerStyle = layer === null ? {} : { zIndex: layer };
+  const layerClass = layer === null ? 'z-[1150]' : '';
+
+  let content;
+  if (view === 'fired') content = <Check size={34} strokeWidth={3} aria-hidden="true" />;
+  else if (view === 'held') content = <span className="text-[11px] font-semibold leading-tight px-2">{SOS_BUTTON.held}</span>;
+  else if (view === 'early') content = <span className="text-[13px] font-semibold leading-tight px-2">{SOS_BUTTON.early}</span>;
+  else content = <span className="text-[22px] font-bold tracking-wide leading-none">{SOS_BUTTON.sos}</span>;
+
   return (
-    <button
-      type="button"
-      onPointerDown={handlePointerDown}
-      onPointerUp={cancelHold}
-      onPointerLeave={cancelHold}
-      onPointerCancel={cancelHold}
-      onContextMenu={(e) => e.preventDefault()}
-      aria-label={showHeld ? HELD_ARIA_LABEL : ARIA_LABELS[phase]}
-      // Placement has to dodge two different chrome layouts, and an SOS control must
-      // never end up underneath either of them:
-      //   mobile  - the bottom HUD (GRID/SCAN/SQUAD) is fixed bottom-0 at z-[1100]
-      //             and ~70px tall, so bottom-4 put this button straight behind it.
-      //             bottom-20 clears it and mirrors the Rally Point FAB on the right.
-      //   desktop - the squad sidebar is fixed left-6 w-80 (ends ~344px in), so
-      //             left-4 overlapped it; left-[23rem] sits just clear of its edge.
-      // z-[1150] keeps it above both regardless, so it can never be buried again.
-      className={`fixed bottom-20 left-4 md:bottom-6 md:left-[23rem] z-[1150] w-20 h-20 rounded-full select-none touch-none pointer-events-auto flex items-center justify-center border-2 bg-red-600 text-white active:scale-95 transition-[border-color,box-shadow] duration-200 ${PHASE_STYLES[phase]} ${className}`}
-      style={{
-        marginBottom: 'env(safe-area-inset-bottom)',
-        ...(layer === null ? {} : { zIndex: layer }),
-        animation: phase === 'armed' ? 'locus-sos-pulse 0.6s ease-in-out infinite' : 'none',
-      }}
-    >
-      <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox={`0 0 ${GRID} ${GRID}`}>
-        <circle
-          cx={CENTER}
-          cy={CENTER}
-          r={COUNTDOWN_RADIUS}
-          fill="none"
-          stroke="#fca5a5"
-          strokeWidth={3}
-          strokeLinecap="round"
-          strokeDasharray={COUNTDOWN_CIRCUMFERENCE}
-          strokeDashoffset={countdownRing.offset}
-          style={{
-            transition: `stroke-dashoffset ${countdownRing.duration}ms linear`,
-            opacity: countdownRing.visible ? 1 : 0,
-          }}
-        />
-        <circle
-          cx={CENTER}
-          cy={CENTER}
-          r={HOLD_RADIUS}
-          fill="none"
-          stroke="#ffffff"
-          strokeWidth={4}
-          strokeLinecap="round"
-          strokeDasharray={HOLD_CIRCUMFERENCE}
-          strokeDashoffset={holdRing.offset}
-          style={{ transition: `stroke-dashoffset ${holdRing.duration}ms linear` }}
-        />
-      </svg>
-      <span className="relative z-10 font-dot text-[10px] uppercase tracking-widest leading-tight text-center px-1">
-        {showHeld ? HELD_LABEL : LABELS[phase]}
-      </span>
-    </button>
+    <>
+      {/* While it is held: the screen dims and a card says what is happening. Neither takes a
+          touch, so nothing about the holds changes. */}
+      {holding && (
+        <>
+          <div
+            data-testid="sos-scrim"
+            aria-hidden="true"
+            className={`fixed inset-0 bg-backdrop pointer-events-none ${layerClass}`}
+            style={layerStyle}
+          />
+          <div
+            data-testid="sos-hold-card"
+            data-phase={phase}
+            aria-hidden="true"
+            className={`fixed left-3 right-3 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:left-[23rem] md:right-auto md:w-96 md:bottom-32 rounded-card bg-raised text-text font-ui shadow-[var(--shadow-2)] border border-border p-5 pointer-events-none ${layerClass}`}
+            style={layerStyle}
+          >
+            <p className="text-heading">{card.title}</p>
+            <p className="mt-1 text-body text-text-secondary">{card.body}</p>
+            {locationNote && (
+              <p data-testid="sos-location-note" className="mt-4 flex items-start gap-3 rounded-input bg-danger-soft px-4 py-3 text-body text-text">
+                <MapPin size={20} className="shrink-0 mt-0.5 text-danger" aria-hidden="true" />
+                {SOS_HOLD.location}
+              </p>
+            )}
+            <div className="mt-4 grid grid-cols-2 gap-3 text-secondary text-text-secondary">
+              {SOS_HOLD.steps.map((step, i) => {
+                const done = i === 0 || phase === 'confirming';
+                return (
+                  <div key={step} data-testid="sos-step" data-done={done || undefined}>
+                    <div className={`h-1 rounded-full ${done ? 'bg-danger' : 'bg-border'}`} />
+                    <p className={`mt-2 ${i === 1 ? 'text-right' : ''}`}>{step}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* What a screen reader hears as the button changes. */}
+      <span data-testid="sos-spoken" role="status" aria-live="polite" className="sr-only">{spoken}</span>
+
+      <button
+        type="button"
+        data-testid="sos-button"
+        data-phase={phase}
+        data-view={view}
+        onPointerDown={handlePointerDown}
+        onPointerUp={cancelHold}
+        onPointerLeave={cancelHold}
+        onPointerCancel={cancelHold}
+        onContextMenu={(e) => e.preventDefault()}
+        aria-label={showHeld ? HELD_ARIA_LABEL : ARIA_LABELS[phase]}
+        // Placement has to dodge two different chrome layouts, and an SOS control must
+        // never end up underneath either of them:
+        //   mobile  - the bottom HUD (GRID/SCAN/SQUAD) is fixed bottom-0 at z-[1100]
+        //             and ~70px tall, so bottom-4 put this button straight behind it.
+        //             bottom-20 clears it and mirrors the Rally Point FAB on the right.
+        //   desktop - the squad sidebar is fixed left-6 w-80 (ends ~344px in), so
+        //             left-4 overlapped it; left-[23rem] sits just clear of its edge.
+        // z-[1150] keeps it above both regardless, so it can never be buried again.
+        className={`fixed bottom-20 left-4 md:bottom-6 md:left-[23rem] ${layerClass} w-20 h-20 rounded-full select-none touch-none pointer-events-auto flex items-center justify-center text-center font-ui border-4 shadow-[var(--shadow-2)] active:scale-95 transition-colors duration-200 ${PHASE_LOOK[phase]} ${className}`}
+        style={{
+          marginBottom: 'env(safe-area-inset-bottom)',
+          ...layerStyle,
+        }}
+      >
+        <svg className="absolute -inset-2 w-24 h-24 -rotate-90 pointer-events-none overflow-visible" viewBox={`0 0 ${GRID} ${GRID}`} aria-hidden="true">
+          {/* The track, while there is something to fill or drain. */}
+          <circle
+            data-testid="sos-ring-track"
+            cx={CENTER}
+            cy={CENTER}
+            r={HOLD_RADIUS}
+            fill="none"
+            className="stroke-danger-soft"
+            strokeWidth={4}
+            style={{ opacity: holding || phase === 'fired' ? 1 : 0 }}
+          />
+          <circle
+            data-testid="sos-ring-countdown"
+            cx={CENTER}
+            cy={CENTER}
+            r={COUNTDOWN_RADIUS}
+            fill="none"
+            className="stroke-danger"
+            strokeWidth={4}
+            strokeLinecap="round"
+            strokeDasharray={COUNTDOWN_CIRCUMFERENCE}
+            strokeDashoffset={countdownRing.offset}
+            style={{
+              transition: `stroke-dashoffset ${countdownRing.duration}ms linear`,
+              opacity: countdownRing.visible ? 1 : 0,
+            }}
+          />
+          <circle
+            data-testid="sos-ring-hold"
+            cx={CENTER}
+            cy={CENTER}
+            r={HOLD_RADIUS}
+            fill="none"
+            className="stroke-danger"
+            strokeWidth={4}
+            strokeLinecap="round"
+            strokeDasharray={HOLD_CIRCUMFERENCE}
+            strokeDashoffset={holdRing.offset}
+            style={{ transition: `stroke-dashoffset ${holdRing.duration}ms linear` }}
+          />
+        </svg>
+        <span className="relative z-10 flex items-center justify-center">{content}</span>
+      </button>
+    </>
   );
 };
 

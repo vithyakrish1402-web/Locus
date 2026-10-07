@@ -171,6 +171,11 @@ body {
 .leaflet-div-icon { background: transparent !important; border: none !important; }
 
 /* SosTrigger ARMED-state pulse (src/components/SosTrigger.jsx) */
+/* The Emergency button while armed (SosTrigger.jsx): a slow pulse. Reduced motion: held
+   still. Its rings are not touched here: they show time, so they fill and drain either way. */
+.locus-sos-armed { animation: locus-sos-pulse 0.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .locus-sos-armed { animation: none; } }
+
 @keyframes locus-sos-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }

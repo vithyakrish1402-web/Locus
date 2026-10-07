@@ -228,16 +228,43 @@ describe('joining a group', () => {
     expect(screen.getByText(LOBBY.hello('Meera'))).toBeTruthy();
   });
 
-  it('waiting: says who it asked, over the tab bar and under the Emergency button', () => {
+  it('waiting: says who it asked, over the tab bar', () => {
     render(<App />);
     joinAs('K7M2QX');
     const waiting = screen.getByRole('dialog', { name: WAITING.title });
     expect(waiting.textContent).toContain('K7M 2QX');
     expect(Number(waiting.style.zIndex)).toBe(STATUS_SCREEN_Z);
-    // Today's tab bar is z 1100 and the Emergency button z 1150 (their own classes).
+    // Today's tab bar is z 1100 (its own class).
     expect(STATUS_SCREEN_Z).toBeGreaterThan(1100);
-    expect(STATUS_SCREEN_Z).toBeLessThan(1150);
-    expect(screen.getByRole('button', { name: /SOS beacon/ }).className).toMatch(/z-\[1150\]/);
+  });
+
+  // D3 (owner, 2026-10-07): the server drops an alert from someone not yet let in, so while
+  // waiting there is no Emergency button, and a line in its place says when alerts work.
+  it('waiting: no Emergency button, and a line in its place saying alerts work once in a group', () => {
+    render(<App />);
+    joinAs('K7M2QX');
+    expect(screen.queryByTestId('sos-button')).toBeNull();
+    expect(screen.queryByRole('button', { name: /SOS beacon/ })).toBeNull();
+    const note = screen.getByTestId('emergency-note');
+    expect(note.textContent).toBe("Emergency alerts work once you're in a group.");
+    expect(screen.getByRole('dialog', { name: WAITING.title }).contains(note)).toBe(true);
+  });
+
+  it('put back to waiting (a server restart lost the approval): the button goes again', () => {
+    render(<App />);
+    joinAs('K7M2QX');
+    act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'K7M2QX' }));
+    act(() => fakeSocket.receive('access-pending', { roomCode: 'K7M2QX' }));
+    expect(screen.queryByTestId('sos-button')).toBeNull();
+    expect(screen.getByTestId('emergency-note')).toBeTruthy();
+  });
+
+  it('once let in: the Emergency button is back and the line has gone', () => {
+    render(<App />);
+    joinAs('K7M2QX');
+    act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'K7M2QX' }));
+    expect(screen.getByTestId('sos-button')).toBeTruthy();
+    expect(screen.queryByTestId('emergency-note')).toBeNull();
   });
 
   it("approved after waiting with a fix: You're in, sharing live, and Open the map closes it", () => {

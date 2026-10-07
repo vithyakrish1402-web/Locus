@@ -27,7 +27,7 @@ export function createSosOutbox(socket) {
   let inGroup = false;
   let held = null;
   const listeners = new Set();
-  const tell = (event, reason) => listeners.forEach((fn) => fn({ held: Boolean(held), event, reason }));
+  const tell = (event, details = {}) => listeners.forEach((fn) => fn({ held: Boolean(held), event, ...details }));
 
   // A new connection, or a lost one, isn't in the group until the server says so again.
   const notReady = () => { inGroup = false; };
@@ -47,7 +47,9 @@ export function createSosOutbox(socket) {
     isHolding: () => Boolean(held),
     /** The alert being held (a copy), or null. */
     held: () => (held ? { ...held } : null),
-    /** Called with { held, event: 'held' | 'sent' | 'dropped', reason } on every change. */
+    /** Called on every change with { held, event: 'held' | 'sent' | 'dropped' }, plus, for
+     *  'sent', { late, withLocation } (late: it waited for a connection), and for 'dropped',
+     *  { reason: 'gone' | 'left' }. */
     subscribe(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
@@ -56,6 +58,7 @@ export function createSosOutbox(socket) {
     send(payload) {
       if (canSend() && !held) {
         socket.emit('sos-broadcast', payload);
+        tell('sent', { late: false, withLocation: hasFix(payload) });
         return true;
       }
       // One alert at a time: the newer press's time, and its location if it has one.
@@ -77,14 +80,14 @@ export function createSosOutbox(socket) {
       const alert = held;
       held = null;
       socket.emit('sos-broadcast', alert);
-      tell('sent');
+      tell('sent', { late: true, withLocation: hasFix(alert) });
     },
     /** The group is gone, or this phone left it: let go of a held alert. Returns whether one was held. */
     drop(reason = 'left') {
       inGroup = false;
       if (!held) return false;
       held = null;
-      tell('dropped', reason);
+      tell('dropped', { reason });
       return true;
     },
     /** A fresh start (the app's first render): nothing held, not in a group yet, and its

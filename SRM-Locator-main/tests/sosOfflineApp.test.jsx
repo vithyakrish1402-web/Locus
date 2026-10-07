@@ -86,7 +86,7 @@ const { __resetNotifications, subscribe } = await import('../src/utils/notify.js
 let feed = [];
 subscribe((items) => { feed = items; });
 const noticeUp = (text) => feed.some((n) => n.message === text || n.body === text);
-const { SOS_HELD, SOS_DELIVERED, SOS_DROPPED } = await import('../src/copy/emergency.js');
+const { SOS_HELD, SOS_SENT, SOS_DROPPED } = await import('../src/copy/emergency.js');
 
 const A = { lat: 12.8230, lng: 80.0440 };
 const B = { lat: 12.8260, lng: 80.0470 };
@@ -132,7 +132,8 @@ const backOnline = () => {
   act(() => fakeSocket.receive('connect'));
 };
 const letBackIn = () => act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
-const label = () => button().textContent;
+// What the button shows: 'idle' (SOS), 'fired' (Sent), 'held' (Waiting for connection)...
+const label = () => button().dataset.view;
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'], shouldAdvanceTime: true });
@@ -160,7 +161,7 @@ afterEach(() => {
 });
 
 describe('online: exactly as before', () => {
-  it('one sos-broadcast at the end of the second hold, same payload, SOS SENT for 2 s, no buzz and no notice', async () => {
+  it('one sos-broadcast at the end of the second hold, same payload, Sent for 2 s, no buzz', async () => {
     await inGroupAt(A);
     fakeSocket.emit.mockClear();
     fireEvent.pointerDown(button(), { button: 0 });
@@ -176,14 +177,15 @@ describe('online: exactly as before', () => {
     expect(near(sent()[0], A)).toBe(true);
     // Nothing else went out with it.
     expect(fakeSocket.emit.mock.calls.map(([e]) => e).filter((e) => !['update-location', 'safety-ping', 'check-ping'].includes(e))).toEqual(['sos-broadcast']);
-    expect(label()).toBe('SOS SENT');
+    expect(label()).toBe('fired');
     expect(navigator.vibrate).not.toHaveBeenCalled();
+    // E3: a quiet "sent" notice, posted without a buzz of its own.
     expect(noticeUp(SOS_HELD.title)).toBe(false);
-    expect(noticeUp(SOS_DELIVERED.title)).toBe(false);
+    expect(feed.find((n) => n.message === SOS_SENT.title)?.body).toContain(SOS_SENT.withLocation);
     advance(1999);
-    expect(label()).toBe('SOS SENT');
+    expect(label()).toBe('fired');
     advance(1);
-    expect(label()).toBe('SOS');
+    expect(label()).toBe('idle');
   });
 });
 
@@ -194,15 +196,17 @@ describe('offline: held until back in the group', () => {
     fakeSocket.emit.mockClear();
     holdTwice();
     expect(sent()).toHaveLength(0);
-    expect(label()).toBe('WAITING FOR CONNECTION');
+    expect(label()).toBe('held');
     expect(button().getAttribute('aria-label')).toMatch(/^Emergency alert waiting for connection/);
-    expect(screen.getByText(SOS_HELD.title)).toBeTruthy();
+    // On the button, and as a notice.
+    expect(screen.getAllByText(SOS_HELD.title)).toHaveLength(2);
     expect(screen.getByText(SOS_HELD.body)).toBeTruthy();
     expect(feed.find((n) => n.message === SOS_HELD.title)).toMatchObject({ severity: 'warning', duration: 0 });
     // It stays, and nothing anywhere says "sent", however long it waits.
     for (let i = 0; i < 6; i += 1) {
       advance(10000);
-      expect(document.body.textContent).not.toMatch(/SOS SENT|Emergency alert sent/i);
+      expect(document.body.textContent).not.toMatch(/\bsent\b/i);
+      expect(label()).toBe('held');
       expect(noticeUp(SOS_HELD.title)).toBe(true);
     }
   });
@@ -214,14 +218,14 @@ describe('offline: held until back in the group', () => {
     holdTwice();
     backOnline();
     expect(sent()).toHaveLength(0);
-    expect(label()).toBe('WAITING FOR CONNECTION');
+    expect(label()).toBe('held');
     letBackIn();
     expect(sent()).toHaveLength(1);
     expect(near(sent()[0], A)).toBe(true);
     expect(sent()[0]).toMatchObject({ roomCode: code, senderName: 'Alpha' });
     expect(noticeUp(SOS_HELD.title)).toBe(false);
-    expect(screen.getByText(SOS_DELIVERED.title)).toBeTruthy();
-    expect(label()).toBe('SOS');
+    expect(feed.find((n) => n.message === SOS_SENT.title)?.body).toContain(SOS_SENT.late);
+    expect(label()).toBe('idle');
   });
 
   it('pressed after reconnecting but before the server lets it back in: held too, not sent', async () => {
@@ -231,7 +235,7 @@ describe('offline: held until back in the group', () => {
     fakeSocket.emit.mockClear();
     holdTwice();
     expect(sent()).toHaveLength(0);
-    expect(label()).toBe('WAITING FOR CONNECTION');
+    expect(label()).toBe('held');
     letBackIn();
     expect(sent()).toHaveLength(1);
   });
@@ -257,7 +261,7 @@ describe('offline: held until back in the group', () => {
     holdTwice();
     await standAt(B);
     holdTwice();
-    expect(label()).toBe('WAITING FOR CONNECTION');
+    expect(label()).toBe('held');
     backOnline();
     letBackIn();
     expect(sent()).toHaveLength(1);
@@ -292,5 +296,48 @@ describe('offline: held until back in the group', () => {
     act(() => fakeSocket.receive('squad-code-taken', { roomCode: code }));
     expect(screen.getByText(SOS_DROPPED.left)).toBeTruthy();
     expect(sent()).toHaveLength(0);
+  });
+});
+
+// E3: what the sender is told once an alert has gone (never before), with no buzz of its own.
+describe('the sender is told once it has gone', () => {
+  it('with a location: sent to your group, with the last known location', async () => {
+    await inGroupAt(A);
+    holdTwice();
+    const notice = feed.find((n) => n.message === SOS_SENT.title);
+    expect(notice).toMatchObject({ severity: 'success', body: SOS_SENT.withLocation });
+    expect(navigator.vibrate).not.toHaveBeenCalled();
+  });
+
+  it('without a fix: "Alert sent, but without your location", in amber', async () => {
+    navigator.geolocation.getCurrentPosition.mockImplementation((_ok, fail) => fail?.({ code: 3 }));
+    render(<App />);
+    code = document.querySelector('.sr-only').textContent;
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
+    act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
+    await act(async () => {});
+    fakeSocket.emit.mockClear();
+    holdTwice();
+    expect(sent()).toHaveLength(1);
+    expect(sent()[0]).toMatchObject({ lat: null, lng: null });
+    const notice = feed.find((n) => n.message === SOS_SENT.noLocationTitle);
+    expect(notice).toMatchObject({ severity: 'warning', body: SOS_SENT.noLocation });
+    expect(noticeUp(SOS_SENT.title)).toBe(false);
+  });
+
+  it('while Paused: says sharing is still paused', async () => {
+    await inGroupAt(A);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Paused' }));
+    holdTwice();
+    expect(feed.find((n) => n.message === SOS_SENT.title)?.body).toBe(`${SOS_SENT.withLocation} ${SOS_SENT.stillPaused}`);
+  });
+
+  it('while Hidden: says sharing is still hidden', async () => {
+    await inGroupAt(A);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Hidden' }));
+    holdTwice();
+    expect(feed.find((n) => n.message === SOS_SENT.title)?.body).toBe(`${SOS_SENT.withLocation} ${SOS_SENT.stillHidden}`);
   });
 });

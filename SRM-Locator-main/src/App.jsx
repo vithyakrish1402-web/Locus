@@ -103,7 +103,7 @@ import { LAYER } from './utils/layers';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { createSosOutbox } from './utils/sosOutbox';
-import { SOS_HELD, SOS_DELIVERED, SOS_DROPPED } from './copy/emergency';
+import { SOS_HELD, SOS_SENT, SOS_DROPPED } from './copy/emergency';
 import { PrecognitionFilter } from './utils/precognition';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
@@ -400,7 +400,7 @@ const App = () => {
   const heldNoticeRef = useRef(null);
   useEffect(() => {
     sosOutbox.reset(); // a fresh app: nothing held, not in a group yet
-    const unsubscribe = sosOutbox.subscribe(({ held, event, reason }) => {
+    const unsubscribe = sosOutbox.subscribe(({ held, event, reason, late, withLocation }) => {
       setSosHeld(held);
       if (event === 'held') {
         heldNoticeRef.current = notify.warning(SOS_HELD.title, { body: SOS_HELD.body, duration: 0 });
@@ -408,7 +408,14 @@ const App = () => {
       }
       if (heldNoticeRef.current !== null) dismissNotice(heldNoticeRef.current);
       heldNoticeRef.current = null;
-      if (event === 'sent') notify.success(SOS_DELIVERED.title, { body: SOS_DELIVERED.body });
+      if (event === 'sent') {
+        // Said only once it has gone (E3). No buzz of its own: sending feels as it always did.
+        const mode = telemetryModeRef.current;
+        const stillLine = mode === 'FROZEN' ? SOS_SENT.stillPaused : mode === 'GHOST' ? SOS_SENT.stillHidden : null;
+        const body = [late ? SOS_SENT.late : null, withLocation ? SOS_SENT.withLocation : SOS_SENT.noLocation, stillLine].filter(Boolean).join(' ');
+        if (withLocation) notify.success(SOS_SENT.title, { body, haptic: false });
+        else notify.warning(SOS_SENT.noLocationTitle, { body, haptic: false });
+      }
       if (event === 'dropped') notify.warning(reason === 'gone' ? SOS_DROPPED.gone : SOS_DROPPED.left, { duration: 0 });
     });
     return unsubscribe;
@@ -2491,6 +2498,7 @@ const App = () => {
           testId="waiting"
           icon={<Loader2 size={40} className="animate-spin motion-reduce:animate-none" />}
           title={WAITING.title}
+          emergencyNote={WAITING.emergency}
           action={(
             <Button
               variant="secondary"
@@ -3275,7 +3283,9 @@ const App = () => {
       )}
 
       {/* ========== SOS TRIGGER (double press-and-hold confirm) ========== */}
-      <SosTrigger
+      {/* Only once in the group (D3): while waiting to be let in, the server would drop an
+          alert, so the waiting screen says so in the button's place instead. */}
+      {accessStatus === 'granted' && <SosTrigger
         // Above AR Scan while it is open (same spot, same two holds), below an incoming alert.
         layer={arTarget ? LAYER.emergencyButtonOverArScan : null}
         socket={socket}
@@ -3284,7 +3294,8 @@ const App = () => {
         senderName={user.displayName}
         outbox={sosOutbox}
         held={sosHeld}
-      />
+        sharingMode={telemetryMode}
+      />}
 
       {/* ========== UPDATES: APK modal + JS-only restart strip (mandatory is gated far above) ========== */}
       {updateOverlay}

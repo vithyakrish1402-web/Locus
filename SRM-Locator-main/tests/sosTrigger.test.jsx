@@ -68,6 +68,85 @@ describe.each([
     expect(sent()).toHaveLength(0);
   });
 
+  it('sliding off the button during either hold cancels it', () => {
+    const button = renderButton(props);
+    press(button);
+    wait(HOLD - 100);
+    fireEvent.pointerLeave(button);
+    wait(HOLD);
+    expect(button.getAttribute('aria-label')).toMatch(/^Press and hold to arm/);
+    press(button);
+    wait(HOLD);
+    release(button);
+    press(button);
+    wait(HOLD - 100);
+    fireEvent.pointerLeave(button);
+    wait(HOLD);
+    expect(sent()).toHaveLength(0);
+  });
+
+  it('a touch the phone cancels (a scroll, a call) cancels the hold', () => {
+    const button = renderButton(props);
+    press(button);
+    wait(HOLD - 100);
+    fireEvent.pointerCancel(button);
+    wait(HOLD);
+    expect(button.getAttribute('aria-label')).toMatch(/^Press and hold to arm/);
+    expect(sent()).toHaveLength(0);
+  });
+
+  it('only a primary press holds: a right-click or another button arms nothing', () => {
+    const button = renderButton(props);
+    fireEvent.pointerDown(button, { button: 2 });
+    wait(HOLD);
+    expect(button.getAttribute('aria-label')).toMatch(/^Press and hold to arm/);
+    fireEvent.pointerDown(button, { button: 1 });
+    wait(HOLD);
+    expect(button.getAttribute('aria-label')).toMatch(/^Press and hold to arm/);
+  });
+
+  it('the second hold must start inside the window: at 3999 ms it sends, at 4000 ms it is back at the start', () => {
+    let button = renderButton(props);
+    press(button);
+    wait(HOLD);
+    release(button);
+    wait(WINDOW - 1);
+    press(button);
+    wait(HOLD);
+    expect(sent()).toHaveLength(1);
+    cleanup();
+    button = renderButton(props);
+    press(button);
+    wait(HOLD);
+    release(button);
+    wait(WINDOW);
+    press(button);
+    wait(HOLD);
+    expect(sent()).toHaveLength(0);
+  });
+
+  it('a press while it shows Sent does nothing', () => {
+    const button = renderButton(props);
+    press(button);
+    wait(HOLD);
+    release(button);
+    press(button);
+    wait(HOLD);
+    release(button);
+    expect(sent()).toHaveLength(1);
+    press(button);
+    wait(HOLD);
+    expect(button.getAttribute('aria-label')).toBe('SOS beacon sent');
+    release(button);
+    wait(2000);
+    press(button);
+    wait(HOLD);
+    release(button);
+    press(button);
+    wait(HOLD);
+    expect(sent()).toHaveLength(2);
+  });
+
   it('letting go during the second hold sends nothing', () => {
     const button = renderButton(props);
     press(button);
