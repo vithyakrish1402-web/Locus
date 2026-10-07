@@ -14,6 +14,11 @@ const COUNTDOWN_CIRCUMFERENCE = 2 * Math.PI * COUNTDOWN_RADIUS;
 
 const FIRED_DISPLAY_MS = 2000;
 
+// While an alert is held for want of a connection (utils/sosOutbox.js), the button says so
+// instead of SOS or SOS SENT: never "sent" while it is only waiting.
+const HELD_LABEL = 'WAITING FOR CONNECTION';
+const HELD_ARIA_LABEL = 'Emergency alert waiting for connection. It will send when you are back online. Press and hold to arm SOS beacon again';
+
 const LABELS = {
   idle: 'SOS',
   arming: 'SOS',
@@ -86,6 +91,11 @@ const SosTrigger = ({
   // LAYER.emergencyButtonOverArScan while AR Scan is open, so the button stays reachable
   // there, in the same spot, with the same two holds.
   layer = null,
+  // The way out (utils/sosOutbox.js): sends at once when the group can be reached, holds the
+  // alert otherwise. Without one, the button emits on `socket` directly, as it always did.
+  outbox = null,
+  // An alert is being held: the button reads "Waiting for connection" until it goes.
+  held = false,
 }) => {
   const [phase, setPhase] = useState('idle');
 
@@ -106,14 +116,19 @@ const SosTrigger = ({
 
   const emitSosBroadcast = () => {
     const send = (coords) => {
-      if (!socket || typeof socket.emit !== 'function') return;
-      socket.emit('sos-broadcast', {
+      const payload = {
         lat: coords?.lat ?? null,
         lng: coords?.lng ?? null,
         roomCode: roomCode ?? null,
         senderName: senderName ?? null,
         timestamp: Date.now(),
-      });
+      };
+      if (outbox) {
+        outbox.send(payload);
+        return;
+      }
+      if (!socket || typeof socket.emit !== 'function') return;
+      socket.emit('sos-broadcast', payload);
     };
 
     const cached = typeof getLocation === 'function' ? getLocation() : null;
@@ -135,9 +150,16 @@ const SosTrigger = ({
 
   const fire = () => {
     clearAllTimers();
-    setPhase('fired');
+    // "Sent" only when it is going out now. Held for a connection, the button goes straight
+    // back to resting, where it reads "Waiting for connection".
+    const goingOutNow = !outbox || (outbox.canSend() && !outbox.isHolding());
+    if (goingOutNow) {
+      setPhase('fired');
+      firedTimeoutRef.current = setTimeout(() => setPhase('idle'), FIRED_DISPLAY_MS);
+    } else {
+      setPhase('idle');
+    }
     emitSosBroadcast();
-    firedTimeoutRef.current = setTimeout(() => setPhase('idle'), FIRED_DISPLAY_MS);
   };
 
   const enterArmed = () => {
@@ -169,6 +191,7 @@ const SosTrigger = ({
     }
   };
 
+  const showHeld = held && (phase === 'idle' || phase === 'fired');
   const holdRing = holdRingFor(phase, holdDurationMs);
   const countdownRing = countdownRingFor(phase, armWindowMs);
 
@@ -180,7 +203,7 @@ const SosTrigger = ({
       onPointerLeave={cancelHold}
       onPointerCancel={cancelHold}
       onContextMenu={(e) => e.preventDefault()}
-      aria-label={ARIA_LABELS[phase]}
+      aria-label={showHeld ? HELD_ARIA_LABEL : ARIA_LABELS[phase]}
       // Placement has to dodge two different chrome layouts, and an SOS control must
       // never end up underneath either of them:
       //   mobile  - the bottom HUD (GRID/SCAN/SQUAD) is fixed bottom-0 at z-[1100]
@@ -226,7 +249,7 @@ const SosTrigger = ({
         />
       </svg>
       <span className="relative z-10 font-dot text-[10px] uppercase tracking-widest leading-tight text-center px-1">
-        {LABELS[phase]}
+        {showHeld ? HELD_LABEL : LABELS[phase]}
       </span>
     </button>
   );

@@ -82,7 +82,7 @@ import CommsFeed from './components/CommsFeed';
 import { CodeTiles, CodeInput } from './components/SquadCode';
 import SquadMemberCard from './components/SquadMemberCard';
 import { locateTarget, sortByDistance } from './utils/direction';
-import { notify } from './utils/notify';
+import { notify, dismiss as dismissNotice } from './utils/notify';
 import { mapEngineStatus } from './utils/mapEngineStatus';
 import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
@@ -102,6 +102,8 @@ import { SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard, fade } from './ut
 import { LAYER } from './utils/layers';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
+import { createSosOutbox } from './utils/sosOutbox';
+import { SOS_HELD, SOS_DELIVERED, SOS_DROPPED } from './copy/emergency';
 import { PrecognitionFilter } from './utils/precognition';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
@@ -134,6 +136,10 @@ const socket = io(BACKEND_URL, {
   transports: ['websocket'],
   upgrade: false
 });
+
+// The Emergency alert's way out (utils/sosOutbox.js): straight to the group when it can be
+// reached, held until this phone is back in its group when it can't. One per app, like the socket.
+const sosOutbox = createSosOutbox(socket);
 
 // Baked in at Vite build time from .env's VITE_GOOGLE_MAPS_API_KEY (gitignored) —
 // never hardcode this. The Capacitor/Android build reads the same key separately from
@@ -387,6 +393,26 @@ const App = () => {
     acknowledge: acknowledgeSos,
     requestSync: requestSosSync,
   } = useIncomingSos(socket);
+
+  // An Emergency alert held for want of a connection (utils/sosOutbox.js): the button reads
+  // "Waiting for connection", and a notice says so until it goes, or can't.
+  const [sosHeld, setSosHeld] = useState(false);
+  const heldNoticeRef = useRef(null);
+  useEffect(() => {
+    sosOutbox.reset(); // a fresh app: nothing held, not in a group yet
+    const unsubscribe = sosOutbox.subscribe(({ held, event, reason }) => {
+      setSosHeld(held);
+      if (event === 'held') {
+        heldNoticeRef.current = notify.warning(SOS_HELD.title, { body: SOS_HELD.body, duration: 0 });
+        return;
+      }
+      if (heldNoticeRef.current !== null) dismissNotice(heldNoticeRef.current);
+      heldNoticeRef.current = null;
+      if (event === 'sent') notify.success(SOS_DELIVERED.title, { body: SOS_DELIVERED.body });
+      if (event === 'dropped') notify.warning(reason === 'gone' ? SOS_DROPPED.gone : SOS_DROPPED.left, { duration: 0 });
+    });
+    return unsubscribe;
+  }, []);
   // --- IN-APP UPDATER (full-APK self-update; see src/hooks/useAppUpdate.js) ---
   // Checks GitHub Releases once per cold start. Held here rather than in a leaf
   // component because the mandatory-update gate has to be able to pre-empt every
@@ -629,6 +655,12 @@ const App = () => {
   const [squadCode, setSquadCode] = useState('');
   const [squadMode, setSquadMode] = useState('create'); // 'create' or 'join'
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
+  // Out of the group, however it happened (left, removed, turned down, signed out): an
+  // Emergency alert still held for it can't reach anyone now. (A group gone from the server
+  // is dropped first, with its own words, in the 'squad-not-found' handler.)
+  useEffect(() => {
+    if (!hasJoinedSquad) sosOutbox.drop('left');
+  }, [hasJoinedSquad]);
   // Why the lobby is showing again, when the server turned a request down (no live squad
   // under the code, the code already taken, the squad gone). Cleared by the next action.
   const [lobbyNotice, setLobbyNotice] = useState(null);
@@ -1223,6 +1255,8 @@ const App = () => {
 
     socket.on('access-granted', (payload) => {
       if (!isAboutThisSquad(payload)) return;
+      // Back in the group on this connection: an Emergency alert held while offline goes now.
+      sosOutbox.markInGroup();
       if (accessStatus === 'pending') setJustApproved(true);
       setAccessStatus('granted');
       setSquadRole(payload?.role);
@@ -1264,6 +1298,8 @@ const App = () => {
     // this client is still waiting to be let in, or after a reconnect finds it gone.
     socket.on('squad-not-found', (payload) => {
       if (!isAboutThisSquad(payload)) return;
+      // A reconnect found the group gone: an alert held for it can never reach anyone.
+      sosOutbox.drop('gone');
       returnToLobby(accessStatus === 'granted' ? LOBBY.ended(currentRoom) : LOBBY.notFound);
     });
 
@@ -3246,6 +3282,8 @@ const App = () => {
         getLocation={() => liveLocationRef.current}
         roomCode={squadCode}
         senderName={user.displayName}
+        outbox={sosOutbox}
+        held={sosHeld}
       />
 
       {/* ========== UPDATES: APK modal + JS-only restart strip (mandatory is gated far above) ========== */}
