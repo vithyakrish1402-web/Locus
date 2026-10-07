@@ -76,9 +76,13 @@ export default function ArTargetPicker({ open, onClose, me, target, members, bui
     );
   };
 
+  // Room at the bottom to scroll the last rows clear of the Emergency button, which stands
+  // above this sheet: its top is 10 rem up plus the gesture bar's inset (SosTrigger: bottom-20,
+  // h-20). The sheet already pads 1 rem plus that inset, so 11 rem more leaves 2 rem between
+  // the last row and the button, like the buildings list.
   return (
     <Sheet open={open} onClose={onClose} title={AR_PICKER.title} layer={LAYER.arScanSheet}>
-      <div data-testid="ar-target-picker" className="px-4 flex flex-col">
+      <div data-testid="ar-target-picker" className="px-4 pb-[11rem] flex flex-col">
         <label className="relative block mb-2">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" size={18} aria-hidden="true" />
           <input

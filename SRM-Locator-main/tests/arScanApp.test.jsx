@@ -217,6 +217,22 @@ describe('the target picker', () => {
     expect(places[0].textContent).toMatch(/^Meeting point/);
   });
 
+  it('scrolls its last rows clear of the Emergency button, gesture bar included', async () => {
+    await scanning(twoMembers);
+    await startArScan();
+    fireEvent.click(pill());
+    // The button's top: 5 rem up plus 5 rem tall, on the gesture bar's inset.
+    const trigger = readFileSync(`${process.cwd()}/src/components/SosTrigger.jsx`, 'utf8');
+    expect(trigger).toMatch(/bottom-20 left-4 [^"]*w-20 h-20/);
+    expect(trigger).toContain("marginBottom: 'env(safe-area-inset-bottom)'");
+    // The sheet pads 1 rem plus that inset (jsdom drops env(), so read its source); the
+    // picker adds its own room. Together they leave at least 2 rem above the button.
+    const sheet = readFileSync(`${process.cwd()}/src/components/ui/Sheet.jsx`, 'utf8');
+    expect(sheet).toContain("paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))'");
+    const room = Number(/(?:^| )pb-\[(\d+)rem\]/.exec(screen.getByTestId('ar-target-picker').className)?.[1] ?? 0);
+    expect(1 + room).toBeGreaterThanOrEqual(10 + 2);
+  });
+
   it('sits above AR Scan and under the Emergency button', () => {
     expect(LAYER.arScanSheet).toBeGreaterThan(LAYER.arScan);
     expect(LAYER.arScanSheet).toBeLessThan(LAYER.emergencyButtonOverArScan);
