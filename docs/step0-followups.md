@@ -180,6 +180,8 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
    - This is a server change, so it needs a Render deploy.
    - Until it is done, a Hidden member's live position still reaches the Group Lead's table and other members' phones (not their maps), and "signal lost" shows their last spot.
 2. **Settings other than the theme reset on restart.** Only the theme is saved on the phone (`locus.theme`). Location refresh rate, AR Scan quality, AR feature overrides, Alert sounds and Map/Satellite go back to their defaults each time the app starts. Kept as it is for now (owner, 2026-10-05).
+3. **The server confirms each Emergency alert.** Today the server never tells the sender an alert arrived. An answer to each send ("delivered" or "not in a group") would let the app say so, and would cover the window in which a dead connection still looks alive (up to about 45 s behind Render's proxy), when an alert can be lost with no sign of it (owner, 2026-10-07).
+4. **The alert carries the fix's age and the sender's account id.** Today the server dates an alert when it arrives, so an alert that arrived late is shown as "just now", and an old cached fix is shown as if it were current. The sender's account id would let a receiving phone match the alert to that member's last known position (owner, 2026-10-07).
 
 ## Later
 
@@ -195,6 +197,7 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
 - **"Invalid attribute name $hover" console errors.** On the Google map, google-map-react hands its own props ($hover, $geoService, $getDimensions and more) to every marker child, and the children that are plain <div>s pass them on to the page, so React logs hundreds of errors. Harmless to how the map works, but it floods the console. Fix: wrap those children in a component that drops the $ props (owner, 2026-10-06).
 
 - **Join requests tile under the Emergency button on phones 640 px tall or less.** At half height the Group Lead's Join requests tile sits clear above the Emergency button on screens 720 px tall or more (77 px at 360 x 780). On a 360 x 640 phone it is under the button until the list is scrolled (owner, 2026-10-06).
+- **Emergency button on the mandatory update screen.** That screen replaces the whole app, so the button isn't there. A received alert still draws over it (owner, 2026-10-07).
 - **"Open phone settings" for the camera.** AR Scan's camera-off notice gives the steps in words; a link straight to LOCUS's settings needs a native call, so a full APK update (owner, 2026-10-06).
 - **An AR Scan notice covers the labels behind it.** Notices sit above the labels so their words stay readable, so a label behind one (with the camera off, often the destination's own) is hidden until the notice goes (owner, 2026-10-07).
 - **AR Scan's "Align" caption can touch a nearby label.** The caption under the round Align button sits above the labels and can overlap one at the top right (owner, 2026-10-07).
@@ -219,3 +222,27 @@ These must be done before LOCUS goes to real users beyond the demonstration. Non
 - The explainer is a sheet, so like the other sheets it sits over the Emergency button while it is open (see the P12 note).
 - Floor tags and the confidence halo still show only behind `SHOW_INDOOR_POSITION_TO_SQUAD` and `WIFI_POSITIONING_ENABLED`, both off; untouched.
 - Markers under the sharing chip or the banners stack: accepted for now (owner, 2026-10-05). Taps still pass through to the map. The meeting point plate is moved clear of the right-hand map controls (Map batch fix 3).
+
+## Emergency alerts sent while offline (fixed 2026-10-07)
+
+**The bug.** An alert sent while the phone was offline never reached the group, and nothing said so.
+
+- The app handed the alert to socket.io, which keeps it in memory and sends it the moment the connection comes back.
+- That is a new connection with a new id. socket.io sends its held packets before the app's reconnect code asks to rejoin the group.
+- The server only takes alerts from connections on the group's member list (`resolveSosRoom`), so it dropped the alert.
+- The button had already shown "SOS SENT".
+
+Shown end to end against the real server: an alert sent during a network drop reached nobody; one sent after rejoining arrived.
+
+**Released versions.** Every released version has it: the v1.1.0 APK's own JS and every `js-*` bundle up to and including js-1.1.19, the latest. The app has always sent alerts straight to socket.io, and the server has routed alerts by the member list since 2026-09-20 (`f0cb592`); before that, by socket id, which drops them the same way.
+
+**The fix** (app only, no event, data or server change; its own commit so it can ship on its own):
+
+- `src/utils/sosOutbox.js` holds an alert the group can't be reached for, and sends it once this connection has been let back into the group (`access-granted` since the last `connect`).
+- One alert at a time: used again while one is held, it keeps one alert with the freshest location.
+- While held, the button reads "Waiting for connection" and an amber notice stays up: "Waiting for connection. Your alert will send when you're back online. If you need help right now, call 112." Nothing says "sent" until it goes.
+- If the group is gone on reconnect, the alert is dropped, the button returns to normal, and an amber notice stays until dismissed: "Your group is no longer on the server, so your alert couldn't reach them. If you need help right now, call 112."
+- Leaving the group (or being removed or turned down) while one is held drops it too, with "You're no longer in the group, so your alert couldn't reach them. If you need help right now, call 112."
+- Online, nothing changes: the same single `sos-broadcast` at the same moment with the same payload, the same "SOS SENT" for 2 s, no extra sound, vibration or notice.
+
+**Limits that remain.** A held alert is kept only while the app is running; closing the app loses it. An alert sent through a dead connection that still looks alive can still be lost (Before real rollout, item 3).
