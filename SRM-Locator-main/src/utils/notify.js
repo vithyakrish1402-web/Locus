@@ -15,7 +15,10 @@ export const SEVERITIES = ['info', 'success', 'warning', 'error'];
 /** How long each severity stays up, in ms. Errors linger: they usually need reading. */
 export const DURATIONS = { info: 4000, success: 3500, warning: 6000, error: 7000 };
 
-/** At most this many at once; the oldest goes first. */
+/** At most this many at once; the oldest ordinary one goes first. A safety notice (posted with
+ *  `safety: true`, such as an Emergency alert that couldn't reach the group) is never pushed
+ *  out by others: with only safety notices left, the feed holds more than this rather than
+ *  drop one. */
 export const MAX_VISIBLE = 4;
 
 const HAPTICS = { info: 'tick', success: 'confirm', warning: 'snap', error: 'snap' };
@@ -46,12 +49,13 @@ export function dismiss(id) {
  * @param {'info'|'success'|'warning'|'error'} severity
  * @param {string} message
  * @param {{title?: string, body?: string, duration?: number, onClick?: () => void,
- *   kind?: 'ping', haptic?: boolean}} [options] duration 0 = stays until dismissed; onClick
+ *   kind?: 'ping', haptic?: boolean, safety?: boolean}} [options] duration 0 = stays until dismissed; onClick
  *   makes the notice tappable (the notice is dismissed first); body is a second, quieter line
  *   under the message; kind 'ping' draws an info notice with the ping icon; haptic false
- *   posts it without a buzz (for notices that came over from the old banners, which had none)
+ *   posts it without a buzz (for notices that came over from the old banners, which had none);
+ *   safety true keeps it from being pushed out by other notices (see MAX_VISIBLE)
  */
-export function post(severity, message, { title: givenTitle, body, duration, onClick, kind, haptic: buzz = true } = {}) {
+export function post(severity, message, { title: givenTitle, body, duration, onClick, kind, haptic: buzz = true, safety = false } = {}) {
   let title = givenTitle;
   const level = SEVERITIES.includes(severity) ? severity : 'info';
   let text = String(message ?? '').trim();
@@ -77,8 +81,13 @@ export function post(severity, message, { title: givenTitle, body, duration, onC
   }
 
   const id = nextId++;
-  items = [...items, { id, severity: level, title, message: text, body, kind, postedAt: Date.now(), duration: life, onClick }];
-  while (items.length > MAX_VISIBLE) dismiss(items[0].id);
+  items = [...items, { id, severity: level, title, message: text, body, kind, postedAt: Date.now(), duration: life, onClick, safety }];
+  // Too many: the oldest ordinary notice goes. Safety notices stay, even past the limit.
+  while (items.length > MAX_VISIBLE) {
+    const oldest = items.find((n) => !n.safety);
+    if (!oldest) break;
+    dismiss(oldest.id);
+  }
   if (life > 0) timers.set(id, setTimeout(() => dismiss(id), life));
   if (buzz) haptic(HAPTICS[level]);
   emit();

@@ -405,7 +405,7 @@ const App = () => {
     const unsubscribe = sosOutbox.subscribe(({ held, event, reason, late, withLocation }) => {
       setSosHeld(held);
       if (event === 'held') {
-        heldNoticeRef.current = notify.warning(SOS_HELD.title, { body: SOS_HELD.body, duration: 0 });
+        heldNoticeRef.current = notify.warning(SOS_HELD.title, { body: SOS_HELD.body, duration: 0, safety: true });
         return;
       }
       if (heldNoticeRef.current !== null) dismissNotice(heldNoticeRef.current);
@@ -418,7 +418,7 @@ const App = () => {
         if (withLocation) notify.success(SOS_SENT.title, { body, haptic: false });
         else notify.warning(SOS_SENT.noLocationTitle, { body, haptic: false });
       }
-      if (event === 'dropped') notify.warning(reason === 'gone' ? SOS_DROPPED.gone : SOS_DROPPED.left, { duration: 0 });
+      if (event === 'dropped') notify.warning(reason === 'gone' ? SOS_DROPPED.gone : SOS_DROPPED.left, { duration: 0, safety: true });
     });
     return unsubscribe;
   }, []);

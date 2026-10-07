@@ -341,3 +341,31 @@ describe('the sender is told once it has gone', () => {
     expect(feed.find((n) => n.message === SOS_SENT.title)?.body).toBe(`${SOS_SENT.withLocation} ${SOS_SENT.stillHidden}`);
   });
 });
+
+// Owner, 2026-10-07: the safety notices stay however many ordinary notices come after them.
+describe('safety notices are never pushed out', () => {
+  it('"group gone" and "waiting for connection" outlast a flood of ordinary notices', async () => {
+    const { notify } = await import('../src/utils/notify.js');
+    await inGroupAt(A);
+    goOffline();
+    holdTwice();
+    for (let i = 0; i < 8; i += 1) notify.info(`ordinary ${i}`);
+    expect(noticeUp(SOS_HELD.title)).toBe(true);
+    backOnline();
+    act(() => fakeSocket.receive('squad-not-found', { roomCode: code }));
+    for (let i = 0; i < 8; i += 1) notify.info(`more ${i}`);
+    expect(noticeUp(SOS_DROPPED.gone)).toBe(true);
+    expect(feed.find((n) => n.message === SOS_DROPPED.gone)).toMatchObject({ safety: true });
+  });
+
+  it('leaving while one is held: "no longer in the group" stays too', async () => {
+    const { notify } = await import('../src/utils/notify.js');
+    await inGroupAt(A);
+    goOffline();
+    holdTwice();
+    backOnline();
+    act(() => fakeSocket.receive('squad-code-taken', { roomCode: code }));
+    for (let i = 0; i < 8; i += 1) notify.info(`ordinary ${i}`);
+    expect(noticeUp(SOS_DROPPED.left)).toBe(true);
+  });
+});
