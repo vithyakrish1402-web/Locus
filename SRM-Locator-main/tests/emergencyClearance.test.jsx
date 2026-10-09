@@ -147,6 +147,23 @@ describe('every screen that reaches its corner ends above it', () => {
     expect(src('ARCompass.jsx')).toContain("export const CLEAR_OF_EMERGENCY_BUTTON = 'var(--emergency-clearance)';");
   });
 
+  // Owner, Stop 2 (option 2): under 700 px high, sheets may take 94 % of the screen and the
+  // guide and AR Scan's start screen drop their pictures, so the words fit above the button.
+  // Measured at 360 x 640 with 130 % text: nothing overlaps the button; Start AR Scan at 301-357
+  // px, the button's top at 432; the guide scrolls at most 74 px (291 before).
+  it('on screens under 700 px high: sheets take up to 94 %, the guide and AR start drop their pictures', () => {
+    const SHORT = '[@media(max-height:699px)]';
+    const panel = (text) => text.slice(text.indexOf('max-h-[90dvh]') - 200, text.indexOf('max-h-[90dvh]') + 200);
+    expect(panel(src('components/ui/Sheet.jsx'))).toContain(`max-h-[90dvh] ${SHORT}:max-h-[94dvh]`);
+    expect(panel(src('components/UpdateModal.jsx'))).toContain(`max-h-[90dvh] ${SHORT}:max-h-[94dvh]`);
+    expect(src('components/guide/Guide.jsx')).toContain(`h-[clamp(9rem,34vh,340px)] ${SHORT}:hidden rounded-sheet bg-accent-soft`);
+    const ar = src('ARCompass.jsx');
+    expect(ar).toContain(`<span className="flex ${SHORT}:hidden items-center justify-center w-22 h-22 rounded-full bg-accent-soft`);
+    // Its words scroll, centred while they fit, rather than running off the top or into the buttons.
+    expect(ar).toContain('data-testid="ar-start-body" className="flex-1 min-h-0 overflow-y-auto');
+    expect(ar).toContain('<div className="my-auto flex flex-col items-center text-center gap-3 py-4">');
+  });
+
   it('the mandatory update screen has no button, so no room for one', () => {
     const app = src('App.jsx');
     const gate = app.slice(app.indexOf('if (appUpdate.mandatory) {'), app.indexOf('if (appUpdate.mandatory) {') + 300);

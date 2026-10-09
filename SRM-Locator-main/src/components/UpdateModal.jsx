@@ -224,7 +224,7 @@ const UpdateModal = ({ update }) => {
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="w-full max-w-xl rounded-t-sheet bg-surface text-text font-ui shadow-[var(--shadow-3)] px-5 pt-3 flex flex-col gap-4 outline-none max-h-[90dvh] overflow-y-auto"
+        className="w-full max-w-xl rounded-t-sheet bg-surface text-text font-ui shadow-[var(--shadow-3)] px-5 pt-3 flex flex-col gap-4 outline-none max-h-[90dvh] [@media(max-height:699px)]:max-h-[94dvh] overflow-y-auto"
         // Its buttons end above the Emergency button, which stands over this dialog.
         style={{ paddingBottom: 'var(--emergency-clearance)' }}
       >

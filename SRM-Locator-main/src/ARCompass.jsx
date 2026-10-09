@@ -388,12 +388,17 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   if (!permissionsGranted) {
     return (
       <div data-testid="ar-start" className="fixed inset-0 bg-bg text-text font-ui flex flex-col px-5" style={{ zIndex: LAYER.arScan, paddingTop: 'env(safe-area-inset-top)', paddingBottom: CLEAR_OF_EMERGENCY_BUTTON }}>
-        <div className="flex-1 flex flex-col items-center justify-center text-center max-w-md w-full mx-auto gap-3">
-          <span className="flex items-center justify-center w-22 h-22 rounded-full bg-accent-soft text-accent mb-3" aria-hidden="true">
-            <ScanLine size={40} />
-          </span>
-          <h2 className="text-display">{AR_START.title}</h2>
-          <p className="text-body text-text-secondary">{AR_START.body(target.name)}</p>
+        {/* Centred while it fits; on a short phone with large text it scrolls instead of running
+            off the top or into the buttons (my-auto centres without overflowing). Under 700 px
+            high its picture goes, as the guide's does. */}
+        <div data-testid="ar-start-body" className="flex-1 min-h-0 overflow-y-auto flex flex-col max-w-md w-full mx-auto">
+          <div className="my-auto flex flex-col items-center text-center gap-3 py-4">
+            <span className="flex [@media(max-height:699px)]:hidden items-center justify-center w-22 h-22 rounded-full bg-accent-soft text-accent mb-3" aria-hidden="true">
+              <ScanLine size={40} />
+            </span>
+            <h2 className="text-display">{AR_START.title}</h2>
+            <p className="text-body text-text-secondary">{AR_START.body(target.name)}</p>
+          </div>
         </div>
         <div className="max-w-md w-full mx-auto flex flex-col gap-2">
           <Button block size="large" onClick={requestPermissions}>{AR_START.start}</Button>

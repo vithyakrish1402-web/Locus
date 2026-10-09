@@ -52,7 +52,8 @@ export default function Guide({ onDone, zIndex, initialStep = 0 }) {
 
         <AnimatePresence mode="wait" initial={false}>
           <motion.div key={step} {...screenTransition(direction, reduceMotion)} className="flex-1 flex flex-col min-h-0 overflow-y-auto">
-            <div className="shrink-0 h-[clamp(9rem,34vh,340px)] rounded-sheet bg-accent-soft overflow-hidden flex items-center justify-center" aria-hidden="true">
+            {/* Under 700 px high (owner, Stop 2) the picture goes: the step's words fit without scrolling. */}
+            <div className="shrink-0 h-[clamp(9rem,34vh,340px)] [@media(max-height:699px)]:hidden rounded-sheet bg-accent-soft overflow-hidden flex items-center justify-center" aria-hidden="true">
               <Picture />
             </div>
             <h1 id={titleId} ref={headingRef} tabIndex={-1} className="mt-6 text-display outline-none">{title}</h1>
