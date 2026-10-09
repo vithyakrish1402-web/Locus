@@ -681,7 +681,8 @@ describe('the members list: heading, loading, empty, no match', () => {
     expect(screen.getByTestId('buildings-no-match').textContent).toBe('No building called "zzqx"');
     fireEvent.change(box, { target: { value: '  tech park  ' } });
     expect(screen.queryByTestId('buildings-no-match')).toBeNull();
-    expect(screen.getAllByTestId('building-row').length).toBeGreaterThan(0);
+    await act(async () => {});
+    expect(screen.getAllByTestId('building-row').map((r) => r.textContent).join(' ')).toMatch(/TECH PARK/);
     fireEvent.change(box, { target: { value: '' } });
     expect(screen.queryByTestId('buildings-no-match')).toBeNull();
   });
