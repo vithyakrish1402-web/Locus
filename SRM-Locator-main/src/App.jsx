@@ -11,7 +11,7 @@ import {
   Users, Search, Settings, Navigation, ShieldCheck,
   Building2, MessageSquare, Send, Loader2,
   BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
-  Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
+  Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Activity,
   AlertCircle, Check, Sliders, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Layers
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
@@ -507,7 +507,6 @@ const App = () => {
   const squadPrecognition = useRef({}); // Tracks separate Kalman math for every squad member
   const memberSeenRef = useRef({}); // id -> { server: lastSeen, local: when this phone saw it change }
 
-  const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
   const ghostFadeTimersRef = useRef({}); // targetId -> timeout, guards against double-scheduling a fade-out
   // Own stable identity, readable from socket callbacks that only subscribe once. Socket
@@ -894,27 +893,6 @@ const App = () => {
       socket.off('pong-bounce');
     };
   }, [hasJoinedSquad]);
-  // --- 🌐 GEOFENCE PERIMETER LISTENER ---
-  useEffect(() => {
-    socket.on('geofence-alert', (alertData) => {
-      const newAlert = {
-        id: Date.now(),
-        ...alertData
-      };
-
-      // Add the alert to the HUD
-      setZoneAlerts(prev => [...prev, newAlert]);
-
-      // Optional: Play a subtle notification sound here if you have one
-
-      // Auto-remove the alert from the screen after 6 seconds
-      setTimeout(() => {
-        setZoneAlerts(prev => prev.filter(a => a.id !== newAlert.id));
-      }, 6000);
-    });
-
-    return () => socket.off('geofence-alert');
-  }, []);
   // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
@@ -2566,40 +2544,6 @@ const App = () => {
         </StatusScreen>
       )}
       {/* --- 🌐 TACTICAL GEOFENCE HUD --- */}
-      {/* This HUD, the banners below and the route panel all hang at top-24, which on a
-          phone is right where the open SQUAD sheet (z-[900]) keeps the Commander's
-          NODE_ACCESS and SYNC_TELEMETRY. They used to sit above it and take the taps meant
-          for those buttons (the location banner, whenever GPS had failed, covered the top
-          third of SYNC_TELEMETRY at 412 px, and all of it with a second banner up). So on a
-          phone they sit under the sheet (z-[850]); on a wider screen the sheet is a side
-          column and they stay on top. And they let taps through (pointer-events-none): only
-          a banner's own dismiss button takes them. */}
-      <div className="absolute top-24 right-6 z-[850] md:z-[1000] flex flex-col gap-2 w-72 pointer-events-none">
-        <AnimatePresence>
-          {zoneAlerts.map(alert => (
-            <motion.div
-              key={alert.id}
-              initial={{ opacity: 0, x: 50, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 50, scale: 0.9 }}
-              className={`p-3 border backdrop-blur-md flex flex-col gap-1 shadow-[0_0_15px_rgba(0,0,0,0.5)] ${alert.type === 'ENTER'
-                ? 'bg-emerald-950/80 border-emerald-500'
-                : 'bg-zinc-900/80 border-zinc-500'
-                }`}
-            >
-              <div className="flex items-center gap-2">
-                <Waypoints size={14} className={alert.type === 'ENTER' ? 'text-emerald-400' : 'text-zinc-400'} />
-                <span className={`text-[10px] font-dot tracking-widest uppercase ${alert.type === 'ENTER' ? 'text-emerald-500' : 'text-zinc-500'}`}>
-                  PERIMETER {alert.type === 'ENTER' ? 'BREACH' : 'DEPARTURE'}
-                </span>
-              </div>
-              <p className="font-dot text-sm text-white uppercase tracking-widest leading-tight">
-                <span className="text-blue-400">{alert.userName}</span> has {alert.type === 'ENTER' ? 'entered' : 'left'} <span className="text-yellow-400">{alert.zoneName}</span>
-              </p>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
       {/* The stack under the top bar (redesign Map batch, pieces 1, 6 and 7): the sharing chip,
           or a banner in its place (choosing a meeting point, the location problem), then your
           route. One column, so none of them lands on another. On a phone it sits under the

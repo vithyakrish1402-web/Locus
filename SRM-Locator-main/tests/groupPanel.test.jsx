@@ -785,3 +785,15 @@ describe('with a search box focused, on a wide screen', () => {
     expect(screen.queryByTestId('lead-tools')).toBeTruthy();
   });
 });
+
+// The geofence ("perimeter breach") banners were removed with the geofence painter (5353d06,
+// in every released version since v1.0.0): no app sends 'geofence-alert', so the banners that
+// showed one were dead code in the old look. The server still relays the event; the app ignores it.
+describe('geofence alerts', () => {
+  it('the app no longer listens for them, and one arriving shows nothing', async () => {
+    await inAGroup();
+    expect(fakeSocket.handlers.has('geofence-alert')).toBe(false);
+    act(() => fakeSocket.receive('geofence-alert', { roomCode: code, userName: 'Aarav', zoneName: 'Tech Park', type: 'ENTER' }));
+    expect(screen.queryByText(/PERIMETER|BREACH|DEPARTURE/)).toBeNull();
+  });
+});
