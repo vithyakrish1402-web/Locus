@@ -20,6 +20,7 @@ import {
   SegmentedControl, Sheet, Skeleton, StatusDot, Switch, TextField,
 } from '../../components/ui';
 import SosTrigger from '../../components/SosTrigger';
+import LocationsTable from '../../components/group/LocationsTable';
 import SosOverlay from '../../components/SosOverlay';
 import CommsFeed from '../../components/CommsFeed';
 import UpdateModal from '../../components/UpdateModal';
@@ -172,6 +173,24 @@ const SCREENS = {
   'ar-start': {
     label: "AR Scan's start screen",
     render: () => <ARCompass target={{ lat: campusPlace(2).lat, lng: campusPlace(2).lng, name: campusPlace(2).name }} liveLocation={ME} onClose={() => {}} />,
+  },
+  'locations-table': {
+    label: "Group Lead's locations table",
+    render: () => (
+      <LocationsTable
+        open
+        members={[{ id: 'a', name: 'Aarav Shah' }, { id: 'r', name: 'Rohan Das' }, { id: 'i', name: 'Ishita Rao' }, { id: 'm', name: 'Meera Iyer' }]}
+        rowFor={(m) => ({
+          a: { latitude: 12.82351, longitude: 80.04462, battery: { text: '77%', color: 'text-success' }, freshness: { text: 'OPTIMAL (< 10s)', color: 'text-success' } },
+          r: { latitude: 12.82212, longitude: 80.04358, battery: { text: '15%', color: 'text-warning' }, freshness: { text: 'WARN (3m ago)', color: 'text-warning' } },
+          i: { latitude: null, longitude: null, battery: { text: 'UNKNOWN', color: 'text-text-secondary' }, freshness: { text: 'NO_SIGNAL', color: 'text-warning' } },
+          m: { latitude: 12.82401, longitude: 80.04511, battery: { text: '54%', color: 'text-success' }, freshness: { text: 'GOOD (24s ago)', color: 'text-text' } },
+        })[m.id]}
+        sync={{ status: 'idle', message: null }}
+        onRefresh={() => {}}
+        onClose={() => {}}
+      />
+    ),
   },
   settings: { label: 'Settings', render: () => <SettingsDemo /> },
   'settings-about': { label: 'Settings, Notifications and About (scrolled)', render: () => <SettingsDemo scrollTo="Notifications" /> },

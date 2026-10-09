@@ -37,6 +37,7 @@ import GroupHeader from './components/group/GroupHeader';
 import SharingControl from './components/group/SharingControl';
 import MemberOptions from './components/group/MemberOptions';
 import LeadTools from './components/group/LeadTools';
+import LocationsTable from './components/group/LocationsTable';
 import JoinRequests from './components/group/JoinRequests';
 import PeekLines from './components/group/PeekLines';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
@@ -182,10 +183,10 @@ const batteryReading = (cacheData) => {
   for (const raw of [cacheData?.batteryLevel, cacheData?.battery]) {
     const percent = typeof raw === 'number' ? raw : parseInt(raw, 10);
     if (Number.isFinite(percent)) {
-      return { text: `${percent}%`, color: percent < 20 ? 'text-warning' : 'text-emerald-500' }; // low: amber, never red
+      return { text: `${percent}%`, color: percent < 20 ? 'text-warning' : 'text-success' }; // low: amber, never red
     }
   }
-  return { text: 'UNKNOWN', color: 'text-zinc-500' };
+  return { text: 'UNKNOWN', color: 'text-text-secondary' };
 };
 
 // --- MAP STYLE / OPTION CONSTANTS ---
@@ -497,10 +498,10 @@ const App = () => {
   const getSignalFreshness = (isoString) => {
     if (!isoString) return { text: "NO_SIGNAL", color: "text-warning" }; // ordinary problems: amber, never red
     const seconds = Math.floor((new Date() - new Date(isoString)) / 1000);
-    if (seconds < 10) return { text: "OPTIMAL (< 10s)", color: "text-emerald-500" };
-    if (seconds < 60) return { text: `GOOD (${seconds}s ago)`, color: "text-blue-400" };
-    if (seconds < 300) return { text: `WARN (${Math.floor(seconds / 60)}m ago)`, color: "text-yellow-500" };
-    return { text: `STALE (> 5m)`, color: "text-warning animate-pulse" };
+    if (seconds < 10) return { text: "OPTIMAL (< 10s)", color: "text-success" };
+    if (seconds < 60) return { text: `GOOD (${seconds}s ago)`, color: "text-text" };
+    if (seconds < 300) return { text: `WARN (${Math.floor(seconds / 60)}m ago)`, color: "text-warning" };
+    return { text: `STALE (> 5m)`, color: "text-warning" };
   };
   // --- PRECOGNITION TRACKERS ---
   const localPrecognition = useRef(new PrecognitionFilter());
@@ -2877,128 +2878,27 @@ const App = () => {
         }}
       />
 
-      {/* --- COMMANDER'S TELEMETRY MATRIX MODAL --- */}
-      <AnimatePresence>
-        {showTelemetryModal && rawTelemetryData && (
-          <motion.div
-            {...modalBackdrop()}
-            onClick={(e) => { if (e.target === e.currentTarget) setShowTelemetryModal(false); }}
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[4000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
-            style={{ paddingBottom: 'var(--emergency-clearance)' }}
-          >
-            <motion.div
-              {...modalCard(reduceMotion)}
-              className="bg-black w-full max-w-4xl border border-yellow-500 flex flex-col h-[80vh] relative shadow-[0_0_30px_rgba(234,179,8,0.1)]"
-            >
-              {/* Corner Accents */}
-              <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-yellow-500 -translate-x-1 -translate-y-1" />
-              <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-yellow-500 translate-x-1 translate-y-1" />
-
-              {/* Header */}
-              <div className="p-6 border-b border-yellow-500/30 flex justify-between items-center bg-black">
-                <div className="flex items-center gap-4 text-yellow-500">
-                  <Activity className="w-8 h-8 animate-pulse" />
-                  <div>
-                    <h3 className="font-dot text-2xl tracking-widest uppercase text-white">SYS_TELEMETRY // MATRIX</h3>
-                    <p className="font-dot text-[10px] tracking-widest uppercase">COMMANDER CLASSIFIED CLEARANCE</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowTelemetryModal(false)} className="p-2 border border-transparent hover:border-yellow-500 transition-colors text-zinc-500 hover:text-yellow-500">
-                  <X size={24} />
-                </button>
-              </div>
-
-              {/* Data Table */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-black">
-                <div className="w-full border border-white/20">
-
-                  {/* Table Header Row (Hidden on Mobile, Visible on Desktop) */}
-                  <div className="hidden md:grid md:grid-cols-4 bg-white/5 border-b border-white/20 p-3 font-dot text-[10px] uppercase tracking-widest text-zinc-500">
-                    <div>NODE_DESIGNATION</div>
-                    <div>LAST_KNOWN_COORDS</div>
-                    <div>POWER_CORE</div>
-                    <div>SIGNAL_INTEGRITY</div>
-                  </div>
-
-                  {/* Table Body */}
-                  {users.length === 0 && (
-                    <div className="p-6 font-dot text-xs uppercase tracking-widest text-zinc-500 text-center">
-                      NO OTHER OPERATIVES IN THE SQUAD YET.
-                    </div>
-                  )}
-                  {users.map(userNode => {
-                    const cacheData = rawTelemetryData?.[userNode.id];
-                    // Read defensively: a server that predates normalised records sends a
-                    // member's raw cache entry, which has lat/lng/lastSeen/battery until their
-                    // first heartbeat adds latitude/longitude/timestamp/batteryLevel. The
-                    // bare `latitude.toFixed()` this used took the whole app down on one.
-                    const latitude = finiteOrNull(cacheData?.latitude) ?? finiteOrNull(cacheData?.lat);
-                    const longitude = finiteOrNull(cacheData?.longitude) ?? finiteOrNull(cacheData?.lng);
-                    const hasPosition = latitude !== null && longitude !== null;
-                    const battery = batteryReading(cacheData);
-                    const freshness = getSignalFreshness(cacheData?.timestamp ?? cacheData?.lastSeen);
-
-                    return (
-                      <div key={userNode.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-0 border-b border-white/10 p-4 font-dot text-xs tracking-widest uppercase text-white hover:bg-white/5 transition-colors items-start md:items-center">
-
-                        {/* 1. NODE NAME */}
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" />
-                          <span className="text-sm md:text-xs">{userNode.name}</span>
-                        </div>
-
-                        {/* 2. COORDINATES */}
-                        <div className="text-zinc-400 font-mono text-[10px] flex md:block justify-between items-center border-t border-white/5 md:border-transparent pt-2 md:pt-0 mt-2 md:mt-0">
-                          <span className="md:hidden text-zinc-600 font-dot uppercase tracking-widest">COORDS:</span>
-                          <div className="text-right md:text-left">
-                            {hasPosition ? (
-                              <>
-                                LAT: {latitude.toFixed(5)}<br />
-                                LNG: {longitude.toFixed(5)}
-                              </>
-                            ) : "NO_CACHE_DATA"}
-                          </div>
-                        </div>
-
-                        {/* 3. BATTERY */}
-                        <div className={`font-bold flex md:block justify-between items-center ${battery.color}`}>
-                          <span className="md:hidden text-zinc-600 font-normal text-[10px] font-dot uppercase tracking-widest">POWER:</span>
-                          {battery.text}
-                        </div>
-
-                        {/* 4. SIGNAL FRESHNESS */}
-                        <div className={`font-bold flex md:block justify-between items-center ${freshness.color}`}>
-                          <span className="md:hidden text-zinc-600 font-normal text-[10px] font-dot uppercase tracking-widest">SIGNAL:</span>
-                          {freshness.text}
-                        </div>
-
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 border-t border-yellow-500/30 flex justify-between items-center bg-black">
-                {telemetrySync.status === 'error' ? (
-                  <span className="font-dot text-[10px] text-warning uppercase tracking-widest pr-4">{telemetrySync.message}</span>
-                ) : (
-                  <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">AUTO-REFRESHING EVERY 5 SECONDS</span>
-                )}
-                <button
-                  onClick={requestTelemetrySync}
-                  disabled={telemetrySync.status === 'pending'}
-                  className="px-6 py-2 border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2 shrink-0 disabled:cursor-wait disabled:opacity-70"
-                >
-                  {telemetrySync.status === 'pending'
-                    ? <><Loader2 size={14} className="animate-spin" /> SYNCING...</>
-                    : <><Activity size={14} /> FORCE_SYNC</>}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* The Group Lead's locations table (components/group/LocationsTable.jsx). */}
+      <LocationsTable
+        open={showTelemetryModal && Boolean(rawTelemetryData)}
+        members={users}
+        rowFor={(member) => {
+          const cacheData = rawTelemetryData?.[member.id];
+          // Read defensively: a server that predates normalised records sends a member's raw
+          // cache entry, which has lat/lng/lastSeen/battery until their first heartbeat adds
+          // latitude/longitude/timestamp/batteryLevel. A bare `latitude.toFixed()` took the
+          // whole app down on one.
+          return {
+            latitude: finiteOrNull(cacheData?.latitude) ?? finiteOrNull(cacheData?.lat),
+            longitude: finiteOrNull(cacheData?.longitude) ?? finiteOrNull(cacheData?.lng),
+            battery: batteryReading(cacheData),
+            freshness: getSignalFreshness(cacheData?.timestamp ?? cacheData?.lastSeen),
+          };
+        }}
+        sync={telemetrySync}
+        onRefresh={requestTelemetrySync}
+        onClose={() => setShowTelemetryModal(false)}
+      />
 
       {/* --- SETTINGS (components/settings/SettingsScreen.jsx) --- */}
       <AnimatePresence>

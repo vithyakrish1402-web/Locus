@@ -236,12 +236,12 @@ describe('the telemetry matrix', () => {
     // The matrix row for a member (their name also appears in the squad roster behind it).
     const power = (name) => screen.getAllByText(name).map((el) => el.closest('[class*="md:grid-cols-4"]')).find(Boolean).children[2];
     expect(power('Bravo').textContent).toMatch(/UNKNOWN$/);
-    expect(power('Bravo').className).toContain('text-zinc-500');
-    expect(power('Bravo').className).not.toContain('emerald');
+    expect(power('Bravo').className).toContain('text-text-secondary');
+    expect(power('Bravo').className).not.toContain('success');
     expect(power('Charlie').textContent).toMatch(/UNKNOWN$/);
-    expect(power('Charlie').className).toContain('text-zinc-500');
+    expect(power('Charlie').className).toContain('text-text-secondary');
     expect(power('Delta').textContent).toMatch(/77%$/);
-    expect(power('Delta').className).toContain('text-emerald-500');
+    expect(power('Delta').className).toContain('text-success');
     expect(power('Echo').textContent).toMatch(/15%$/);
     expect(power('Echo').className).toContain('text-warning'); // low: amber, never red
   });
@@ -264,7 +264,7 @@ describe('the telemetry matrix', () => {
     expect(syncRequests().length).toBe(before + 1);
 
     // Closed: no more.
-    fireEvent.click(screen.getByText('SYS_TELEMETRY // MATRIX').closest('.p-6').querySelector('button'));
+    fireEvent.click(screen.getByTestId('locations-table-close'));
     const afterClose = syncRequests().length;
     act(() => vi.advanceTimersByTime(15000));
     expect(syncRequests().length).toBe(afterClose);
