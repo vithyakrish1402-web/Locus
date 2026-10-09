@@ -206,6 +206,13 @@ function SheetHarness({ dismissible = true }) {
 }
 
 describe('Sheet', () => {
+  // Desktop layout (Stop 2 leftovers): on a wide screen a sheet is a centred card as wide as
+  // the update dialog, not a strip across the whole window.
+  it('on a wide screen, is centred and no wider than the update dialog', () => {
+    render(<Sheet open onClose={() => {}} title="Options"><button type="button">Cancel</button></Sheet>);
+    expect(screen.getByRole('dialog').className).toMatch(/inset-x-0 bottom-0 md:mx-auto md:max-w-xl /);
+  });
+
   // A tap focuses the button in Chrome (the WebView); jsdom's click doesn't, so focus it.
   const open = () => {
     const button = screen.getByRole('button', { name: 'Options' });
