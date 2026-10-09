@@ -14,10 +14,10 @@ import { LAYER } from '../utils/layers';
 const GRID = 96;
 const CENTER = GRID / 2;
 
-const HOLD_RADIUS = 44;
+const HOLD_RADIUS = 38;
 const HOLD_CIRCUMFERENCE = 2 * Math.PI * HOLD_RADIUS;
 
-const COUNTDOWN_RADIUS = 44;
+const COUNTDOWN_RADIUS = 38;
 const COUNTDOWN_CIRCUMFERENCE = 2 * Math.PI * COUNTDOWN_RADIUS;
 
 const FIRED_DISPLAY_MS = 2000;
@@ -37,12 +37,12 @@ const ARIA_LABELS = {
   fired: 'SOS beacon sent',
 };
 
-// The button's look in each phase. Red with a casing at rest and while held; white with a red
-// edge once armed, so armed never relies on colour alone (the card says so too). No glow.
+// The button's look in each phase. Red with a casing at rest and while held; white (the red ring on its casing
+// draining) once armed, so armed never relies on colour alone (the card says so too). No glow.
 const PHASE_LOOK = {
   idle: 'bg-danger text-danger-on border-surface',
   arming: 'bg-danger-pressed text-danger-on border-surface',
-  armed: 'bg-surface text-danger border-danger locus-sos-armed',
+  armed: 'bg-surface text-danger border-surface locus-sos-armed',
   confirming: 'bg-danger-pressed text-danger-on border-surface',
   fired: 'bg-danger text-danger-on border-surface',
 };

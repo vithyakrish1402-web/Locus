@@ -162,14 +162,16 @@ describe('the card above the button', () => {
 });
 
 describe('the look', () => {
-  it('red with a casing at rest, white with a red edge once armed, a tick once sent; no glow', () => {
+  it('red with a casing at rest, white with the red countdown ring once armed, a tick once sent; no glow', () => {
     const b = renderButton();
     expect(b.className).toMatch(/bg-danger /);
     expect(b.className).toContain('border-surface');
     expect(b.textContent).toBe('SOS');
     STATES.armed(b);
     expect(b.className).toContain('bg-surface');
-    expect(b.className).toContain('border-danger');
+    expect(b.className).toContain('border-surface');
+    // One ring only, drawn on the casing itself: no second outline beside it.
+    expect(b.className).not.toContain('border-danger');
     press(b);
     wait(HOLD);
     expect(b.querySelector('svg.lucide-check')).toBeTruthy();
