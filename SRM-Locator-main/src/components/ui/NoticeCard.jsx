@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Check, Info, OctagonAlert, X } from 'lucide-react';
+import { AlertTriangle, Check, Info, X } from 'lucide-react';
 import IconButton from './IconButton';
 
 // A message on a card: a tinted round icon, a short title, an optional sentence under it,
@@ -9,13 +9,13 @@ import IconButton from './IconButton';
 //   info     neutral news, and pings
 //   success  something worked
 //   warning  every ordinary problem: amber, with the alert icon
-//   danger   only an emergency or a destructive action's own message. Never for errors.
+// No red tone: nothing used one (the Emergency alert and the destructive confirmations have
+// their own screens), and red stays for those.
 
 const TONES = {
   info: { Icon: Info, disc: 'bg-accent-soft text-accent' },
   success: { Icon: Check, disc: 'bg-success-soft text-success' },
   warning: { Icon: AlertTriangle, disc: 'bg-warning-soft text-warning' },
-  danger: { Icon: OctagonAlert, disc: 'bg-danger-soft text-danger' },
 };
 
 /**

@@ -132,6 +132,12 @@ describe('TextField', () => {
 });
 
 describe('NoticeCard', () => {
+  // No red tone (Stop 2): red is for the Emergency alert and destructive actions only.
+  it('has no danger tone', async () => {
+    const source = (await import('node:fs')).readFileSync(`${process.cwd()}/src/components/ui/NoticeCard.jsx`, 'utf8');
+    expect(source).not.toMatch(/danger|OctagonAlert/);
+  });
+
   it('can be dismissed', () => {
     const onDismiss = vi.fn();
     render(<NoticeCard tone="success" title="Meera joined the group" onDismiss={onDismiss} />);

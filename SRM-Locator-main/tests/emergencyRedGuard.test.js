@@ -32,7 +32,6 @@ describe('red is for the Emergency alert and destructive actions only', () => {
     'components/group/MemberOptions.jsx': 'Remove and block: a destructive action',
     'components/ui/Button.jsx': "the danger variant's definition",
     'components/ui/ListRow.jsx': "the danger row's definition",
-    'components/ui/NoticeCard.jsx': "the danger notice's definition",
     // Not in the new look yet (the Refresh locations table and the admin tools keep their old
     // red buttons), and the WiFi floor tag's marker colour. Listed so they stay visible.
     'App.jsx': 'the old admin ABORT buttons and the WiFi floor tag colour',
@@ -66,7 +65,7 @@ describe('red is for the Emergency alert and destructive actions only', () => {
     expect(lines.length).toBeLessThanOrEqual(3);
   });
 
-  it('the danger button, row and notice are used only by Leave group, Remove and block and the alert screen', () => {
+  it('the danger button and row are used only by Leave group, Remove and block and the alert screen', () => {
     const users = files
       .filter((file) => !/components\/ui\//.test(rel(file)))
       .filter((file) => /variant="danger"|tone="danger"|^\s+danger\s*$/m.test(read(rel(file))))
