@@ -38,6 +38,7 @@ import SharingControl from './components/group/SharingControl';
 import MemberOptions from './components/group/MemberOptions';
 import LeadTools from './components/group/LeadTools';
 import LocationsTable from './components/group/LocationsTable';
+import AdminTools, { RecordingBar } from './components/admin/AdminTools';
 import JoinRequests from './components/group/JoinRequests';
 import PeekLines from './components/group/PeekLines';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
@@ -99,7 +100,7 @@ import FloorPicker from './components/FloorPicker';
 import WifiReadout from './components/WifiReadout';
 import { useIsMobile } from './hooks/useIsMobile';
 import { haptic } from './utils/haptics';
-import { SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard, fade } from './utils/motion';
+import { SHEET_SPRING, PANEL_SPRING, fade } from './utils/motion';
 import { LAYER } from './utils/layers';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
@@ -586,6 +587,26 @@ const App = () => {
     }
   });
   const recordingPolylineRef = useRef(null);
+  // The owner's path recorder (components/admin/AdminTools.jsx): Publish asks for the two
+  // buildings' names and sends the route to the group; Abort throws the points away.
+  const stopRecording = () => {
+    setIsRecordingPath(false);
+    setRecordedCoords([]);
+    if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
+    recordingPolylineRef.current = null;
+  };
+  const abortRecording = stopRecording;
+  const publishRecordedRoute = () => {
+    const startName = prompt("Enter START Building Name (e.g., Tech Park):");
+    const endName = prompt("Enter END Building Name (e.g., Java Green):");
+    if (startName && endName && recordedCoords.length > 1) {
+      const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
+      setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
+      socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData, roomCode: squadCode });
+      stopRecording();
+      notify.success(NOTICES.routePublished(startName, endName));
+    }
+  };
 
   const [loginMethod, setLoginMethod] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -2767,45 +2788,9 @@ const App = () => {
         {/* PHASE 3: Satellite toggle pill removed — function reassigned to Bottom HUD GRID button */}
       </div>
 
-      {/* --- ADMIN INDICATOR (Compact HUD) --- */}
+      {/* The bar on the map while the owner records a path (components/admin/AdminTools.jsx). */}
       {isAdmin && isRecordingPath && (
-        <div className="absolute top-24 right-6 z-[600] flex flex-col gap-2 pointer-events-auto">
-          <div className="bg-black border border-yellow-500 p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
-            <div className="text-yellow-500 font-dot text-xs tracking-widest animate-pulse">RECORDING_NODES: {recordedCoords.length}</div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  const startName = prompt("Enter START Building Name (e.g., Tech Park):");
-                  const endName = prompt("Enter END Building Name (e.g., Java Green):");
-                  if (startName && endName && recordedCoords.length > 1) {
-                    const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
-                    setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
-                    socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData, roomCode: squadCode });
-                    setIsRecordingPath(false);
-                    setRecordedCoords([]);
-                    if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
-                    recordingPolylineRef.current = null;
-                    notify.success(NOTICES.routePublished(startName, endName));
-                  }
-                }}
-                className="flex-1 p-2 bg-yellow-500 text-black font-dot text-[10px] hover:bg-yellow-400 transition-colors"
-              >
-                PUBLISH
-              </button>
-              <button
-                onClick={() => {
-                  setIsRecordingPath(false);
-                  setRecordedCoords([]);
-                  if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
-                  recordingPolylineRef.current = null;
-                }}
-                className="flex-1 p-2 border border-red-500 text-red-500 font-dot text-[10px] hover:bg-red-500 hover:text-white transition-colors"
-              >
-                ABORT
-              </button>
-            </div>
-          </div>
-        </div>
+        <RecordingBar points={recordedCoords.length} onPublish={publishRecordedRoute} onAbort={abortRecording} />
       )}
 
       {/* Map Interactive Layers */}
@@ -2932,135 +2917,18 @@ const App = () => {
       {guideOpen && <Guide zIndex={SETTINGS_Z + 1} onDone={() => setGuideOpen(false)} />}
       {/* --- END OF MODALS --- */}
 
-      {/* --- ADMIN_SETTINGS MODAL --- */}
-      <AnimatePresence>
-        {showAdminSettings && isAdmin && (
-          <motion.div
-            {...modalBackdrop()}
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[6000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
-            style={{ paddingBottom: 'var(--emergency-clearance)' }}
-          >
-            <motion.div
-              {...modalCard(reduceMotion)}
-              className="bg-black w-full max-w-2xl border border-yellow-500/60 flex flex-col max-h-[88vh] relative shadow-[0_0_40px_rgba(234,179,8,0.15)]"
-            >
-              {/* Corner Accents */}
-              <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-yellow-500" />
-              <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-yellow-500" />
-              <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-yellow-500" />
-              <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-yellow-500" />
-
-              {/* Header */}
-              <div className="p-6 border-b border-yellow-500/30 flex justify-between items-center bg-black">
-                <div className="flex items-center gap-4">
-                  <ShieldAlert className="w-6 h-6 text-yellow-500" />
-                  <div>
-                    <h3 className="font-dot text-xl tracking-widest uppercase text-yellow-500">ADMIN_OVERRIDE</h3>
-                    <p className="font-dot text-[10px] tracking-widest uppercase text-zinc-500">
-                      RESTRICTED ACCESS // <span className="text-yellow-500/70">{user?.email}</span>
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowAdminSettings(false)}
-                  className="p-2 border border-yellow-500/30 hover:border-yellow-500 hover:text-yellow-500 transition-colors text-zinc-500"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Warning Banner */}
-              <div className="flex items-center gap-3 px-6 py-3 bg-yellow-500/5 border-b border-yellow-500/20">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-                <span className="font-dot text-[10px] uppercase tracking-widest text-yellow-500/70">
-                  CLASSIFIED // COMMANDER-LEVEL CONTROLS — ALL ACTIONS PUSH TO GLOBAL MATRIX
-                </span>
-              </div>
-
-              {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar bg-black">
-
-                {/* ─── SECTION 1: PATH RECORDER ─── */}
-                <div className="p-6 border-b border-white/10">
-                  <div className="flex items-center gap-3 mb-5">
-                    <Route size={16} className="text-yellow-500" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-300">SECTION_01 // PATH_RECORDER</span>
-                    <div className="flex-1 h-[1px] bg-yellow-500/20" />
-                  </div>
-                  <p className="font-inter text-[11px] text-zinc-500 mb-5 leading-relaxed">
-                    Activate map recording mode to trace custom tactical routes between campus nodes. Click points on the map canvas, then publish to broadcast across all squad members.
-                  </p>
-
-                  {!isRecordingPath ? (
-                    <button
-                      onClick={() => { setIsRecordingPath(true); setShowAdminSettings(false); }}
-                      className="w-full py-4 bg-black border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 shadow-[0_0_15px_rgba(234,179,8,0.2)]"
-                    >
-                      <Crosshair size={16} className="animate-pulse" />
-                      INITIATE_RECORD_PATH
-                    </button>
-                  ) : (
-                    <div className="border border-yellow-500 p-4 bg-yellow-500/5">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-ping" />
-                        <span className="font-dot text-xs text-yellow-500 uppercase tracking-widest animate-pulse">
-                          RECORDING ACTIVE — {recordedCoords.length} NODES CAPTURED
-                        </span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            const startName = prompt("Enter START Building Name (e.g., Tech Park):");
-                            const endName = prompt("Enter END Building Name (e.g., Java Green):");
-                            if (startName && endName && recordedCoords.length > 1) {
-                              const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
-                              setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
-                              socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData, roomCode: squadCode });
-                              setIsRecordingPath(false);
-                              setRecordedCoords([]);
-                              if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
-                              recordingPolylineRef.current = null;
-                              notify.success(NOTICES.routePublished(startName, endName));
-                            }
-                          }}
-                          className="flex-1 py-3 bg-yellow-500 text-black font-dot text-[10px] uppercase tracking-widest hover:bg-yellow-400 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Terminal size={12} /> PUBLISH_ROUTE
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsRecordingPath(false);
-                            setRecordedCoords([]);
-                            if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
-                            recordingPolylineRef.current = null;
-                          }}
-                          className="flex-1 py-3 border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2"
-                        >
-                          <X size={12} /> ABORT
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 border-t border-yellow-500/20 flex justify-between items-center bg-black/80">
-                <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">
-                  COMMANDER // {user?.displayName || user?.email}
-                </span>
-                <button
-                  onClick={() => setShowAdminSettings(false)}
-                  className="px-6 py-2 border border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-colors"
-                >
-                  CLOSE_TERMINAL
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* The owner's admin tools (components/admin/AdminTools.jsx). */}
+      <AdminTools
+        open={showAdminSettings && isAdmin}
+        email={user?.email}
+        name={user?.displayName}
+        recording={isRecordingPath}
+        points={recordedCoords.length}
+        onRecord={() => { setIsRecordingPath(true); setShowAdminSettings(false); }}
+        onPublish={publishRecordedRoute}
+        onAbort={abortRecording}
+        onClose={() => setShowAdminSettings(false)}
+      />
 
       {/* ========== MOBILE BOTTOM BAR (src/components/BottomTabBar.jsx) ========== */}
       <BottomTabBar

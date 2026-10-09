@@ -32,9 +32,8 @@ describe('red is for the Emergency alert and destructive actions only', () => {
     'components/group/MemberOptions.jsx': 'Remove and block: a destructive action',
     'components/ui/Button.jsx': "the danger variant's definition",
     'components/ui/ListRow.jsx': "the danger row's definition",
-    // Not in the new look yet (the Refresh locations table and the admin tools keep their old
-    // red buttons), and the WiFi floor tag's marker colour. Listed so they stay visible.
-    'App.jsx': 'the old admin ABORT buttons and the WiFi floor tag colour',
+    // The WiFi floor tag's marker colour (WiFi positioning is off). Listed so it stays visible.
+    'App.jsx': 'the WiFi floor tag colour',
     'components/IndoorMarkers.jsx': 'the WiFi floor tag colour (positioning is off)',
     'components/TacticalLeafletMap.jsx': 'the WiFi floor tag colour (positioning is off)',
     'theme/tokens.css': 'the tokens themselves',
@@ -56,13 +55,13 @@ describe('red is for the Emergency alert and destructive actions only', () => {
     expect(redIn(pictures.slice(at)).length).toBeGreaterThan(0);
   });
 
-  it('App.jsx has red only in the old admin buttons and the WiFi floor tag', () => {
+  it('App.jsx has red only in the WiFi floor tag', () => {
     const app = read('App.jsx');
     const lines = app.split('\n').filter((line) => redIn(line).length > 0);
     for (const line of lines) {
-      expect(line, line.trim()).toMatch(/FloorTag text=|border-red-500 text-red-500 font-dot/);
+      expect(line, line.trim()).toMatch(/FloorTag text=/);
     }
-    expect(lines.length).toBeLessThanOrEqual(3);
+    expect(lines.length).toBeLessThanOrEqual(1);
   });
 
   it('the danger button and row are used only by Leave group, Remove and block and the alert screen', () => {

@@ -21,6 +21,7 @@ import {
 } from '../../components/ui';
 import SosTrigger from '../../components/SosTrigger';
 import LocationsTable from '../../components/group/LocationsTable';
+import AdminTools, { RecordingBar } from '../../components/admin/AdminTools';
 import SosOverlay from '../../components/SosOverlay';
 import CommsFeed from '../../components/CommsFeed';
 import UpdateModal from '../../components/UpdateModal';
@@ -191,6 +192,18 @@ const SCREENS = {
         onClose={() => {}}
       />
     ),
+  },
+  'admin-tools': {
+    label: 'Admin tools (owner only)',
+    render: () => <AdminTools open email="owner@example.com" name="Krish" recording={false} points={0} onRecord={() => {}} onPublish={() => {}} onAbort={() => {}} onClose={() => {}} />,
+  },
+  'admin-tools-recording': {
+    label: 'Admin tools, recording a path',
+    render: () => <AdminTools open email="owner@example.com" name="Krish" recording points={12} onRecord={() => {}} onPublish={() => {}} onAbort={() => {}} onClose={() => {}} />,
+  },
+  'recording-bar': {
+    label: 'Recording a path: the bar on the map',
+    render: () => <div style={{ position: 'absolute', inset: 0, background: 'var(--color-map-land)' }}><RecordingBar points={12} onPublish={() => {}} onAbort={() => {}} /></div>,
   },
   settings: { label: 'Settings', render: () => <SettingsDemo /> },
   'settings-about': { label: 'Settings, Notifications and About (scrolled)', render: () => <SettingsDemo scrollTo="Notifications" /> },

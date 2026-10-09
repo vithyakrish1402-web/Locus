@@ -137,12 +137,8 @@ describe('every screen that reaches its corner ends above it', () => {
   it("the Group Lead's Refresh locations table and the admin tools", () => {
     const table = src('components/group/LocationsTable.jsx');
     expect(table.slice(table.indexOf('z-[4000]'), table.indexOf('z-[4000]') + 300)).toContain("style={{ paddingBottom: 'var(--emergency-clearance)' }}");
-    const app = src('App.jsx');
-    for (const z of ['z-[6000]']) {
-      const at = app.indexOf(`backdrop-blur-md ${z}`);
-      expect(at, z).toBeGreaterThan(0);
-      expect(app.slice(at, at + 400), z).toContain("style={{ paddingBottom: 'var(--emergency-clearance)' }}");
-    }
+    const admin = src('components/admin/AdminTools.jsx');
+    expect(admin.slice(admin.indexOf('z-[6000]'), admin.indexOf('z-[6000]') + 300)).toContain("style={{ paddingBottom: 'var(--emergency-clearance)' }}");
   });
 
   it('AR Scan, its start screen and its readout', () => {
