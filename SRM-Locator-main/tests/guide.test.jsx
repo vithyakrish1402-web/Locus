@@ -133,6 +133,19 @@ describe('the guide itself', () => {
   it('step 5 says the alert sends your current location whatever your sharing setting', () => {
     expect(GUIDE.steps[4].body).toMatch(/current location, whatever your sharing setting/);
   });
+
+  // The Emergency button stands over the guide's lower left, so the guide's last row ends above
+  // it (E1). The part between the header and that row scrolls when a short screen or large text
+  // leaves it too little room, so no sentence ever runs into the dots or the button.
+  it("keeps its step on a scrolling middle between a fixed header and a fixed footer, and the picture its size", () => {
+    render(<Guide onDone={() => {}} />);
+    const middle = screen.getByTestId('guide').querySelector('.overflow-y-auto');
+    expect(middle).toBeTruthy();
+    expect(middle.contains(screen.getByRole('heading', { level: 1 }))).toBe(true);
+    expect(middle.contains(screen.getByRole('button', { name: GUIDE.next }))).toBe(false);
+    expect(middle.contains(screen.getByTestId('guide-progress'))).toBe(false);
+    expect(middle.firstElementChild.className).toMatch(/shrink-0/);
+  });
 });
 
 describe('the guide on first run', () => {

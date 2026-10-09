@@ -51,8 +51,8 @@ export default function Guide({ onDone, zIndex, initialStep = 0 }) {
         </div>
 
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div key={step} {...screenTransition(direction, reduceMotion)} className="flex-1 flex flex-col min-h-0">
-            <div className="shrink-0 h-[min(40vh,340px)] rounded-sheet bg-accent-soft overflow-hidden flex items-center justify-center" aria-hidden="true">
+          <motion.div key={step} {...screenTransition(direction, reduceMotion)} className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+            <div className="shrink-0 h-[clamp(9rem,34vh,340px)] rounded-sheet bg-accent-soft overflow-hidden flex items-center justify-center" aria-hidden="true">
               <Picture />
             </div>
             <h1 id={titleId} ref={headingRef} tabIndex={-1} className="mt-6 text-display outline-none">{title}</h1>

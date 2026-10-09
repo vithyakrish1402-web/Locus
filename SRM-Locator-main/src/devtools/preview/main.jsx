@@ -479,7 +479,15 @@ function Frame({ id, theme }) {
 // Inside a frame: just the screen, filling the phone. (Its theme is set on <html> before the
 // first render; see the bottom of this file.)
 function FrameContent({ id }) {
-  return <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: 'var(--color-bg)' }}>{SCREENS[id].render()}</div>;
+  // &button=1 draws the real Emergency button over the screen, as the app does on every screen but
+  // the mandatory update; &text=130 scales the text as the phone's font-size setting does.
+  const withButton = params.get('button') === '1';
+  return (
+    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: 'var(--color-bg)' }}>
+      {SCREENS[id].render()}
+      {withButton && <SosTrigger socket={null} getLocation={() => ME} roomCode="K7M2QX" senderName="ALPHA" />}
+    </div>
+  );
 }
 
 function Gallery() {
@@ -523,6 +531,7 @@ function Gallery() {
 }
 
 const frameId = SCREENS[params.get('screen')] ? params.get('screen') : 'tokens';
+if (params.get('text')) document.documentElement.style.fontSize = `${Number(params.get('text'))}%`;
 if (params.get('frame') === '1') document.documentElement.dataset.theme = params.get('theme') === 'light' ? 'light' : 'dark';
 createRoot(document.getElementById('preview-root')).render(
   params.get('frame') === '1'

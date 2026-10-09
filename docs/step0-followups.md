@@ -255,3 +255,26 @@ It failed once in the full-suite run after the Emergency batch's Stop 1. It was 
 - Under load (another test file running alongside), 15 runs each: `main` 1 failure, the branch 1 failure, both in "not another member, whose Rally Point it isn't".
 
 So it is a timing-sensitive test that predates the redesign; `backend/` and the test are identical on both. It fails a different case each time, only when the machine is busy. Fixing it is a separate task.
+
+## Emergency batch, Stop 2: room for the button (measured 2026-10-09)
+
+The button stands on one layer (`LAYER.emergencyButton`, above everything but an incoming alert) and every screen that reaches its corner ends its content above it, through one shared bottom padding (`--emergency-clearance`: 11 rem plus the gesture bar on a phone, 7.5 rem from 768 px wide, 1 rem when there is no button).
+
+**What it costs.** The button's top is 160 px above the bottom edge at 100 % text and 208 px at 130 % (it grows with the text size, as the rest of the app does). On the screen that is:
+
+| Phone | 100 % text | 130 % text |
+| --- | --- | --- |
+| 360 × 640 | 25 % | 33 % |
+| 360 × 780 | 21 % | 27 % |
+| 412 × 892 | 18 % | 23 % |
+
+At every size and both text sizes, the last button of each sheet and dialog (Confirm, Cancel, Retry, Update now, Later, Not now, Continue, Set meeting point, Leave group, Stay in the group, Download installer, Copy link, Get started) ends 16 px (21 px at 130 %) above the button's top, with nothing overlapping it. Scripted check in the preview gallery with the real button drawn over each screen (`/preview.html?frame=1&screen=<id>&button=1&text=130`).
+
+**Where it is tight.** On a 640 px phone at 130 % text, every sheet is taller than the 90 % it may take, so its content scrolls by 36 to 127 px; the buttons are reachable by scrolling and end clear of the Emergency button, but the first screenful no longer shows them. The guide's text scrolls by up to 291 px there (the fixed header, dots and button leave little room). AR Scan's start screen keeps 2 px (it fits, but only just). At 100 % on a 640 px phone nothing scrolls except the guide (84 px) and Settings.
+
+Two things were found and fixed on the way: the guide's paragraph ran into its page dots on a 360 px phone (the clearance squeezed it), so the guide's middle now scrolls between a fixed header and footer and its picture is a little shorter on short phones; and Settings and the other screens needed the clearance (done).
+
+**With the keyboard open.** The group panel's search box (Members and Buildings tabs) is the one text field on a screen with the button. On a 520 px high screen (about what an 850 px phone has with the keyboard up) the box sits at 394 to 438 px and the button at 360 to 440 px on its left edge: **it covers the start of the box.** Expanding the panel to full height does not help, because the panel's title, code, tabs and three action buttons already fill the space above the box on a short screen. The AR Scan target picker's search box is near the top of its sheet and is clear by geometry. Options, for the owner to choose (nothing was changed): (a) while a text field has focus, hide the panel's title and action buttons so the search box rises clear; (b) while a text field has focus, indent that field to start right of the button; (c) move the button while the keyboard is up (not recommended: it changes where the button is).
+
+**Smaller ways to cut the padding, if wanted** (nothing changed): the button's own offset (bottom 5 rem) leaves 80 px under it that no sheet can use; lowering the button to 1 rem on the screens that cover the bottom bar would give back about 64 px but moves the button there; or, on phones under 700 px high only, drop the guide's picture and let sheets use 94 % of the screen height.
+
