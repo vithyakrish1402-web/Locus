@@ -136,6 +136,18 @@ describe('incoming SOS while a mandatory update gates the app', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
+  // Owner, Emergency plan D1: no Emergency button on the mandatory update screen (an incoming
+  // alert still draws over it). So the screen reserves no room for one either (E1).
+  it('has no Emergency button, and reserves no room for one, with or without an alert', () => {
+    render(<App />);
+    expect(screen.queryByTestId('sos-button')).toBeNull();
+    expect(document.documentElement.dataset.emergencyButton).toBeUndefined();
+    act(() => fakeSocket.receive('sos-received', SOS));
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+    expect(screen.queryByTestId('sos-button')).toBeNull();
+    expect(document.documentElement.dataset.emergencyButton).toBeUndefined();
+  });
+
   it('draws the SOS overlay on top of the gate, with sender and coordinates', () => {
     render(<App />);
     act(() => fakeSocket.receive('sos-received', SOS));
