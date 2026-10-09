@@ -278,3 +278,15 @@ Two things were found and fixed on the way: the guide's paragraph ran into its p
 
 **Smaller ways to cut the padding, if wanted** (nothing changed): the button's own offset (bottom 5 rem) leaves 80 px under it that no sheet can use; lowering the button to 1 rem on the screens that cover the bottom bar would give back about 64 px but moves the button there; or, on phones under 700 px high only, drop the guide's picture and let sheets use 94 % of the screen height.
 
+## Stop 2 decisions, done (2026-10-09)
+
+- **Padding, option 2.** Under 700 px high, sheets may take 94 % of the screen and the guide drops its picture. The button does not move. Deviation: AR Scan's start screen also drops its picture under 700 px and scrolls its words if they still don't fit (its icon was cut off and its sentence touched Start AR Scan at 360 x 640 with 130 % text). There, Start AR Scan sits at 301-357 px and the button's top at 432.
+- **Keyboard, option 1.** While a group panel search box has focus on a phone, the panel's title and the Group Lead's buttons step aside and come back when focus leaves. Deviation: they move only after the tap that moved focus has finished, because moving them under the finger sent that tap to whatever slid under it (Live, Paused). At 412 x 520 the box sits at 252-296 px, the button's top at 360. Pressing the Emergency button keeps the box focused, so the keyboard stays up and nothing moves.
+- **Geofence banners** removed: nothing has sent `geofence-alert` since 5353d06 (every release since v1.0.0). The server's relay is unchanged.
+- **Danger variants.** The notice card's red tone was unused and is gone. The red list row stays: it is Remove and block.
+- **Locations table and admin tools** are in the new look, words unchanged. Deviation: the path recorder's ABORT is a neutral button, not red (it only throws away unsaved points).
+- **Buildings list.** A search with no match now says "No building called ...", and the search trims spaces as the members search does.
+- **Desktop.** Sheets are a centred card (max 576 px) from 768 px up, instead of a strip across the window.
+
+New words for the wording pass: "Close" (screen-reader label of the locations table's and admin tools' close buttons) and "No building called ...".
+
