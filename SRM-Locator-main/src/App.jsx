@@ -44,7 +44,7 @@ import PeekLines from './components/group/PeekLines';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { panelStops, snapPanel } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED } from './copy/group';
+import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -2394,6 +2394,9 @@ const App = () => {
           {/* Buildings: the search heads the list. (Members: it sits above the members list,
               under the controls, so a Group Lead's tools come higher at half height.) */}
           {activeTab === 'buildings' && groupSearch}
+          {activeTab === 'buildings' && searchQuery.trim() && !SRM_MASTER_DATABASE.some(b => matchesSearch(b.name)) && (
+            <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="buildings-no-match">{GROUP_BUILDINGS_LIST.noMatch(searchQuery.trim())}</p>
+          )}
           {/* The Group Lead's tools come first, before Your location (the design has them after):
               at half height on a 360 px phone they would otherwise sit under the Emergency button,
               which stays above the panel. */}
@@ -2438,7 +2441,7 @@ const App = () => {
           )}
           <AnimatePresence mode="popLayout">
             {activeTab === 'buildings' ? (
-              SRM_MASTER_DATABASE.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).map(building => (
+              SRM_MASTER_DATABASE.filter(b => matchesSearch(b.name)).map(building => (
                 <motion.div
                   layout
                   initial={{ opacity: 0 }}

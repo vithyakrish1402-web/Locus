@@ -150,3 +150,8 @@ export const MEMBERS_LIST = {
   codeCopied: 'Code copied',
   noMatch: (query) => `No one called "${query}"`,
 };
+
+// The Buildings list (Stop 2 leftovers: a search that found nothing showed a blank list).
+export const BUILDINGS_LIST = {
+  noMatch: (query) => `No building called "${query}"`,
+};

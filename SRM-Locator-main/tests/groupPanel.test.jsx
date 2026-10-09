@@ -672,6 +672,20 @@ describe('the members list: heading, loading, empty, no match', () => {
     expect(screen.queryByTestId('members-empty')).toBeNull();
   });
 
+  // Stop 2 leftovers: a building search that found nothing showed a blank list.
+  it('a building search that finds nothing says so, and spaces around a name still find it', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.buildings);
+    const box = panel().getByRole('searchbox', { name: GROUP_TABS.searchBuildings });
+    fireEvent.change(box, { target: { value: 'zzqx' } });
+    expect(screen.getByTestId('buildings-no-match').textContent).toBe('No building called "zzqx"');
+    fireEvent.change(box, { target: { value: '  tech park  ' } });
+    expect(screen.queryByTestId('buildings-no-match')).toBeNull();
+    expect(screen.getAllByTestId('building-row').length).toBeGreaterThan(0);
+    fireEvent.change(box, { target: { value: '' } });
+    expect(screen.queryByTestId('buildings-no-match')).toBeNull();
+  });
+
   it('leaving the group forgets the list: the next group loads afresh', async () => {
     await inAGroup({ lead: false, members: () => member('Meera Iyer') });
     tab(GROUP_TABS.members);
