@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flag } from 'lucide-react';
+import { Check, Flag } from 'lucide-react';
 import { Avatar } from '../ui';
 import { GUIDE } from '../../copy/guide';
 
@@ -102,23 +102,38 @@ export function SharingPicture() {
 }
 
 /** Step 5: the SOS button part-way through its hold, and the two holds. */
-export function EmergencyPicture() {
-  // The ring as it fills during a hold: 70 % round.
-  const r = 52;
+// The Emergency button's own two holds, in the new look (Emergency batch, E6): the first hold
+// fills the ring, the second (armed: white with a red edge) drains it, then the group is alerted.
+// Red only here, as on the button itself.
+function MiniButton({ look, ring, children }) {
+  const r = 36;
   const around = 2 * Math.PI * r;
   return (
-    <div className="flex items-center gap-6">
-      <span className="relative inline-flex items-center justify-center w-32 h-32">
-        <svg viewBox="0 0 120 120" className="absolute inset-0 -rotate-90" role="presentation">
-          <circle cx="60" cy="60" r={r} fill="none" stroke="var(--color-danger-soft)" strokeWidth="6" />
-          <circle cx="60" cy="60" r={r} fill="none" stroke="var(--color-danger)" strokeWidth="6" strokeDasharray={`${around * 0.7} ${around}`} strokeLinecap="round" />
-        </svg>
-        <span className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-danger text-danger-on text-title">{P.sos}</span>
+    <span className="relative inline-flex items-center justify-center w-[4.5rem] h-[4.5rem]">
+      <svg viewBox="0 0 80 80" className="absolute -inset-1 w-20 h-20 -rotate-90" data-testid="guide-sos-ring">
+        <circle cx="40" cy="40" r={r} fill="none" stroke="var(--color-danger-soft)" strokeWidth="4" />
+        <circle cx="40" cy="40" r={r} fill="none" stroke="var(--color-danger)" strokeWidth="4" strokeDasharray={`${around * ring} ${around}`} strokeLinecap="round" />
+      </svg>
+      <span className={`relative inline-flex items-center justify-center w-16 h-16 rounded-full border-2 text-label font-semibold ${look}`}>{children}</span>
+    </span>
+  );
+}
+
+export function EmergencyPicture() {
+  const [hold, again, sent] = P.sosSteps;
+  return (
+    <div className="flex items-start justify-center gap-4">
+      <span className="flex flex-col items-center gap-3 w-20 text-center text-label text-text font-semibold">
+        <MiniButton look="bg-danger text-danger-on border-surface" ring={0.7}>{P.sos}</MiniButton>
+        {hold}
       </span>
-      <span className="flex flex-col gap-2 text-label">
-        {P.sosSteps.map((s, i) => (
-          <span key={s} className={i < 2 ? 'text-text' : 'text-text-secondary font-normal'}>{s}</span>
-        ))}
+      <span className="flex flex-col items-center gap-3 w-20 text-center text-label text-text font-semibold">
+        <MiniButton look="bg-surface text-danger border-danger" ring={0.4}>{P.sos}</MiniButton>
+        {again}
+      </span>
+      <span className="flex flex-col items-center gap-3 w-20 text-center text-label text-text-secondary font-normal">
+        <MiniButton look="bg-danger text-danger-on border-surface" ring={1}><Check size={26} strokeWidth={3} /></MiniButton>
+        {sent}
       </span>
     </div>
   );
