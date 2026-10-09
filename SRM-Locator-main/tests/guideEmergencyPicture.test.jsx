@@ -17,12 +17,13 @@ describe("the guide's Emergency picture", () => {
     render(<Guide onDone={() => {}} initialStep={4} />);
     const rings = screen.getAllByTestId('guide-sos-ring');
     expect(rings).toHaveLength(3);
-    const discs = rings.map((ring) => ring.nextElementSibling);
-    // Hold: red with a casing; hold again: armed, white with a red edge; sent: red with a tick.
+    const discs = rings.map((ring) => ring.previousElementSibling);
+    // Hold: red with a casing; hold again: armed, white (no red edge, as on the button); sent: a tick.
     expect(discs[0].className).toMatch(/bg-danger /);
     expect(discs[0].textContent).toBe(GUIDE.picture.sos);
     expect(discs[1].className).toMatch(/bg-surface/);
-    expect(discs[1].className).toMatch(/border-danger/);
+    expect(discs[1].className).toMatch(/border-surface/);
+    expect(discs[1].className).not.toMatch(/border-danger/);
     expect(discs[1].textContent).toBe(GUIDE.picture.sos);
     expect(discs[2].querySelector('svg')).toBeTruthy();
     expect(discs[2].textContent).toBe('');

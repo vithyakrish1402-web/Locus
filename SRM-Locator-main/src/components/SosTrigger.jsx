@@ -14,10 +14,12 @@ import { LAYER } from '../utils/layers';
 const GRID = 96;
 const CENTER = GRID / 2;
 
-const HOLD_RADIUS = 38;
+// On the 4 px casing (radius 36 to 40 of the 80 px button), 1 px into the face so no
+// hairline of the casing shows between the ring and a red face.
+const HOLD_RADIUS = 37.5;
 const HOLD_CIRCUMFERENCE = 2 * Math.PI * HOLD_RADIUS;
 
-const COUNTDOWN_RADIUS = 38;
+const COUNTDOWN_RADIUS = 37.5;
 const COUNTDOWN_CIRCUMFERENCE = 2 * Math.PI * COUNTDOWN_RADIUS;
 
 const FIRED_DISPLAY_MS = 2000;
@@ -42,7 +44,7 @@ const ARIA_LABELS = {
 const PHASE_LOOK = {
   idle: 'bg-danger text-danger-on border-surface',
   arming: 'bg-danger-pressed text-danger-on border-surface',
-  armed: 'bg-surface text-danger border-surface locus-sos-armed',
+  armed: 'bg-surface text-danger border-surface',
   confirming: 'bg-danger-pressed text-danger-on border-surface',
   fired: 'bg-danger text-danger-on border-surface',
 };
@@ -313,7 +315,7 @@ const SosTrigger = ({
           ...layerStyle,
         }}
       >
-        <svg className="absolute -inset-2 w-24 h-24 -rotate-90 pointer-events-none overflow-visible" viewBox={`0 0 ${GRID} ${GRID}`} aria-hidden="true">
+        <svg className="absolute left-1/2 top-1/2 w-24 h-24 -translate-x-1/2 -translate-y-1/2 -rotate-90 pointer-events-none overflow-visible" viewBox={`0 0 ${GRID} ${GRID}`} aria-hidden="true">
           {/* The track, while there is something to fill or drain. */}
           <circle
             data-testid="sos-ring-track"
@@ -322,8 +324,9 @@ const SosTrigger = ({
             r={HOLD_RADIUS}
             fill="none"
             className="stroke-danger-soft"
-            strokeWidth={4}
-            style={{ opacity: holding || phase === 'fired' ? 1 : 0 }}
+            strokeWidth={5}
+            // Not once sent: the full ring covers it, and its pale edges would show as a hairline.
+            style={{ opacity: holding ? 1 : 0 }}
           />
           <circle
             data-testid="sos-ring-countdown"
@@ -332,7 +335,7 @@ const SosTrigger = ({
             r={COUNTDOWN_RADIUS}
             fill="none"
             className="stroke-danger"
-            strokeWidth={4}
+            strokeWidth={5}
             strokeLinecap="round"
             strokeDasharray={COUNTDOWN_CIRCUMFERENCE}
             strokeDashoffset={countdownRing.offset}
@@ -348,14 +351,16 @@ const SosTrigger = ({
             r={HOLD_RADIUS}
             fill="none"
             className="stroke-danger"
-            strokeWidth={4}
+            strokeWidth={5}
             strokeLinecap="round"
             strokeDasharray={HOLD_CIRCUMFERENCE}
             strokeDashoffset={holdRing.offset}
-            style={{ transition: `stroke-dashoffset ${holdRing.duration}ms linear` }}
+            // Shown only while it fills (and full once sent): an empty dash with round caps still draws a dot at the top.
+            style={{ transition: `stroke-dashoffset ${holdRing.duration}ms linear`, opacity: phase === 'arming' || phase === 'confirming' || phase === 'fired' ? 1 : 0 }}
           />
         </svg>
-        <span className="relative z-10 flex items-center justify-center">{content}</span>
+        {/* Armed, only the word pulses: pulsing the whole button let the dimmed screen show through its white face. */}
+        <span className={`relative z-10 flex items-center justify-center ${phase === 'armed' ? 'locus-sos-armed' : ''}`}>{content}</span>
       </button>
     </>
   );

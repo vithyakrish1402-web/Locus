@@ -103,18 +103,19 @@ export function SharingPicture() {
 
 /** Step 5: the SOS button part-way through its hold, and the two holds. */
 // The Emergency button's own two holds, in the new look (Emergency batch, E6): the first hold
-// fills the ring, the second (armed: white with a red edge) drains it, then the group is alerted.
+// fills the ring, the second (armed: white, the ring draining) empties it, then the group is alerted.
 // Red only here, as on the button itself.
 function MiniButton({ look, ring, children }) {
-  const r = 36;
+  // Drawn as the button is: a white casing with the ring on it, centred, one ring only.
+  const r = 34;
   const around = 2 * Math.PI * r;
   return (
     <span className="relative inline-flex items-center justify-center w-[4.5rem] h-[4.5rem]">
-      <svg viewBox="0 0 80 80" className="absolute -inset-1 w-20 h-20 -rotate-90" data-testid="guide-sos-ring">
-        <circle cx="40" cy="40" r={r} fill="none" stroke="var(--color-danger-soft)" strokeWidth="4" />
-        <circle cx="40" cy="40" r={r} fill="none" stroke="var(--color-danger)" strokeWidth="4" strokeDasharray={`${around * ring} ${around}`} strokeLinecap="round" />
+      <span className={`inline-flex items-center justify-center w-full h-full rounded-full border-4 shadow-[var(--shadow-2)] text-label font-semibold ${look}`}>{children}</span>
+      <svg viewBox="0 0 72 72" className="absolute inset-0 w-full h-full -rotate-90" data-testid="guide-sos-ring">
+        <circle cx="36" cy="36" r={r} fill="none" stroke="var(--color-danger-soft)" strokeWidth="4" />
+        <circle cx="36" cy="36" r={r} fill="none" stroke="var(--color-danger)" strokeWidth="4" strokeDasharray={`${around * ring} ${around}`} strokeLinecap="round" />
       </svg>
-      <span className={`relative inline-flex items-center justify-center w-16 h-16 rounded-full border-2 text-label font-semibold ${look}`}>{children}</span>
     </span>
   );
 }
@@ -128,7 +129,7 @@ export function EmergencyPicture() {
         {hold}
       </span>
       <span className="flex flex-col items-center gap-3 w-20 text-center text-label text-text font-semibold">
-        <MiniButton look="bg-surface text-danger border-danger" ring={0.4}>{P.sos}</MiniButton>
+        <MiniButton look="bg-surface text-danger border-surface" ring={0.4}>{P.sos}</MiniButton>
         {again}
       </span>
       <span className="flex flex-col items-center gap-3 w-20 text-center text-label text-text-secondary font-normal">
