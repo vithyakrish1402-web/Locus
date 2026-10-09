@@ -594,6 +594,15 @@ const App = () => {
 
   const [activeTab, setActiveTab] = useState('buildings');
   const [searchQuery, setSearchQuery] = useState('');
+  // The group panel's search box has focus, so on a phone the keyboard is up and the screen is
+  // short: the panel's title and the Group Lead's buttons step aside until focus leaves, so the
+  // box rises clear of the Emergency button (owner, Stop 2, keyboard option 1).
+  const [searchFocused, setSearchFocused] = useState(false);
+  const afterTap = (stillSo, focused) => {
+    const apply = () => { if (stillSo()) setSearchFocused(focused); };
+    window.addEventListener('click', apply, { once: true });
+    setTimeout(apply, 400);
+  };
   const [selectedItem, setSelectedItem] = useState(null);
 
   const [users, setUsers] = useState([]);
@@ -1969,6 +1978,8 @@ const App = () => {
   // The group panel's heights (utils/panelHeights.js). Until it has been measured (and in
   // tests, with no layout) closed is the screen's height and every open height is full.
   const atPeek = isMobile && sheetOpen && panelHeight === 'peek';
+  // On a phone, a focused search box means the keyboard is up (see searchFocused).
+  const keyboardUp = isMobile && searchFocused;
   const panelStopsNow = panelGeometry ?? { full: 0, half: 0, peek: 0, closed: typeof window === 'undefined' ? 1000 : window.innerHeight };
   const panelTarget = !isMobile ? 0 : sheetOpen ? panelStopsNow[panelHeight] : panelStopsNow.closed;
   // The peek line's counts: who is live, paused, waiting for a location, or lost.
@@ -1990,7 +2001,8 @@ const App = () => {
     const measure = () => {
       const panel = sheetRef.current;
       const header = panelHeaderRef.current;
-      if (!panel || !header || !panel.offsetHeight) return;
+      // The header steps aside while the search box has focus: keep the heights it gave.
+      if (!panel || !header || !panel.offsetHeight || !header.offsetHeight) return;
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       const inset = insetProbeRef.current?.offsetHeight ?? 0;
       const tabBar = 4 * rem;
@@ -2034,6 +2046,10 @@ const App = () => {
         className="w-full min-h-11 rounded-full bg-sunken pl-11 pr-4 font-ui text-body text-text placeholder:text-text-secondary focus:outline-2 focus:outline-offset-2 focus:outline-accent"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
+        // The panel steps aside, and back, only once the tap that moved focus has finished:
+        // moving it under the finger would send that tap's click to whatever slid under it.
+        onFocus={(e) => { const box = e.currentTarget; afterTap(() => document.activeElement === box, true); }}
+        onBlur={(e) => { const box = e.currentTarget; afterTap(() => document.activeElement !== box, false); }}
       />
     </label>
   );
@@ -2322,7 +2338,8 @@ const App = () => {
             Copy. On a phone it is the panel's drag handle too: pressing anywhere on it starts the
             drag, and a plain tap still closes the panel, as the handle did. */}
         <div
-          className="shrink-0 select-none pt-3 md:pt-4 touch-none md:touch-auto cursor-grab active:cursor-grabbing md:cursor-auto"
+          className={`${keyboardUp ? 'hidden ' : ''}shrink-0 select-none pt-3 md:pt-4 touch-none md:touch-auto cursor-grab active:cursor-grabbing md:cursor-auto`}
+          data-testid="group-panel-header"
           data-no-ping
           onPointerDown={(e) => { if (!isMobile) return; sheetDraggedRef.current = false; sheetDragControls.start(e); }}
           // A drag that snapped back still ends in a click; only a real tap closes.
@@ -2380,7 +2397,7 @@ const App = () => {
           {/* The Group Lead's tools come first, before Your location (the design has them after):
               at half height on a 360 px phone they would otherwise sit under the Emergency button,
               which stays above the panel. */}
-          {activeTab === 'users' && squadRole === 'OWNER' && (
+          {activeTab === 'users' && squadRole === 'OWNER' && !keyboardUp && (
             <LeadTools
               requests={pendingRequests.length}
               onRequests={() => setShowRequestsModal(true)}

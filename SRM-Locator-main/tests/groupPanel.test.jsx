@@ -708,3 +708,80 @@ describe("the order down the panel (so the Group Lead's tools come high at half)
     expect(search.compareDocumentPosition(screen.getAllByTestId('building-row')[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
+
+// Owner, Stop 2 (keyboard option 1): on a phone, while a search box has focus (the keyboard is
+// up and the screen short), the panel's title and the Group Lead's buttons step aside so the box
+// rises clear of the Emergency button; they come back when focus leaves. They move only once the
+// tap that moved focus has finished, so that tap's click can't land on whatever slid under it.
+// Measured at 412 x 520: the box at 252-296 px, the Emergency button's top at 360.
+describe('with the keyboard up, on a phone', () => {
+  let realMatchMedia;
+  beforeEach(() => {
+    realMatchMedia = window.matchMedia;
+    window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
+  });
+  afterEach(() => { window.matchMedia = realMatchMedia; });
+
+  const header = () => screen.getByTestId('group-panel-header');
+  const leadTools = () => screen.queryByTestId('lead-tools');
+  const search = () => screen.getByRole('searchbox', { name: GROUP_TABS.searchMembers });
+
+  it("a focused search box sends the title and the Lead's buttons aside, after the tap, and back on leaving", async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    expect(leadTools()).toBeTruthy();
+    fireEvent.focus(search());
+    search().focus();
+    // Not under the finger: nothing moves until the tap's click is done.
+    expect(header().className).not.toMatch(/(^| )hidden /);
+    expect(leadTools()).toBeTruthy();
+    fireEvent.click(search());
+    expect(header().className).toMatch(/(^| )hidden /);
+    expect(leadTools()).toBeNull();
+    // The Emergency button stays.
+    expect(screen.getByTestId('sos-button')).toBeTruthy();
+    // Focus leaves: back once that tap is done.
+    search().blur();
+    fireEvent.blur(search());
+    expect(header().className).toMatch(/(^| )hidden /);
+    fireEvent.click(document.body);
+    expect(header().className).not.toMatch(/(^| )hidden /);
+    expect(leadTools()).toBeTruthy();
+  });
+
+  it('focus from the keyboard, with no tap, still sends them aside', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    search().focus();
+    fireEvent.focus(search());
+    await act(async () => { await new Promise((r) => setTimeout(r, 450)); });
+    expect(header().className).toMatch(/(^| )hidden /);
+  });
+
+  it('a search box focused and left at once changes nothing', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    search().focus();
+    fireEvent.focus(search());
+    search().blur();
+    fireEvent.click(document.body);
+    expect(header().className).not.toMatch(/(^| )hidden /);
+    // Nor later, when the focus's fallback timer runs.
+    await act(async () => { await new Promise((r) => setTimeout(r, 450)); });
+    expect(header().className).not.toMatch(/(^| )hidden /);
+    expect(leadTools()).toBeTruthy();
+  });
+});
+
+describe('with a search box focused, on a wide screen', () => {
+  it('nothing steps aside: the panel is a side column there, clear of the button', async () => {
+    await inAGroup();
+    tab(GROUP_TABS.members);
+    const box = screen.getByRole('searchbox', { name: GROUP_TABS.searchMembers });
+    box.focus();
+    fireEvent.focus(box);
+    fireEvent.click(box);
+    expect(screen.getByTestId('group-panel-header').className).not.toMatch(/(^| )hidden /);
+    expect(screen.queryByTestId('lead-tools')).toBeTruthy();
+  });
+});
