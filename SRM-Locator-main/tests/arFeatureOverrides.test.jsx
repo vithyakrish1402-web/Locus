@@ -34,7 +34,7 @@ const open = async ({ fidelity, overrides, routePath = ROUTE }) => {
     <ARCompass target={RALLY} liveLocation={HERE} routePath={routePath} buildings={BUILDINGS}
       fidelity={fidelity} overrides={overrides} onClose={() => {}} />,
   );
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   const event = new Event('deviceorientationabsolute');
   Object.assign(event, { absolute: true, alpha: 0 });
   act(() => window.dispatchEvent(event));

@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 //
-// SYS_CONFIG -> AR_RENDER_MODE, AR Scan's main fidelity dial, and AR_FEATURE_OVERRIDES,
-// each feature's own setting under it: selectable, showing which option is active, and
-// reaching AR Scan.
+// Settings -> AR Scan quality, AR Scan's main fidelity dial, and AR Scan parts (under More),
+// each part's own setting: selectable, showing which option is chosen, and reaching AR Scan.
 //
 // Renders the real App.jsx; only the socket, Firebase, native plugins, maps and the update
 // hooks are stubbed (same harness as tabBarAndBanners.test.jsx).
@@ -76,8 +75,11 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 });
 
 const { default: App } = await import('../src/App.jsx');
+const { SETTINGS } = await import('../src/copy/settings.js');
 
 beforeEach(() => {
+  // The camera was allowed before, so AR Scan opens without its explainer (see cameraExplainer.test.jsx).
+  try { localStorage.setItem('locus.cameraAllowed', '1'); } catch { /* no storage */ }
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
     value: {
@@ -94,94 +96,93 @@ afterEach(() => {
   delete navigator.geolocation;
 });
 
-// Signed in -> lobby -> INITIALIZE -> the map -> SYS_CONFIG.
+// Signed in -> lobby -> Create group -> the map -> Settings (the gear).
 const openSettings = () => {
   render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
-  fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
+  fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
 };
-const option = (name) => screen.getByRole('button', { name: new RegExp(`^${name}$`) });
-const isActive = (name) => !option(name).className.includes('text-zinc-500');
+const group = (name) => within(screen.getByRole('radiogroup', { name }));
+const choice = (groupName, label) => group(groupName).getByRole('radio', { name: label });
+const chosen = (groupName) => group(groupName).getAllByRole('radio').filter((r) => r.getAttribute('aria-checked') === 'true').map((r) => r.textContent);
+const Q = SETTINGS.arQuality;
+const QO = SETTINGS.arQualityOptions;
+const PART = SETTINGS.arPartNames;
+const PO = SETTINGS.arPartOptions;
 
-describe('AR_RENDER_MODE', () => {
-  it('sits after the polling rate, with STANDARD selected by default', () => {
+describe('AR Scan quality', () => {
+  it('sits after the location refresh rate, with Standard chosen by default', () => {
     openSettings();
-    const label = screen.getByText('AR_RENDER_MODE');
-    const polling = screen.getByText('TELEMETRY_POLLING_RATE');
-    expect(polling.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(isActive('STANDARD')).toBe(true);
-    expect(isActive('EFFICIENT')).toBe(false);
-    expect(isActive('REALISTIC')).toBe(false);
-    expect(screen.getByText(/REALISTIC mode uses more battery/)).toBeTruthy();
+    const quality = screen.getByRole('radiogroup', { name: Q });
+    const refresh = screen.getByRole('radiogroup', { name: SETTINGS.refresh });
+    expect(refresh.compareDocumentPosition(quality) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(chosen(Q)).toEqual([QO.standard]);
+    expect(screen.getByText(SETTINGS.arQualityHelp)).toBeTruthy();
   });
 
-  it('selects exactly one option at a time, without touching the polling rate', () => {
+  it('chooses exactly one option at a time, without touching the refresh rate', () => {
     openSettings();
-    for (const pick of ['EFFICIENT', 'REALISTIC', 'STANDARD']) {
-      fireEvent.click(option(pick));
-      for (const other of ['EFFICIENT', 'STANDARD', 'REALISTIC']) {
-        expect(isActive(other)).toBe(other === pick);
-      }
-      expect(screen.getByRole('button', { name: /STANDARD \(5s\)/ }).className).not.toContain('text-zinc-500');
+    for (const pick of ['efficient', 'realistic', 'standard']) {
+      fireEvent.click(choice(Q, QO[pick]));
+      expect(chosen(Q)).toEqual([QO[pick]]);
+      expect(chosen(SETTINGS.refresh)[0]).toMatch(new RegExp(`^${SETTINGS.refreshOptions.standard.label}`));
     }
   });
 });
 
-describe('AR_RENDER_MODE reaches AR Scan', () => {
-  it('opens AR Scan with the selected mode', async () => {
+describe('AR Scan quality reaches AR Scan', () => {
+  it('opens AR Scan with the chosen quality', async () => {
     openSettings();
-    fireEvent.click(option('EFFICIENT'));
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: /SCAN/ }));
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+    fireEvent.click(choice(Q, QO.efficient));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Scan' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
     expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe('efficient');
   });
 });
 
-// Stage 6: AR_FEATURE_OVERRIDES, one row per AR Scan feature under the main dial.
-describe('AR_FEATURE_OVERRIDES', () => {
-  const row = (label) => within(screen.getByRole('group', { name: label }));
-  const optionsOf = (label) => row(label).getAllByRole('button').map((b) => b.textContent);
-  const pressed = (label) => row(label).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent);
+// Stage 6's per-part overrides, now under Settings' "More": one row per AR Scan part.
+describe('AR Scan parts', () => {
+  const optionsOf = (part) => group(PART[part]).getAllByRole('radio').map((r) => r.textContent);
 
-  it('sits after AR_RENDER_MODE, one row per feature, each with only its own options', () => {
+  it('sit after AR Scan quality, one row per part, each with only its own options', () => {
     openSettings();
-    const dial = screen.getByText('AR_RENDER_MODE');
-    const block = screen.getByText('AR_FEATURE_OVERRIDES');
-    expect(dial.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(optionsOf('AMBIENT_TAGS')).toEqual(['AUTO', 'OFF']);
-    expect(optionsOf('ROAD_LINE')).toEqual(['AUTO', 'OFF', 'EFFICIENT', 'REALISTIC']);
-    expect(optionsOf('ARROW')).toEqual(['AUTO', 'EFFICIENT', 'REALISTIC']);
+    const quality = screen.getByRole('radiogroup', { name: Q });
+    const parts = screen.getByText(SETTINGS.arParts);
+    expect(quality.compareDocumentPosition(parts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(optionsOf('tags')).toEqual([PO.auto, PO.off]);
+    expect(optionsOf('roadLine')).toEqual([PO.auto, PO.off, PO.efficient, PO.realistic]);
+    expect(optionsOf('arrow')).toEqual([PO.auto, PO.efficient, PO.realistic]);
   });
 
-  it('starts with every feature on AUTO', () => {
+  it('start with every part on Auto', () => {
     openSettings();
-    for (const label of ['AMBIENT_TAGS', 'ROAD_LINE', 'ARROW']) expect(pressed(label)).toEqual(['AUTO']);
+    for (const part of ['tags', 'roadLine', 'arrow']) expect(chosen(PART[part])).toEqual([PO.auto]);
   });
 
-  it('sets one feature at a time, leaving the others and the main dial alone', () => {
+  it('set one part at a time, leaving the others and the main dial alone', () => {
     openSettings();
-    fireEvent.click(screen.getByRole('button', { name: 'ROAD_LINE OFF' }));
-    expect(pressed('ROAD_LINE')).toEqual(['OFF']);
-    expect(pressed('AMBIENT_TAGS')).toEqual(['AUTO']);
-    expect(pressed('ARROW')).toEqual(['AUTO']);
-    expect(isActive('STANDARD')).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'ARROW REALISTIC' }));
-    fireEvent.click(screen.getByRole('button', { name: 'AMBIENT_TAGS OFF' }));
-    expect(pressed('ROAD_LINE')).toEqual(['OFF']); // an earlier choice survives a later one
-    expect(pressed('ARROW')).toEqual(['REALISTIC']);
-    expect(pressed('AMBIENT_TAGS')).toEqual(['OFF']);
-    fireEvent.click(screen.getByRole('button', { name: 'ROAD_LINE AUTO' }));
-    expect(pressed('ROAD_LINE')).toEqual(['AUTO']);
-    expect(pressed('ARROW')).toEqual(['REALISTIC']);
+    fireEvent.click(choice(PART.roadLine, PO.off));
+    expect(chosen(PART.roadLine)).toEqual([PO.off]);
+    expect(chosen(PART.tags)).toEqual([PO.auto]);
+    expect(chosen(PART.arrow)).toEqual([PO.auto]);
+    expect(chosen(Q)).toEqual([QO.standard]);
+    fireEvent.click(choice(PART.arrow, PO.realistic));
+    fireEvent.click(choice(PART.tags, PO.off));
+    expect(chosen(PART.roadLine)).toEqual([PO.off]); // an earlier choice survives a later one
+    expect(chosen(PART.arrow)).toEqual([PO.realistic]);
+    expect(chosen(PART.tags)).toEqual([PO.off]);
+    fireEvent.click(choice(PART.roadLine, PO.auto));
+    expect(chosen(PART.roadLine)).toEqual([PO.auto]);
+    expect(chosen(PART.arrow)).toEqual([PO.realistic]);
   });
 
-  it('reaches AR Scan: an arrow override beats the main dial', async () => {
+  it('reach AR Scan: an arrow override beats the main dial', async () => {
     openSettings();
-    fireEvent.click(option('REALISTIC'));
-    fireEvent.click(screen.getByRole('button', { name: 'ARROW EFFICIENT' }));
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: /SCAN/ }));
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+    fireEvent.click(choice(Q, QO.realistic));
+    fireEvent.click(choice(PART.arrow, PO.efficient));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Scan' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
     expect(screen.getByTestId('ar-arrow-ring').dataset.fidelity).toBe('efficient');
     expect(screen.getByTestId('ar-arrow-3d')).toBeTruthy();
   });

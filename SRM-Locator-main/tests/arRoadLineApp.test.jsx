@@ -53,7 +53,7 @@ vi.mock('@capacitor/app', () => ({
 vi.mock('google-map-react', () => ({ default: () => null }));
 vi.mock('../src/components/TacticalLeafletMap.jsx', () => ({
   default: ({ activeWaypoint, onArTrack }) => (activeWaypoint
-    ? <button title="AR Track Rally Point" onClick={() => onArTrack({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })} />
+    ? <button title="Find with AR Scan" onClick={() => onArTrack({ lat: activeWaypoint.lat, lng: activeWaypoint.lng, name: activeWaypoint.name })} />
     : null),
 }));
 vi.mock('../src/hooks/useLiveUpdate.js', () => ({
@@ -95,8 +95,12 @@ vi.mock('../src/utils/arArrowScene.js', () => ({
 }));
 
 const { default: App } = await import('../src/App.jsx');
+const { SRM_MASTER_DATABASE } = await import('../src/srmDatabase.js');
+const { SETTINGS } = await import('../src/copy/settings.js');
 
 beforeEach(() => {
+  // The camera was allowed before, so AR Scan opens without its explainer (see cameraExplainer.test.jsx).
+  try { localStorage.setItem('locus.cameraAllowed', '1'); } catch { /* no storage */ }
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
     value: {
@@ -139,13 +143,13 @@ const onTheMapWithRally = async () => {
   navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: HERE.lat, longitude: HERE.lng, speed: 0 } });
   render(<App />);
   code = document.querySelector('.sr-only').textContent;
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
   await act(async () => fakeSocket.receive('new-waypoint', RALLY));
   await act(async () => {}); // the route fetch resolves
 };
 const grantAndFaceNorth = async () => {
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   faceNorth();
 };
 
@@ -153,16 +157,50 @@ describe('the AR road line', () => {
   it('is drawn when AR Scan is on the Rally Point', async () => {
     await onTheMapWithRally();
     expect(globalThis.fetch).toHaveBeenCalled();
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
-    expect(screen.getByText('RALLY_ALPHA', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('RALLY_ALPHA');
     expect(roadLine()).toBeTruthy();
     expect(roadLine().querySelector('polygon').getAttribute('points').split(' ').length).toBeGreaterThan(4);
   });
 
+  // Your own destination drives the road line when you have one, otherwise the meeting point
+  // (owner's rule, AR Scan batch; it used to follow the meeting point only). The road is
+  // drawn only when AR Scan is aimed at where that route leads.
+  it('follows your own destination when you have one, with AR Scan aimed at it', async () => {
+    const realFetch = globalThis.fetch;
+    // A real route only toward the first building; anything else gets no answer.
+    const building = SRM_MASTER_DATABASE[0];
+    globalThis.fetch = vi.fn(async (url) => (String(url).includes(`${building.lng},${building.lat}?`)
+      ? realFetch(url)
+      : Promise.reject(new Error('offline'))));
+    await onTheMapWithRally();
+    fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
+    fireEvent.click(screen.getByRole('button', { name: `Navigate to ${building.name}` }));
+    await act(async () => {});
+    expect(screen.getByTestId('route-card')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: `AR Scan to ${building.name}` }));
+    await grantAndFaceNorth();
+    expect(roadLine()).toBeTruthy();
+  });
+
+  it('with your own destination elsewhere, AR Scan on the meeting point draws no road (it would lead elsewhere)', async () => {
+    await onTheMapWithRally();
+    fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
+    fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
+    await act(async () => {});
+    expect(screen.getByTestId('route-card')).toBeTruthy();
+
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
+    await grantAndFaceNorth();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('RALLY_ALPHA');
+    expect(roadLine()).toBeNull();
+  });
+
   it('runs up to the Rally Point tag: the tag sits on the road’s far end', async () => {
     await onTheMapWithRally();
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     // The tag glides to a new spot (the Landmark Anchor Engine's easing); let it land.
     await act(() => new Promise((r) => setTimeout(r, 800)));
@@ -180,9 +218,27 @@ describe('the AR road line', () => {
   it('is not drawn before a real route arrives', async () => {
     globalThis.fetch = vi.fn(() => new Promise(() => {})); // still fetching
     await onTheMapWithRally();
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     expect(roadLine()).toBeNull();
+  });
+
+  // The readout's walking time follows the same rule (AR Scan batch, piece 8): "about N min
+  // on foot" only along a real route; without one, distance and direction only.
+  it('the readout gives the walk only along a real route', async () => {
+    await onTheMapWithRally();
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
+    await grantAndFaceNorth();
+    expect(screen.getByTestId('ar-readout').textContent).toMatch(/about \d+ min on foot/);
+  });
+
+  it('no walk in the readout before a real route arrives', async () => {
+    globalThis.fetch = vi.fn(() => new Promise(() => {})); // still fetching
+    await onTheMapWithRally();
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
+    await grantAndFaceNorth();
+    expect(screen.getByTestId('ar-readout-distance')).toBeTruthy();
+    expect(screen.getByTestId('ar-readout').textContent).not.toMatch(/min on foot/);
   });
 
   it('is not drawn when AR Scan is on a squad member, even one on the Rally Point', async () => {
@@ -190,17 +246,17 @@ describe('the AR road line', () => {
     act(() => fakeSocket.receive('users-update', {
       'sock-1': { uid: 'u-bravo', name: 'Bravo', roomCode: code, lat: RALLY.lat, lng: RALLY.lng, battery: 50, lastSeen: 1 },
     }));
-    fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
-    expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('Bravo');
     expect(roadLine()).toBeNull();
   });
 
   it('is not drawn on the SRM_HQ default', async () => {
     await onTheMapWithRally();
-    fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
-    expect(screen.getByText('SRM_HQ', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('SRM_HQ');
     expect(roadLine()).toBeNull();
   });
 });
@@ -208,8 +264,8 @@ describe('the AR road line', () => {
 describe('the AR road line in REALISTIC mode', () => {
   const roadGl = () => screen.queryByTestId('ar-road-gl');
   const chooseRealistic = () => {
-    fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
-    fireEvent.click(screen.getByRole('button', { name: /^REALISTIC$/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.arQuality })).getByRole('radio', { name: SETTINGS.arQualityOptions.realistic }));
   };
   beforeEach(() => {
     roadViews.length = 0;
@@ -219,7 +275,7 @@ describe('the AR road line in REALISTIC mode', () => {
   it('is drawn in three.js when AR Scan is on the Rally Point', async () => {
     await onTheMapWithRally();
     chooseRealistic();
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     await settle();
     expect(roadGl()).toBeTruthy();
@@ -232,7 +288,7 @@ describe('the AR road line in REALISTIC mode', () => {
     globalThis.fetch = vi.fn(() => new Promise(() => {}));
     await onTheMapWithRally();
     chooseRealistic();
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     await settle();
     expect(roadGl()).toBeNull();
@@ -246,10 +302,10 @@ describe('the AR road line in REALISTIC mode', () => {
       'sock-1': { uid: 'u-bravo', name: 'Bravo', roomCode: code, lat: RALLY.lat, lng: RALLY.lng, battery: 50, lastSeen: 1 },
     }));
     chooseRealistic();
-    fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
     await settle();
-    expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('Bravo');
     expect(roadGl()).toBeNull();
     expect(roadLine()).toBeNull();
     expect(roadViews).toHaveLength(0);
@@ -258,10 +314,10 @@ describe('the AR road line in REALISTIC mode', () => {
   it('is not drawn on the SRM_HQ default', async () => {
     await onTheMapWithRally();
     chooseRealistic();
-    fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
+    fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     await grantAndFaceNorth();
     await settle();
-    expect(screen.getByText('SRM_HQ', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByTestId('ar-target-pill').textContent).toContain('SRM_HQ');
     expect(roadGl()).toBeNull();
     expect(roadLine()).toBeNull();
     expect(roadViews).toHaveLength(0);
@@ -273,10 +329,10 @@ describe('the AR road line override, with the main dial on REALISTIC', () => {
   const roadGl = () => screen.queryByTestId('ar-road-gl');
   const openWith = async (roadLine) => {
     await onTheMapWithRally();
-    fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
-    fireEvent.click(screen.getByRole('button', { name: /^REALISTIC$/ }));
-    fireEvent.click(screen.getByRole('button', { name: `ROAD_LINE ${roadLine}` }));
-    fireEvent.click(screen.getByTitle('AR Track Rally Point'));
+    fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.arQuality })).getByRole('radio', { name: SETTINGS.arQualityOptions.realistic }));
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.arPartNames.roadLine })).getByRole('radio', { name: SETTINGS.arPartOptions[roadLine.toLowerCase()] }));
+    fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
     await act(async () => {});
   };

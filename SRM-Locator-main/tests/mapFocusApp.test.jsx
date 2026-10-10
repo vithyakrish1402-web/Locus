@@ -4,7 +4,8 @@
 // notice a squadmate gets. The glide itself is tested in mapFocus.test.js, so focusMapOn is
 // a spy here. (The real two-phone delivery is still a check for a device.)
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { NOTICES } from '../src/copy/notices.js';
+import { render, screen, act, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
   const handlers = new Map();
@@ -85,13 +86,13 @@ const { __resetNotifications } = await import('../src/utils/notify.js');
 const RALLY = { lat: 12.8231, lng: 80.0442, name: 'RALLY POINT', setBy: 'u-other' };
 
 const joinAsMember = async () => {
-  fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-  fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: 'KTR7X9' } });
-  fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+  fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: 'KTR7X9' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'KTR7X9' }));
   await screen.findByTestId('map');
 };
-const notice = () => screen.queryByText(/designated a rally point/i);
+const notice = () => screen.queryByText(NOTICES.meetingPoint.body);
 
 beforeEach(() => {
   fakeSocket.handlers.clear();
@@ -113,7 +114,7 @@ describe("a squadmate's rally-point notice", () => {
     render(<App />);
     await joinAsMember();
     act(() => fakeSocket.receive('new-waypoint', RALLY));
-    fireEvent.click(await screen.findByText(/designated a rally point/i));
+    fireEvent.click(await screen.findByText(NOTICES.meetingPoint.body));
     expect(focus.spy).toHaveBeenCalledTimes(1);
     expect(focus.spy.mock.calls[0][0]).toEqual({ lat: RALLY.lat, lng: RALLY.lng, zoom: 19 });
     await waitFor(() => expect(notice()).toBeNull()); // after its exit animation
@@ -130,7 +131,7 @@ describe("a squadmate's rally-point notice", () => {
     render(<App />);
     await joinAsMember();
     act(() => fakeSocket.receive('new-waypoint', RALLY));
-    fireEvent.click(await screen.findByText(/designated a rally point/i));
+    fireEvent.click(await screen.findByText(NOTICES.meetingPoint.body));
     await waitFor(() => expect(notice()).toBeNull());
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY }));
     expect(notice()).toBeNull();
@@ -140,10 +141,10 @@ describe("a squadmate's rally-point notice", () => {
     render(<App />);
     await joinAsMember();
     act(() => fakeSocket.receive('new-waypoint', RALLY));
-    const tap = await screen.findByText(/designated a rally point/i);
+    const tap = await screen.findByText(NOTICES.meetingPoint.body);
     act(() => fakeSocket.receive('remove-waypoint'));
     fireEvent.click(tap);
-    expect(await screen.findByText(/no longer active/i)).toBeTruthy();
+    expect(await screen.findByText(NOTICES.meetingPoint.gone)).toBeTruthy();
     expect(focus.spy).not.toHaveBeenCalled();
   });
 });
@@ -169,11 +170,11 @@ describe('a matrix building tap', () => {
       const { container } = render(<App />);
       await joinAsMember();
       const sheet = () => container.querySelector('.fixed.inset-x-0.bottom-16');
-      fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' }).at(-1)); // the bottom bar's: opens the sheet
-      fireEvent.click(screen.getAllByRole('button', { name: /MATRIX/ })[0]);
-      await waitFor(() => expect(sheet().style.transform).not.toContain('100%'));
+      fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Group' })); // the bottom bar's: opens the sheet
+      fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
+      await waitFor(() => expect(sheet().dataset.height).toBe('half'));
       fireEvent.click((await screen.findAllByText(SRM_MASTER_DATABASE[0].name))[0]);
-      await waitFor(() => expect(sheet().style.transform).toContain('100%'));
+      await waitFor(() => expect(sheet().dataset.height).toBe('closed'));
     } finally {
       window.matchMedia = original;
     }
@@ -183,7 +184,7 @@ describe('a matrix building tap', () => {
     render(<App />);
     await joinAsMember();
     await screen.findAllByText(SRM_MASTER_DATABASE[0].name);
-    fireEvent.click(screen.getAllByRole('button', { name: 'SELECT_WAYPOINT' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
     expect(focus.spy).toHaveBeenCalledTimes(1);
     const b = SRM_MASTER_DATABASE[0];
     expect(focus.spy.mock.calls[0][0]).toEqual({ lat: b.lat, lng: b.lng, zoom: 19 });

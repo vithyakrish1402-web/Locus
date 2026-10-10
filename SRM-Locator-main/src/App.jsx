@@ -1,40 +1,72 @@
 import { io } from "socket.io-client";
 import { Capacitor } from '@capacitor/core';
-import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 // `motion` is used throughout via <motion.div>/<motion.nav> JSX member expressions.
 // This project's eslint config has no eslint-plugin-react (only react-hooks/react-refresh),
 // so core no-unused-vars can't see through JSXMemberExpression tag names — false positive.
 // eslint-disable-next-line no-unused-vars
-import { motion, AnimatePresence, useDragControls, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls, useReducedMotion, useMotionValue, animate as animateMotion } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
 import {
-  MapPin, Users, Search, Settings, Navigation, ShieldCheck,
-  Building2, MessageSquare, Send, Loader2, Info,
+  Users, Search, Settings, Navigation, ShieldCheck,
+  Building2, MessageSquare, Send, Loader2,
   BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
-  Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Waypoints, Activity,
-  Target, Sliders, Volume2, VolumeX, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Globe, Layers
+  Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Activity,
+  AlertCircle, Check, Sliders, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Layers
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
 
 // 👇 ADD THIS LINE RIGHT HERE
-import LocusGuide from './LocusGuide';
+import Guide from './components/guide/Guide';
+import { guideSeen, rememberGuideSeen } from './utils/guideSeen';
+import BrandMark from './components/access/BrandMark';
+import BootScreen from './components/access/BootScreen';
+import StatusScreen from './components/access/StatusScreen';
+import { Avatar, Button, Card, IconButton, InlineMessage, SegmentedControl, TextField } from './components/ui';
+import PlaceCard from './components/PlaceCard';
+import MeetingPointConfirm from './components/MeetingPointConfirm';
+import { SETTINGS } from './copy/settings';
+import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen';
+import { SharingChip, TopBar } from './components/map/TopBar';
+import { MapControls, MeetingPointButton } from './components/map/MapControls';
+import { BELOW_TOP_BAR } from './utils/mapChrome';
+import RouteCard from './components/map/RouteCard';
+import BuildingRow from './components/map/BuildingRow';
+import GroupHeader from './components/group/GroupHeader';
+import SharingControl from './components/group/SharingControl';
+import MemberOptions from './components/group/MemberOptions';
+import LeadTools from './components/group/LeadTools';
+import LocationsTable from './components/group/LocationsTable';
+import AdminTools, { RecordingBar } from './components/admin/AdminTools';
+import JoinRequests from './components/group/JoinRequests';
+import PeekLines from './components/group/PeekLines';
+import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
+import { panelStops, snapPanel } from './utils/panelHeights';
+import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
+import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED } from './copy/group';
+import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
+import { TABS } from './copy/map';
+import { mapStylesFor } from './utils/mapStyles';
+import { cssColor } from './utils/cssColor';
+import MemberMarker from './components/MemberMarker';
+import { MARKERS } from './copy/map';
+import { distanceLabel } from './copy/place';
+import { useResolvedTheme } from './theme/useResolvedTheme';
+import CameraExplainer from './components/CameraExplainer';
+import LocationExplainer from './components/LocationExplainer';
+import { locationKnownAllowed, locationPermissionGranted, rememberLocationAllowed } from './utils/locationPermission';
+import { cameraKnownAllowed, cameraPermissionGranted, rememberCameraAllowed } from './utils/cameraPermission';
+import { NOTICES, OS_NOTICES } from './copy/notices';
+import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
+import { authProblem } from './utils/authProblems';
 import ARCompass from './ARCompass';
 import { SRM_MASTER_DATABASE } from './srmDatabase';
 import { arTargetForMember, followArTarget } from './utils/arTags';
 import { arRoutePathFor } from './utils/arRoadLine';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
-import { AR_FEATURE_OPTIONS, DEFAULT_AR_FEATURE_OVERRIDES } from './utils/arFeatures';
+import { DEFAULT_AR_FEATURE_OVERRIDES } from './utils/arFeatures';
 
-// SYS_CONFIG's AR_FEATURE_OVERRIDES rows: a selected option wears its tier's colour, as
-// in AR_RENDER_MODE (AUTO is the neutral one, like STANDARD there).
-const OVERRIDE_ACTIVE_STYLE = {
-  auto: 'bg-white/10 text-white border-white',
-  off: 'bg-zinc-500/20 text-zinc-300 border-zinc-400',
-  efficient: 'bg-emerald-500/20 text-emerald-500 border-emerald-500',
-  realistic: 'bg-red-500/20 text-red-500 border-red-500',
-};
-const OVERRIDE_GRID_COLS = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' };
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
 import { useWaypointNavigationLine } from './hooks/useWaypointNavigationLine';
@@ -51,11 +83,9 @@ import BottomTabBar from './components/BottomTabBar';
 import CommsFeed from './components/CommsFeed';
 import { CodeTiles, CodeInput } from './components/SquadCode';
 import SquadMemberCard from './components/SquadMemberCard';
-import BuildingInfo from './components/BuildingInfo';
-import { BUILDING_INFO_LABEL } from './utils/buildingInfo';
-import { sortByDistance } from './utils/direction';
-import { notify } from './utils/notify';
-import { mapEngineStatus, MAP_STATUS_LABEL, MAP_STATUS_REASON_TEXT } from './utils/mapEngineStatus';
+import { locateTarget, sortByDistance } from './utils/direction';
+import { notify, dismiss as dismissNotice } from './utils/notify';
+import { mapEngineStatus } from './utils/mapEngineStatus';
 import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
@@ -68,14 +98,15 @@ import { buildingAt, isOnOtherFloor, memberFloorTag } from './utils/indoorView';
 import { ConfidenceHalo, FloorTag } from './components/IndoorMarkers';
 import FloorPicker from './components/FloorPicker';
 import WifiReadout from './components/WifiReadout';
-import SendApp from './components/SendApp';
 import { useIsMobile } from './hooks/useIsMobile';
 import { haptic } from './utils/haptics';
-import { shouldDismissSheet, SHEET_SPRING, PANEL_SPRING, modalBackdrop, modalCard } from './utils/motion';
+import { SHEET_SPRING, PANEL_SPRING, fade } from './utils/motion';
+import { LAYER } from './utils/layers';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
+import { createSosOutbox } from './utils/sosOutbox';
+import { SOS_HELD, SOS_SENT, SOS_DROPPED } from './copy/emergency';
 import { PrecognitionFilter } from './utils/precognition';
-import { formatTacticalDistanceBracketed as calculateDistance } from './utils/geoMath';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -108,10 +139,17 @@ const socket = io(BACKEND_URL, {
   upgrade: false
 });
 
+// The Emergency alert's way out (utils/sosOutbox.js): straight to the group when it can be
+// reached, held until this phone is back in its group when it can't. One per app, like the socket.
+const sosOutbox = createSosOutbox(socket);
+
 // Baked in at Vite build time from .env's VITE_GOOGLE_MAPS_API_KEY (gitignored) —
 // never hardcode this. The Capacitor/Android build reads the same key separately from
 // android/local.properties (see AndroidManifest.xml's MAPS_API_KEY meta-data placeholder).
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+
+// How long the old ping and lost-connection banners stayed up; their notices keep it.
+const OLD_BANNER_MS = 6000;
 
 if (!GOOGLE_MAPS_API_KEY) {
   // Say this out loud. Without a key Google would still "work" — it just renders a
@@ -131,12 +169,11 @@ const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
 const TELEMETRY_SYNC_TIMEOUT_MS = 8000;
 // What the server's refusals ('request-telemetry' in backend/server.js) mean to the Commander.
 const TELEMETRY_SYNC_REFUSALS = {
-  'not-owner': 'ONLY THE SQUAD COMMANDER CAN SYNC TELEMETRY.',
-  'not-in-squad': 'THE SERVER HAS NO RECORD OF THIS SQUAD FOR THIS DEVICE. DISCONNECT AND REJOIN IT.',
+  'not-owner': REFRESH_FAILED.notLead,
+  'not-in-squad': REFRESH_FAILED.notInGroup,
 };
 // A telemetry value that is a real number, or null (never something toFixed() throws on).
 // The square glass buttons down the map's right edge (recenter, locate, satellite, settings).
-const MAP_CONTROL = 'p-3 bg-black/70 backdrop-blur-md border border-white/15 text-white shadow-[0_8px_24px_rgba(0,0,0,0.5)] hover:bg-white/10 hover:border-white/30';
 const finiteOrNull = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 // A member's battery for the telemetry matrix: the first real reading of the heartbeat's
 // `batteryLevel` ("77%") or update-location's `battery` (77). With neither there is no
@@ -147,10 +184,10 @@ const batteryReading = (cacheData) => {
   for (const raw of [cacheData?.batteryLevel, cacheData?.battery]) {
     const percent = typeof raw === 'number' ? raw : parseInt(raw, 10);
     if (Number.isFinite(percent)) {
-      return { text: `${percent}%`, color: percent < 20 ? 'text-red-500' : 'text-emerald-500' };
+      return { text: `${percent}%`, color: percent < 20 ? 'text-warning' : 'text-success' }; // low: amber, never red
     }
   }
-  return { text: 'UNKNOWN', color: 'text-zinc-500' };
+  return { text: 'UNKNOWN', color: 'text-text-secondary' };
 };
 
 // --- MAP STYLE / OPTION CONSTANTS ---
@@ -173,250 +210,149 @@ const SATELLITE_MAP_OPTIONS = {
   styles: [], // Clear custom styles so the photos show up
 };
 
-// Standard Cyberpunk Dark Theme
-const TACTICAL_MAP_STYLES = [
-  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
-];
+// The roadmap's light and dark styles are in utils/mapStyles.js, chosen by the app's theme.
 
-// Ultra-Minimal Stealth Theme (Pitch black, no POI icons, dark grey roads)
-const STEALTH_MAP_STYLES = [
-  { elementType: "geometry", stylers: [{ color: "#000000" }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#333333" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#000000" }] },
-  { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#0a0a0a" }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#111111" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] }
-];
+// --- LOADING AND SIGN-IN (redesign P3; words in src/copy/access.js) ---
+// The loading screen is src/components/access/BootScreen.jsx.
 
-// --- THE NEW AUTH TERMINAL (Replaces CinematicLanding) ---
-// Shown while Firebase restores the saved session on a cold start. It used to be a single
-// line of plain text; now a radar ring sweeps around it so the wait reads as work in
-// progress, in the same visual language as the rest of the app. Reduced motion: no sweep.
-const BootScreen = () => (
-  <div className="h-screen bg-black text-white flex flex-col justify-center items-center gap-8 bg-dots" role="status" aria-live="polite">
-    <div className="relative w-28 h-28" aria-hidden="true">
-      <div className="absolute inset-0 rounded-full border border-white/15" />
-      <div className="absolute inset-5 rounded-full border border-red-500/30" />
-      <div className="absolute inset-[3.25rem] rounded-full bg-red-500 shadow-[0_0_14px_rgba(239,68,68,0.9)]" />
-      <div className="absolute inset-0 rounded-full locus-radar-sweep" />
-    </div>
-    <div className="font-dot text-xs tracking-[0.3em] text-zinc-300">INITIALIZING_SECURE_LINK...</div>
-  </div>
-);
+// Which field a sign-in problem is about, so that field is outlined too. (A plain object:
+// `Map` in this file is lucide's map icon.)
+const PROBLEM_FIELD = {
+  [AUTH_PROBLEMS.wrongCredentials]: 'password',
+  [AUTH_PROBLEMS.weakPassword]: 'password',
+  [AUTH_PROBLEMS.noAccount]: 'email',
+  [AUTH_PROBLEMS.badEmail]: 'email',
+  [AUTH_PROBLEMS.emailInUse]: 'email',
+  [AUTH_PROBLEMS.missingEmailForReset]: 'email',
+  [AUTH_PROBLEMS.missingName]: 'name',
+};
 
+// Sign in, create an account, and "reset link sent". A problem shows in an amber message above
+// the fields, with the field it is about outlined; it used to be a notice in the corner that
+// timed out. While signing in, the fields grey out and the button says so (it used to be a
+// full-screen "LINKING..." overlay).
 const AuthTerminal = ({
   email, setEmail, password, setPassword, showPassword, setShowPassword, executeAuthDirective, loginMethod, username, setUsername, latency
 }) => {
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [screen, setScreen] = useState('sign-in'); // 'sign-in' | 'create' | 'reset-sent'
+  const [problem, setProblem] = useState(null);
+  const busy = Boolean(loginMethod);
+  const creating = screen === 'create';
+  const problemField = problem ? PROBLEM_FIELD[problem] : undefined;
+  const go = (next) => { setScreen(next); setProblem(null); };
 
-  // --- 🔑 FORGOT PASSWORD / KEY RECOVERY HANDLER ---
   const handleForgotPassword = async () => {
-    if (!email || !email.trim()) {
-      notify.warning("[SYS_ERROR] ID // EMAIL IS REQUIRED FOR KEY RECOVERY.");
+    if (!email.trim()) {
+      setProblem(AUTH_PROBLEMS.missingEmailForReset);
       return;
     }
     try {
       await sendPasswordResetEmail(auth, email.trim());
-      notify.success(`[RECOVERY_DISPATCHED] RESET SIGNAL TRANSMITTED TO ${email.trim().toUpperCase()}. CHECK YOUR INBOX.`);
+      go('reset-sent');
     } catch (error) {
-      console.error("Password Reset Error:", error.code);
-      let errorMessage = `[SYS_FAILURE] ${error.message}`;
-      switch (error.code) {
-        case 'auth/user-not-found': errorMessage = "[ACCESS_DENIED] NO OPERATIVE FOUND WITH THIS EMAIL."; break;
-        case 'auth/invalid-email': errorMessage = "[SYS_ERROR] MALFORMED ID // EMAIL SYNTAX."; break;
-        case 'auth/too-many-requests': errorMessage = "[SEC_LOCKOUT] TOO MANY REQUESTS. STAND BY BEFORE RETRYING."; break;
-      }
-      notify.error(errorMessage);
+      console.error('Password reset error:', error.code);
+      setProblem(authProblem(error, 'reset'));
     }
   };
 
-  // Dynamic Ping Color Logic
-  const getPingColor = (ping) => {
-    if (!ping) return 'bg-zinc-500';
-    if (ping < 80) return 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]';
-    if (ping < 150) return 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]';
-    return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse';
+  const submit = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setProblem(null);
+    setProblem(await executeAuthDirective('email', creating));
   };
 
+  const words = creating ? CREATE_ACCOUNT : screen === 'reset-sent' ? RESET : SIGN_IN;
+  const eye = (
+    <IconButton
+      label={showPassword ? SIGN_IN.hidePassword : SIGN_IN.showPassword}
+      icon={showPassword ? EyeOff : Eye}
+      onClick={() => setShowPassword(!showPassword)}
+    />
+  );
+
   return (
-    <div className="relative w-full h-screen bg-black text-white font-inter selection:bg-red-500/30 flex items-center justify-center overflow-hidden bg-dots px-4">
+    <div
+      className="relative min-h-[100dvh] bg-bg text-text font-ui px-5 flex flex-col"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top) + 3rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)' }}
+    >
+      {/* Round trip to the server, when one has been measured (after leaving a group). */}
+      {latency > 0 && (
+        <p className="absolute right-5 text-caption text-text-secondary tabular-nums" style={{ top: 'calc(env(safe-area-inset-top) + 1rem)' }}>
+          {SIGN_IN.connection(latency)}
+        </p>
+      )}
 
-      {/* 📡 RESTORED PING HUD 📡 */}
-      <div className="absolute right-4 sm:right-8 z-50 flex items-center gap-3 font-dot text-xs tracking-widest text-zinc-400" style={{ top: 'max(1.5rem, calc(env(safe-area-inset-top) + 0.75rem))' }}>
-        <span className="uppercase">SYS_PING</span>
-        <div className="flex items-center gap-2 bg-zinc-900/50 border border-white/10 px-3 py-1">
-          <div className={`w-2 h-2 rounded-full ${getPingColor(latency)}`} />
-          <span className={latency > 150 ? 'text-red-500' : 'text-white'}>
-            {latency ? `${latency}MS` : 'CALCULATING...'}
-          </span>
-        </div>
-      </div>
+      <main className="w-full max-w-md mx-auto flex-1">
+        <BrandMark />
+        <h1 className="mt-6 text-display">{words.title}</h1>
+        <p className="mt-2 text-body text-text-secondary">{words.intro}</p>
 
-      {/* Subtle background radar */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-        <div className="w-[80vw] h-[80vw] max-w-3xl max-h-3xl border border-white/10 rounded-full flex flex-col items-center justify-center animate-[spin_60s_linear_infinite]">
-          <div className="w-1/2 h-1/2 border border-red-500/20 rounded-full animate-[spin_30s_linear_infinite_reverse]" />
-        </div>
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
-        animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="w-full max-w-md p-7 sm:p-10 border border-white/20 bg-black relative pointer-events-auto z-10 shadow-[0_0_50px_rgba(255,255,255,0.05)]"
-      >
-        <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
-        <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
-        <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
-        <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
-
-        <div className="mb-10 text-left border-b border-white/20 pb-6 flex items-start justify-between">
-          <div>
-            <h2 className="text-3xl font-dot uppercase tracking-widest mb-2">Auth_Node</h2>
-            <p className="text-red-500 font-dot text-xs">
-              {isRegistering ? 'CREATING CREDENTIALS...' : 'AWAITING CREDENTIALS...'}
-            </p>
+        {screen === 'reset-sent' ? (
+          <div className="mt-6 flex flex-col gap-5">
+            <InlineMessage tone="success">
+              {RESET.sent(email.trim()).map((part, i) => (i === 1 ? <strong key={i} className="font-semibold">{part}</strong> : part))}
+            </InlineMessage>
+            <TextField label={SIGN_IN.email} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+            <Button block size="large" onClick={() => go('sign-in')}>{RESET.back}</Button>
           </div>
-          <Waypoints size={32} className="text-zinc-600" />
-        </div>
-
-        <form onSubmit={(e) => { e.preventDefault(); executeAuthDirective('email', isRegistering); }} className="space-y-6 relative z-50">
-
-          <AnimatePresence>
-            {isRegistering && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-2 overflow-hidden"
-              >
-                <label className="text-xs font-dot text-white tracking-widest uppercase">CODENAME // Username</label>
-                <input
-                  type="text"
-                  placeholder="E.G. GHOST_01"
-                  className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm text-white uppercase"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value.toUpperCase())}
-                  maxLength={15}
-                />
-              </motion.div>
+        ) : (
+          <form onSubmit={submit} className="mt-6 flex flex-col gap-5" noValidate>
+            {problem && <InlineMessage>{problem}</InlineMessage>}
+            {creating && (
+              <TextField
+                label={CREATE_ACCOUNT.name}
+                hint={CREATE_ACCOUNT.nameHint}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                maxLength={15}
+                autoComplete="name"
+                invalid={problemField === 'name'}
+                disabled={busy}
+              />
             )}
-          </AnimatePresence>
-
-          <div className="space-y-2">
-            <label className="text-xs font-dot text-white tracking-widest uppercase">ID // Email</label>
-            <input
+            <TextField
+              label={SIGN_IN.email}
               type="email"
-              placeholder="you@srmist.edu.in"
-              className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
+              placeholder={SIGN_IN.emailPlaceholder}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              invalid={problemField === 'email'}
+              disabled={busy}
             />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-dot text-white tracking-widest uppercase">KEY // Passkey</label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 bg-black border border-white/30 focus:border-red-500 focus:outline-none transition-colors placeholder:text-zinc-700 font-inter text-sm"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
-          {!isRegistering && (
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="text-[10px] font-dot text-zinc-500 hover:text-red-400 uppercase tracking-widest transition-colors border-b border-transparent hover:border-red-400 pb-0.5"
-              >
-                [ FORGOT KEY? RECOVER ACCESS ]
-              </button>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className={`w-full py-4 mt-4 font-dot uppercase tracking-widest border transition-all flex justify-center items-center gap-2 ${isRegistering
-              ? 'bg-red-500 text-white border-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
-              : 'bg-white text-black border-white hover:bg-red-500 hover:text-white hover:border-red-500'
-              }`}
-          >
-            {isRegistering ? 'REQUEST_ACCESS' : 'INITIALIZE_LINK'} <ArrowRight size={16} />
-          </button>
-        </form>
-
-        <div className="mt-6 flex justify-center relative z-50">
-          <button
-            type="button"
-            onClick={() => setIsRegistering(!isRegistering)}
-            className="text-[10px] font-dot text-zinc-500 hover:text-white uppercase tracking-widest transition-colors border-b border-transparent hover:border-white pb-1"
-          >
-            {isRegistering ? '[ ABORT // RETRIEVE EXISTING ID ]' : '[ NO CLEARANCE? REGISTER NEW ID ]'}
-          </button>
-        </div>
-
-        {/* TACTICAL BYPASS: Google Auth Disabled for Mobile WebViews. Enforcing Email/Passkey only. */}
-        {/*
-        <div className="flex items-center gap-4 my-8 relative z-50">
-          <div className="h-[1px] bg-white/20 flex-1"></div>
-          <span className="text-[10px] font-dot text-zinc-500 uppercase">OR EXT_AUTH</span>
-          <div className="h-[1px] bg-white/20 flex-1"></div>
-        </div>
-
-        <button
-          onClick={() => executeAuthDirective('google')}
-          className="w-full py-4 border border-white/30 hover:border-white transition-all font-dot uppercase text-xs flex items-center justify-center gap-3 bg-black text-white relative z-50"
-        >
-          <div className="w-4 h-4 border border-white flex items-center justify-center">
-            <span className="text-[10px] leading-none">G</span>
-          </div>
-          CONTINUE VIA GOOGLE
-        </button>
-        */}
-      </motion.div>
-
-      {/* Auth Overlay Modal */}
-      <AnimatePresence>
-        {loginMethod && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[100] bg-black/90 backdrop-blur-md border-[8px] border-white flex flex-col items-center justify-center p-6 pointer-events-auto"
-          >
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-              className="w-24 h-24 border-2 border-white/20 border-t-red-500 rounded-full mb-8 relative"
-            >
-              <div className="absolute inset-2 border border-white/10 rounded-full" />
-            </motion.div>
-            <h2 className="text-3xl font-dot uppercase tracking-widest text-white mb-2 blink">LINKING...</h2>
-            <p className="text-red-500 font-dot text-sm uppercase">ESTABLISHING SECURE CONNECTION</p>
-          </motion.div>
+            <TextField
+              label={SIGN_IN.password}
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={creating ? 'new-password' : 'current-password'}
+              hint={creating ? CREATE_ACCOUNT.passwordHint : undefined}
+              trailing={eye}
+              invalid={problemField === 'password'}
+              disabled={busy}
+            />
+            {!creating && (
+              <div className="flex justify-end -mt-2">
+                <Button variant="plain" onClick={handleForgotPassword} disabled={busy}>{SIGN_IN.forgotPassword}</Button>
+              </div>
+            )}
+            <Button type="submit" block size="large" aria-busy={busy || undefined} icon={busy ? Loader2 : null} className={busy ? '[&>svg]:animate-spin' : ''}>
+              {busy ? (creating ? CREATE_ACCOUNT.submitting : SIGN_IN.submitting) : words.submit}
+            </Button>
+          </form>
         )}
-      </AnimatePresence>
+      </main>
+
+      <p className="w-full max-w-md mx-auto mt-8 flex flex-wrap items-center justify-center gap-x-1 text-body text-text-secondary">
+        {creating ? CREATE_ACCOUNT.haveAccount : SIGN_IN.newHere}
+        <Button variant="plain" onClick={() => go(creating ? 'sign-in' : 'create')} disabled={busy}>
+          {creating ? CREATE_ACCOUNT.toSignIn : SIGN_IN.toCreate}
+        </Button>
+      </p>
+
+      {/* TACTICAL BYPASS: Google Auth Disabled for Mobile WebViews. Enforcing Email/Passkey only.
+          (executeAuthDirective('google') still exists; nothing offers it.) */}
     </div>
   );
 };
@@ -428,15 +364,27 @@ const App = () => {
   // --- MOBILE VIEW STATE ---
   // Controls which panel is active on mobile bottom HUD: 'grid' | 'matrix' | 'squad' | 'cmd'
   const [mobileView, setMobileView] = useState('grid');
+  const [optionsMemberId, setOptionsMemberId] = useState(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  // When the member list last came in from the server; null until it has, in this group.
+  const [rosterAt, setRosterAt] = useState(null);
   // Phone layout and the squad/matrix sheet (see the Sidebar Panel below).
   const isMobile = useIsMobile();
   const reduceMotion = useReducedMotion();
   const sheetOpen = mobileView === 'matrix' || mobileView === 'squad';
   const sheetDragControls = useDragControls();
   const sheetRef = useRef(null);
+  // The panel's resting height on a phone (utils/panelHeights.js): it opens at half.
+  const [panelHeight, setPanelHeight] = useState('half');
+  const panelY = useMotionValue(0);
+  const panelDragStartRef = useRef(0);
+  const [panelGeometry, setPanelGeometry] = useState(null);
+  const panelHeaderRef = useRef(null);
+  const peekWrapRef = useRef(null);
+  const peekLinesRef = useRef(null);
+  const insetProbeRef = useRef(null);
   const sheetDraggedRef = useRef(false);
   // --- TACTICAL WAYPOINT STATE ---
-  const [isDroppingWaypoint, setIsDroppingWaypoint] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
   // Squad-wide SOS beacons this client hasn't acknowledged yet: a queue, one overlay
   // on screen at a time (see useIncomingSos). Live beacons arrive as 'sos-received';
@@ -444,9 +392,38 @@ const App = () => {
   const {
     current: incomingSos,
     pendingCount: pendingSosCount,
+    position: sosPosition,
+    total: sosTotal,
     acknowledge: acknowledgeSos,
     requestSync: requestSosSync,
   } = useIncomingSos(socket);
+
+  // An Emergency alert held for want of a connection (utils/sosOutbox.js): the button reads
+  // "Waiting for connection", and a notice says so until it goes, or can't.
+  const [sosHeld, setSosHeld] = useState(false);
+  const heldNoticeRef = useRef(null);
+  useEffect(() => {
+    sosOutbox.reset(); // a fresh app: nothing held, not in a group yet
+    const unsubscribe = sosOutbox.subscribe(({ held, event, reason, late, withLocation }) => {
+      setSosHeld(held);
+      if (event === 'held') {
+        heldNoticeRef.current = notify.warning(SOS_HELD.title, { body: SOS_HELD.body, duration: 0, safety: true });
+        return;
+      }
+      if (heldNoticeRef.current !== null) dismissNotice(heldNoticeRef.current);
+      heldNoticeRef.current = null;
+      if (event === 'sent') {
+        // Said only once it has gone (E3). No buzz of its own: sending feels as it always did.
+        const mode = telemetryModeRef.current;
+        const stillLine = mode === 'FROZEN' ? SOS_SENT.stillPaused : mode === 'GHOST' ? SOS_SENT.stillHidden : null;
+        const body = [late ? SOS_SENT.late : null, withLocation ? SOS_SENT.withLocation : SOS_SENT.noLocation, stillLine].filter(Boolean).join(' ');
+        if (withLocation) notify.success(SOS_SENT.title, { body, haptic: false });
+        else notify.warning(SOS_SENT.noLocationTitle, { body, haptic: false });
+      }
+      if (event === 'dropped') notify.warning(reason === 'gone' ? SOS_DROPPED.gone : SOS_DROPPED.left, { duration: 0, safety: true });
+    });
+    return unsubscribe;
+  }, []);
   // --- IN-APP UPDATER (full-APK self-update; see src/hooks/useAppUpdate.js) ---
   // Checks GitHub Releases once per cold start. Held here rather than in a leaf
   // component because the mandatory-update gate has to be able to pre-empt every
@@ -462,19 +439,43 @@ const App = () => {
   // otherwise it behaves normally. See useBackButtonGuard.
   useBackButtonGuard(Boolean(incomingSos) || appUpdate.mandatory);
   const [arTarget, setArTarget] = useState(null);
+  // The camera explainer (components/CameraExplainer.jsx) shows before AR Scan only until the
+  // camera has been allowed: known from this phone's note or the Permissions API. Continue
+  // lets AR Scan open this time; the note is made once the camera actually starts.
+  const [cameraAllowed, setCameraAllowed] = useState(cameraKnownAllowed);
+  const [cameraExplained, setCameraExplained] = useState(false);
+  const arScanReady = cameraAllowed || cameraExplained;
+  useEffect(() => {
+    let live = true;
+    cameraPermissionGranted().then((granted) => {
+      if (!live || !granted) return;
+      rememberCameraAllowed();
+      setCameraAllowed(true);
+    });
+    return () => { live = false; };
+  }, []);
+  // Each opening of AR Scan asks again until the camera is allowed.
+  useEffect(() => { if (!arTarget) setCameraExplained(false); }, [arTarget]);
   // --- TARGETING MODE (Two-step Rally Point) ---
   const [isTargetingMode, setIsTargetingMode] = useState(false);
   // --- SYS_CONFIG STATE ---
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAdminSettings, setShowAdminSettings] = useState(false);
-  const [hasSeenGuide, setHasSeenGuide] = useState(false);
+  // The guide shows once, on first run, before sign-in; Skip and Get started both count, and
+  // the phone remembers it (utils/guideSeen.js). It was shown on every cold start before.
+  const [hasSeenGuide, setHasSeenGuide] = useState(guideSeen);
   const [sysConfig, setSysConfig] = useState({
-    audio: true,
-    theme: 'tactical', // 'tactical' | 'stealth'
+    audio: true, // Settings' Alert sounds (ping and lost-connection sounds; never the Emergency alarm)
     polling: 'standard', // 'eco' | 'standard' | 'max'
     arFidelity: 'standard', // 'efficient' | 'standard' | 'realistic': AR Scan's main dial (see ARCompass)
     arFeatureOverrides: DEFAULT_AR_FEATURE_OVERRIDES // per feature; 'auto' follows arFidelity (see arFeatures.js)
   });
+
+  // Alert sounds, for playSonarPing (called from socket handlers that are set up once).
+  const alertSoundsRef = useRef(sysConfig.audio);
+  alertSoundsRef.current = sysConfig.audio;
+  // How LOCUS works, opened from Settings (the guide over everything else, until closed).
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // `key` is a setting's name, or 'group.name' for one entry of a nested setting
   // (arFeatureOverrides.roadLine), merged into the rest of its group.
@@ -496,21 +497,19 @@ const App = () => {
 
   // Calculates exactly how stale a node's GPS signal is
   const getSignalFreshness = (isoString) => {
-    if (!isoString) return { text: "NO_SIGNAL", color: "text-red-500" };
+    if (!isoString) return { text: "NO_SIGNAL", color: "text-warning" }; // ordinary problems: amber, never red
     const seconds = Math.floor((new Date() - new Date(isoString)) / 1000);
-    if (seconds < 10) return { text: "OPTIMAL (< 10s)", color: "text-emerald-500" };
-    if (seconds < 60) return { text: `GOOD (${seconds}s ago)`, color: "text-blue-400" };
-    if (seconds < 300) return { text: `WARN (${Math.floor(seconds / 60)}m ago)`, color: "text-yellow-500" };
-    return { text: `STALE (> 5m)`, color: "text-red-500 animate-pulse" };
+    if (seconds < 10) return { text: "OPTIMAL (< 10s)", color: "text-success" };
+    if (seconds < 60) return { text: `GOOD (${seconds}s ago)`, color: "text-text" };
+    if (seconds < 300) return { text: `WARN (${Math.floor(seconds / 60)}m ago)`, color: "text-warning" };
+    return { text: `STALE (> 5m)`, color: "text-warning" };
   };
   // --- PRECOGNITION TRACKERS ---
   const localPrecognition = useRef(new PrecognitionFilter());
   const squadPrecognition = useRef({}); // Tracks separate Kalman math for every squad member
   const memberSeenRef = useRef({}); // id -> { server: lastSeen, local: when this phone saw it change }
 
-  const [zoneAlerts, setZoneAlerts] = useState([]); // <-- Tracks active perimeter breaches
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
-  const [signalLostAlerts, setSignalLostAlerts] = useState([]); // one-time auto-dismissing banners
   const ghostFadeTimersRef = useRef({}); // targetId -> timeout, guards against double-scheduling a fade-out
   // Own stable identity, readable from socket callbacks that only subscribe once. Socket
   // ids change on every reconnect; this doesn't, so it's what "is this me?" is answered with.
@@ -532,6 +531,8 @@ const App = () => {
   );
 
   const [showBuildingInfo, setShowBuildingInfo] = useState(false);
+  // The place waiting on "Set as meeting point"'s confirmation, or null.
+  const [meetingPointToConfirm, setMeetingPointToConfirm] = useState(null);
 
   // --- ADDED: ROUTING STATE ---
   const [routeStart, setRouteStart] = useState(null);
@@ -586,6 +587,26 @@ const App = () => {
     }
   });
   const recordingPolylineRef = useRef(null);
+  // The owner's path recorder (components/admin/AdminTools.jsx): Publish asks for the two
+  // buildings' names and sends the route to the group; Abort throws the points away.
+  const stopRecording = () => {
+    setIsRecordingPath(false);
+    setRecordedCoords([]);
+    if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
+    recordingPolylineRef.current = null;
+  };
+  const abortRecording = stopRecording;
+  const publishRecordedRoute = () => {
+    const startName = prompt("Enter START Building Name (e.g., Tech Park):");
+    const endName = prompt("Enter END Building Name (e.g., Java Green):");
+    if (startName && endName && recordedCoords.length > 1) {
+      const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
+      setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
+      socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData, roomCode: squadCode });
+      stopRecording();
+      notify.success(NOTICES.routePublished(startName, endName));
+    }
+  };
 
   const [loginMethod, setLoginMethod] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -594,6 +615,15 @@ const App = () => {
 
   const [activeTab, setActiveTab] = useState('buildings');
   const [searchQuery, setSearchQuery] = useState('');
+  // The group panel's search box has focus, so on a phone the keyboard is up and the screen is
+  // short: the panel's title and the Group Lead's buttons step aside until focus leaves, so the
+  // box rises clear of the Emergency button (owner, Stop 2, keyboard option 1).
+  const [searchFocused, setSearchFocused] = useState(false);
+  const afterTap = (stillSo, focused) => {
+    const apply = () => { if (stillSo()) setSearchFocused(focused); };
+    window.addEventListener('click', apply, { once: true });
+    setTimeout(apply, 400);
+  };
   const [selectedItem, setSelectedItem] = useState(null);
 
   const [users, setUsers] = useState([]);
@@ -614,14 +644,71 @@ const App = () => {
   // for anything else (a timeout indoors, no position available): the banner used to say
   // ACCESS DENIED for both, which sent people hunting for a permission that was granted.
   const [locationError, setLocationError] = useState(null);
-  const onGeolocationError = (err) => setLocationError(err?.code === 1 ? 'denied' : 'no-fix');
+  // The location explainer (components/LocationExplainer.jsx), before LOCUS first asks
+  // Android for location, shown only until location is known to be allowed: from this
+  // phone's note of a real fix, or the Permissions API. Until Continue, nothing asks for or
+  // shares a location. Not now leaves it off, with the "Location is off" card to turn it on.
+  const [locationAllowed, setLocationAllowed] = useState(locationKnownAllowed);
+  // Whether the Permissions API has answered yet. Until it has, the explainer waits, so a
+  // phone that already allows location never sees it flash up for a moment at launch.
+  const [permissionChecked, setPermissionChecked] = useState(locationKnownAllowed);
+  const [locationExplained, setLocationExplained] = useState(false);
+  const [locationDeclined, setLocationDeclined] = useState(false);
+  const [declinedCardDismissed, setDeclinedCardDismissed] = useState(false);
+  // Bumped by "Turn on location": the location effect runs again and asks once more.
+  const [locationRetry, setLocationRetry] = useState(0);
+  const locationReady = locationAllowed || locationExplained;
+  useEffect(() => {
+    let live = true;
+    locationPermissionGranted().then((granted) => {
+      if (!live) return;
+      setPermissionChecked(true);
+      if (!granted) return;
+      rememberLocationAllowed();
+      setLocationAllowed(true);
+    });
+    return () => { live = false; };
+  }, []);
+  const noteRealFix = () => {
+    if (locationKnownAllowed()) return;
+    rememberLocationAllowed();
+    setLocationAllowed(true);
+  };
+  const turnOnLocation = () => {
+    setLocationDeclined(false);
+    setDeclinedCardDismissed(false);
+    setLocationExplained(true);
+    setLocationError(null);
+    setLocationRetry((n) => n + 1);
+  };
+  const onGeolocationError = (err) => {
+    // Anything but a refusal (a timeout indoors, no position) means Android allowed location:
+    // noted like a fix, so the explainer doesn't come back next time for want of one.
+    if (err?.code !== 1) {
+      rememberLocationAllowed();
+      setLocationAllowed(true);
+    }
+    setLocationError(err?.code === 1 ? 'denied' : 'no-fix');
+  };
 
   const [squadCode, setSquadCode] = useState('');
   const [squadMode, setSquadMode] = useState('create'); // 'create' or 'join'
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
+  // Out of the group, however it happened (left, removed, turned down, signed out): an
+  // Emergency alert still held for it can't reach anyone now. (A group gone from the server
+  // is dropped first, with its own words, in the 'squad-not-found' handler.)
+  useEffect(() => {
+    if (!hasJoinedSquad) sosOutbox.drop('left');
+  }, [hasJoinedSquad]);
   // Why the lobby is showing again, when the server turned a request down (no live squad
   // under the code, the code already taken, the squad gone). Cleared by the next action.
   const [lobbyNotice, setLobbyNotice] = useState(null);
+  // The code of a squad whose Commander just turned this user's request down: the lobby shows
+  // "Request not approved" until they choose to try another code. (It used to be a notice.)
+  const [deniedCode, setDeniedCode] = useState(null);
+  // Let into a squad after waiting for approval: "You're in" shows over the map until
+  // dismissed. Not for a squad you create, nor a reconnect into one you were already in.
+  const [justApproved, setJustApproved] = useState(false);
 
   // --- MAP ENGINE FALLBACK WATCHDOG ---
   // Armed only once the map screen is actually about to render (past auth +
@@ -667,6 +754,13 @@ const App = () => {
   // Mirrors telemetryMode in a ref so setInterval and watchPosition callbacks
   // always read the current value — they close over the ref, not the stale state.
   const telemetryModeRef = useRef('ACTIVE');
+  // Paused (FROZEN): the position the squad keeps seeing, taken the moment sharing was
+  // paused: { position (positionFor's result), heading, at (epoch ms) }, or null when there
+  // was no fix to take. Nothing after that moment leaves this phone as a squad position.
+  const pausedPositionRef = useRef(null);
+  // Whether that paused position exists, for what the screen says: paused before any fix
+  // shares no spot at all, so it mustn't say the group sees your last spot.
+  const [pausedHasSpot, setPausedHasSpot] = useState(false);
   // WiFi Arc Stage 6: every update-location payload takes its lat/lng/positionSource from
   // positionFor(gps). Off by default (src/utils/positionSource.js), and then it is always
   // the GPS fix with positionSource 'gps'. The Kalman filter and safety-ping stay on GPS.
@@ -694,7 +788,7 @@ const App = () => {
   // Start listening for compass heading as soon as we're signed in — on Android
   // this needs no user gesture. On iOS 13+ this call is a silent no-op (that
   // platform requires the permission request to originate from a click handler,
-  // which ARCompass's own "GRANT_ACCESS" button still provides separately).
+  // which AR Scan's own "Start AR Scan" button still provides separately).
   useEffect(() => {
     if (user) requestHeadingPermission();
   }, [user, requestHeadingPermission]);
@@ -764,7 +858,7 @@ const App = () => {
   const requestTelemetrySync = useCallback(() => {
     if (!socket.connected) {
       pendingSyncRef.current = null;
-      setTelemetrySync({ status: 'error', message: 'NOT CONNECTED TO THE SERVER. RECONNECTING — TRY AGAIN IN A MOMENT.' });
+      setTelemetrySync({ status: 'error', message: REFRESH_FAILED.notConnected });
       return;
     }
     const attempt = {};
@@ -774,11 +868,11 @@ const App = () => {
       if (pendingSyncRef.current !== attempt) return; // already settled by the telemetry itself
       pendingSyncRef.current = null;
       if (err) {
-        setTelemetrySync({ status: 'error', message: 'NO RESPONSE FROM THE SERVER. CHECK YOUR CONNECTION AND TRY AGAIN.' });
+        setTelemetrySync({ status: 'error', message: REFRESH_FAILED.noResponse });
       } else if (reply?.ok) {
         setTelemetrySync({ status: 'idle', message: null });
       } else {
-        setTelemetrySync({ status: 'error', message: TELEMETRY_SYNC_REFUSALS[reply?.reason] || 'THE SERVER REFUSED THE SYNC.' });
+        setTelemetrySync({ status: 'error', message: TELEMETRY_SYNC_REFUSALS[reply?.reason] || REFRESH_FAILED.refused });
       }
     });
   }, [squadCode]);
@@ -821,27 +915,6 @@ const App = () => {
       socket.off('pong-bounce');
     };
   }, [hasJoinedSquad]);
-  // --- 🌐 GEOFENCE PERIMETER LISTENER ---
-  useEffect(() => {
-    socket.on('geofence-alert', (alertData) => {
-      const newAlert = {
-        id: Date.now(),
-        ...alertData
-      };
-
-      // Add the alert to the HUD
-      setZoneAlerts(prev => [...prev, newAlert]);
-
-      // Optional: Play a subtle notification sound here if you have one
-
-      // Auto-remove the alert from the screen after 6 seconds
-      setTimeout(() => {
-        setZoneAlerts(prev => prev.filter(a => a.id !== newAlert.id));
-      }, 6000);
-    });
-
-    return () => socket.off('geofence-alert');
-  }, []);
   // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
@@ -878,13 +951,9 @@ const App = () => {
         }
       }));
 
-      // One-time auto-dismissing banner — replaces the old blocking alert(),
-      // which froze the whole UI thread until someone clicked OK.
-      const alertId = `signal-lost-${targetId}-${Date.now()}`;
-      setSignalLostAlerts(prev => [...prev, { id: alertId, name }]);
-      setTimeout(() => {
-        setSignalLostAlerts(prev => prev.filter(a => a.id !== alertId));
-      }, 6000);
+      // A notice that clears itself (it replaced a blocking alert(), which froze the whole UI
+      // until someone clicked OK). Six seconds and no buzz, as the old banner had.
+      notify.warning(NOTICES.signalLost.body, { title: NOTICES.signalLost.title(name), duration: OLD_BANNER_MS, haptic: false });
     });
 
     return () => {
@@ -909,8 +978,8 @@ const App = () => {
   useEffect(() => {
     socket.on('exiled', ({ reason } = {}) => {
       // 1. Tell them why (a comms-feed notice; this used to be a blocking alert())
-      if (reason === 'blocked') notify.error('The Squad Commander has blocked you from this channel.', { title: 'SYS_BANNED' });
-      else notify.error('You have been exiled from the squad by majority vote.', { title: 'SYS_MUTINY' });
+      if (reason === 'blocked') notify.error(NOTICES.removedByLead);
+      else notify.error(NOTICES.removedByVote);
 
       // 2. Trigger your existing leave function to wipe local state and return to the join screen
       handleLeaveSquad();
@@ -984,12 +1053,12 @@ const App = () => {
       setActiveWaypoint(waypointData);
       if (!isRepeat && !placedByMe) {
         const { lat, lng, setBy } = waypointData ?? {};
-        notify.info('A squad member designated a rally point. Tap to view it.', {
-          title: 'RALLY_POINT',
+        notify.info(NOTICES.meetingPoint.body, {
+          title: NOTICES.meetingPoint.title,
           onClick: () => focusRallyPointRef.current({ lat, lng, setBy }),
         });
       }
-      triggerSystemNotification("🎯 RALLY POINT DESIGNATED", "New tactical coordinates uploaded to map.");
+      triggerSystemNotification(OS_NOTICES.meetingPoint.title, OS_NOTICES.meetingPoint.body);
     });
 
     socket.on('remove-waypoint', () => {
@@ -998,6 +1067,8 @@ const App = () => {
     });
 
     socket.on('users-update', (activeUsers) => {
+      // When the list last came in, for the panel's "Updated just now" (and its loading state).
+      setRosterAt(Date.now());
       // When each member was last heard from, on THIS phone's clock: the moment their
       // server-side lastSeen changed. Using the server's timestamp directly would carry any
       // clock difference between the two into every "12s AGO" on the roster. Done here,
@@ -1076,19 +1147,15 @@ const App = () => {
     // to be worded as an SOS and end in a blocking alert(), which froze the whole app
     // (klaxon, sockets, map) until dismissed. Now a sonar blip plus a short notice in the
     // HUD; the OS notification only when the app isn't in view to show that notice.
+    // The notice keeps the old ping banner's six seconds and, like it, doesn't buzz.
     socket.on('receive-ping', ({ senderName } = {}) => {
-      const name = (senderName || 'A squad member').toUpperCase();
       playSonarPing();
 
       if (document.hidden) {
-        triggerSystemNotification('📡 PING', `${name} is pinging you.`);
+        triggerSystemNotification(OS_NOTICES.ping.title, OS_NOTICES.ping.body(senderName));
       }
 
-      const notice = { id: `ping-${Date.now()}-${Math.random()}`, type: 'PING', userName: name };
-      setZoneAlerts(prev => [...prev, notice]);
-      setTimeout(() => {
-        setZoneAlerts(prev => prev.filter(a => a.id !== notice.id));
-      }, 6000);
+      notify.info(NOTICES.ping(senderName), { kind: 'ping', duration: OLD_BANNER_MS, haptic: false });
     });
     socket.on('new-custom-route', ({ key, data }) => {
       setLiveSecretRoutes(prev => ({ ...prev, [key]: data }));
@@ -1173,6 +1240,7 @@ const App = () => {
     setHasJoinedSquad(false);
     setSquadCode(nextCode);
     setUsers([]);
+    setRosterAt(null);
     setOfflineNodes({});
     // Cancel in-flight ghost fade-outs so a stray one can't fire after the squad's gone.
     Object.values(ghostFadeTimersRef.current).forEach(clearTimeout);
@@ -1180,6 +1248,7 @@ const App = () => {
     setAccessStatus(null);
     setSquadRole(null);
     setPendingRequests([]);
+    setJustApproved(false);
   }, []);
 
   // --- GATEKEEPER PROTOCOL LISTENERS ---
@@ -1204,8 +1273,26 @@ const App = () => {
 
     socket.on('access-granted', (payload) => {
       if (!isAboutThisSquad(payload)) return;
+      // Back in the group on this connection: an Emergency alert held while offline goes now.
+      sosOutbox.markInGroup();
+      if (accessStatus === 'pending') setJustApproved(true);
       setAccessStatus('granted');
       setSquadRole(payload?.role);
+      // Paused: a reconnect gives this phone a new socket, which the server has no position
+      // for, so the squad would lose this member from map and roster. Hand it the paused
+      // position again. (Live members do this with their next heartbeat.)
+      // The position taken when they paused, never a newer one; same fields as ever.
+      const paused = telemetryModeRef.current === 'FROZEN' ? pausedPositionRef.current : null;
+      if (paused && user) {
+        socket.emit('update-location', {
+          name: user.displayName, photo: user.photoURL,
+          ...paused.position,
+          speed: 0, battery: 100,
+          status: 'FROZEN',
+          roomCode: payload?.roomCode || currentRoom,
+          heading: paused.heading,
+        });
+      }
       // Now (back) in the squad's room: catch up on any SOS fired while this client
       // was offline, reconnecting or awaiting approval. Asked for here, not pushed by
       // the server right after 'access-granted', which could arrive before this
@@ -1221,7 +1308,7 @@ const App = () => {
       if (!isAboutThisSquad(payload)) return;
       setAccessStatus('denied');
       setHasJoinedSquad(false);
-      notify.error("[SYS_REJECTED] The Squad Commander denied your entry.");
+      setDeniedCode(currentRoom);
     });
 
     // A JOIN for a code no live squad has. Answered this way rather than by founding a new
@@ -1229,19 +1316,16 @@ const App = () => {
     // this client is still waiting to be let in, or after a reconnect finds it gone.
     socket.on('squad-not-found', (payload) => {
       if (!isAboutThisSquad(payload)) return;
-      returnToLobby(accessStatus === 'granted'
-        ? `SQUAD ${currentRoom} NO LONGER EXISTS ON THE SERVER.`
-        : `NO ACTIVE SQUAD WITH CODE ${currentRoom}. CHECK THE CODE, OR ASK YOUR COMMANDER TO INITIALIZE IT FIRST.`);
+      // A reconnect found the group gone: an alert held for it can never reach anyone.
+      sosOutbox.drop('gone');
+      returnToLobby(accessStatus === 'granted' ? LOBBY.ended(currentRoom) : LOBBY.notFound);
     });
 
     // A CREATE under a code a live squad already has. Answered this way rather than by
     // queueing the creator for that stranger squad's approval.
     socket.on('squad-code-taken', (payload) => {
       if (!isAboutThisSquad(payload)) return;
-      returnToLobby(
-        `CODE ${currentRoom} IS ALREADY IN USE BY ANOTHER SQUAD. A NEW CODE HAS BEEN GENERATED: SHARE THIS ONE INSTEAD.`,
-        generateRandomSquadCode()
-      );
+      returnToLobby(LOBBY.codeTaken, generateRandomSquadCode());
     });
 
     // One entry per request: the server re-sends a squad's queue to whoever takes over as
@@ -1267,7 +1351,7 @@ const App = () => {
       if (!isAboutThisSquad(payload)) return;
       setSquadRole('MEMBER');
       setPendingRequests([]);
-      notify.info('[SYS] THE SQUAD COMMANDER IS BACK. YOU ARE A SQUAD MEMBER AGAIN.');
+      notify.info(NOTICES.leadIsBack);
     });
 
     const onConnect = () => {
@@ -1304,6 +1388,8 @@ const App = () => {
   // 2. Broadcast your live GPS data to the network
   useEffect(() => {
     if (!user || !hasJoinedSquad || accessStatus !== 'granted') return;
+    // Not before the location explainer's Continue (or a known permission): see above.
+    if (!locationReady) return;
 
     // --- ⏱️ DYNAMIC POLLING TRANSLATOR ---
     const getPollingMs = () => {
@@ -1326,7 +1412,10 @@ const App = () => {
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
         setLocationError(null);
+        noteRealFix();
 
+        // Paused: this effect re-runs on a settings change too, and must not leak a new fix.
+        if (telemetryModeRef.current === 'FROZEN') return;
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
           ...positionFor(smoothed),
@@ -1359,12 +1448,20 @@ const App = () => {
         // insecure context) even in Chrome — fall back to the 100 default silently.
       }
 
-      socket.emit('safety-ping', {
-        latitude: currentLoc.lat, longitude: currentLoc.lng,
-        timestamp: new Date().toISOString(), batteryLevel: `${currentBattery}%`,
-      });
+      // Paused: the heartbeat (which feeds the Commander's telemetry matrix) carries the
+      // paused position and the time it was taken, and no GPS report goes out at all. Both
+      // used to carry the live fix every beat, so "FROZEN" never froze anything.
+      const paused = telemetryModeRef.current === 'FROZEN' ? pausedPositionRef.current : null;
+      if (telemetryModeRef.current !== 'FROZEN' || paused) {
+        socket.emit('safety-ping', {
+          latitude: paused ? paused.position.lat : currentLoc.lat,
+          longitude: paused ? paused.position.lng : currentLoc.lng,
+          timestamp: new Date(paused ? paused.at : Date.now()).toISOString(),
+          batteryLevel: `${currentBattery}%`,
+        });
+      }
 
-      if (telemetryModeRef.current !== 'GHOST') {
+      if (telemetryModeRef.current === 'ACTIVE') {
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
           ...positionFor(currentLoc),
@@ -1386,6 +1483,7 @@ const App = () => {
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
         setLiveSpeed(speed || 0);
         setLocationError(null);
+        noteRealFix();
 
         let batteryLevel = 100;
         try {
@@ -1426,7 +1524,7 @@ const App = () => {
     // headingRef is a ref (stable identity, never triggers a re-run) — listed only
     // to satisfy exhaustive-deps now that it comes from useDeviceHeading rather
     // than a local useRef the lint rule can recognise on its own.
-  }, [user, hasJoinedSquad, squadCode, accessStatus, sysConfig.polling, headingRef, positionFor]); // <-- CRITICAL: ADDED TO DEPENDENCIES
+  }, [user, hasJoinedSquad, squadCode, accessStatus, sysConfig.polling, headingRef, positionFor, locationReady, locationRetry]); // <-- CRITICAL: ADDED TO DEPENDENCIES
   // --- ⚡ INSTANT MODE OVERRIDE ---
   // Fires the moment a telemetry button is clicked so the server gets the new
   // status immediately, without waiting for the next watchPosition tick.
@@ -1435,11 +1533,21 @@ const App = () => {
   // (the heartbeat/watchPosition effect above already re-broadcasts on those changes).
   useEffect(() => {
     const currentLoc = liveLocationRef.current;
-    if (!currentLoc || !user || !hasJoinedSquad) return;
+    // Pausing takes the position the squad keeps seeing; any other mode drops it.
+    if (telemetryMode !== 'FROZEN') pausedPositionRef.current = null;
+    if (!currentLoc || !user || !hasJoinedSquad) {
+      setPausedHasSpot(pausedPositionRef.current !== null);
+      return;
+    }
 
+    const position = positionFor(currentLoc);
+    if (telemetryMode === 'FROZEN') {
+      pausedPositionRef.current = { position, heading: headingRef.current, at: Date.now() };
+    }
+    setPausedHasSpot(pausedPositionRef.current !== null);
     socket.emit('update-location', {
       name: user.displayName, photo: user.photoURL,
-      ...positionFor(currentLoc),
+      ...position,
       speed: 0, battery: 100,
       status: telemetryMode, // use state here — this effect re-runs when it changes
       roomCode: squadCode,
@@ -1448,8 +1556,12 @@ const App = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [telemetryMode]);
 
-  // --- CYBERPUNK SONAR AUDIO ENGINE ---
+  // --- PING SOUND ---
+  // The short blip for a ping (sent or received) and for someone losing connection. Settings'
+  // Alert sounds switch silences it. The Emergency alarm is SosOverlay's own (useAlertAudio)
+  // and always plays. Read through a ref: the socket handlers that call this are set up once.
   const playSonarPing = () => {
+    if (!alertSoundsRef.current) return;
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
@@ -1481,7 +1593,6 @@ const App = () => {
 
   const [blockedUserIds, setBlockedUserIds] = useState([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
-  const [modalTab, setModalTab] = useState('requests');
 
   // Commander-only screens close when the role goes: a stand-in handing the squad back
   // to its returning Commander could otherwise be left looking at the join queue, or the
@@ -1510,6 +1621,8 @@ const App = () => {
   }, [isSatellite, mapProps.zoom]);
 
   // --- 🔐 THE MASTER AUTH ENGINE ---
+  // Signs in or creates the account. Returns the problem to show on the screen (an
+  // AUTH_PROBLEMS sentence), or null; the screen shows it in place, not as a notice.
   const executeAuthDirective = async (method, isRegistering = false) => {
     setLoginMethod(method);
 
@@ -1521,17 +1634,15 @@ const App = () => {
       else if (method === 'email') {
         // ✉️ SECURE ENCRYPTED CHANNEL
         if (!email || !password) {
-          notify.warning("[SYS_ERROR] ID AND KEY ARE REQUIRED FOR LINK.");
           setLoginMethod(null);
-          return;
+          return AUTH_PROBLEMS.missingEmailAndPassword;
         }
 
         if (isRegistering) {
           // 1. Enforce Username Requirement
           if (!username.trim()) {
-            notify.warning("[SYS_ERROR] CODENAME REQUIRED FOR NEW RECRUITS.");
             setLoginMethod(null);
-            return;
+            return AUTH_PROBLEMS.missingName;
           }
 
           // 2. Create the Node in the Mainframe
@@ -1540,14 +1651,16 @@ const App = () => {
           // 3. Generate a unique Tactical Bot Avatar based on their username
           const generatedAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}&backgroundColor=000000`;
 
-          // 4. Attach the data to their Firebase Profile
+          // 4. Attach the data to their Firebase Profile. The name is saved as typed. Accounts
+          // made before the redesign keep the capitals they were saved with; nothing compares
+          // names (members, blocks and approvals all go by uid), so the two can sit side by side.
           await updateProfile(userCredential.user, {
-            displayName: username.toUpperCase(),
+            displayName: username.trim(),
             photoURL: generatedAvatar
           });
 
           // 5. Force React to recognize the newly attached data immediately
-          setUser({ ...userCredential.user, displayName: username.toUpperCase(), photoURL: generatedAvatar });
+          setUser({ ...userCredential.user, displayName: username.trim(), photoURL: generatedAvatar });
 
         } else {
           // VERIFY EXISTING CREDENTIALS
@@ -1555,18 +1668,11 @@ const App = () => {
         }
       }
     } catch (error) {
-      console.error("Auth Terminal Error:", error.code);
-
-      let errorMessage = `[SYS_FAILURE] ${error.message}`;
-      switch (error.code) {
-        case 'auth/invalid-credential': errorMessage = "[ACCESS_DENIED] CREDENTIALS REJECTED. CHECK ID AND KEY."; break;
-        case 'auth/email-already-in-use': errorMessage = "[SYS_WARN] THIS ID ALREADY EXISTS IN THE MATRIX. INITIATE LOGIN INSTEAD."; break;
-        case 'auth/weak-password': errorMessage = "[SEC_VIOLATION] KEY ENCRYPTION TOO WEAK. MINIMUM 6 CHARACTERS REQUIRED."; break;
-        case 'auth/invalid-email': errorMessage = "[SYS_ERROR] MALFORMED ID SYNTAX."; break;
-      }
-      notify.error(errorMessage);
+      console.error('Sign-in error:', error.code);
       setLoginMethod(null);
+      return authProblem(error, isRegistering ? 'create' : 'sign-in');
     }
+    return null;
   };
 
   // --- 🚨 KILL SWITCH LOGOUT HANDLER ---
@@ -1646,7 +1752,7 @@ const App = () => {
   focusRallyPointRef.current = ({ lat, lng }) => {
     const live = activeWaypointRef.current;
     if (!live || live.lat !== lat || live.lng !== lng) {
-      notify.info('Rally point no longer active.', { title: 'RALLY_POINT' });
+      notify.info(NOTICES.meetingPoint.gone);
       return;
     }
     setMobileView('grid');
@@ -1676,17 +1782,6 @@ const App = () => {
       return;
     }
 
-    // 1. COMMANDER RALLY POINT OVERRIDE (the squad panel's RALLY POINT button). Shown to
-    // every Commander, so it isn't gated on isAdmin here: it was, so for any Commander but
-    // the admin account the button switched to "SELECT MAP..." and the tap did nothing.
-    if (isDroppingWaypoint) {
-      const waypoint = { lat, lng, name: "RALLY POINT" };
-      setActiveWaypoint(waypoint);
-      socket.emit('publish-waypoint', { roomCode: squadCode, waypoint });
-      setIsDroppingWaypoint(false);
-      return;
-    }
-
     // 1. If Admin is recording a path, save the coordinate and draw it
     if (isAdmin && isRecordingPath) {
       const newCoords = [...recordedCoords, { lat, lng }];
@@ -1705,10 +1800,10 @@ const App = () => {
   };
 
   // --- TACTICAL ROUTING ENGINE ---
-  // Finalizing a destination here also designates it as the squad's shared
-  // rally point (publish-waypoint) — SELECT_WAYPOINT previously only ever
-  // updated this client's own local route HUD, so no marker ever reached
-  // anyone else in the squad.
+  // Sets the group's meeting point (publish-waypoint): only from the place card's "Set as
+  // meeting point", once confirmed. Navigate used to do this too (8602d13, 2026-08-03, from
+  // when it was the only way to share a place); since the redesign (P5c) it starts only
+  // your own route.
   const publishSquadWaypoint = (destination) => {
     const waypoint = { lat: destination.lat, lng: destination.lng, name: destination.name };
     setActiveWaypoint(waypoint);
@@ -1723,7 +1818,6 @@ const App = () => {
         setRouteStart({ name: "MY_LOCATION", ...liveLocation });
         setRouteEnd(targetCoords);
         calculateActualRoute({ name: "MY_LOCATION", ...liveLocation }, targetCoords);
-        publishSquadWaypoint(targetCoords);
       } else {
         setRouteStart(targetCoords);
       }
@@ -1732,7 +1826,6 @@ const App = () => {
       setRouteEnd(targetCoords);
       setSelectedItem(null);
       calculateActualRoute(routeStart, targetCoords);
-      publishSquadWaypoint(targetCoords);
     }
   };
 
@@ -1781,24 +1874,35 @@ const App = () => {
     setRouteData(null);
   };
 
-  // The tracking panel's own close (X) button, specifically — asks the server
-  // to clear the squad's shared waypoint too (mirroring the Commander's
-  // dedicated CLEAR button exactly: same emit, same server-side owner-only
-  // check), rather than optimistically clearing activeWaypoint here and
-  // risking this viewer's map disagreeing with everyone else's about whether
-  // the rally point still exists.
-  const closeWaypointTrackingPanel = () => {
-    clearRoute();
-    if (activeWaypoint) socket.emit('clear-waypoint', squadCode);
-  };
+  // The route card's "End route" ends your own route and nothing else. It used to clear the
+  // group's meeting point as well (2ec4aa8), back when Navigate was what set it; now the
+  // meeting point goes only by Remove on its marker or the Group Lead's clear.
 
 
-  const blockedUsers = users.filter(u => blockedUserIds.includes(u.id));
 
   // --- LIVE LOCATION MARKER STATE ---
+  // The theme on screen, and the colours the map's lines are drawn in: Google's Polyline and
+  // Leaflet's path options take literal colours, so they are read from the theme here.
+  const resolvedTheme = useResolvedTheme();
+  const routeColor = useMemo(() => cssColor('--color-map-route', '#1F4FB8'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastKnownColor = useMemo(() => cssColor('--color-map-last-known', '#8A94A3'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+  const casingColor = useMemo(() => cssColor('--color-map-casing', '#FFFFFF'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+  // How far a member is from you, for their plate on the map ("Meera · 120 m").
+  const memberDistance = (u) => {
+    const where = locateTarget(liveLocation, u);
+    return where && !where.here ? distanceLabel(where.shownDistance) : null;
+  };
+  // A lost-connection member, tapped: their card says who and when they were last seen.
+  const ghostFocusItem = (ghost) => ({
+    name: ghost.phase === 'expired' ? MARKERS.lastSeenTitle(ghost.name) : MARKERS.lostConnectionTitle(ghost.name),
+    info: MARKERS.lastBattery(ghost.battery ?? 0),
+  });
   // Movement alone (no waypoint needed) already counts as "navigating" —
   // drop the speed clause here if that should require an explicit waypoint instead.
-  const isNavigating = Boolean(activeWaypoint) || liveSpeed > NAVIGATING_SPEED_MPS;
+  // Your own destination (Navigate, from where you are), or null. Building-to-building routes
+  // without a fix have no live start, so no walking line.
+  const personalTarget = routeStart?.name === 'MY_LOCATION' && routeEnd ? routeEnd : null;
+  const isNavigating = Boolean(activeWaypoint || personalTarget) || liveSpeed > NAVIGATING_SPEED_MPS;
   const liveHeading = useLiveHeading({
     lat: liveLocation?.lat,
     lng: liveLocation?.lng,
@@ -1810,7 +1914,7 @@ const App = () => {
   // no-ops when the Leaflet fallback is active (mapRef only holds a Google
   // map instance) or before the map's finished mounting. TacticalLeafletMap
   // renders the Leaflet-engine equivalent itself, declaratively.
-  useGhostProjectionLines(!mapEngineFailed && isMapReady ? mapRef.current : null, ghostMembers);
+  useGhostProjectionLines(!mapEngineFailed && isMapReady ? mapRef.current : null, ghostMembers, lastKnownColor);
 
   // Live walking route to the active squad waypoint — real routed path from
   // Google Directions (or OSRM on the Leaflet fallback) when available,
@@ -1823,14 +1927,23 @@ const App = () => {
     liveLocation,
     activeWaypoint,
   });
+  // The same walking route, to your own destination while you have one: the map shows that
+  // line instead of the meeting point's, and so does AR Scan's road line (arRoutePathFor).
+  const personalRoute = useWalkingRoute({
+    engine: mapEngineFailed ? 'leaflet' : 'google',
+    liveLocation,
+    activeWaypoint: personalTarget,
+  });
+  const shownRoute = personalTarget ? personalRoute : walkingRoute;
 
   // Live navigation line from the operative's own position to the active
   // squad waypoint — same "no-op on Leaflet/before mount" gating as above.
   useWaypointNavigationLine(
     !mapEngineFailed && isMapReady ? mapRef.current : null,
-    walkingRoute?.path,
-    walkingRoute?.isRealRoute,
-    '#EF4444'
+    shownRoute?.path,
+    shownRoute?.isRealRoute,
+    routeColor,
+    casingColor
   );
 
   // The ACTIVE_WAYPOINT_TRACKING panel prefers the real route's distance/
@@ -1845,24 +1958,13 @@ const App = () => {
   const canClearWaypoint = squadRole === 'OWNER'
     || Boolean(activeWaypoint?.setBy && activeWaypoint.setBy === (user?.uid || socket.id));
 
-  // The route panel opened by choosing a destination is what published that Rally Point,
-  // and it tracks it: when the Rally Point is cleared (by anyone), the panel closes with it
-  // rather than staying up, still pointing the way to a Rally Point that no longer exists.
-  const trackedWaypointRef = useRef(null);
-  useEffect(() => {
-    const tracked = trackedWaypointRef.current;
-    trackedWaypointRef.current = activeWaypoint;
-    if (tracked && !activeWaypoint && routeEnd?.lat === tracked.lat && routeEnd?.lng === tracked.lng) {
-      setRouteStart(null);
-      setRouteEnd(null);
-      setRouteData(null);
-    }
-  }, [activeWaypoint, routeEnd]);
+  // Your own route (Navigate) is yours alone: it no longer closes when the group's meeting
+  // point is removed, since choosing a destination no longer sets one.
 
   const isTrackingSquadWaypoint = Boolean(
     routeEnd && activeWaypoint && routeEnd.lat === activeWaypoint.lat && routeEnd.lng === activeWaypoint.lng
   );
-  const displayedRouteData = (isTrackingSquadWaypoint && walkingRoute) || routeData;
+  const displayedRouteData = (personalTarget && personalRoute) || (isTrackingSquadWaypoint && walkingRoute) || routeData;
 
   // --- TACTICAL MAP RENDERING ENGINE ---
   // Memoised on exactly the inputs that can change the map's configuration.
@@ -1870,9 +1972,99 @@ const App = () => {
   // freshly-built `styles` array) on every render made it call map.setOptions() —
   // a full restyle — on every render, which is what made the map flicker and feel
   // unresponsive to drags while the compass was ticking.
+  // "Location is off" after the explainer's Not now, until location is turned on or the card
+  // is dismissed.
+  const showDeclinedCard = locationDeclined && !locationReady && !declinedCardDismissed;
+  // The group panel's heights (utils/panelHeights.js). Until it has been measured (and in
+  // tests, with no layout) closed is the screen's height and every open height is full.
+  const atPeek = isMobile && sheetOpen && panelHeight === 'peek';
+  // On a phone, a focused search box means the keyboard is up (see searchFocused).
+  const keyboardUp = isMobile && searchFocused;
+  const panelStopsNow = panelGeometry ?? { full: 0, half: 0, peek: 0, closed: typeof window === 'undefined' ? 1000 : window.innerHeight };
+  const panelTarget = !isMobile ? 0 : sheetOpen ? panelStopsNow[panelHeight] : panelStopsNow.closed;
+  // The peek line's counts: who is live, paused, waiting for a location, or lost.
+  const peekCounts = (() => {
+    const listed = users.filter(u => !blockedUserIds.includes(u.id));
+    return {
+      live: listed.filter(u => u.status !== 'FROZEN' && u.hasFix).length,
+      paused: listed.filter(u => u.status === 'FROZEN' && u.hasFix).length,
+      waiting: listed.filter(u => !u.hasFix).length,
+      lost: ghostMembers.length,
+    };
+  })();
+  // Measures the heights: the panel at full height, and how much shows at peek, which is its
+  // header with the peek lines plus room under them for the Emergency button (5 rem tall,
+  // standing 5 rem above the tab bar's 4 rem, plus the gesture bar's inset), so the buttons
+  // that float above the panel never cover any of it.
+  useLayoutEffect(() => {
+    if (!isMobile || !hasJoinedSquad) return undefined;
+    const measure = () => {
+      const panel = sheetRef.current;
+      const header = panelHeaderRef.current;
+      // The header steps aside while the search box has focus: keep the heights it gave.
+      if (!panel || !header || !panel.offsetHeight || !header.offsetHeight) return;
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const inset = insetProbeRef.current?.offsetHeight ?? 0;
+      const tabBar = 4 * rem;
+      const room = 10 * rem + inset - tabBar + 0.5 * rem;
+      const headerAtPeek = header.offsetHeight - (peekWrapRef.current?.offsetHeight ?? 0) + (peekLinesRef.current?.scrollHeight ?? 0);
+      const next = panelStops({ viewport: window.innerHeight, panelHeight: panel.offsetHeight, peekHeight: headerAtPeek + room, tabBar });
+      setPanelGeometry((prev) => (prev && ['full', 'half', 'peek', 'closed'].every((k) => prev[k] === next[k]) ? prev : next));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(panelHeaderRef.current);
+    observer?.observe(sheetRef.current);
+    return () => {
+      window.removeEventListener('resize', measure);
+      observer?.disconnect();
+    };
+  }, [isMobile, hasJoinedSquad]);
+  // Moves the panel to its resting height on the sheet spring (placed at once the first time,
+  // and with reduced motion).
+  const panelPlacedRef = useRef(false);
+  useEffect(() => {
+    if (!panelPlacedRef.current || reduceMotion) {
+      panelY.set(panelTarget);
+      panelPlacedRef.current = true;
+      return undefined;
+    }
+    const controls = animateMotion(panelY, panelTarget, SHEET_SPRING);
+    return () => controls.stop();
+  }, [panelTarget, panelY, reduceMotion]);
+  // Whose options sheet is open: an id, so it follows their live updates and closes if they go.
+  const optionsMember = optionsMemberId ? users.find((u) => u.id === optionsMemberId) ?? null : null;
+  // The group panel's search box: at the head of the buildings list, and above the members.
+  const groupSearch = (
+    <label className="relative block">
+      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" size={18} aria-hidden="true" />
+      <input
+        type="search"
+        aria-label={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
+        placeholder={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
+        className="w-full min-h-11 rounded-full bg-sunken pl-11 pr-4 font-ui text-body text-text placeholder:text-text-secondary focus:outline-2 focus:outline-offset-2 focus:outline-accent"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        // The panel steps aside, and back, only once the tap that moved focus has finished:
+        // moving it under the finger would send that tap's click to whatever slid under it.
+        onFocus={(e) => { const box = e.currentTarget; afterTap(() => document.activeElement === box, true); }}
+        onBlur={(e) => { const box = e.currentTarget; afterTap(() => document.activeElement !== box, false); }}
+      />
+    </label>
+  );
+  // The group panel's search, for members as for buildings (it used to filter buildings only).
+  const matchesSearch = (name) => (name || '').toLowerCase().includes(searchQuery.trim().toLowerCase());
+  // "You're in" says live only once there is a fix to share (Map batch fixes).
+  // Paused says no spot is shared when the pause took none (Map batch fixes, owner's wording).
+  const youreInKey = telemetryMode === 'ACTIVE' && !liveLocation ? 'waiting'
+    : telemetryMode === 'FROZEN' && !pausedHasSpot ? 'pausedNoSpot'
+      : telemetryMode;
+
+  // The roadmap follows the app's theme (light or dark); satellite is photos either way.
   const mapOptions = useMemo(() => ({
     ...(isSatellite ? SATELLITE_MAP_OPTIONS : BASE_MAP_OPTIONS),
-    ...(isSatellite ? {} : { styles: sysConfig.theme === 'stealth' ? STEALTH_MAP_STYLES : TACTICAL_MAP_STYLES }),
+    ...(isSatellite ? {} : { styles: mapStylesFor(resolvedTheme) }),
     // Google renders its own clickable POI icons (hospitals, colleges, etc.)
     // straight onto the map tiles. Tapping one pops up Google's native white
     // InfoWindow on top of this app's own custom SYS_NODE panel — two
@@ -1881,7 +2073,7 @@ const App = () => {
     // built-in POI layer is pure UI collision here, not a needed feature.
     clickableIcons: false,
     draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : 'grab',
-  }), [isSatellite, sysConfig.theme, isAdmin, isRecordingPath]);
+  }), [isSatellite, resolvedTheme, isAdmin, isRecordingPath]);
 
   // Incoming SOS (stays up until acknowledged). Built once here because two branches
   // render it: the map below, and the mandatory-update gate. It used to live only in
@@ -1897,7 +2089,13 @@ const App = () => {
       lat={incomingSos.lat}
       lng={incomingSos.lng}
       ageMs={incomingSos.ageMs}
+      receivedAt={incomingSos.receivedAt}
       pendingCount={pendingSosCount}
+      position={sosPosition}
+      total={sosTotal}
+      me={liveLocation}
+      heading={heading}
+      headingLive={hasHeadingReading}
       onAcknowledge={acknowledgeSos}
     />
   );
@@ -1931,7 +2129,10 @@ const App = () => {
         hidden={hasJoinedSquad && isMobile && (sheetOpen || Boolean(selectedItem && activeTab === 'buildings'))}
       />
       {/* Non-blocking notices (src/utils/notify.js) - what window.alert() used to be. */}
-      <CommsFeed />
+      {/* Under the open group panel on a phone, so a notice never covers or takes the taps
+          meant for the Group Lead's buttons there (as the old ping and lost-connection
+          banners did, z-[850]); everywhere else, and over AR Scan, on top. */}
+      <CommsFeed overArScan={Boolean(arTarget) && arScanReady} coveredBy={hasJoinedSquad && isMobile && sheetOpen ? sheetRef : null} />
     </>
   );
 
@@ -1947,13 +2148,7 @@ const App = () => {
       return (
         <>
           {updateOverlay}
-          <LocusGuide
-            onInitialize={() => setHasSeenGuide(true)}
-            onCheckForUpdates={() => appUpdate.check({ manual: true })}
-            updateStatus={appUpdate.status}
-            updateSupported={appUpdate.supported}
-            installedVersion={appUpdate.installedVersion}
-          />
+          <Guide onDone={() => { rememberGuideSeen(); setHasSeenGuide(true); }} />
         </>
       );
     }
@@ -1978,243 +2173,151 @@ const App = () => {
   }
 
   if (user && !hasJoinedSquad) {
-    return (
-      <div className="h-screen w-full bg-black flex flex-col items-center justify-center text-white p-6 bg-dots">
-        {updateOverlay}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md p-8 md:p-10 border border-white/20 bg-black relative shadow-[0_0_50px_rgba(255,0,0,0.1)] text-center pointer-events-auto"
-        >
-          <div className="absolute top-0 left-0 w-2 h-2 bg-white" />
-          <div className="absolute top-0 right-0 w-2 h-2 bg-white" />
-          <div className="absolute bottom-0 left-0 w-2 h-2 bg-white" />
-          <div className="absolute bottom-0 right-0 w-2 h-2 bg-white" />
-
-          <ShieldCheck size={44} className="text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-dot uppercase tracking-widest mb-1">SECURE_CHANNEL</h2>
-          <p className="text-zinc-500 font-dot text-[10px] uppercase mb-6 tracking-widest">
-            {squadMode === 'create' ? 'INITIALIZE NEW SQUAD PROTOCOL' : 'JOIN EXISTING OPERATIVE NETWORK'}
-          </p>
-
-          {/* Mode Switcher Tabs */}
-          <div className="flex border border-white/20 mb-6 font-dot text-xs uppercase tracking-widest">
-            <button
-              onClick={() => {
-                setSquadMode('create');
-                setSquadCode(generateRandomSquadCode());
-                setLobbyNotice(null);
-              }}
-              className={`flex-1 py-3 transition-colors ${squadMode === 'create' ? 'bg-white text-black font-bold' : 'text-zinc-500 hover:text-white'}`}
-            >
-              CREATE SQUAD
-            </button>
-            <button
-              onClick={() => {
-                setSquadMode('join');
-                setSquadCode('');
-                setLobbyNotice(null);
-              }}
-              className={`flex-1 py-3 transition-colors border-l border-white/20 ${squadMode === 'join' ? 'bg-white text-black font-bold' : 'text-zinc-500 hover:text-white'}`}
-            >
-              JOIN SQUAD
-            </button>
-          </div>
-
-          {lobbyNotice && (
-            <p role="alert" className="mb-6 p-3 border border-red-500/50 bg-red-500/10 text-left font-dot text-[10px] text-red-400 uppercase tracking-widest leading-relaxed">
-              {lobbyNotice}
-            </p>
-          )}
-
-          {squadMode === 'create' ? (
-            <div className="space-y-6">
-              <div className="p-4 border border-red-500/40 bg-red-500/5 relative">
-                <p className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest mb-2">GENERATED SQUAD DESIGNATOR</p>
-                {/* Six tiles that decrypt into place, tap-to-copy and share (SquadCode.jsx).
-                    The caption always asked people to share the code; now they can. */}
-                <CodeTiles code={squadCode} />
-                <div className="mt-3 flex items-center justify-center gap-2">
-                  <p className="text-[9px] font-dot text-zinc-500 uppercase tracking-widest">
-                    Share this code with your team to grant entry clearance.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => { setSquadCode(generateRandomSquadCode()); setLobbyNotice(null); }}
-                    className="p-1.5 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white shrink-0"
-                    title="Generate New Code"
-                  >
-                    <RefreshCw size={12} />
-                  </button>
-                </div>
-              </div>
-
-              <button
-                onClick={handleJoinSquad}
-                className="w-full py-4 bg-red-500 text-white font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-600 shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all flex items-center justify-center gap-2"
+    // Turned down: say so, and offer another try (the join tab, with the code kept to edit).
+    if (deniedCode) {
+      return (
+        <>
+          {updateOverlay}
+          <StatusScreen
+            testId="not-approved"
+            tone="warning"
+            icon={<AlertCircle size={40} />}
+            title={NOT_APPROVED.title}
+            action={(
+              <Button
+                block
+                size="large"
+                onClick={() => { setSquadMode('join'); setSquadCode(deniedCode); setDeniedCode(null); setLobbyNotice(null); }}
               >
-                INITIALIZE SQUAD <ArrowRight size={16} />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="space-y-2 text-left">
-                <p className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ENTER SQUAD CODE (ALPHANUMERIC ONLY)</p>
-                {/* Tiles over one real input (SquadCode.jsx): keyboard, paste and autofill as
-                    normal, and Enter now connects (it used to do nothing). */}
+                {NOT_APPROVED.tryAnother}
+              </Button>
+            )}
+          >
+            <p>{NOT_APPROVED.body(deniedCode)}</p>
+          </StatusScreen>
+        </>
+      );
+    }
+
+    // The lobby (redesign P3; words in src/copy/access.js): create a group, or join one by
+    // its code. Why the server turned a request down (no group under that code, the group
+    // ended, the code taken) shows in the card, in amber.
+    const joining = squadMode === 'join';
+    const lobbyProblemId = 'lobby-problem';
+    return (
+      <div
+        className="min-h-[100dvh] bg-bg text-text font-ui px-5 flex flex-col"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 3rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+      >
+        {updateOverlay}
+        <main className="w-full max-w-md mx-auto flex-1">
+          <p className="text-body text-text-secondary">{LOBBY.hello(firstNameOf(user.displayName))}</p>
+          <h1 className="mt-1 text-display">{LOBBY.title}</h1>
+
+          <SegmentedControl
+            className="mt-6"
+            label={LOBBY.modes}
+            value={squadMode}
+            onChange={(mode) => {
+              if (mode === squadMode) return;
+              setSquadMode(mode);
+              setSquadCode(mode === 'create' ? generateRandomSquadCode() : '');
+              setLobbyNotice(null);
+            }}
+            options={[
+              { value: 'create', label: LOBBY.createTab },
+              { value: 'join', label: LOBBY.joinTab },
+            ]}
+          />
+
+          <Card className="mt-5">
+            {joining ? (
+              <>
+                <p className="mb-3 text-secondary font-semibold text-text-secondary">{LOBBY.joinCode}</p>
                 <CodeInput
                   value={squadCode}
                   onChange={(code) => { setSquadCode(code); setLobbyNotice(null); }}
                   onSubmit={handleJoinSquad}
+                  problem={Boolean(lobbyNotice)}
+                  describedBy={lobbyNotice ? lobbyProblemId : undefined}
                 />
-              </div>
+                {lobbyNotice && (
+                  <p id={lobbyProblemId} role="alert" className="mt-4 flex items-start gap-2 text-body text-text">
+                    <AlertCircle size={20} className="shrink-0 mt-0.5 text-warning" aria-hidden="true" />
+                    {lobbyNotice}
+                  </p>
+                )}
+                <p className="mt-4 text-secondary text-text-secondary">{LOBBY.joinHelp}</p>
+              </>
+            ) : (
+              <>
+                <p className="mb-3 text-secondary font-semibold text-text-secondary">{LOBBY.yourCode}</p>
+                {lobbyNotice && (
+                  <InlineMessage tone={lobbyNotice === LOBBY.codeTaken ? 'info' : 'warning'} className="mb-4">{lobbyNotice}</InlineMessage>
+                )}
+                <CodeTiles code={squadCode} onNewCode={() => { setSquadCode(generateRandomSquadCode()); setLobbyNotice(null); }} />
+                <p className="mt-4 text-secondary text-text-secondary">{LOBBY.createHelp}</p>
+              </>
+            )}
+          </Card>
+        </main>
 
-              <button
-                onClick={handleJoinSquad}
-                disabled={!squadCode.trim()}
-                className="w-full py-4 bg-white text-black font-dot uppercase tracking-[0.2em] text-xs hover:bg-red-500 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                CONNECT TO SQUAD <ArrowRight size={16} />
-              </button>
-            </div>
-          )}
-        </motion.div>
+        <div className="w-full max-w-md mx-auto mt-6">
+          <Button block size="large" onClick={handleJoinSquad} disabled={!squadCode.trim()}>
+            {joining ? LOBBY.joinButton : LOBBY.createButton}
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-full bg-black flex overflow-hidden text-white font-inter selection:bg-red-500/30 bg-dots">
+    <div className="h-screen w-full bg-black flex overflow-hidden text-white font-inter selection:bg-accent-soft bg-dots">
 
-      {/* Blocky Header Panel — PURGED: Only Logo + Logout remain */}
-      <motion.nav
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="absolute top-0 left-0 z-[1000] w-full px-6 bg-black/95 backdrop-blur-md border-b border-white/20 flex items-center justify-between pointer-events-auto"
-        style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' , paddingBottom: '0.75rem' }}
-      >
-        <div className="flex items-center gap-4">
-          <div className="p-2 border border-white text-white">
-            <Navigation className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="font-dot tracking-widest uppercase text-xl">LOCUS</h1>
-            <p className="font-dot text-[8px] text-zinc-600 uppercase tracking-[0.3em] -mt-0.5">{isSatellite ? 'ORBITAL RECON' : 'TACTICAL GRID'}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Desktop-only profile badge */}
-          <div className="hidden md:flex items-center gap-3 px-4 py-2 border border-white/20 bg-black font-dot text-xs uppercase tracking-widest">
-            {user.photoURL ? (
-              <img src={user.photoURL} className="w-6 h-6 rounded-full border border-white/50" alt="profile" />
-            ) : (
-              <div className="w-2 h-2 bg-red-500"></div>
-            )}
-            {user.displayName || "GUEST_NODE"}
-          </div>
-          {/* Desktop-only: Admin Settings */}
-          {isAdmin && (
-            <button
-              onClick={() => setShowAdminSettings(true)}
-              className="hidden md:flex p-2 border border-yellow-500/60 text-yellow-500 hover:bg-yellow-500 hover:text-black transition-colors shadow-[0_0_10px_rgba(234,179,8,0.2)]"
-              title="Admin Settings"
-            >
-              <ShieldAlert size={18} />
-            </button>
-          )}
-          {/* Desktop-only: SYS_CONFIG */}
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            className="hidden md:flex p-2 border border-white/20 hover:bg-white hover:text-black transition-colors"
-            title="System Configuration"
-          >
-            <Sliders size={18} />
-          </button>
-          {/* Logout — visible on all screens */}
-          <button
-            onClick={handleLogout}
-            className="p-2 border border-white/20 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors"
-            title="Disconnect"
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
-      </motion.nav>
-
-      {/* --- ACTIVE ROUTE HUD --- */}
-      <AnimatePresence>
-        {(routeStart || routeData) && (
-          <motion.div
-            initial={{ y: -50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -50, opacity: 0 }}
-            className="absolute top-24 left-1/2 -translate-x-1/2 z-[850] md:z-[1000] w-[90%] max-w-md bg-black border border-red-500 pointer-events-auto shadow-[0_0_30px_rgba(239,68,68,0.2)]"
-          >
-            <div className="p-4 flex flex-col gap-2 relative">
-              <button onClick={closeWaypointTrackingPanel} className="absolute top-2 right-2 text-zinc-500 hover:text-white">
-                <X size={16} />
-              </button>
-
-              <div className="flex items-center gap-2 text-red-500 font-dot text-xs uppercase tracking-widest">
-                <Waypoints size={14} className="animate-pulse" />
-                ACTIVE_WAYPOINT_TRACKING
-              </div>
-
-              <div className="flex justify-between items-end mt-2">
-                <div className="flex flex-col font-dot text-sm text-white uppercase tracking-widest">
-                  <span>{routeStart?.name || "AWAITING_START"}</span>
-                  <span className="text-zinc-600">↓</span>
-                  <span>{routeEnd?.name || "AWAITING_TARGET"}</span>
-                </div>
-
-                {displayedRouteData && (
-                  <div className="text-right flex flex-col">
-                    <span className="text-2xl font-dot text-red-500 leading-none">{displayedRouteData.distance.text}</span>
-                    <span className="text-[10px] font-dot text-zinc-400 uppercase tracking-widest">ETA: {displayedRouteData.duration.text}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Top bar and sharing chip (components/map/TopBar.jsx) */}
+      <TopBar
+        isSatellite={isSatellite}
+        onSignOut={handleLogout}
+        onSettings={() => setShowSettingsModal(true)}
+        isAdmin={isAdmin}
+        onAdmin={() => setShowAdminSettings(true)}
+      />
 
       {/* Sidebar Panel — visible on desktop always; on a phone, a sheet that is open when
           mobileView is 'matrix' or 'squad' and can be dragged down by its handle strip. */}
       <motion.div
-        initial={false}
-        animate={{ y: isMobile ? (sheetOpen ? 0 : '100%') : 0, x: 0, opacity: 1 }}
-        transition={reduceMotion ? { duration: 0 } : SHEET_SPRING}
+        // Its y is panelY, moved to the resting height by the effect on panelTarget, and by
+        // the finger while dragged (the handle strip and header start the drag).
+        data-height={isMobile ? (sheetOpen ? panelHeight : 'closed') : undefined}
         drag={isMobile ? 'y' : false}
         dragListener={false}
         dragControls={sheetDragControls}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        // Follows the finger almost 1:1 downwards, and rubber-bands upwards: the sheet is
-        // already fully open, so pulling it higher resists instead of moving.
-        dragElastic={{ top: 0.06, bottom: 0.95 }}
+        dragConstraints={{ top: 0, bottom: panelStopsNow.closed }}
+        // Follows the finger almost 1:1 between the heights, and rubber-bands above full.
+        dragElastic={{ top: 0.06, bottom: 0.2 }}
         dragMomentum={false}
-        onDragStart={() => { sheetDraggedRef.current = true; }}
+        onDragStart={() => { sheetDraggedRef.current = true; panelDragStartRef.current = panelTarget; }}
         onDragEnd={(_event, info) => {
           // Decide from where the throw is GOING, not where the finger let go: project the
-          // release velocity forward (Apple's scroll-deceleration projection), so a short
-          // quick flick closes the sheet and a slow long drag that stops early doesn't.
-          const height = sheetRef.current?.offsetHeight || window.innerHeight;
-          if (shouldDismissSheet(info.offset.y, info.velocity.y, height)) {
-            haptic('snap');
-            setMobileView('grid');
-          }
+          // release velocity forward (Apple's scroll-deceleration projection), and settle at
+          // the nearest height to that: peek, half, full, or closed. Where it was let go is
+          // where the drag started plus how far it went, kept on the panel.
+          const letGo = Math.min(panelStopsNow.closed, Math.max(0, panelDragStartRef.current + info.offset.y));
+          const next = snapPanel(letGo, info.velocity.y, panelStopsNow);
+          haptic('snap');
+          animateMotion(panelY, panelStopsNow[next], reduceMotion ? { duration: 0 } : SHEET_SPRING);
+          if (next === 'closed') setMobileView('grid');
+          else setPanelHeight(next);
         }}
         ref={sheetRef}
         className={`${
           isMobile
-            ? 'fixed inset-x-0 bottom-16 z-[900] flex flex-col bg-black/95 backdrop-blur-lg pointer-events-auto border-t border-white/10 shadow-[0_-24px_48px_rgba(0,0,0,0.6)]'
-            : 'hidden md:flex w-80 bg-black border-r border-red-900/50 fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
+            ? 'fixed inset-x-0 bottom-16 z-[900] flex flex-col bg-surface text-text rounded-t-sheet shadow-[var(--shadow-3)] pointer-events-auto'
+            : 'hidden md:flex w-80 bg-surface text-text border border-border rounded-card shadow-[var(--shadow-2)] fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
         }`}
         // Starts under the header instead of behind it (it used to start at the very top, so
         // its handle and MATRIX/SQUAD indicator were hidden under the header).
-        style={isMobile ? { top: 'calc(max(1rem, env(safe-area-inset-top)) + 3.2rem)' } : undefined}
+        style={isMobile ? { top: BELOW_TOP_BAR, y: panelY } : undefined}
         onTouchStart={(e) => { e.currentTarget._touchStartX = e.touches[0].clientX; }}
         onTouchEnd={(e) => {
           const startX = e.currentTarget._touchStartX;
@@ -2231,203 +2334,128 @@ const App = () => {
           }
         }}
       >
-        {/* Mobile drag strip: the handle and the MATRIX/SQUAD indicator. Pressing anywhere
-            here starts the drag; a plain tap still closes the sheet, as the handle did. */}
+        {/* The header (components/group/GroupHeader.jsx): "Your group", your role, the code and
+            Copy. On a phone it is the panel's drag handle too: pressing anywhere on it starts the
+            drag, and a plain tap still closes the panel, as the handle did. */}
         <div
-          className="md:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
+          className={`${keyboardUp ? 'hidden ' : ''}shrink-0 select-none pt-3 md:pt-4 touch-none md:touch-auto cursor-grab active:cursor-grabbing md:cursor-auto`}
+          data-testid="group-panel-header"
           data-no-ping
-          onPointerDown={(e) => { sheetDraggedRef.current = false; sheetDragControls.start(e); }}
+          onPointerDown={(e) => { if (!isMobile) return; sheetDraggedRef.current = false; sheetDragControls.start(e); }}
           // A drag that snapped back still ends in a click; only a real tap closes.
-          onClick={() => { if (!sheetDraggedRef.current) setMobileView('grid'); }}
+          // At peek a tap opens it to half; at half or full it closes, as the handle did.
+          onClick={() => {
+            if (!isMobile || sheetDraggedRef.current) return;
+            if (panelHeight === 'peek') setPanelHeight('half');
+            else setMobileView('grid');
+          }}
+          ref={panelHeaderRef}
         >
-        <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-3 mb-1" />
-
-        {/* Gesture Dot Indicators (mobile) + Desktop Tabs */}
-        <div className="md:hidden flex items-center justify-center gap-3 py-3">
-          <div className={`w-2 h-2 rounded-full transition-all duration-300 ${activeTab === 'buildings' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-125' : 'bg-zinc-700'}`} />
-          <span className="font-dot text-[9px] text-zinc-500 uppercase tracking-widest">{activeTab === 'buildings' ? 'MATRIX' : 'SQUAD'}</span>
-          <div className={`w-2 h-2 rounded-full transition-all duration-300 ${activeTab === 'users' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] scale-125' : 'bg-zinc-700'}`} />
-        </div>
-        </div>
-
-        {/* Desktop Tabs (hidden on mobile) */}
-        <div className="hidden md:flex border-b border-white/20">
-          <button
-            onClick={() => { setActiveTab('buildings'); setSelectedItem(null); }}
-            className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors ${activeTab === 'buildings' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
-              }`}
-          >
-            <Building2 size={16} /> MATRIX
-          </button>
-          <button
-            onClick={() => { setActiveTab('users'); setSelectedItem(null); }}
-            className={`flex-1 py-4 flex items-center justify-center gap-2 font-dot text-sm uppercase tracking-widest transition-colors border-l border-white/20 ${activeTab === 'users' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white hover:bg-white/5'
-              }`}
-          >
-            <Users size={16} /> SQUAD
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="p-4 border-b border-white/20 bg-black">
-
-          {/* --- ONLY THE COMMANDER SEES THESE BUTTONS --- */}
-          {activeTab === 'users' && squadRole === 'OWNER' && (
-            <div className="flex flex-col gap-2 mb-4">
-              <button onClick={() => setShowRequestsModal(true)} className="w-full px-4 py-3 border border-red-500 text-sm font-dot uppercase tracking-widest flex items-center justify-between hover:bg-red-500 hover:text-white transition-colors text-red-500">
-                <div className="flex items-center gap-2"><ShieldCheck size={18} /> NODE_ACCESS</div>
-                {pendingRequests.length > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-xs">{pendingRequests.length}</span>}
-              </button>
-
-              {/* --- NEW: TELEMETRY SYNC BUTTON --- */}
-              {/* Always answers the tap: SYNCING while it waits, then the matrix, or what went
-                  wrong and a retry (see requestTelemetrySync). */}
-              <button
-                onClick={requestTelemetrySync}
-                disabled={telemetrySync.status === 'pending'}
-                className={`w-full px-4 py-3 border text-sm font-dot uppercase tracking-widest flex items-center justify-center gap-2 transition-colors disabled:cursor-wait disabled:opacity-70 ${telemetrySync.status === 'error'
-                  ? 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'
-                  : 'border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black shadow-[0_0_15px_rgba(234,179,8,0.2)]'}`}
-              >
-                {telemetrySync.status === 'pending' ? (
-                  <><Loader2 size={18} className="animate-spin" /> SYNCING...</>
-                ) : telemetrySync.status === 'error' ? (
-                  <><RefreshCw size={18} /> RETRY SYNC</>
-                ) : (
-                  <><Activity size={18} /> SYNC_TELEMETRY</>
-                )}
-              </button>
-              {telemetrySync.status === 'error' && (
-                <p role="alert" className="px-3 py-2 border border-red-500/50 bg-red-500/10 font-dot text-[10px] text-red-400 uppercase tracking-widest leading-relaxed">
-                  {telemetrySync.message}
-                </p>
-              )}
-
-              <div className="flex gap-2 w-full">
-                <button
-                  onClick={() => setIsDroppingWaypoint(!isDroppingWaypoint)}
-                  className={`flex-1 px-2 py-3 border text-[10px] font-dot uppercase tracking-widest flex items-center justify-center gap-1 transition-colors ${isDroppingWaypoint ? 'bg-red-500 text-white border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'}`}
-                >
-                  <Crosshair size={14} /> {isDroppingWaypoint ? 'SELECT MAP...' : 'RALLY POINT'}
-                </button>
-                {activeWaypoint && (
-                  <button
-                    onClick={() => socket.emit('clear-waypoint', squadCode)}
-                    className="flex-1 px-2 py-3 border border-zinc-500 text-[10px] font-dot uppercase tracking-widest flex items-center justify-center gap-1 hover:bg-zinc-800 transition-colors text-zinc-400"
-                  >
-                    <Trash2 size={14} /> CLEAR
-                  </button>
-                )}
+          <div className="md:hidden w-9 h-1 rounded-full bg-border mx-auto mb-3" aria-hidden="true" />
+          <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode}>
+            {/* The peek height's lines: laid out always on a phone (so peek's height is known
+                at every height), shown only at peek. */}
+            {isMobile && (
+              <div ref={peekWrapRef} className="grid" style={{ gridTemplateRows: atPeek ? '1fr' : '0fr' }} inert={!atPeek} aria-hidden={!atPeek}>
+                <div ref={peekLinesRef} className="overflow-hidden min-h-0">
+                  <PeekLines
+                    requests={pendingRequests.length}
+                    onRequests={squadRole === 'OWNER' ? () => setShowRequestsModal(true) : null}
+                    names={users.filter(u => !blockedUserIds.includes(u.id)).map(u => u.name || '?')}
+                    counts={peekCounts}
+                  />
+                </div>
               </div>
-            </div>
-          )}
-
-          {activeTab === 'users' && (
-            <div className="mb-4 flex items-center justify-between border border-red-500/30 bg-red-500/5 p-3">
-              <div className="flex flex-col">
-                {/* --- UPGRADED: DISPLAYS YOUR EXACT ROLE IN THE HUD --- */}
-                <span className="text-[10px] text-zinc-500 font-dot uppercase tracking-widest">
-                  ACTIVE_CHANNEL // <span className={squadRole === 'OWNER' ? 'text-yellow-500' : 'text-blue-400'}>{squadRole || 'MEMBER'}</span>
-                </span>
-                <span className="font-dot text-sm text-red-500 tracking-widest">{squadCode}</span>
-              </div>
-              <button
-                onClick={handleLeaveSquad}
-                className="text-[10px] border border-red-500 text-red-500 hover:bg-red-500 hover:text-white px-3 py-2 transition-colors font-dot uppercase tracking-widest"
-              >
-                DISCONNECT
-              </button>
-            </div>
-          )}
-
-          {/* --- NEW: TELEMETRY CONTROL PANEL --- */}
-          {activeTab === 'users' && (
-            <div className="mb-4 flex flex-col gap-2 border border-white/20 p-2 bg-black">
-              <span className="text-[10px] font-dot uppercase tracking-widest text-zinc-500 text-center">TELEMETRY_CONTROL</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { telemetryModeRef.current = 'ACTIVE'; setTelemetryMode('ACTIVE'); }}
-                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'ACTIVE' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                >
-                  <Activity size={14} /> ACTIVE
-                </button>
-                <button
-                  onClick={() => { telemetryModeRef.current = 'FROZEN'; setTelemetryMode('FROZEN'); }}
-                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'FROZEN' ? 'bg-blue-500/20 border-blue-500 text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                >
-                  <LocateFixed size={14} /> FROZEN
-                </button>
-                <button
-                  onClick={() => { telemetryModeRef.current = 'GHOST'; setTelemetryMode('GHOST'); }}
-                  className={`flex-1 py-2 font-dot text-[10px] tracking-widest border flex flex-col items-center gap-1 transition-colors ${telemetryMode === 'GHOST' ? 'bg-zinc-800 border-zinc-500 text-zinc-300 shadow-[0_0_10px_rgba(113,113,122,0.3)]' : 'border-white/10 text-zinc-600 hover:border-white/30'}`}
-                >
-                  <EyeOff size={14} /> GHOST
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white" size={16} />
-            <input
-              type="text"
-              placeholder={activeTab === 'buildings' ? "SEARCH_MATRIX..." : "SEARCH_SQUAD..."}
-              className="w-full bg-transparent border border-white/30 py-3 pl-12 pr-4 text-xs font-dot uppercase focus:outline-none focus:border-white transition-colors placeholder:text-zinc-600"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+            )}
+          </GroupHeader>
+          {/* Measures the gesture bar's inset, for the room left under the buttons at peek. */}
+          <div ref={insetProbeRef} aria-hidden="true" className="absolute w-0 invisible pointer-events-none" style={{ height: 'env(safe-area-inset-bottom)' }} />
         </div>
+
+
         {/* List Content */}
-        {/* pb-28 on a phone: room to scroll the last rows clear of the floating SOS and targeting buttons, which used to cover them. */}
-        <div className="flex-1 overflow-y-auto p-4 pb-28 md:pb-4 space-y-4 custom-scrollbar bg-black">
+        {/* Room at the bottom on a phone to scroll the last rows clear of the Emergency and
+            meeting point buttons: they stand 10 rem above the screen's bottom edge plus the
+            gesture bar's inset, and this panel ends 4 rem up without that inset. 8 rem plus the
+            inset leaves 2 rem between the last row and the buttons on any phone. */}
+        <div data-testid="group-panel-list" className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto p-4 pt-1 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}>
+          <SegmentedControl
+            label={GROUP_TABS.label}
+            value={activeTab === 'buildings' ? 'buildings' : 'users'}
+            onChange={(tab) => {
+              setActiveTab(tab); setSelectedItem(null);
+              if (isMobile) setMobileView(tab === 'buildings' ? 'matrix' : 'squad');
+            }}
+            options={[
+              { value: 'users', label: GROUP_TABS.members },
+              { value: 'buildings', label: GROUP_TABS.buildings },
+            ]}
+          />
+          {/* Buildings: the search heads the list. (Members: it sits above the members list,
+              under the controls, so a Group Lead's tools come higher at half height.) */}
+          {activeTab === 'buildings' && groupSearch}
+          {activeTab === 'buildings' && searchQuery.trim() && !SRM_MASTER_DATABASE.some(b => matchesSearch(b.name)) && (
+            <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="buildings-no-match">{GROUP_BUILDINGS_LIST.noMatch(searchQuery.trim())}</p>
+          )}
+          {/* The Group Lead's tools come first, before Your location (the design has them after):
+              at half height on a 360 px phone they would otherwise sit under the Emergency button,
+              which stays above the panel. */}
+          {activeTab === 'users' && squadRole === 'OWNER' && !keyboardUp && (
+            <LeadTools
+              requests={pendingRequests.length}
+              onRequests={() => setShowRequestsModal(true)}
+              refresh={telemetrySync}
+              onRefresh={requestTelemetrySync}
+              choosing={isTargetingMode}
+              onMeetingPoint={() => {
+                const choosing = !isTargetingMode;
+                setIsTargetingMode(choosing);
+                // On a phone the open panel covers the map the spot is chosen on.
+                if (choosing && isMobile) setMobileView('grid');
+              }}
+              hasMeetingPoint={Boolean(activeWaypoint)}
+              onRemoveMeetingPoint={() => socket.emit('clear-waypoint', squadCode)}
+            />
+          )}
+          {/* Your location: Live, Paused or Hidden (components/group/SharingControl.jsx). */}
+          {activeTab === 'users' && (
+            <SharingControl
+              mode={telemetryMode}
+              onChange={(mode) => { telemetryModeRef.current = mode; setTelemetryMode(mode); }}
+              waiting={!liveLocation}
+              pausedNoSpot={!pausedHasSpot}
+              polling={sysConfig.polling}
+            />
+          )}
+          {/* The members list's heading and its states (components/group/MembersHeading.jsx). */}
+          {activeTab === 'users' && (
+            <MembersHeading count={users.filter(u => !blockedUserIds.includes(u.id)).length + ghostMembers.length + 1} updatedAt={rosterAt} />
+          )}
+          {activeTab === 'users' && groupSearch}
+          {activeTab === 'users' && rosterAt === null && <MembersLoading />}
+          {activeTab === 'users' && rosterAt !== null && !users.some(u => !blockedUserIds.includes(u.id)) && ghostMembers.length === 0 && (
+            <MembersEmpty code={squadCode} isLead={squadRole === 'OWNER'} />
+          )}
+          {activeTab === 'users' && searchQuery.trim() && !users.some(u => !blockedUserIds.includes(u.id) && matchesSearch(u.name)) && !ghostMembers.some(g => matchesSearch(g.name)) && (users.length > 0 || ghostMembers.length > 0) && (
+            <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="members-no-match">{GROUP_MEMBERS_LIST.noMatch(searchQuery.trim())}</p>
+          )}
           <AnimatePresence mode="popLayout">
             {activeTab === 'buildings' ? (
-              SRM_MASTER_DATABASE.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).map(building => (
+              SRM_MASTER_DATABASE.filter(b => matchesSearch(b.name)).map(building => (
                 <motion.div
                   layout
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   key={building.id}
-                  className="p-4 mb-2 bg-gray-900 border border-gray-800 rounded-lg active:bg-gray-800 transition-colors relative group hover:border-white/40 cursor-pointer"
-                  onClick={() => handleBuildingTap(building)}
                 >
-                  <div className="absolute top-0 left-0 w-2 h-2 bg-white/20" />
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex flex-col">
-                      <span className="inline-block border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest px-2 py-0.5 mb-2 w-max">
-                        {building.category}
-                      </span>
-                      <h4 className="font-dot text-sm uppercase tracking-widest text-white leading-none mb-1">
-                        {building.name}
-                      </h4>
-
-                      {/* --- 📡 LIVE DISTANCE TRACKER RESTORED --- */}
-                      {liveLocation && (
-                        <span className="text-[10px] text-emerald-400 font-dot uppercase tracking-widest mt-1 flex items-center gap-1">
-                          <Activity size={10} className="animate-pulse" />
-                          {calculateDistance(liveLocation.lat, liveLocation.lng, building.lat, building.lng)} AWAY
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest">[{building.id}]</span>
-                  </div>
-                  <p className="font-inter text-xs text-zinc-400 mb-4 leading-relaxed">{building.info}</p>
-                  <div className="flex gap-2 w-full">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setArTarget({ lat: building.lat, lng: building.lng, name: building.name }); }}
-                      className="w-12 flex-shrink-0 flex items-center justify-center border border-white/30 hover:border-red-500 hover:text-red-500 transition-colors text-white"
-                      title="AR Tracking"
-                    >
-                      <Crosshair size={14} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleWaypointSelect(building); showBuildingOnMap(building); }}
-                      className="w-full py-3 border border-white/30 hover:border-white hover:bg-white hover:text-black font-dot text-xs uppercase tracking-widest transition-colors text-white"
-                    >
-                      SELECT_WAYPOINT
-                    </button>
-                  </div>
+                  <BuildingRow
+                    building={building}
+                    me={liveLocation}
+                    onOpen={() => handleBuildingTap(building)}
+                    onArScan={() => setArTarget({ lat: building.lat, lng: building.lng, name: building.name })}
+                    onNavigate={() => { handleWaypointSelect(building); showBuildingOnMap(building); }}
+                  />
                 </motion.div>
               ))
             ) : (
@@ -2440,38 +2468,30 @@ const App = () => {
                 /* Persistent per-row ghost badge — independent of the transient
                     top-of-screen banner, so anyone opening the Squad panel later
                    still sees who's dark, not just whoever was looking when it fired. */
-                ...ghostMembers.map(ghost => (
+                ...ghostMembers.filter(g => matchesSearch(g.name)).map(ghost => (
                   <motion.div
                     layout
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     key={`ghost-row-${ghost.id}`}
+                    data-testid="lost-member-row"
                     onClick={() => handleFocus(ghost.position, null)}
-                    className="p-4 mb-2 bg-gray-900 border border-dashed border-zinc-600 rounded-lg active:bg-gray-800 transition-colors relative group hover:border-zinc-400 cursor-pointer opacity-80"
+                    className="flex items-center gap-3 py-3 border-b border-border font-ui text-text cursor-pointer"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 flex items-center justify-center font-dot text-sm border border-dashed border-zinc-600 text-zinc-400 overflow-hidden shrink-0">
-                          {ghost.photo ? <img src={ghost.photo} className="w-full h-full object-cover grayscale" alt="" /> : ghost.name.charAt(0)}
-                        </div>
-                        <div className="flex flex-col">
-                          <h4 className="font-dot text-sm uppercase tracking-widest text-zinc-300 leading-none mb-1">{ghost.name}</h4>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] font-dot uppercase tracking-widest px-1.5 py-0.5 border border-dashed border-zinc-500 text-zinc-400">
-                              {ghost.phase === 'expired' ? 'LAST KNOWN' : 'SIGNAL LOST'}
-                            </span>
-                            <span className="text-[10px] font-dot text-zinc-500 uppercase tracking-widest">{ghost.elapsedLabel} AGO</span>
-                          </div>
-                        </div>
-                      </div>
-                      <WifiOff size={16} className="text-zinc-500 shrink-0" />
+                    <Avatar name={ghost.name || '?'} dashed className="opacity-70" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-heading truncate text-text-secondary">{ghost.name}</h4>
+                      <p className="mt-0.5 text-secondary text-text-secondary">
+                        {ghost.phase === 'expired' ? GROUP_MEMBERS.lastSeen(ghost.elapsedLabel) : GROUP_MEMBERS.lostConnection(ghost.elapsedLabel)}
+                      </p>
                     </div>
+                    <WifiOff size={20} className="text-text-secondary shrink-0" aria-hidden="true" />
                   </motion.div>
                 )),
                 // Nearest first (by straight-line distance from this phone); members with no
                 // fix yet go last. See SquadMemberCard for the dial and freshness line.
-                ...sortByDistance(users.filter(u => !blockedUserIds.includes(u.id)), liveLocation).map(user => (
+                ...sortByDistance(users.filter(u => !blockedUserIds.includes(u.id) && matchesSearch(u.name)), liveLocation).map(user => (
                 <motion.div
                   layout
                   initial={{ opacity: 0 }}
@@ -2484,167 +2504,125 @@ const App = () => {
                     me={liveLocation}
                     heading={heading}
                     headingLive={hasHeadingReading}
-                    isOwner={squadRole === 'OWNER'}
-                    onPing={sendPing}
-                    onBlock={toggleBlock}
-                    onAR={(m) => setArTarget(arTargetForMember(m))}
-                    onTrack={(m) => handleFocus({ lat: m.lat, lng: m.lng }, null)}
+                    onOptions={(m) => setOptionsMemberId(m.id)}
                   />
                 </motion.div>
                 )),
               ]
             )}
           </AnimatePresence>
-
+          {activeTab === 'users' && <LeaveGroupButton onClick={() => setShowLeaveConfirm(true)} />}
+          {/* The panel rests lower than full by this much: room to scroll the last rows up into
+              view at half. */}
+          {isMobile && sheetOpen && panelStopsNow[panelHeight] > 0 && <div aria-hidden="true" style={{ height: panelStopsNow[panelHeight] }} />}
         </div>
       </motion.div>
 
-      {/* --- 1. WAITING ROOM OVERLAY --- */}
+      {/* --- WAITING FOR APPROVAL, AND "YOU'RE IN" (redesign P3) --- */}
+      {/* Full screens over the map and its tab bar, under the Emergency button (see
+          StatusScreen). Waiting used to be a dark overlay with the tab bar still on top. */}
       {hasJoinedSquad && accessStatus !== 'granted' && (
-        <div className="absolute inset-0 z-[1000] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center pointer-events-auto p-6">
-          <Loader2 className="animate-spin text-red-500 mb-6" size={40} />
-          <h2 className="font-dot text-white text-2xl tracking-[0.3em] uppercase mb-2 text-center">
-            {accessStatus === 'denied' ? 'ACCESS_DENIED' : 'AWAITING_CLEARANCE'}
-          </h2>
-          <p className="font-inter text-zinc-500 text-sm text-center max-w-xs px-6 mb-6">
-            {accessStatus === 'denied'
-              ? 'Handshake rejected by Commander.'
-              : 'Transmitting handshake to Squad Commander. Stand by...'}
-          </p>
-
-          <button
-            onClick={() => {
-              // Tell the server too. It used to go on holding the request, and a Commander
-              // who tapped GRANT later pulled this user into their squad, wherever they had
-              // gone since (see resolve-access in backend/server.js).
-              socket.emit('cancel-join', { roomCode: squadCode.trim().toUpperCase() });
-              setHasJoinedSquad(false);
-              setAccessStatus(null);
-            }}
-            className="px-6 py-3 border border-red-500/50 text-red-400 hover:bg-red-500 hover:text-white font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2"
-          >
-            <X size={14} /> ABORT HANDSHAKE
-          </button>
-        </div>
+        <StatusScreen
+          testId="waiting"
+          icon={<Loader2 size={40} className="animate-spin motion-reduce:animate-none" />}
+          title={WAITING.title}
+          emergencyNote={WAITING.emergency}
+          action={(
+            <Button
+              variant="secondary"
+              block
+              size="large"
+              onClick={() => {
+                // Tell the server too. It used to go on holding the request, and a Commander
+                // who tapped GRANT later pulled this user into their squad, wherever they had
+                // gone since (see resolve-access in backend/server.js).
+                socket.emit('cancel-join', { roomCode: squadCode.trim().toUpperCase() });
+                setHasJoinedSquad(false);
+                setAccessStatus(null);
+              }}
+            >
+              {WAITING.cancel}
+            </Button>
+          )}
+        >
+          <p>{WAITING.body(squadCode)}</p>
+        </StatusScreen>
+      )}
+      {justApproved && accessStatus === 'granted' && (
+        <StatusScreen
+          testId="youre-in"
+          tone="success"
+          icon={<Check size={40} />}
+          title={YOURE_IN.title}
+          action={<Button block size="large" onClick={() => setJustApproved(false)}>{YOURE_IN.openMap}</Button>}
+        >
+          {/* Says what is actually happening to their location: the mode is kept from their
+              last group, so this isn't always "live", and live with no fix yet shares nothing. */}
+          <p>{YOURE_IN.body[youreInKey]}</p>
+          <span className="inline-flex items-center gap-2 min-h-10 px-4 rounded-full bg-surface border border-border shadow-[var(--shadow-1)] text-label text-text">
+            <span
+              aria-hidden="true"
+              className={`w-2.5 h-2.5 rounded-full ${youreInKey === 'waiting' ? 'bg-border-control' : telemetryMode === 'ACTIVE' ? 'bg-success' : telemetryMode === 'FROZEN' ? 'bg-warning' : 'border border-dashed border-border-control'}`}
+            />
+            {YOURE_IN.chip[youreInKey]}
+          </span>
+        </StatusScreen>
       )}
       {/* --- 🌐 TACTICAL GEOFENCE HUD --- */}
-      {/* This HUD, the banners below and the route panel all hang at top-24, which on a
-          phone is right where the open SQUAD sheet (z-[900]) keeps the Commander's
-          NODE_ACCESS and SYNC_TELEMETRY. They used to sit above it and take the taps meant
-          for those buttons (the location banner, whenever GPS had failed, covered the top
-          third of SYNC_TELEMETRY at 412 px, and all of it with a second banner up). So on a
-          phone they sit under the sheet (z-[850]); on a wider screen the sheet is a side
-          column and they stay on top. And they let taps through (pointer-events-none): only
-          a banner's own dismiss button takes them. */}
-      <div className="absolute top-24 right-6 z-[850] md:z-[1000] flex flex-col gap-2 w-72 pointer-events-none">
-        <AnimatePresence>
-          {zoneAlerts.map(alert => alert.type === 'PING' ? (
-            <motion.div
-              key={alert.id}
-              role="status"
-              initial={{ opacity: 0, x: 50, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 50, scale: 0.9 }}
-              className="p-3 border backdrop-blur-md flex flex-col gap-1 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-zinc-900/80 border-blue-500"
-            >
-              <div className="flex items-center gap-2">
-                <Radio size={14} className="text-blue-400" />
-                <span className="text-[10px] font-dot tracking-widest uppercase text-blue-400">PING</span>
-              </div>
-              <p className="font-dot text-sm text-white uppercase tracking-widest leading-tight">
-                <span className="text-blue-400">{alert.userName}</span> is pinging you
-              </p>
-            </motion.div>
-          ) : (
-            <motion.div
-              key={alert.id}
-              initial={{ opacity: 0, x: 50, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 50, scale: 0.9 }}
-              className={`p-3 border backdrop-blur-md flex flex-col gap-1 shadow-[0_0_15px_rgba(0,0,0,0.5)] ${alert.type === 'ENTER'
-                ? 'bg-emerald-950/80 border-emerald-500'
-                : 'bg-zinc-900/80 border-zinc-500'
-                }`}
-            >
-              <div className="flex items-center gap-2">
-                <Waypoints size={14} className={alert.type === 'ENTER' ? 'text-emerald-400' : 'text-zinc-400'} />
-                <span className={`text-[10px] font-dot tracking-widest uppercase ${alert.type === 'ENTER' ? 'text-emerald-500' : 'text-zinc-500'}`}>
-                  PERIMETER {alert.type === 'ENTER' ? 'BREACH' : 'DEPARTURE'}
-                </span>
-              </div>
-              <p className="font-dot text-sm text-white uppercase tracking-widest leading-tight">
-                <span className="text-blue-400">{alert.userName}</span> has {alert.type === 'ENTER' ? 'entered' : 'left'} <span className="text-yellow-400">{alert.zoneName}</span>
-              </p>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-      {/* --- 👻 SIGNAL LOST BANNER (one-time, auto-dismissing) --- */}
-      <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[850] md:z-[1000] w-[90%] max-w-md pointer-events-none flex flex-col gap-2">
-        <AnimatePresence>
-          {/* Targeting mode. It used to be a separate fixed banner at nearly the same height
-              as this stack, so it landed on top of the location banner below and hid it. */}
+      {/* The stack under the top bar (redesign Map batch, pieces 1, 6 and 7): the sharing chip,
+          or a banner in its place (choosing a meeting point, the location problem), then your
+          route. One column, so none of them lands on another. On a phone it sits under the
+          open group panel (z-[850] < 900) and lets taps through except on its own buttons:
+          the location banner used to cover the Group Lead's buttons there. */}
+      <div
+        data-testid="map-top-stack"
+        className="absolute inset-x-3 z-[850] md:z-[1000] md:left-1/2 md:right-auto md:w-[28rem] md:-translate-x-1/2 pointer-events-none flex flex-col gap-2"
+        style={{ top: BELOW_TOP_BAR }}
+      >
+        {!(isTargetingMode && isMobile) && !locationError && !showDeclinedCard && <SharingChip mode={telemetryMode} waiting={!liveLocation} pausedNoSpot={!pausedHasSpot} />}
+        <AnimatePresence initial={false}>
+          {/* Choosing a meeting point (a phone's meeting point button). */}
           {isTargetingMode && (
-            <motion.div
-              key="targeting-mode"
-              initial={{ y: -30, opacity: 0, scale: 0.97 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: -30, opacity: 0, scale: 0.97 }}
-              transition={reduceMotion ? { duration: 0 } : PANEL_SPRING}
-              className="md:hidden bg-yellow-500/10 border border-yellow-500/50 backdrop-blur-xl p-3 flex items-center gap-3 pointer-events-auto"
-            >
-              <Target size={18} className="text-yellow-500 flex-shrink-0" />
-              <div>
-                <p className="font-dot text-[10px] text-yellow-500 uppercase tracking-widest leading-tight">TARGETING MODE ACTIVE</p>
-                <p className="font-dot text-[9px] text-yellow-500/60 uppercase tracking-widest">TAP ANYWHERE ON MAP TO DEPLOY RALLY POINT</p>
-              </div>
-              <button onClick={() => setIsTargetingMode(false)} className="ml-auto text-yellow-500 hover:text-white p-1 flex-shrink-0">
-                <X size={16} />
-              </button>
+            <motion.div key="choosing-meeting-point" className="md:hidden" {...fade()}>
+              <MeetingPointBanner onCancel={() => setIsTargetingMode(false)} />
             </motion.div>
           )}
-          {/* Persistent (not auto-dismissing) — the underlying problem doesn't go away
-              on its own, so this stays until either a real GPS fix clears it or the
-              operative dismisses it themselves. Without this, a friend testing LOCUS
-              with location denied just sees no marker anywhere, with zero indication
-              of why — the exact silent failure this is meant to replace. */}
+          {/* Persistent (not auto-dismissing): the problem doesn't go away on its own, so this
+              stays until a real fix clears it or it is dismissed. Without it, someone with
+              location refused just sees no marker anywhere, with no word of why. */}
           {locationError && (
-            <motion.div
-              key="location-access-denied"
-              initial={{ opacity: 0, y: -30, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -30, scale: 0.95 }}
-              className="p-3 border border-red-500 bg-red-950/90 backdrop-blur-md flex items-center gap-2 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
-            >
-              <ShieldAlert size={16} className="text-red-500 shrink-0" />
-              <p className="font-dot text-xs text-white uppercase tracking-widest leading-tight flex-1">
-                {locationError === 'denied'
-                  ? '⚠ LOCATION ACCESS DENIED — SQUAD CANNOT SEE YOU'
-                  : '⚠ NO GPS FIX — SQUAD CANNOT SEE YOU'}
-              </p>
-              <button onClick={() => setLocationError(null)} className="text-red-400 hover:text-white shrink-0 pointer-events-auto" title="Dismiss">
-                <X size={14} />
-              </button>
+            <motion.div key="location-problem" {...fade()}>
+              <LocationProblemCard
+                kind={locationError}
+                onDismiss={() => setLocationError(null)}
+                onTurnOn={locationError === 'denied' ? turnOnLocation : null}
+              />
             </motion.div>
           )}
-          {signalLostAlerts.map(alert => (
-            <motion.div
-              key={alert.id}
-              initial={{ opacity: 0, y: -30, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -30, scale: 0.95 }}
-              className="p-3 border border-zinc-500 bg-zinc-900/90 backdrop-blur-md flex items-center gap-2 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-            >
-              <WifiOff size={16} className="text-zinc-400 shrink-0" />
-              <p className="font-dot text-xs text-white uppercase tracking-widest leading-tight">
-                ⚠ <span className="text-zinc-300">{alert.name}</span> SIGNAL LOST — TRACKING LAST VECTOR
-              </p>
+          {/* Location left off at the explainer (Not now). */}
+          {!locationError && showDeclinedCard && (
+            <motion.div key="location-declined" {...fade()}>
+              <LocationProblemCard kind="denied" onDismiss={() => setDeclinedCardDismissed(true)} onTurnOn={turnOnLocation} />
             </motion.div>
-          ))}
+          )}
+          {(routeStart || routeData) && (
+            <motion.div key="route-card" className="pointer-events-auto" {...fade()}>
+              <RouteCard start={routeStart} end={routeEnd} data={displayedRouteData} onEnd={clearRoute} />
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
+      {/* "Finding your location…" while the first fix is on its way. */}
+      {locationReady && !liveLocation && !locationError && <FindingLocation />}
+
+      {/* The location explainer, once you are on the map, until location is allowed. */}
+      <LocationExplainer
+        open={permissionChecked && !locationReady && !locationDeclined && !justApproved}
+        onContinue={() => setLocationExplained(true)}
+        onNotNow={() => setLocationDeclined(true)}
+      />
       {/* FULLSCREEN MAP */}
-      <div className="absolute inset-0 z-0 bg-black">
+      <div className="absolute inset-0 z-0 bg-[var(--color-map-land)]">
         {mapEngineFailed ? (
           <Suspense
             fallback={
@@ -2670,12 +2648,17 @@ const App = () => {
               ghostMembers={ghostMembers}
               activeTab={activeTab}
               activeWaypoint={activeWaypoint}
-              walkingRoute={walkingRoute}
+              walkingRoute={shownRoute}
               canClearWaypoint={canClearWaypoint}
               highlightBuildingId={(activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null}
               onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}
               onArTrack={setArTarget}
               isSatellite={isSatellite}
+              routeColor={routeColor}
+              casingColor={casingColor}
+              lastKnownColor={lastKnownColor}
+              memberDistance={memberDistance}
+              ghostFocusItem={ghostFocusItem}
             />
           </Suspense>
         ) : (
@@ -2720,7 +2703,6 @@ const App = () => {
                 zoom={currentZoom}
                 isNavigating={isNavigating}
                 heading={liveHeading}
-                color="#10B981"
               />
             </div>
           )}
@@ -2776,11 +2758,12 @@ const App = () => {
                 ...(SHOW_INDOOR_POSITION_TO_SQUAD && isOnOtherFloor(u, indoorView) ? { opacity: 0.35 } : {}),
               }}
             >
-              <LiveLocationMarker
-                zoom={currentZoom}
+              <MemberMarker
+                name={u.name}
+                paused={u.status === 'FROZEN'}
                 isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
                 heading={u.heading}
-                color="#EF4444"
+                distance={memberDistance(u)}
               />
               {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
             </div>
@@ -2794,10 +2777,10 @@ const App = () => {
               key={`ghost-${ghost.id}`}
               lat={ghost.position.lat}
               lng={ghost.position.lng}
-              onClick={() => handleFocus(ghost.position, { name: `${ghost.phase === 'expired' ? 'LAST KNOWN' : 'SIGNAL LOST'}: ${ghost.name}`, info: `Last seen with ${ghost.battery ?? 0}% battery.` })}
+              onClick={() => handleFocus(ghost.position, ghostFocusItem(ghost))}
               style={{ cursor: 'pointer', opacity: ghost.fading ? 0 : 1, transition: `opacity ${GHOST_FADE_MS}ms ease` }}
             >
-              <GhostMemberMarker phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} color="#A1A1AA" />
+              <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} />
             </div>
           ))}
 
@@ -2808,45 +2791,9 @@ const App = () => {
         {/* PHASE 3: Satellite toggle pill removed — function reassigned to Bottom HUD GRID button */}
       </div>
 
-      {/* --- ADMIN INDICATOR (Compact HUD) --- */}
+      {/* The bar on the map while the owner records a path (components/admin/AdminTools.jsx). */}
       {isAdmin && isRecordingPath && (
-        <div className="absolute top-24 right-6 z-[600] flex flex-col gap-2 pointer-events-auto">
-          <div className="bg-black border border-yellow-500 p-4 flex flex-col gap-3 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
-            <div className="text-yellow-500 font-dot text-xs tracking-widest animate-pulse">RECORDING_NODES: {recordedCoords.length}</div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  const startName = prompt("Enter START Building Name (e.g., Tech Park):");
-                  const endName = prompt("Enter END Building Name (e.g., Java Green):");
-                  if (startName && endName && recordedCoords.length > 1) {
-                    const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
-                    setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
-                    socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData, roomCode: squadCode });
-                    setIsRecordingPath(false);
-                    setRecordedCoords([]);
-                    if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
-                    recordingPolylineRef.current = null;
-                    notify.success(`[SYS] Route ${startName} -> ${endName} published.`);
-                  }
-                }}
-                className="flex-1 p-2 bg-yellow-500 text-black font-dot text-[10px] hover:bg-yellow-400 transition-colors"
-              >
-                PUBLISH
-              </button>
-              <button
-                onClick={() => {
-                  setIsRecordingPath(false);
-                  setRecordedCoords([]);
-                  if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
-                  recordingPolylineRef.current = null;
-                }}
-                className="flex-1 p-2 border border-red-500 text-red-500 font-dot text-[10px] hover:bg-red-500 hover:text-white transition-colors"
-              >
-                ABORT
-              </button>
-            </div>
-          </div>
-        </div>
+        <RecordingBar points={recordedCoords.length} onPublish={publishRecordedRoute} onAbort={abortRecording} />
       )}
 
       {/* Map Interactive Layers */}
@@ -2855,667 +2802,147 @@ const App = () => {
       {/* Owner-only field-test readout: every scan cycle's numbers, for judging the estimates. */}
       {WIFI_POSITIONING_ENABLED && isAdmin && <WifiReadout lastCycle={lastCycle} active={wifiActive} />}
 
-      {/* Right-side Action Column */}
-      <div className="absolute right-4 top-1/3 flex flex-col gap-2.5 z-40 pointer-events-auto">
+      {/* Right-hand map controls (components/map/MapControls.jsx) */}
+      <MapControls
+        onCampus={() => handleFocus(SRM_KTR_COORDS, null)}
+        onLocate={selfMarkerAt ? () => handleFocus(selfMarkerAt, null) : null}
+        isSatellite={isSatellite}
+        onToggleSatellite={() => setIsSatellite(!isSatellite)}
+        onSettings={() => setShowSettingsModal(true)}
+      />
 
-        <button
-          onClick={() => handleFocus(SRM_KTR_COORDS, null)}
-          className={MAP_CONTROL}
-          title="Recenter Campus"
-        >
-          <MapPin size={20} />
-        </button>
-
-        {selfMarkerAt && (
-          <button
-            onClick={() => handleFocus(selfMarkerAt, null)}
-            className={`${MAP_CONTROL} relative !text-red-500 !border-red-500/50 shadow-[0_0_12px_rgba(239,68,68,0.35)]`}
-            title="Locate Signal"
-          >
-            {/* One soft radar ring, instead of the icon pulsing without end. */}
-            <span className="absolute inset-0 border border-red-500/60 locus-soft-ring" aria-hidden="true" />
-            <LocateFixed size={20} />
-          </button>
-        )}
-
-        {/* Satellite Recon Toggle Button */}
-        <button
-          onClick={() => setIsSatellite(!isSatellite)}
-          className={`${MAP_CONTROL} ${isSatellite ? '!bg-emerald-500/15 !text-emerald-400 !border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.35)]' : ''}`}
-          title={isSatellite ? "Switch to Tactical Grid" : "Switch to Satellite Recon"}
-        >
-          {/* The globe turns half a revolution each way as the map style flips. */}
-          <motion.span className="flex" animate={{ rotate: isSatellite ? 180 : 0 }} transition={reduceMotion ? { duration: 0 } : PANEL_SPRING}>
-            <Globe size={20} />
-          </motion.span>
-        </button>
-
-        {/* Gear icon opens SYS_CONFIG modal */}
-        <button
-          onClick={() => setShowSettingsModal(true)}
-          className={MAP_CONTROL}
-          title="System Configuration (SYS_CONFIG)"
-        >
-          <Settings size={20} />
-        </button>
-      </div>
-
-      {/* Selected Location Card. On a phone it sits above the floating SOS button (80 px
-          tall, 80 px up, plus the safe area): it used to start at 96 px, so SOS - drawn on
-          top - covered the card's first button. 11rem clears it with a gap. */}
+      {/* The place card (components/PlaceCard.jsx). On a phone it sits above the floating SOS
+          button (80 px tall, 80 px up, plus the safe area): it used to start at 96 px, so SOS -
+          drawn on top - covered the card's first button. 11rem clears it with a gap. */}
       <AnimatePresence>
         {selectedItem && activeTab === 'buildings' && (
           <motion.div
-            initial={{ opacity: 0, x: 60 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 60 }}
-            transition={{ duration: 0.4 }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={reduceMotion ? { duration: 0.15 } : PANEL_SPRING}
             data-testid="location-card"
-            className="absolute inset-x-4 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 z-[600] md:w-80 max-h-[55vh] md:max-h-none overflow-y-auto bg-black border border-white/20 pointer-events-auto flex flex-col pt-6 pb-2"
+            className="absolute inset-x-3 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 z-[600] md:w-96 max-h-[60vh] md:max-h-[80vh] overflow-y-auto rounded-card pointer-events-auto"
           >
-            <div className="px-6 pb-4 border-b border-white/20 flex justify-between items-start">
-              <div className="flex-1 pr-4">
-                <span className="inline-block border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest px-2 py-0.5 mb-2">
-                  SYS_NODE // {selectedItem.category}
-                </span>
-                <h2 className="text-xl font-dot uppercase tracking-widest text-white leading-tight">{selectedItem.name}</h2>
-              </div>
-              <button onClick={() => setSelectedItem(null)} className="p-2 border border-white/20 hover:bg-white hover:text-black transition-colors shrink-0">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="p-6 pb-4">
-              <p className="font-inter text-zinc-400 text-sm leading-relaxed">{selectedItem.info}</p>
-            </div>
-
-
-            <div className="px-6 pb-4 flex gap-3">
-              <button
-                onClick={() => setShowBuildingInfo((open) => !open)}
-                aria-expanded={showBuildingInfo}
-                className="flex-1 py-3 border border-white/20 hover:bg-white/10 font-dot text-[10px] text-white flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
-              >
-                <Info size={14} className="text-red-500" /> {BUILDING_INFO_LABEL}
-              </button>
-
-              {/* Always show the Waypoint/Destination button */}
-              <button
-                onClick={() => setArTarget({ lat: selectedItem.lat, lng: selectedItem.lng, name: selectedItem.name })}
-                className="flex-1 py-3 bg-black border border-white/20 text-white hover:border-red-500 hover:text-red-500 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
-              >
-                <Crosshair size={14} /> AR_TRACK
-              </button>
-              <button
-                onClick={() => handleWaypointSelect(selectedItem)}
-                className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 font-dot text-[10px] font-bold flex items-center justify-center gap-2 transition-colors uppercase tracking-widest"
-              >
-                <Navigation size={14} /> {routeStart && !routeEnd ? "SET_DESTINATION" : "WAYPOINT"}
-              </button>
-            </div>
-
-            {showBuildingInfo && (
-              <BuildingInfo
-                building={selectedItem}
-                me={liveLocation}
-                heading={heading}
-                headingLive={hasHeadingReading}
-                onTakeMeThere={() => handleWaypointSelect(selectedItem)}
-                onShowOnMap={() => showBuildingOnMap(selectedItem)}
-              />
-            )}
+            <PlaceCard
+              place={selectedItem}
+              me={liveLocation}
+              heading={heading}
+              headingLive={hasHeadingReading}
+              choosingDestination={Boolean(routeStart && !routeEnd)}
+              expanded={showBuildingInfo}
+              onToggleExpanded={() => setShowBuildingInfo((open) => !open)}
+              onClose={() => setSelectedItem(null)}
+              onNavigate={() => handleWaypointSelect(selectedItem)}
+              onArScan={() => setArTarget({ lat: selectedItem.lat, lng: selectedItem.lng, name: selectedItem.name })}
+              // Who may set one follows the server: any member of the group.
+              onSetMeetingPoint={hasJoinedSquad ? () => setMeetingPointToConfirm(selectedItem) : null}
+              onShowOnMap={() => showBuildingOnMap(selectedItem)}
+            />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* --- PRIVACY MODAL --- */}
-      <AnimatePresence>
-        {showRequestsModal && (
-          <motion.div
-            {...modalBackdrop()}
-            onClick={(e) => { if (e.target === e.currentTarget) setShowRequestsModal(false); }}
-            className="fixed inset-0 bg-black/90 backdrop-blur-md z-[2000] flex items-center justify-center p-4 pointer-events-auto"
-          >
-            <motion.div
-              {...modalCard(reduceMotion)}
-              className="bg-zinc-950 w-full max-w-lg border border-red-500/30 flex flex-col max-h-[85vh] overflow-hidden relative shadow-[0_0_50px_rgba(239,68,68,0.1)]"
-            >
-              {/* Tactical HUD Corners */}
-              <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-red-500 z-10" />
-              <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-red-500 z-10" />
-              <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-red-500 z-10" />
-              <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-red-500 z-10" />
+      {/* "Set as meeting point" asks first: it moves the meeting point on everyone's map. */}
+      <MeetingPointConfirm
+        place={meetingPointToConfirm}
+        onConfirm={() => {
+          publishSquadWaypoint(meetingPointToConfirm);
+          setMeetingPointToConfirm(null);
+        }}
+        onCancel={() => setMeetingPointToConfirm(null)}
+      />
 
-              {/* Subtle Grid Background */}
-              <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
+      {/* The Group Lead's join requests (components/group/JoinRequests.jsx): Waiting only. */}
+      <JoinRequests
+        open={showRequestsModal && squadRole === 'OWNER'}
+        onClose={() => setShowRequestsModal(false)}
+        requests={pendingRequests}
+        code={squadCode}
+        onAnswer={(request, approved) => {
+          // The squad the request was made to, not merely the one on screen.
+          socket.emit('resolve-access', { targetId: request.targetId, roomCode: request.roomCode || squadCode, approved });
+          setPendingRequests(prev => prev.filter(p => p.targetId !== request.targetId));
+        }}
+      />
 
-              {/* Header */}
-              <div className="p-6 border-b border-red-500/30 flex items-center justify-between bg-black/50 relative z-10">
-                <div className="flex items-center gap-4">
-                  <div className="border border-red-500/50 bg-red-500/10 p-2 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-                    <ShieldCheck size={24} className="animate-pulse" />
-                  </div>
-                  <div>
-                    <h3 className="font-dot text-xl tracking-widest text-white uppercase leading-none mb-1">SYS_ACCESS_CONTROL</h3>
-                    <p className="font-dot text-[10px] text-red-500 tracking-widest uppercase">SECURE_OVERRIDE_TERMINAL</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowRequestsModal(false)} className="p-2 border border-transparent hover:border-red-500 transition-colors text-zinc-500 hover:text-red-500">
-                  <X size={20} />
-                </button>
-              </div>
+      {/* The Group Lead's locations table (components/group/LocationsTable.jsx). */}
+      <LocationsTable
+        open={showTelemetryModal && Boolean(rawTelemetryData)}
+        members={users}
+        rowFor={(member) => {
+          const cacheData = rawTelemetryData?.[member.id];
+          // Read defensively: a server that predates normalised records sends a member's raw
+          // cache entry, which has lat/lng/lastSeen/battery until their first heartbeat adds
+          // latitude/longitude/timestamp/batteryLevel. A bare `latitude.toFixed()` took the
+          // whole app down on one.
+          return {
+            latitude: finiteOrNull(cacheData?.latitude) ?? finiteOrNull(cacheData?.lat),
+            longitude: finiteOrNull(cacheData?.longitude) ?? finiteOrNull(cacheData?.lng),
+            battery: batteryReading(cacheData),
+            freshness: getSignalFreshness(cacheData?.timestamp ?? cacheData?.lastSeen),
+          };
+        }}
+        sync={telemetrySync}
+        onRefresh={requestTelemetrySync}
+        onClose={() => setShowTelemetryModal(false)}
+      />
 
-              {/* Tabs */}
-              <div className="flex border-b border-red-500/20 bg-black/40 relative z-10">
-                <button
-                  onClick={() => setModalTab('requests')}
-                  className={`flex-1 py-4 font-dot text-sm uppercase tracking-widest transition-all relative ${modalTab === 'requests' ? 'text-red-500 bg-red-500/5' : 'text-zinc-500 hover:text-white hover:bg-white/5'
-                    }`}
-                >
-                  INBOUND {pendingRequests.length > 0 && `[${pendingRequests.length}]`}
-                  {modalTab === 'requests' && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]" />}
-                </button>
-                <button
-                  onClick={() => setModalTab('blocked')}
-                  className={`flex-1 py-4 border-l border-red-500/20 font-dot text-sm uppercase tracking-widest transition-all relative ${modalTab === 'blocked' ? 'text-red-500 bg-red-500/5' : 'text-zinc-500 hover:text-white hover:bg-white/5'
-                    }`}
-                >
-                  BLACKLIST
-                  {modalTab === 'blocked' && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]" />}
-                </button>
-              </div>
-
-              {/* Content Area */}
-              <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 relative z-10 min-h-[300px]">
-                {modalTab === 'requests' ? (
-                  pendingRequests.length === 0 ? (
-                    <div className="h-full py-16 flex flex-col items-center justify-center text-red-500/40 gap-6 cursor-default">
-                      <div className="relative">
-                        <motion.div animate={{ rotate: 360 }} transition={{ duration: 8, ease: "linear", repeat: Infinity }} className="absolute -inset-4 border border-dashed border-red-500/30 rounded-full" />
-                        <ShieldCheck size={56} className="relative z-10 drop-shadow-[0_0_15px_rgba(239,68,68,0.3)]" />
-                      </div>
-                      <div className="text-center">
-                        <p className="font-dot tracking-widest text-sm uppercase text-zinc-300">NO_PENDING_REQUESTS</p>
-                        <p className="font-dot tracking-[0.2em] text-[10px] uppercase text-zinc-600 mt-2 animate-pulse">MONITORING_NETWORK_TRAFFIC...</p>
-                      </div>
-                    </div>
-                  ) : (
-                    pendingRequests.map(node => (
-                      <div key={node.targetId} className="p-4 bg-black/60 border border-white/10 hover:border-red-500/50 flex flex-col gap-4 relative transition-colors shadow-lg">
-                        <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 animate-pulse" />
-
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 border border-white/30 flex items-center justify-center font-dot text-xl text-zinc-400 overflow-hidden bg-black">
-                            {node.photo ? <img src={node.photo} className="w-full h-full object-cover opacity-80" alt="" /> : node.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-dot uppercase tracking-widest text-white text-lg drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">{node.name}</p>
-                            <p className="text-[10px] font-dot text-red-500 uppercase tracking-widest">REQUESTING_ACCESS // NODE_LINK</p>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-3 mt-2">
-                          <button
-                            onClick={() => {
-                              // The squad the request was made to, not merely the one on screen.
-                              socket.emit('resolve-access', { targetId: node.targetId, roomCode: node.roomCode || squadCode, approved: true });
-                              setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
-                            }}
-                            className="flex-1 bg-white/10 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/20 hover:border-emerald-400 py-3 font-dot text-xs uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-                          >
-                            GRANT_ACCESS
-                          </button>
-                          <button
-                            onClick={() => {
-                              socket.emit('resolve-access', { targetId: node.targetId, roomCode: node.roomCode || squadCode, approved: false });
-                              setPendingRequests(prev => prev.filter(p => p.targetId !== node.targetId));
-                            }}
-                            className="flex-1 bg-black text-red-500 py-3 border border-red-500/30 hover:bg-red-500/10 hover:border-red-500 font-dot text-xs uppercase tracking-widest transition-all"
-                          >
-                            DENY
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )
-                ) : (
-                  blockedUsers.length === 0 ? (
-                    <div className="h-full py-16 flex flex-col items-center justify-center text-red-500/40 gap-6 cursor-default">
-                      <div className="relative">
-                        <motion.div animate={{ rotate: -360 }} transition={{ duration: 10, ease: "linear", repeat: Infinity }} className="absolute -inset-4 border border-dashed border-zinc-600/30 rounded-full" />
-                        <Ban size={56} className="relative z-10 text-zinc-600 drop-shadow-[0_0_15px_rgba(82,82,91,0.3)]" />
-                      </div>
-                      <p className="font-dot tracking-widest text-sm uppercase text-zinc-400">BLACKLIST_EMPTY</p>
-                    </div>
-                  ) : (
-                    blockedUsers.map(user => (
-                      <div key={user.id} className="p-4 bg-black/60 border-l-4 border-l-red-500 border-y border-r border-white/10 flex items-center justify-between">
-                        <span className="font-dot uppercase tracking-widest text-zinc-300">{user.name}</span>
-                        <button onClick={() => toggleBlock(user.id)} className="border border-white/20 hover:border-white text-white hover:bg-white hover:text-black px-4 py-2 font-dot text-xs uppercase tracking-widest transition-all">
-                          REVOKE
-                        </button>
-                      </div>
-                    ))
-                  )
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* --- COMMANDER'S TELEMETRY MATRIX MODAL --- */}
-      <AnimatePresence>
-        {showTelemetryModal && rawTelemetryData && (
-          <motion.div
-            {...modalBackdrop()}
-            onClick={(e) => { if (e.target === e.currentTarget) setShowTelemetryModal(false); }}
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[4000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
-          >
-            <motion.div
-              {...modalCard(reduceMotion)}
-              className="bg-black w-full max-w-4xl border border-yellow-500 flex flex-col h-[80vh] relative shadow-[0_0_30px_rgba(234,179,8,0.1)]"
-            >
-              {/* Corner Accents */}
-              <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-yellow-500 -translate-x-1 -translate-y-1" />
-              <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-yellow-500 translate-x-1 translate-y-1" />
-
-              {/* Header */}
-              <div className="p-6 border-b border-yellow-500/30 flex justify-between items-center bg-black">
-                <div className="flex items-center gap-4 text-yellow-500">
-                  <Activity className="w-8 h-8 animate-pulse" />
-                  <div>
-                    <h3 className="font-dot text-2xl tracking-widest uppercase text-white">SYS_TELEMETRY // MATRIX</h3>
-                    <p className="font-dot text-[10px] tracking-widest uppercase">COMMANDER CLASSIFIED CLEARANCE</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowTelemetryModal(false)} className="p-2 border border-transparent hover:border-yellow-500 transition-colors text-zinc-500 hover:text-yellow-500">
-                  <X size={24} />
-                </button>
-              </div>
-
-              {/* Data Table */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-black">
-                <div className="w-full border border-white/20">
-
-                  {/* Table Header Row (Hidden on Mobile, Visible on Desktop) */}
-                  <div className="hidden md:grid md:grid-cols-4 bg-white/5 border-b border-white/20 p-3 font-dot text-[10px] uppercase tracking-widest text-zinc-500">
-                    <div>NODE_DESIGNATION</div>
-                    <div>LAST_KNOWN_COORDS</div>
-                    <div>POWER_CORE</div>
-                    <div>SIGNAL_INTEGRITY</div>
-                  </div>
-
-                  {/* Table Body */}
-                  {users.length === 0 && (
-                    <div className="p-6 font-dot text-xs uppercase tracking-widest text-zinc-500 text-center">
-                      NO OTHER OPERATIVES IN THE SQUAD YET.
-                    </div>
-                  )}
-                  {users.map(userNode => {
-                    const cacheData = rawTelemetryData?.[userNode.id];
-                    // Read defensively: a server that predates normalised records sends a
-                    // member's raw cache entry, which has lat/lng/lastSeen/battery until their
-                    // first heartbeat adds latitude/longitude/timestamp/batteryLevel. The
-                    // bare `latitude.toFixed()` this used took the whole app down on one.
-                    const latitude = finiteOrNull(cacheData?.latitude) ?? finiteOrNull(cacheData?.lat);
-                    const longitude = finiteOrNull(cacheData?.longitude) ?? finiteOrNull(cacheData?.lng);
-                    const hasPosition = latitude !== null && longitude !== null;
-                    const battery = batteryReading(cacheData);
-                    const freshness = getSignalFreshness(cacheData?.timestamp ?? cacheData?.lastSeen);
-
-                    return (
-                      <div key={userNode.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-0 border-b border-white/10 p-4 font-dot text-xs tracking-widest uppercase text-white hover:bg-white/5 transition-colors items-start md:items-center">
-
-                        {/* 1. NODE NAME */}
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" />
-                          <span className="text-sm md:text-xs">{userNode.name}</span>
-                        </div>
-
-                        {/* 2. COORDINATES */}
-                        <div className="text-zinc-400 font-mono text-[10px] flex md:block justify-between items-center border-t border-white/5 md:border-transparent pt-2 md:pt-0 mt-2 md:mt-0">
-                          <span className="md:hidden text-zinc-600 font-dot uppercase tracking-widest">COORDS:</span>
-                          <div className="text-right md:text-left">
-                            {hasPosition ? (
-                              <>
-                                LAT: {latitude.toFixed(5)}<br />
-                                LNG: {longitude.toFixed(5)}
-                              </>
-                            ) : "NO_CACHE_DATA"}
-                          </div>
-                        </div>
-
-                        {/* 3. BATTERY */}
-                        <div className={`font-bold flex md:block justify-between items-center ${battery.color}`}>
-                          <span className="md:hidden text-zinc-600 font-normal text-[10px] font-dot uppercase tracking-widest">POWER:</span>
-                          {battery.text}
-                        </div>
-
-                        {/* 4. SIGNAL FRESHNESS */}
-                        <div className={`font-bold flex md:block justify-between items-center ${freshness.color}`}>
-                          <span className="md:hidden text-zinc-600 font-normal text-[10px] font-dot uppercase tracking-widest">SIGNAL:</span>
-                          {freshness.text}
-                        </div>
-
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 border-t border-yellow-500/30 flex justify-between items-center bg-black">
-                {telemetrySync.status === 'error' ? (
-                  <span className="font-dot text-[10px] text-red-400 uppercase tracking-widest pr-4">{telemetrySync.message}</span>
-                ) : (
-                  <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">AUTO-REFRESHING EVERY 5 SECONDS</span>
-                )}
-                <button
-                  onClick={requestTelemetrySync}
-                  disabled={telemetrySync.status === 'pending'}
-                  className="px-6 py-2 border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-colors flex items-center gap-2 shrink-0 disabled:cursor-wait disabled:opacity-70"
-                >
-                  {telemetrySync.status === 'pending'
-                    ? <><Loader2 size={14} className="animate-spin" /> SYNCING...</>
-                    : <><Activity size={14} /> FORCE_SYNC</>}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* --- SYS_CONFIG MODAL --- */}
+      {/* --- SETTINGS (components/settings/SettingsScreen.jsx) --- */}
       <AnimatePresence>
         {showSettingsModal && (
-          <motion.div
-            {...modalBackdrop()}
-            onClick={(e) => { if (e.target === e.currentTarget) setShowSettingsModal(false); }}
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[5000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
-          >
-            <motion.div
-              {...modalCard(reduceMotion)}
-              className="bg-black w-full max-w-2xl border border-white/30 flex flex-col max-h-[85vh] relative shadow-[0_0_30px_rgba(255,255,255,0.05)]"
-            >
-              {/* Header */}
-              <div className="p-6 border-b border-white/20 flex justify-between items-center bg-black">
-                <div className="flex items-center gap-4 text-white">
-                  <Sliders className="w-6 h-6 text-zinc-400" />
-                  <div>
-                    <h3 className="font-dot text-xl tracking-widest uppercase">SYS_CONFIG</h3>
-                    <p className="font-dot text-[10px] tracking-widest uppercase text-zinc-500">LOCAL CLIENT PREFERENCES</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowSettingsModal(false)} className="p-2 border border-transparent hover:border-white transition-colors text-zinc-500 hover:text-white">
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Settings List */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-black text-white">
-
-                {/* Setting 1: Audio */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    {sysConfig.audio ? <Volume2 size={16} className="text-emerald-500" /> : <VolumeX size={16} className="text-red-500" />}
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">SONAR_AUDIO_SIGNALS</span>
-                  </div>
-                  <div className="flex gap-4">
-                    <button onClick={() => toggleConfig('audio', true)} className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${sysConfig.audio ? 'bg-white text-black border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>ENABLED</button>
-                    <button onClick={() => toggleConfig('audio', false)} className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${!sysConfig.audio ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>MUTED</button>
-                  </div>
-                </div>
-
-                {/* Setting 2: Map Theme & Satellite Mode */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Globe size={16} className="text-emerald-400" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">MAP_RENDER_MODE</span>
-                  </div>
-                  <div className="flex gap-4">
-                    <button 
-                      onClick={() => setIsSatellite(false)} 
-                      className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${!isSatellite ? 'bg-blue-500/20 text-blue-400 border-blue-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}
-                    >
-                      TACTICAL (DARK GRID)
-                    </button>
-                    <button 
-                      onClick={() => setIsSatellite(true)} 
-                      className={`flex-1 py-3 font-dot text-xs uppercase tracking-widest border transition-colors ${isSatellite ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}
-                    >
-                      ORBITAL (SATELLITE)
-                    </button>
-                  </div>
-                  <p className="font-inter text-[10px] text-zinc-500 leading-tight" data-testid="map-engine-status">
-                    {MAP_STATUS_LABEL[mapStatus.engine]}
-                    {mapStatus.reason !== 'ok' && <><br />{MAP_STATUS_REASON_TEXT[mapStatus.reason]}</>}
-                  </p>
-                </div>
-
-                {/* Setting 3: Polling Rate */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Zap size={16} className="text-yellow-500" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">TELEMETRY_POLLING_RATE</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button onClick={() => toggleConfig('polling', 'eco')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.polling === 'eco' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Battery size={14} /> ECO (15s)
-                    </button>
-                    <button onClick={() => toggleConfig('polling', 'standard')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.polling === 'standard' ? 'bg-white/10 text-white border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Activity size={14} /> STANDARD (5s)
-                    </button>
-                    <button onClick={() => toggleConfig('polling', 'max')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.polling === 'max' ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Zap size={14} /> MAX (1s)
-                    </button>
-                  </div>
-                  <p className="font-inter text-[10px] text-zinc-500 leading-tight">Warning: MAX polling drains battery significantly faster. Use only during active pursuits.</p>
-                </div>
-
-                {/* Setting 4: AR Scan render fidelity */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Crosshair size={16} className="text-blue-400" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">AR_RENDER_MODE</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button onClick={() => toggleConfig('arFidelity', 'efficient')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.arFidelity === 'efficient' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Battery size={14} /> EFFICIENT
-                    </button>
-                    <button onClick={() => toggleConfig('arFidelity', 'standard')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.arFidelity === 'standard' ? 'bg-white/10 text-white border-white' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Activity size={14} /> STANDARD
-                    </button>
-                    <button onClick={() => toggleConfig('arFidelity', 'realistic')} className={`py-3 font-dot text-[10px] uppercase tracking-widest border flex flex-col items-center gap-1 transition-colors ${sysConfig.arFidelity === 'realistic' ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}>
-                      <Zap size={14} /> REALISTIC
-                    </button>
-                  </div>
-                  <p className="font-inter text-[10px] text-zinc-500 leading-tight">REALISTIC mode uses more battery and needs a newer phone.</p>
-                </div>
-
-                {/* Setting 5: AR Scan per-feature overrides. AUTO follows AR_RENDER_MODE;
-                    each feature offers only what it has (arFeatures.js). */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Sliders size={16} className="text-blue-400" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">AR_FEATURE_OVERRIDES</span>
-                  </div>
-                  {[['tags', 'AMBIENT_TAGS'], ['roadLine', 'ROAD_LINE'], ['arrow', 'ARROW']].map(([feature, label]) => {
-                    const options = ['auto', ...AR_FEATURE_OPTIONS[feature]];
-                    return (
-                      <div key={feature} role="group" aria-label={label} className="space-y-2">
-                        <span className="font-dot text-[10px] uppercase tracking-widest text-zinc-500">{label}</span>
-                        <div className={`grid gap-2 ${OVERRIDE_GRID_COLS[options.length]}`}>
-                          {options.map((option) => {
-                            const active = sysConfig.arFeatureOverrides[feature] === option;
-                            return (
-                              <button
-                                key={option}
-                                onClick={() => toggleConfig(`arFeatureOverrides.${feature}`, option)}
-                                aria-label={`${label} ${option.toUpperCase()}`}
-                                aria-pressed={active}
-                                className={`py-3 font-dot text-[10px] uppercase tracking-widest border transition-colors ${active ? OVERRIDE_ACTIVE_STYLE[option] : 'bg-black text-zinc-500 border-white/20 hover:border-white/50'}`}
-                              >
-                                {option.toUpperCase()}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <p className="font-inter text-[10px] text-zinc-500 leading-tight">AUTO follows AR_RENDER_MODE. Set a feature on its own, e.g. the road line OFF on an older phone.</p>
-                </div>
-
-                {/* Setting 6: hand the app to someone else */}
-                <SendApp />
-
-              </div>
-            </motion.div>
+          <motion.div key="settings" {...fade()}>
+            <SettingsScreen
+              onClose={() => setShowSettingsModal(false)}
+              polling={sysConfig.polling}
+              onPolling={(v) => toggleConfig('polling', v)}
+              arFidelity={sysConfig.arFidelity}
+              onArFidelity={(v) => toggleConfig('arFidelity', v)}
+              alertSounds={sysConfig.audio}
+              onAlertSounds={(on) => toggleConfig('audio', on)}
+              isSatellite={isSatellite}
+              onSatellite={setIsSatellite}
+              mapStatus={mapStatus}
+              arFeatureOverrides={sysConfig.arFeatureOverrides}
+              onArFeatureOverride={(feature, v) => toggleConfig(`arFeatureOverrides.${feature}`, v)}
+              update={{
+                installedVersion: appUpdate.installedVersion,
+                supported: appUpdate.supported,
+                status: appUpdate.status,
+                onCheck: () => appUpdate.check({ manual: true }),
+              }}
+              onOpenGuide={() => setGuideOpen(true)}
+            />
           </motion.div>
         )}
       </AnimatePresence>
+      {/* How LOCUS works, from Settings: the guide over Settings, until it is closed. */}
+      {guideOpen && <Guide zIndex={SETTINGS_Z + 1} onDone={() => setGuideOpen(false)} />}
       {/* --- END OF MODALS --- */}
 
-      {/* --- ADMIN_SETTINGS MODAL --- */}
-      <AnimatePresence>
-        {showAdminSettings && isAdmin && (
-          <motion.div
-            {...modalBackdrop()}
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[6000] flex items-center justify-center p-4 pointer-events-auto bg-dots"
-          >
-            <motion.div
-              {...modalCard(reduceMotion)}
-              className="bg-black w-full max-w-2xl border border-yellow-500/60 flex flex-col max-h-[88vh] relative shadow-[0_0_40px_rgba(234,179,8,0.15)]"
-            >
-              {/* Corner Accents */}
-              <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-yellow-500" />
-              <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-yellow-500" />
-              <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-yellow-500" />
-              <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-yellow-500" />
-
-              {/* Header */}
-              <div className="p-6 border-b border-yellow-500/30 flex justify-between items-center bg-black">
-                <div className="flex items-center gap-4">
-                  <ShieldAlert className="w-6 h-6 text-yellow-500" />
-                  <div>
-                    <h3 className="font-dot text-xl tracking-widest uppercase text-yellow-500">ADMIN_OVERRIDE</h3>
-                    <p className="font-dot text-[10px] tracking-widest uppercase text-zinc-500">
-                      RESTRICTED ACCESS // <span className="text-yellow-500/70">{user?.email}</span>
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowAdminSettings(false)}
-                  className="p-2 border border-yellow-500/30 hover:border-yellow-500 hover:text-yellow-500 transition-colors text-zinc-500"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Warning Banner */}
-              <div className="flex items-center gap-3 px-6 py-3 bg-yellow-500/5 border-b border-yellow-500/20">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-                <span className="font-dot text-[10px] uppercase tracking-widest text-yellow-500/70">
-                  CLASSIFIED // COMMANDER-LEVEL CONTROLS — ALL ACTIONS PUSH TO GLOBAL MATRIX
-                </span>
-              </div>
-
-              {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar bg-black">
-
-                {/* ─── SECTION 1: PATH RECORDER ─── */}
-                <div className="p-6 border-b border-white/10">
-                  <div className="flex items-center gap-3 mb-5">
-                    <Route size={16} className="text-yellow-500" />
-                    <span className="font-dot text-xs uppercase tracking-widest text-zinc-300">SECTION_01 // PATH_RECORDER</span>
-                    <div className="flex-1 h-[1px] bg-yellow-500/20" />
-                  </div>
-                  <p className="font-inter text-[11px] text-zinc-500 mb-5 leading-relaxed">
-                    Activate map recording mode to trace custom tactical routes between campus nodes. Click points on the map canvas, then publish to broadcast across all squad members.
-                  </p>
-
-                  {!isRecordingPath ? (
-                    <button
-                      onClick={() => { setIsRecordingPath(true); setShowAdminSettings(false); }}
-                      className="w-full py-4 bg-black border border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 shadow-[0_0_15px_rgba(234,179,8,0.2)]"
-                    >
-                      <Crosshair size={16} className="animate-pulse" />
-                      INITIATE_RECORD_PATH
-                    </button>
-                  ) : (
-                    <div className="border border-yellow-500 p-4 bg-yellow-500/5">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-ping" />
-                        <span className="font-dot text-xs text-yellow-500 uppercase tracking-widest animate-pulse">
-                          RECORDING ACTIVE — {recordedCoords.length} NODES CAPTURED
-                        </span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            const startName = prompt("Enter START Building Name (e.g., Tech Park):");
-                            const endName = prompt("Enter END Building Name (e.g., Java Green):");
-                            if (startName && endName && recordedCoords.length > 1) {
-                              const newRouteData = { distance: "CUSTOM", eta: "TACTICAL", path: recordedCoords };
-                              setLiveSecretRoutes(prev => ({ ...prev, [`${startName}_${endName}`]: newRouteData }));
-                              socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData, roomCode: squadCode });
-                              setIsRecordingPath(false);
-                              setRecordedCoords([]);
-                              if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
-                              recordingPolylineRef.current = null;
-                              notify.success(`[SYS] Route ${startName} → ${endName} published.`);
-                            }
-                          }}
-                          className="flex-1 py-3 bg-yellow-500 text-black font-dot text-[10px] uppercase tracking-widest hover:bg-yellow-400 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Terminal size={12} /> PUBLISH_ROUTE
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsRecordingPath(false);
-                            setRecordedCoords([]);
-                            if (recordingPolylineRef.current) recordingPolylineRef.current.setMap(null);
-                            recordingPolylineRef.current = null;
-                          }}
-                          className="flex-1 py-3 border border-red-500 text-red-500 font-dot text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2"
-                        >
-                          <X size={12} /> ABORT
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 border-t border-yellow-500/20 flex justify-between items-center bg-black/80">
-                <span className="font-dot text-[10px] text-zinc-600 uppercase tracking-widest">
-                  COMMANDER // {user?.displayName || user?.email}
-                </span>
-                <button
-                  onClick={() => setShowAdminSettings(false)}
-                  className="px-6 py-2 border border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black font-dot text-xs uppercase tracking-widest transition-colors"
-                >
-                  CLOSE_TERMINAL
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* The owner's admin tools (components/admin/AdminTools.jsx). */}
+      <AdminTools
+        open={showAdminSettings && isAdmin}
+        email={user?.email}
+        name={user?.displayName}
+        recording={isRecordingPath}
+        points={recordedCoords.length}
+        onRecord={() => { setIsRecordingPath(true); setShowAdminSettings(false); }}
+        onPublish={publishRecordedRoute}
+        onAbort={abortRecording}
+        onClose={() => setShowAdminSettings(false)}
+      />
 
       {/* ========== MOBILE BOTTOM BAR (src/components/BottomTabBar.jsx) ========== */}
       <BottomTabBar
         activeId={mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid'}
         tabs={[
-          // GRID only navigates now. It used to toggle satellite on every tap as well, so
-          // coming back to the map from SQUAD or SCAN flipped the map style; satellite has
-          // its own globe button on the map.
-          { id: 'grid', label: isSatellite ? 'ORBITAL' : 'GRID', Icon: Map, flourish: 'lift' },
-          { id: 'scan', label: 'SCAN', Icon: Scan, flourish: 'turn' },
-          { id: 'squad', label: 'SQUAD', Icon: Users, flourish: 'pop' },
+          // Map only navigates. It used to toggle satellite on every tap as well, so coming
+          // back to the map from Group or Scan flipped the map style; satellite has its own
+          // control on the map.
+          { id: 'grid', label: TABS.map, Icon: Map, flourish: 'lift' },
+          { id: 'scan', label: TABS.scan, Icon: Scan, flourish: 'turn' },
+          { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop' },
         ]}
         onSelect={(id) => {
           const current = mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid';
@@ -3532,42 +2959,54 @@ const App = () => {
               ? arTargetForMember(scanNode)
               : { lat: SRM_KTR_COORDS.lat, lng: SRM_KTR_COORDS.lng, name: 'SRM_HQ' });
           } else {
-            setMobileView('squad'); setActiveTab('users'); setSelectedItem(null);
+            setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); setPanelHeight('half');
           }
         }}
       />
 
-      {/* ========== RALLY POINT FAB (Two-Step Targeting) ========== */}
+      {/* The meeting point button (two steps: tap it, then tap the map) */}
       {!(selectedItem && activeTab === 'buildings') && (
-        <button
-          onClick={() => setIsTargetingMode(!isTargetingMode)}
-          className={`md:hidden fixed bottom-20 right-4 p-4 rounded-full z-[1050] pointer-events-auto ${
-            isTargetingMode
-              ? 'bg-yellow-500 text-black border-2 border-yellow-300 shadow-[0_0_25px_rgba(234,179,8,0.6)]'
-              : 'bg-red-600 text-black border-2 border-red-400 shadow-[0_0_20px_rgba(220,38,38,0.6)]'
-          }`}
-          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
-          title={isTargetingMode ? 'Cancel Targeting' : 'Deploy Rally Point'}
-        >
-          {/* Targeting: a dashed ring orbits the button while a spot is being chosen, and the
-              crosshair spins into an X (and back), instead of the whole button blinking. */}
-          {isTargetingMode && <span className="absolute -inset-2 rounded-full border-2 border-dashed border-yellow-400/80 locus-orbit" aria-hidden="true" />}
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.span
-              key={isTargetingMode ? 'cancel' : 'target'}
-              className="flex"
-              initial={reduceMotion ? { opacity: 0 } : { rotate: -90, scale: 0.6, opacity: 0 }}
-              animate={{ rotate: 0, scale: 1, opacity: 1 }}
-              exit={reduceMotion ? { opacity: 0 } : { rotate: 90, scale: 0.6, opacity: 0 }}
-              transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
-            >
-              {isTargetingMode ? <X className="w-6 h-6" /> : <Crosshair className="w-6 h-6" />}
-            </motion.span>
-          </AnimatePresence>
-        </button>
+        <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
       )}
 
-      {arTarget && (
+      {/* Leaving, confirmed (components/group/LeaveGroup.jsx). */}
+      <LeaveGroupConfirm
+        open={showLeaveConfirm && hasJoinedSquad}
+        code={squadCode}
+        isLead={squadRole === 'OWNER'}
+        alone={users.length === 0 && ghostMembers.length === 0}
+        onCancel={() => setShowLeaveConfirm(false)}
+        onLeave={() => { setShowLeaveConfirm(false); handleLeaveSquad(); }}
+      />
+
+      {/* A member's options (components/group/MemberOptions.jsx): Ping, Show on map, Find with
+          AR Scan, and the Group Lead's Remove and block behind its confirmation. */}
+      <MemberOptions
+        member={optionsMember}
+        me={liveLocation}
+        heading={heading}
+        headingLive={hasHeadingReading}
+        isLead={squadRole === 'OWNER'}
+        onClose={() => setOptionsMemberId(null)}
+        onPing={sendPing}
+        onShowOnMap={(m) => {
+          handleFocus({ lat: m.lat, lng: m.lng }, null);
+          // On a phone the open panel covers the map: get out of the way, as a building does.
+          if (isMobile) setMobileView('grid');
+        }}
+        onArScan={(m) => setArTarget(arTargetForMember(m))}
+        onRemoveAndBlock={toggleBlock}
+      />
+
+      {/* The camera explainer, before AR Scan opens, only until the camera has been allowed.
+          Not now leaves AR Scan closed, as AR Scan's own Cancel does. */}
+      <CameraExplainer
+        open={Boolean(arTarget) && !arScanReady}
+        onContinue={() => setCameraExplained(true)}
+        onNotNow={() => setArTarget(null)}
+      />
+
+      {arTarget && arScanReady && (
         <ARCompass
           target={arTarget}
           liveLocation={liveLocation}
@@ -3575,20 +3014,28 @@ const App = () => {
           squadMembers={users.filter(u => !blockedUserIds.includes(u.id))}
           buildings={SRM_MASTER_DATABASE}
           selfUid={user?.uid ?? null}
-          routePath={arRoutePathFor(arTarget, activeWaypoint, walkingRoute)}
+          routePath={arRoutePathFor(arTarget, { personalTarget, personalRoute, activeWaypoint, walkingRoute })}
           fidelity={sysConfig.arFidelity}
           overrides={sysConfig.arFeatureOverrides}
           onClose={() => setArTarget(null)}
+          onChooseTarget={setArTarget}
+          meetingPoint={activeWaypoint}
+          onCameraStarted={() => { rememberCameraAllowed(); setCameraAllowed(true); }}
         />
       )}
 
       {/* ========== SOS TRIGGER (double press-and-hold confirm) ========== */}
-      <SosTrigger
+      {/* Only once in the group (D3): while waiting to be let in, the server would drop an
+          alert, so the waiting screen says so in the button's place instead. */}
+      {accessStatus === 'granted' && <SosTrigger
         socket={socket}
         getLocation={() => liveLocationRef.current}
         roomCode={squadCode}
         senderName={user.displayName}
-      />
+        outbox={sosOutbox}
+        held={sosHeld}
+        sharingMode={telemetryMode}
+      />}
 
       {/* ========== UPDATES: APK modal + JS-only restart strip (mandatory is gated far above) ========== */}
       {updateOverlay}

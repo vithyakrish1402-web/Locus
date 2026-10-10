@@ -135,9 +135,9 @@ async function loadApp({ share, engine }) {
 
 async function joinSquad(App) {
   render(createElement(App));
-  fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-  fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: CODE } });
-  fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+  fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: CODE } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: CODE }));
   await waitFor(() => expect(fake.started).toBe(1));
   await waitFor(() => expect(fake.listeners.size).toBe(1));
@@ -234,7 +234,7 @@ describe.each(['google', 'leaflet'])('on the %s engine', (engine) => {
       const App = await loadApp({ share: false, engine });
       await joinSquad(App);
       squadUpdate([BRAVO]);
-      fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+      fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
       await screen.findAllByText('Bravo');
       expect(pill('BRAVO · F7')).toBeNull();
       expect(screen.queryByTestId('member-floor-chip')).toBeNull();
@@ -299,7 +299,7 @@ describe.each(['google', 'leaflet'])('on the %s engine', (engine) => {
       await waitFor(() => expect(screen.getByText('BRAVO · F7').parentElement.style.opacity).toBe(''));
 
       // Roster: a floor chip on Bravo's card only, beside the direction finder.
-      fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+      fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
       const chips = await screen.findAllByTestId('member-floor-chip');
       expect(chips.map((c) => c.textContent)).toEqual(['TECH PARK · F7']);
 
@@ -309,8 +309,8 @@ describe.each(['google', 'leaflet'])('on the %s engine', (engine) => {
       squadUpdate([{ ...bravoOutside, positionSource: 'gps', lastSeen: 2 }, CHARLIE]);
       await waitFor(() => expect(pill('BRAVO · F7')).toBeNull());
       expect(screen.queryByTestId('member-floor-chip')).toBeNull();
-      const bravoCard = screen.getAllByText('Bravo').find((el) => el.tagName === 'H4').closest('.relative');
-      expect(bravoCard.textContent).toMatch(/\bM\b|KM/);
+      const bravoCard = screen.getAllByText('Bravo').find((el) => el.tagName === 'H4').closest('[data-testid="member-row"]');
+      expect(bravoCard.textContent).toMatch(/\d+(\.\d+)? (m|km)/);
     });
   });
 });
@@ -339,8 +339,8 @@ describe("a squadmate's floor chip", () => {
     const App = await loadApp({ share: true, engine: 'leaflet' });
     await joinSquad(App);
     squadUpdate([BRAVO]);
-    fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
-    await screen.findByText('AWAITING_GPS_FIX');
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
+    await screen.findAllByTestId('member-floor-chip');
     expect(screen.getByTestId('member-floor-chip').textContent).toBe('TECH PARK · F7');
   });
 });

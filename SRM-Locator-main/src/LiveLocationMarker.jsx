@@ -19,7 +19,7 @@ export const CHEVRON_GAP_PX = 4;             // chevron's near edge to dot's edg
 const GRID = 56;
 const CENTER = GRID / 2;
 
-const DOT_SIZE = { idleFar: 10, idleNear: 12, navFar: 10, navNear: 14 };
+const DOT_SIZE = { idleFar: 16, idleNear: 18, navFar: 16, navNear: 18 };
 const RING_DIAMETER = 34;
 const CHEVRON_BOX = { far: 14, near: 18 };
 const BRACKET_FRAME = 44; // overall square the 4 corner brackets sit at the corners of
@@ -32,7 +32,7 @@ const Chevron = ({ size, color, dotRadius }) => {
   const boxTop = -(dotRadius + CHEVRON_GAP_PX) - size * baseFraction;
   return (
     <svg x={CENTER - size / 2} y={CENTER + boxTop} width={size} height={size} viewBox="0 0 24 24">
-      <path d="M7 14l5-5 5 5" stroke={color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M7 14l5-5 5 5" style={{ stroke: color }} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </svg>
   );
 };
@@ -50,7 +50,7 @@ const CornerBrackets = ({ color }) => {
     `M ${armNear},${far} L ${near},${far} L ${near},${armFar}`,
   ];
   return paths.map((d, i) => (
-    <path key={i} d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="square" />
+    <path key={i} d={d} fill="none" style={{ stroke: color }} strokeWidth={2} strokeLinecap="square" />
   ));
 };
 
@@ -64,7 +64,10 @@ const CornerBrackets = ({ color }) => {
  * `speed` is accepted for API symmetry with LocationMarker but isn't
  * consumed here — the caller has already folded it into `isNavigating`.
  */
-const LiveLocationMarker = ({ zoom, isNavigating = false, heading = 0, color = '#10B981' }) => {
+// Redesign (Map batch, piece 5): your dot is the accent (--color-map-self) on the map's light
+// casing, with a soft accent halo at rest; colours are set through style so they follow the
+// theme's CSS variables.
+const LiveLocationMarker = ({ zoom, isNavigating = false, heading = 0, color = 'var(--color-map-self)' }) => {
   const isNear = zoom >= NEAR_ZOOM_THRESHOLD;
 
   const dotSize = isNavigating
@@ -84,16 +87,8 @@ const LiveLocationMarker = ({ zoom, isNavigating = false, heading = 0, color = '
       <svg width={GRID} height={GRID} viewBox={`0 0 ${GRID} ${GRID}`} style={{ overflow: 'visible' }}>
         {isNavigating && isNear && <CornerBrackets color={color} />}
 
-        {!isNavigating && isNear && (
-          <circle
-            cx={CENTER}
-            cy={CENTER}
-            r={RING_DIAMETER / 2}
-            fill="none"
-            stroke={color}
-            strokeWidth={1}
-            opacity={0.35}
-          />
+        {!isNavigating && (
+          <circle cx={CENTER} cy={CENTER} r={isNear ? RING_DIAMETER / 2 : RING_DIAMETER / 2.6} style={{ fill: 'var(--color-accent-halo)' }} />
         )}
 
         {/* Dot + chevron rotate together as one unit; brackets/ring above are static. */}
@@ -105,7 +100,7 @@ const LiveLocationMarker = ({ zoom, isNavigating = false, heading = 0, color = '
           }}
         >
           {isNavigating && <Chevron size={chevronSize} color={color} dotRadius={dotSize / 2} />}
-          <circle cx={CENTER} cy={CENTER} r={dotSize / 2} fill={color} stroke="rgba(255,255,255,0.9)" strokeWidth={2} />
+          <circle cx={CENTER} cy={CENTER} r={dotSize / 2} style={{ fill: color, stroke: 'var(--color-map-casing)' }} strokeWidth={3} />
         </g>
       </svg>
     </div>

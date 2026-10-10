@@ -83,7 +83,9 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 });
 
 const { default: App } = await import('../src/App.jsx');
+const { LIVE_UPDATE } = await import('../src/copy/updates.js');
 const { LiveUpdateStatus } = await import('../src/hooks/useLiveUpdate.js');
+const { BOOT, LOBBY } = await import('../src/copy/access.js');
 
 const ready = () => ({
   status: LiveUpdateStatus.READY,
@@ -97,12 +99,11 @@ const ready = () => ({
 // The strip is one of possibly several live regions (the boot screen's loader is one too),
 // so it is found by what it says rather than by being the only role="status".
 const strip = () =>
-  screen.queryAllByRole('status').find((el) => /UPDATE (READY|BLOCKED)/.test(el.textContent)) ?? null;
+  screen.queryAllByRole('status').find((el) => el.textContent.startsWith(LIVE_UPDATE.ready.title) || el.textContent.startsWith(LIVE_UPDATE.blocked.title)) ?? null;
 
-// The guide opens on an animated intro; its skip button goes straight to the guide.
-const skipIntro = async () => {
-  fireEvent.click(screen.getByRole('button', { name: /skip intro/i }));
-  await screen.findByRole('button', { name: /initialize secure link/i });
+// First run: the guide opens first; Skip goes on to sign-in.
+const skipGuide = async () => {
+  fireEvent.click(await screen.findByRole('button', { name: 'Skip' }));
 };
 
 beforeEach(() => {
@@ -133,42 +134,38 @@ describe('the JS update strip is offered on every screen', () => {
   it('on the boot screen, while sign-in is still being restored', () => {
     authState.pending = true;
     render(<App />);
-    expect(screen.getByText('INITIALIZING_SECURE_LINK...')).toBeTruthy();
+    expect(screen.getByRole('status', { name: BOOT.loading })).toBeTruthy();
     expect(strip()).toBeTruthy();
   });
 
-  it('on the guide, from its intro onwards', async () => {
+  it('on the guide', async () => {
     authState.user = null;
     render(<App />);
-    expect(screen.getByRole('button', { name: /skip intro/i })).toBeTruthy();
-    expect(strip()).toBeTruthy();
-    await skipIntro();
-    expect(screen.getByRole('button', { name: /initialize secure link/i })).toBeTruthy();
+    expect(screen.getByTestId('guide')).toBeTruthy();
     expect(strip()).toBeTruthy();
   });
 
   it('on sign-in', async () => {
     authState.user = null;
     render(<App />);
-    await skipIntro();
-    fireEvent.click(screen.getByRole('button', { name: /initialize secure link/i }));
-    expect(screen.queryByText('SECURE_CHANNEL')).toBeNull();
+    await skipGuide();
+    expect(screen.queryByText(LOBBY.title)).toBeNull();
     expect(strip()).toBeTruthy();
   });
 
   it('in the squad lobby - where the device check found it missing', () => {
     render(<App />);
-    expect(screen.getByText('SECURE_CHANNEL')).toBeTruthy();
+    expect(screen.getByText(LOBBY.title)).toBeTruthy();
     expect(strip()).toBeTruthy();
-    expect(screen.getByText('Version 1.0.5 is ready. Restart to use it.')).toBeTruthy();
+    expect(screen.getByText(LIVE_UPDATE.ready.body('1.0.5'))).toBeTruthy();
   });
 
   it('on the map, exactly once', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
-    expect(screen.queryByText('SECURE_CHANNEL')).toBeNull(); // on the map now
-    expect(screen.getAllByText('Version 1.0.5 is ready. Restart to use it.')).toHaveLength(1);
+    expect(screen.queryByText(LOBBY.title)).toBeNull(); // on the map now
+    expect(screen.getAllByText(LIVE_UPDATE.ready.body('1.0.5'))).toHaveLength(1);
   });
 });
 
@@ -184,7 +181,7 @@ describe('where the strip sits', () => {
 
   it('sits above the tab bar on the map', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
     act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
     expect(raised()).toBe(true);
   });
@@ -195,8 +192,8 @@ describe('when the strip steps aside', () => {
   // the map it covered the roster whenever the squad sheet was open.
   it('hides while a text field has focus, and returns after', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-    const input = screen.getByPlaceholderText('E.G. KTR7X9');
+    fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+    const input = screen.getByPlaceholderText('e.g. KTR7X9');
     expect(strip()).toBeTruthy();
     act(() => { input.focus(); });
     expect(strip()).toBeNull();
@@ -206,8 +203,8 @@ describe('when the strip steps aside', () => {
 
   it('comes back when the focused field is removed without a blur (Enter joining a squad)', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-    const input = screen.getByPlaceholderText('E.G. KTR7X9');
+    fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+    const input = screen.getByPlaceholderText('e.g. KTR7X9');
     act(() => { input.focus(); });
     expect(strip()).toBeNull();
     // What Chrome does when a focused element leaves the page: nothing. No blur, no focusout.
@@ -228,13 +225,13 @@ describe('when the strip steps aside', () => {
     window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
     try {
       render(<App />);
-      fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
       act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
       expect(strip()).toBeTruthy();
       const bar = screen.getByRole('navigation', { name: 'Main' });
-      fireEvent.click(within(bar).getByRole('button', { name: /SQUAD/ }));
+      fireEvent.click(within(bar).getByRole('button', { name: 'Group' }));
       expect(strip()).toBeNull();
-      fireEvent.click(within(bar).getByRole('button', { name: /GRID/ }));
+      fireEvent.click(within(bar).getByRole('button', { name: 'Map' }));
       expect(strip()).toBeTruthy();
     } finally {
       window.matchMedia = realMatchMedia;
@@ -251,9 +248,9 @@ describe('a building card on a phone', () => {
     window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
     try {
       render(<App />);
-      fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
       act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
-      fireEvent.click(screen.getByRole('button', { name: /MATRIX/ }));
+      fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
       fireEvent.click(screen.getAllByText('NELSON MANDELA HOSTEL')[0]);
       const card = screen.getByTestId('location-card');
       expect(card.className).toContain('bottom-[calc(11rem');
@@ -268,10 +265,10 @@ describe('a building card on a phone', () => {
 });
 
 describe('the strip itself', () => {
-  it('says READY, not APPLIED, and RESTART applies it', () => {
+  it('says ready, not applied, and Restart applies it', () => {
     render(<App />);
-    expect(screen.getByText('UPDATE READY')).toBeTruthy();
-    expect(screen.queryByText('UPDATE APPLIED')).toBeNull();
+    expect(screen.getByText(LIVE_UPDATE.ready.title)).toBeTruthy();
+    expect(screen.queryByText(/applied/i)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Restart' }));
     expect(live.current.applyNow).toHaveBeenCalledTimes(1);
   });
@@ -279,7 +276,7 @@ describe('the strip itself', () => {
   it('shows a blocked bundle outside the map too', () => {
     live.current = { ...ready(), status: LiveUpdateStatus.BLOCKED, manifest: { version: '1.0.5', minNative: '1.1.0' } };
     render(<App />);
-    expect(screen.getByText('UPDATE BLOCKED')).toBeTruthy();
+    expect(screen.getByText(LIVE_UPDATE.blocked.title)).toBeTruthy();
     expect(screen.getByText(/needs app version 1\.1\.0 or newer/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Restart' })).toBeNull();
   });

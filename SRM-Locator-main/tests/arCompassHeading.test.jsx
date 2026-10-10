@@ -37,7 +37,7 @@ const rotation = () => {
 
 const openAr = async (speedMps) => {
   const view = render(<ARCompass target={TARGET} liveLocation={START} speedMps={speedMps} onClose={() => {}} />);
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   act(() => compass(180)); // phone says it faces south
   view.rerender(<ARCompass target={TARGET} liveLocation={NORTH} speedMps={speedMps} onClose={() => {}} />);
   return view;

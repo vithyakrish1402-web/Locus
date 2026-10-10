@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Which map the app is running, as SYS_CONFIG reports it, through the real App.jsx:
+// Which map the app is running, as Settings reports it, through the real App.jsx:
 // key set + Google loads, no key, Google never loads (the 8 s watchdog), and Google
 // rejecting the key (window.gm_authFailure). Both engines are stood in for, so this
 // proves the switch and the wording, not what Google does in a WebView.
@@ -12,7 +12,9 @@ const fakeSocket = vi.hoisted(() => ({
   on: () => {}, off: () => {}, emit: vi.fn(),
 }));
 // Whether the stand-in Google map reports itself loaded.
-const google = vi.hoisted(() => ({ loads: true }));
+const google = vi.hoisted(() => ({ loads: true, options: null }));
+const leaflet = vi.hoisted(() => ({ props: null }));
+const googleLine = vi.hoisted(() => ({ args: null }));
 
 vi.mock('socket.io-client', () => ({ io: () => fakeSocket }));
 vi.mock('../src/firebase.js', () => ({ auth: { currentUser: null }, googleProvider: {}, db: {} }));
@@ -34,7 +36,8 @@ vi.mock('@capacitor/app', () => ({
 vi.mock('google-map-react', async () => {
   const React = await import('react');
   return {
-    default: function FakeGoogleMap({ onGoogleApiLoaded }) {
+    default: function FakeGoogleMap({ onGoogleApiLoaded, options }) {
+      google.options = options;
       React.useEffect(() => {
         if (google.loads) onGoogleApiLoaded?.({ map: { setTilt() {}, getDiv() {}, getCenter: () => ({ lat: () => 0, lng: () => 0 }), getZoom: () => 17 } });
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -43,7 +46,17 @@ vi.mock('google-map-react', async () => {
     },
   };
 });
-vi.mock('../src/components/TacticalLeafletMap.jsx', () => ({ default: () => <div data-testid="leaflet-map" /> }));
+vi.mock('../src/components/TacticalLeafletMap.jsx', () => ({
+  default: (props) => {
+    leaflet.props = props;
+    return <div data-testid="leaflet-map" />;
+  },
+}));
+// The Google walking line's colours, as App.jsx hands them over.
+vi.mock('../src/hooks/useWaypointNavigationLine.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useWaypointNavigationLine: (...args) => { googleLine.args = args; },
+}));
 vi.mock('../src/hooks/useLiveUpdate.js', () => ({
   useLiveUpdate: () => ({ status: 'idle', supported: false, restart: vi.fn() }),
 }));
@@ -67,10 +80,10 @@ const loadApp = async (key) => {
 };
 
 const enterMapScreen = () => {
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
 };
 const statusText = () => {
-  fireEvent.click(screen.getByTitle('System Configuration (SYS_CONFIG)'));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
   return screen.getByTestId('map-engine-status').textContent;
 };
 
@@ -78,6 +91,8 @@ let warnSpy;
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
   google.loads = true;
+  google.options = null;
+  try { localStorage.removeItem('locus.theme'); } catch { /* no storage */ }
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
@@ -93,7 +108,7 @@ afterEach(() => {
   delete window.gm_authFailure;
 });
 
-describe('the map status line in SYS_CONFIG', () => {
+describe("the map status line in Settings' More section", () => {
   it('says Google, with no reason, when the key is set and Google loads', async () => {
     const App = await loadApp('test-key');
     render(<App />);
@@ -161,5 +176,66 @@ describe('the map status line in SYS_CONFIG', () => {
     expect(window.gm_authFailure).not.toBe(theirs);
     act(() => window.gm_authFailure());
     expect(window.gm_authFailure).toBe(theirs);
+  });
+});
+
+// The roadmap follows the app's theme (redesign Map batch, piece 4). The styles themselves
+// are untested against a live Google map; this checks the right set reaches it.
+describe('the Google map style', () => {
+  it('is the light style in the light theme', async () => {
+    const { LIGHT_MAP_STYLES } = await import('../src/utils/mapStyles.js');
+    try { localStorage.setItem('locus.theme', 'light'); } catch { /* no storage */ }
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    expect(google.options.styles).toEqual(LIGHT_MAP_STYLES);
+  });
+
+  it('is the dark style in the dark theme', async () => {
+    const { DARK_MAP_STYLES } = await import('../src/utils/mapStyles.js');
+    try { localStorage.setItem('locus.theme', 'dark'); } catch { /* no storage */ }
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    expect(google.options.styles).toEqual(DARK_MAP_STYLES);
+  });
+
+  it('has no style over satellite photos', async () => {
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Satellite view' }));
+    expect(google.options.styles).toEqual([]);
+    expect(google.options.mapTypeId).toBe('hybrid');
+  });
+});
+
+// The walking line's colours come from the theme (Map batch fix 5): the line in the route
+// colour on a casing in the map's casing colour, so a dark map never gets a white casing.
+describe('the walking line colours reaching the map', () => {
+  afterEach(() => {
+    document.documentElement.style.removeProperty('--color-map-route');
+    document.documentElement.style.removeProperty('--color-map-casing');
+  });
+
+  it("are the theme's route and casing colours", async () => {
+    document.documentElement.style.setProperty('--color-map-route', '#8FB1FF');
+    document.documentElement.style.setProperty('--color-map-casing', '#0E1116');
+    const App = await loadApp('');
+    render(<App />);
+    enterMapScreen();
+    await screen.findByTestId('leaflet-map');
+    expect(leaflet.props.routeColor).toBe('#8FB1FF');
+    expect(leaflet.props.casingColor).toBe('#0E1116');
+  });
+
+  it('reach the Google line too', async () => {
+    document.documentElement.style.setProperty('--color-map-route', '#8FB1FF');
+    document.documentElement.style.setProperty('--color-map-casing', '#0E1116');
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    await screen.findByTestId('google-map');
+    expect(googleLine.args.slice(3)).toEqual(['#8FB1FF', '#0E1116']);
   });
 });

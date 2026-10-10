@@ -70,12 +70,12 @@ describe('stickyDistance', () => {
 
 describe('formatArDistance', () => {
   it('rounds the same way everywhere: whole metres, then tenths of a km', () => {
-    expect(formatArDistance(0)).toBe('0 M');
-    expect(formatArDistance(349.6)).toBe('350 M');
-    expect(formatArDistance(999)).toBe('999 M');
-    expect(formatArDistance(1000)).toBe('1.0 KM');
-    expect(formatArDistance(1460)).toBe('1.5 KM');
-    expect(formatArDistance(350, '')).toBe('350M');
-    expect(formatArDistance(undefined)).toBe('0 M');
+    expect(formatArDistance(0)).toBe('0 m');
+    expect(formatArDistance(349.6)).toBe('350 m');
+    expect(formatArDistance(999)).toBe('999 m');
+    expect(formatArDistance(1000)).toBe('1.0 km');
+    expect(formatArDistance(1460)).toBe('1.5 km');
+    expect(formatArDistance(350, '')).toBe('350m');
+    expect(formatArDistance(undefined)).toBe('0 m');
   });
 });

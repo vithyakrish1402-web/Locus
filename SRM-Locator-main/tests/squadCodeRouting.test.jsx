@@ -86,6 +86,7 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 });
 
 const { default: App } = await import('../src/App.jsx');
+const { LOBBY, NOT_APPROVED, WAITING } = await import('../src/copy/access.js');
 // The comms feed (notices that replaced alert()) is module-level; each test starts it empty,
 // so "the" role="alert" below is the lobby's own notice and not a leftover from a test before.
 const { __resetNotifications } = await import('../src/utils/notify.js');
@@ -97,31 +98,33 @@ const lastJoinRequest = () => joinRequests().at(-1);
 const emitted = (event) => fakeSocket.emit.mock.calls.filter(([e]) => e === event).map(([, p]) => p);
 
 // The lobby's generated code, as displayed on the CREATE screen.
-const displayedCode = () => screen.getByText('GENERATED SQUAD DESIGNATOR').parentElement.querySelector('span').textContent;
+const displayedCode = () => document.querySelector('.sr-only').textContent;
 
 // Signed in -> lobby (CREATE is the default tab) -> INITIALIZE. Returns the squad's code.
 const createSquad = () => {
   const code = displayedCode();
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   return code;
 };
 
 // Signed in -> lobby -> JOIN SQUAD -> code -> CONNECT.
 const joinSquad = (code = 'KTR7X9') => {
-  fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-  fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: code } });
-  fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+  fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: code } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
   return code;
 };
 
-const openSquadTab = () => fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
-// The squad panel's own DISCONNECT (leave the squad), not the header's log-out.
+const openSquadTab = () => fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
+// The group panel's own Leave group (and its confirmation), not the header's sign-out.
 const leaveSquad = () => {
   openSquadTab();
-  fireEvent.click(screen.getByRole('button', { name: 'DISCONNECT' }));
+  fireEvent.click(screen.getByTestId('leave-group'));
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Leave the group?' })).getByRole('button', { name: 'Leave group' }));
 };
-const inLobby = () => Boolean(screen.queryByText('SECURE_CHANNEL'));
-const nodeAccessButton = () => screen.queryByRole('button', { name: /NODE_ACCESS/ });
+const inLobby = () => Boolean(screen.queryByText(LOBBY.title));
+// The Group Lead's Join requests (the old NODE_ACCESS).
+const nodeAccessButton = () => screen.queryByRole('button', { name: /^Join requests/ });
 
 let alertSpy;
 
@@ -218,20 +221,28 @@ describe('replies about a different squad', () => {
     expect(inLobby()).toBe(false);
   });
 
-  it('a denial for the squad you asked to join still sends you back', () => {
+  it('a denial for the squad you asked to join says so, then offers another try with the code kept', () => {
     render(<App />);
     joinSquad('KTR7X9');
     act(() => fakeSocket.receive('access-denied', { roomCode: 'KTR7X9' }));
+    const notApproved = screen.getByRole('dialog', { name: NOT_APPROVED.title });
+    expect(notApproved.textContent).toContain(NOT_APPROVED.body('KTR7X9'));
+    expect(inLobby()).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: NOT_APPROVED.tryAnother }));
     expect(inLobby()).toBe(true);
+    expect(screen.getByRole('radio', { name: LOBBY.joinTab }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByPlaceholderText(LOBBY.joinPlaceholder).value).toBe('KTR7X9');
   });
 });
 
 describe('the waiting room', () => {
-  it('ABORT HANDSHAKE withdraws the request from the server, not just the screen', () => {
+  it('Cancel request withdraws the request from the server, not just the screen', () => {
     render(<App />);
     joinSquad('KTR7X9');
     act(() => fakeSocket.receive('access-pending', { roomCode: 'KTR7X9' }));
-    fireEvent.click(screen.getByRole('button', { name: /abort handshake/i }));
+    expect(screen.getByRole('dialog', { name: WAITING.title }).textContent).toContain(WAITING.body('KTR7X9'));
+    fireEvent.click(screen.getByRole('button', { name: WAITING.cancel }));
     expect(emitted('cancel-join')).toEqual([{ roomCode: 'KTR7X9' }]);
     expect(inLobby()).toBe(true);
   });
@@ -244,8 +255,12 @@ describe('a request the server turns down', () => {
     act(() => fakeSocket.receive('squad-not-found', { roomCode: 'KTR7X9' }));
 
     expect(inLobby()).toBe(true);
-    expect(screen.getByPlaceholderText('E.G. KTR7X9').value).toBe('KTR7X9');
-    expect(screen.getByRole('alert').textContent).toMatch(/no active squad/i);
+    expect(screen.getByPlaceholderText('e.g. KTR7X9').value).toBe('KTR7X9');
+    expect(screen.getByRole('alert').textContent).toBe(LOBBY.notFound);
+    // Read with the code field, which is marked as the one with the problem.
+    const field = screen.getByRole('textbox', { name: LOBBY.joinCode });
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(field.getAttribute('aria-describedby')).textContent).toBe(LOBBY.notFound);
   });
 
   it('a CREATE under a code that is already live comes back with a fresh code to share', () => {
@@ -256,7 +271,8 @@ describe('a request the server turns down', () => {
     expect(inLobby()).toBe(true);
     expect(displayedCode()).toMatch(/^[A-Z0-9]{6}$/);
     expect(displayedCode()).not.toBe(code);
-    expect(screen.getByRole('alert').textContent).toMatch(/already in use/i);
+    // Not a problem to fix: an info message over the new code.
+    expect(screen.getByRole('status').textContent).toBe(LOBBY.codeTaken);
   });
 
   it('a squad that vanished while you were in it sends you back with the reason', () => {
@@ -266,7 +282,7 @@ describe('a request the server turns down', () => {
     act(() => fakeSocket.receive('squad-not-found', { roomCode: 'KTR7X9' }));
 
     expect(inLobby()).toBe(true);
-    expect(screen.getByRole('alert').textContent).toMatch(/no longer exists/i);
+    expect(screen.getByRole('alert').textContent).toBe(LOBBY.ended('KTR7X9'));
   });
 
   it('ignores a refusal about some other code', () => {
@@ -318,7 +334,7 @@ describe("the Commander's queue", () => {
     act(() => fakeSocket.receive('access-request', { targetId: 't1', name: 'X', photo: null, roomCode: code }));
 
     fireEvent.click(nodeAccessButton());
-    fireEvent.click(screen.getByRole('button', { name: 'GRANT_ACCESS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve X' }));
     expect(emitted('resolve-access')).toEqual([{ targetId: 't1', roomCode: code, approved: true }]);
   });
 
@@ -328,7 +344,7 @@ describe("the Commander's queue", () => {
     act(() => fakeSocket.receive('access-request', { targetId: 't1', name: 'X', photo: null, roomCode: code }));
     leaveSquad();
 
-    fireEvent.click(screen.getByRole('button', { name: 'CREATE SQUAD' }));
+    fireEvent.click(screen.getByRole('radio', { name: LOBBY.createTab }));
     createSquad();
     openSquadTab();
     expect(badge()).toBeNull();

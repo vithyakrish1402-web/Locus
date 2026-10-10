@@ -73,6 +73,24 @@ describe('the comms feed store', () => {
     expect(seen.at(-1).message).toBe(`notice ${MAX_VISIBLE + 2}`);
   });
 
+  // Owner, 2026-10-07: a safety notice (an Emergency alert that couldn't reach the group) is
+  // never pushed out by ordinary notices; the oldest ordinary one goes instead.
+  it('never pushes out a safety notice: the oldest ordinary one goes instead', () => {
+    notify.warning('group gone', { duration: 0, safety: true });
+    for (let i = 0; i < MAX_VISIBLE + 3; i++) notify.info(`notice ${i}`);
+    expect(seen).toHaveLength(MAX_VISIBLE);
+    expect(seen[0].message).toBe('group gone');
+    expect(seen.slice(1).map((n) => n.message)).toEqual(['notice 4', 'notice 5', 'notice 6']);
+  });
+
+  it('with only safety notices left, holds more than the limit rather than drop one', () => {
+    for (let i = 0; i < MAX_VISIBLE + 1; i++) notify.warning(`safety ${i}`, { duration: 0, safety: true });
+    expect(seen).toHaveLength(MAX_VISIBLE + 1);
+    notify.info('ordinary');
+    expect(seen.map((n) => n.message)).not.toContain('ordinary');
+    expect(seen.filter((n) => n.safety)).toHaveLength(MAX_VISIBLE + 1);
+  });
+
   it('ignores empty messages and unknown severities fall back to info', () => {
     expect(notify.error('   ')).toBeNull();
     expect(notify.error('[SYS_ERROR]')).toBeNull(); // a tag and nothing to say
@@ -86,5 +104,16 @@ describe('the comms feed store', () => {
     notify.success('b');
     notify.error('c');
     expect(vibrate.mock.calls.map(([p]) => p)).toEqual([8, [10, 40, 16], [6, 30, 10]]);
+  });
+
+  it('can post without a buzz, for the notices that replaced the silent banners', () => {
+    notify.info('a', { haptic: false });
+    notify.warning('b', { haptic: false });
+    expect(vibrate).not.toHaveBeenCalled();
+  });
+
+  it('keeps a second line (body) and a ping kind', () => {
+    notify.warning('Showing where they were last.', { title: 'Aarav lost connection', body: 'extra', kind: 'ping' });
+    expect(seen[0]).toMatchObject({ title: 'Aarav lost connection', message: 'Showing where they were last.', body: 'extra', kind: 'ping' });
   });
 });

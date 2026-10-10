@@ -22,6 +22,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { zipDirectory } from './lib/zip.mjs';
 import { releaseVersionConflict } from '../src/utils/liveUpdateManifest.js';
+import { webBuildProblem } from './lib/webBuild.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
@@ -113,8 +114,13 @@ if (dryRun) console.log('  DRY RUN: builds and hashes, but publishes nothing.');
 
 // ---------------------------------------------------------------- build + zip
 
+// Only a production build made by this run is published: never test JavaScript left by
+// npm run sidetest:install, nor a device check (scripts/lib/webBuild.mjs).
+const webBuildStarted = Date.now();
 run('npm', ['run', 'build']);
 if (!existsSync(DIST_DIR)) die('npm run build produced no dist/');
+const webProblem = webBuildProblem({ dir: DIST_DIR, builtAfter: webBuildStarted, label: 'dist/' });
+if (webProblem) die(webProblem);
 
 rmSync(STAGING_DIR, { recursive: true, force: true });
 mkdirSync(STAGING_DIR, { recursive: true });

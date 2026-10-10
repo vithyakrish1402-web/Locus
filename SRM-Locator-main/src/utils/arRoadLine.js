@@ -48,18 +48,24 @@ export const roadScreenYFor = (distance) =>
   ROAD_LINE_HORIZON + (ROAD_LINE_BOTTOM - ROAD_LINE_HORIZON) * (ROAD_LINE_D0_METERS / (Math.max(distance, 0) + ROAD_LINE_D0_METERS));
 
 /**
- * The route to draw for this AR Scan session, or null. Only when AR Scan is on the
- * squad's active Rally Point (the AR TRACK button copies its coordinates) and a real
- * routed path exists: never for a squad member (they move, so there is no fixed route),
- * the SRM_HQ default (nothing is routed to it), or the straight-line placeholder
- * useWalkingRoute returns before a route arrives (a straight ribbon through buildings).
+ * The route to draw for this AR Scan session, or null (AR Scan batch, owner's rule): your own
+ * destination's route when you have one (Navigate), and otherwise the group's meeting point's,
+ * as the map's walking line does. Drawn only when AR Scan is aimed at the place that route
+ * leads to, so the road never leads somewhere other than where the arrow points; never for a
+ * group member (they move, so there is no fixed route), the campus default (nothing is routed
+ * to it), or the straight-line placeholder useWalkingRoute returns before a route arrives (a
+ * straight ribbon through buildings).
+ * @param {object|null} arTarget  where AR Scan is aimed
+ * @param {{ personalTarget?: object|null, personalRoute?: object|null,
+ *   activeWaypoint?: object|null, walkingRoute?: object|null }} routes
  */
-export const arRoutePathFor = (arTarget, activeWaypoint, walkingRoute) => {
-  if (!arTarget || !activeWaypoint || !walkingRoute) return null;
-  if (arTarget.memberUid || arTarget.memberId) return null;
-  if (arTarget.lat !== activeWaypoint.lat || arTarget.lng !== activeWaypoint.lng) return null;
-  if (!walkingRoute.isRealRoute || !Array.isArray(walkingRoute.path) || walkingRoute.path.length < 2) return null;
-  return walkingRoute.path;
+export const arRoutePathFor = (arTarget, { personalTarget = null, personalRoute = null, activeWaypoint = null, walkingRoute = null } = {}) => {
+  if (!arTarget || arTarget.memberUid || arTarget.memberId) return null;
+  const [destination, route] = personalTarget ? [personalTarget, personalRoute] : [activeWaypoint, walkingRoute];
+  if (!destination || !route) return null;
+  if (arTarget.lat !== destination.lat || arTarget.lng !== destination.lng) return null;
+  if (!route.isRealRoute || !Array.isArray(route.path) || route.path.length < 2) return null;
+  return route.path;
 };
 
 // Metres east (x) and north (y) of `origin`. Flat, which is plenty over a route's length.

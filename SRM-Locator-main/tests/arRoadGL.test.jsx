@@ -63,7 +63,7 @@ const expectSameOrientation = (a, b) => expect(qAngleDeg(a, b)).toBeLessThan(1e-
 // most one reading per 100 ms, so a test that turns the phone leaves this one out.
 const open = async (props, { faceNorth = true } = {}) => {
   const view = render(compass(props));
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   if (faceNorth) face(0);
   await act(async () => {}); // the dynamic imports settle
   return view;

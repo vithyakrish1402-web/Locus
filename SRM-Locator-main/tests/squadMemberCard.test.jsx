@@ -1,80 +1,104 @@
 // @vitest-environment jsdom
+//
+// One member in the group panel (redesign Group panel batch, piece 3): where they are from
+// here, in words, and their status; their actions are in their options sheet.
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import SquadMemberCard from '../src/components/SquadMemberCard.jsx';
+import { memberStatus } from '../src/utils/memberStatus.js';
 
 const me = { lat: 12.8249, lng: 80.0452 };
 // ~350 m north-east of `me` (bearing ~43°).
-const bravo = { id: 'b', name: 'Bravo', role: 'Campus Node', hasFix: true, lat: 12.8272, lng: 80.0474, battery: 77, speed: 3, lastSeen: Date.now() };
+const bravo = { id: 'b', name: 'Bravo Rao', hasFix: true, status: 'ACTIVE', lat: 12.8272, lng: 80.0474, battery: 77, speed: 3, lastSeen: Date.now() };
 
-const renderCard = (props = {}) => {
-  const handlers = { onPing: vi.fn(), onBlock: vi.fn(), onAR: vi.fn(), onTrack: vi.fn() };
-  render(<SquadMemberCard member={bravo} me={me} heading={0} headingLive={false} isOwner={false} {...handlers} {...props} />);
-  return handlers;
+const renderRow = (props = {}) => {
+  const onOptions = vi.fn();
+  render(<SquadMemberCard member={bravo} me={me} heading={0} headingLive={false} onOptions={onOptions} {...props} />);
+  return onOptions;
 };
 
 afterEach(cleanup);
 
-describe('where a squadmate is', () => {
-  it('shows the distance at a glance', () => {
-    renderCard();
-    expect(screen.getByText('350')).toBeTruthy();
-    expect(screen.getByText('M')).toBeTruthy();
+describe('where a member is', () => {
+  it('says how far, in plain words', () => {
+    renderRow();
+    expect(screen.getByTestId('member-where').textContent).toMatch(/^350 m/);
   });
 
-  it('gives a compass point when the phone has no compass reading (north-up)', () => {
-    renderCard({ headingLive: false });
-    expect(screen.getByText('BEARING NE')).toBeTruthy();
+  it('gives a compass direction when the phone has no compass reading (north-up)', () => {
+    renderRow({ headingLive: false });
+    expect(screen.getByText('to the north-east')).toBeTruthy();
   });
 
-  it('says it like a clock face once the compass works', () => {
-    const { unmount } = render(<SquadMemberCard member={bravo} me={me} heading={43} headingLive isOwner={false} onPing={vi.fn()} onBlock={vi.fn()} onAR={vi.fn()} onTrack={vi.fn()} />);
-    expect(screen.getByText('AHEAD')).toBeTruthy(); // facing them
+  it("says it like a clock face once the compass works, never in capitals", () => {
+    const { unmount } = render(<SquadMemberCard member={bravo} me={me} heading={43} headingLive onOptions={vi.fn()} />);
+    expect(screen.getByText('straight ahead')).toBeTruthy(); // facing them
     unmount();
-    render(<SquadMemberCard member={bravo} me={me} heading={313} headingLive isOwner={false} onPing={vi.fn()} onBlock={vi.fn()} onAR={vi.fn()} onTrack={vi.fn()} />);
-    expect(screen.getByText("3 O'CLOCK")).toBeTruthy(); // facing NW: they're to the right
+    render(<SquadMemberCard member={bravo} me={me} heading={313} headingLive onOptions={vi.fn()} />);
+    expect(screen.getByText('3 o’clock')).toBeTruthy(); // facing NW: they're to the right
+    expect(screen.getByTestId('member-row').textContent).not.toMatch(/O'CLOCK|BEARING|AHEAD/);
   });
 
-  it('says WITH YOU inside GPS accuracy instead of a meaningless direction', () => {
-    renderCard({ member: { ...bravo, lat: me.lat + 0.00005, lng: me.lng } }); // ~5 m
-    expect(screen.getByText('WITH YOU')).toBeTruthy();
-    expect(screen.getByText('<15')).toBeTruthy();
-  });
-
-  it('marks a member heard from just now as LIVE', () => {
-    renderCard();
-    expect(screen.getByText(/LIVE/)).toBeTruthy();
+  it('says "With you" inside GPS accuracy, with no arrow pointing nowhere', () => {
+    renderRow({ member: { ...bravo, lat: me.lat + 0.00005, lng: me.lng } }); // ~5 m
+    expect(screen.getByTestId('member-where').textContent).toBe('With you');
   });
 });
 
-describe('a member with no fix', () => {
-  it('says so, and offers nothing that would aim at nowhere', () => {
-    renderCard({ member: { ...bravo, hasFix: false, lat: null, lng: null, lastSeen: null } });
-    expect(screen.getByText('AWAITING_GPS_FIX')).toBeTruthy();
-    expect(screen.getByText(/NO SIGNAL YET/)).toBeTruthy();
-    expect(screen.queryByText('TRACK_TARGET')).toBeNull();
-    expect(screen.queryByTitle('AR Tracking')).toBeNull();
-    expect(screen.getByRole('button', { name: 'PING' })).toBeTruthy();
+describe('their status', () => {
+  const now = Date.now();
+  it.each([
+    ['heard from just now', { lastSeen: now - 3000 }, 'Live now', 'live'],
+    ['paused', { status: 'FROZEN' }, 'Paused', 'paused'],
+    ['quiet for 3 minutes', { lastSeen: now - 3 * 60000 }, 'Last update 3 min ago', 'stale'],
+    ['quiet for 8 minutes (amber, never red)', { lastSeen: now - 8 * 60000 }, 'Last update 8 min ago', 'stale'],
+    ['with no fix yet', { hasFix: false, lat: null, lng: null }, 'Waiting for location', 'none'],
+  ])('%s', (_label, extra, text, dot) => {
+    expect(memberStatus({ ...bravo, ...extra }, now)).toEqual({ text, dot });
+  });
+
+  it('with no fix: says so, and shows no distance or arrow to aim at nowhere', () => {
+    renderRow({ member: { ...bravo, hasFix: false, lat: null, lng: null } });
+    expect(screen.getByTestId('member-status').textContent).toBe('Waiting for location');
+    expect(screen.queryByTestId('member-where')).toBeNull();
   });
 });
 
 describe('actions', () => {
-  it('offers PING once, and wires every action to its member', () => {
-    const h = renderCard({ isOwner: true });
-    expect(screen.getAllByRole('button', { name: 'PING' })).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'PING' }));
-    fireEvent.click(screen.getByTitle('AR Tracking'));
-    fireEvent.click(screen.getByRole('button', { name: 'TRACK_TARGET' }));
-    fireEvent.click(screen.getByTitle('Instant Ban'));
-    expect(h.onPing).toHaveBeenCalledWith('b');
-    expect(h.onAR).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
-    expect(h.onTrack).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
-    expect(h.onBlock).toHaveBeenCalledWith('b');
+  it('one ⋮ button opens their options; no buttons on the row itself', () => {
+    const onOptions = renderRow();
+    const row = screen.getByTestId('member-row');
+    const buttons = row.querySelectorAll('button');
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo Rao' }));
+    expect(onOptions).toHaveBeenCalledWith(bravo);
   });
 
-  it('shows the ban control to the Commander only', () => {
-    renderCard({ isOwner: false });
-    expect(screen.queryByTitle('Instant Ban')).toBeNull();
+  it('never red, never the old tactical words', () => {
+    renderRow();
+    const row = screen.getByTestId('member-row');
+    expect(row.outerHTML).not.toMatch(/red-|danger|font-dot/);
+    expect(row.textContent).not.toMatch(/PING|TRACK|AWAITING|KM\/H|LIVE/);
+  });
+});
+
+describe('low battery', () => {
+  it.each([
+    [19, true],
+    [24, true],
+    [25, false],
+    [80, false],
+    [0, false], // no reading
+    [undefined, false],
+  ])('%s%% → a warning: %s', (battery, warned) => {
+    renderRow({ member: { ...bravo, battery } });
+    const icon = screen.queryByTestId('member-low-battery');
+    expect(Boolean(icon)).toBe(warned);
+    if (warned) {
+      expect(icon.getAttribute('aria-label')).toBe(`Low battery, ${battery}%`);
+      expect(icon.getAttribute('class')).toMatch(/text-warning/);
+      expect(icon.getAttribute('class')).not.toMatch(/red|danger/);
+    }
   });
 });

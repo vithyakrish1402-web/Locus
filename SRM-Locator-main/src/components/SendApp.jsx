@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { Download, Link as LinkIcon, Send } from 'lucide-react';
+import { Download, Link as LinkIcon } from 'lucide-react';
+import { Button } from './ui';
+import { SEND_APP } from '../copy/settings';
 import { selectInstallerRelease } from '../utils/updateManifest';
 import { copyText } from '../utils/clipboard';
 
-// SYS_CONFIG -> SEND_APP: hand LOCUS to someone else. Finds the installer for the version
+// Settings -> More -> Send LOCUS to someone: hand LOCUS to someone else. Finds the installer for the version
 // on this phone (see selectInstallerRelease) and either downloads it - the link is handed
 // to the phone's browser, which Capacitor does for any address outside the app - or copies
 // its link to paste into a chat. The recipient's copy then updates itself like this one.
@@ -59,55 +61,29 @@ export default function SendApp({ openUrl = (url) => window.location.assign(url)
   const copyLink = async () => {
     if (!installer) return;
     const ok = await copyText(installer.apkUrl);
-    setCopied(ok ? 'COPIED' : 'COPY FAILED');
+    setCopied(ok ? SEND_APP.copied : SEND_APP.copyFailed);
     setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="space-y-4" data-testid="send-app">
-      <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-        <Send size={16} className="text-emerald-400" />
-        <span className="font-dot text-xs uppercase tracking-widest text-zinc-400">SEND_APP</span>
-      </div>
-
-      <p className="font-inter text-[11px] text-zinc-400 leading-snug">
-        {status === 'loading' && 'Finding the installer...'}
-        {status === 'ready' && (
-          <>
-            LOCUS v{installer.version}
-            {formatSize(installer.apkSize) ? ` · ${formatSize(installer.apkSize)}` : ''}. Download the installer to pass it on,
-            or copy its link into a chat. It keeps itself up to date once installed.
-          </>
-        )}
-        {status === 'error' && <span className="text-yellow-500">Couldn&apos;t find the installer: {error}.</span>}
+    <div className="flex flex-col gap-3 font-ui" data-testid="send-app">
+      <p className="text-body text-text">{SEND_APP.title}</p>
+      <p className="text-secondary text-text-secondary">
+        {status === 'loading' && SEND_APP.loading}
+        {status === 'ready' && SEND_APP.ready(installer.version, formatSize(installer.apkSize))}
+        {status === 'error' && <span className="text-warning">{SEND_APP.error(error)}</span>}
       </p>
 
       {status === 'error' ? (
-        <button
-          type="button"
-          onClick={lookup}
-          className="w-full py-3 font-dot text-xs uppercase tracking-widest border border-white/20 text-zinc-300 hover:border-white/50 transition-colors"
-        >
-          TRY AGAIN
-        </button>
+        <Button variant="secondary" block onClick={lookup}>{SEND_APP.tryAgain}</Button>
       ) : (
-        <div className="flex gap-4">
-          <button
-            type="button"
-            disabled={status !== 'ready'}
-            onClick={() => openUrl(installer.apkUrl)}
-            className="flex-1 py-3 font-dot text-xs uppercase tracking-widest border flex items-center justify-center gap-2 transition-colors bg-emerald-500/15 text-emerald-400 border-emerald-500 hover:bg-emerald-500/25 disabled:opacity-40"
-          >
-            <Download size={14} /> DOWNLOAD APK
-          </button>
-          <button
-            type="button"
-            disabled={status !== 'ready'}
-            onClick={copyLink}
-            className="flex-1 py-3 font-dot text-xs uppercase tracking-widest border flex items-center justify-center gap-2 transition-colors bg-black text-zinc-300 border-white/20 hover:border-white/50 disabled:opacity-40"
-          >
-            <LinkIcon size={14} /> {copied || 'COPY LINK'}
-          </button>
+        <div className="flex gap-3">
+          <Button variant="tonal" icon={Download} className="flex-1" disabled={status !== 'ready'} onClick={() => openUrl(installer.apkUrl)}>
+            {SEND_APP.download}
+          </Button>
+          <Button variant="secondary" icon={LinkIcon} className="flex-1" disabled={status !== 'ready'} onClick={copyLink}>
+            {copied || SEND_APP.copyLink}
+          </Button>
         </div>
       )}
     </div>

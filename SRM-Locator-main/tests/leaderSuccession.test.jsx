@@ -10,6 +10,7 @@
 //
 // Renders the real App.jsx against a fake socket.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NOTICES } from '../src/copy/notices.js';
 import { render, screen, act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
@@ -82,16 +83,17 @@ const { default: App } = await import('../src/App.jsx');
 
 const CODE = 'KTR7X9';
 const emitted = (event) => fakeSocket.emit.mock.calls.filter(([e]) => e === event).map(([, ...args]) => args);
-const nodeAccess = () => screen.queryByRole('button', { name: /NODE_ACCESS/ });
-const openSquadTab = () => fireEvent.click(screen.getAllByRole('button', { name: 'SQUAD' })[0]);
+// The Group Lead's Join requests (the old NODE_ACCESS).
+const nodeAccess = () => screen.queryByRole('button', { name: /^Join requests/ });
+const openSquadTab = () => fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
 
 // Joined as a member, then promoted to stand in while the Commander is away, with a
 // stranger's request waiting and the join queue open.
 const standInWithQueueOpen = async () => {
   render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: 'JOIN SQUAD' }));
-  fireEvent.change(screen.getByPlaceholderText('E.G. KTR7X9'), { target: { value: CODE } });
-  fireEvent.click(screen.getByRole('button', { name: /connect to squad/i }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+  fireEvent.change(screen.getByPlaceholderText('e.g. KTR7X9'), { target: { value: CODE } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: CODE }));
   await screen.findByTestId('map');
 
@@ -125,11 +127,11 @@ describe('a stand-in Commander, when the Commander comes back', () => {
     act(() => fakeSocket.receive('demoted-to-member', { roomCode: CODE }));
 
     // The join queue closes, rather than staying up with every GRANT refused.
-    await waitFor(() => expect(screen.queryByText(/INBOUND/)).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Join requests' })).toBeNull());
     expect(screen.queryByText('Stranger')).toBeNull();
     expect(nodeAccess()).toBeNull();
-    expect(screen.queryByRole('button', { name: /SYNC_TELEMETRY/ })).toBeNull();
-    await screen.findByText(/COMMANDER IS BACK/);
+    expect(screen.queryByRole('button', { name: /Refresh locations/ })).toBeNull();
+    await screen.findByText(NOTICES.leadIsBack);
   });
 
   it('rejoins as a member on its next reconnect, not as the squad\'s Commander', async () => {
@@ -150,7 +152,7 @@ describe('a stand-in Commander, when the Commander comes back', () => {
 
     act(() => fakeSocket.receive('promoted-to-owner', { roomCode: CODE }));
     fireEvent.click(await waitFor(() => { const b = nodeAccess(); expect(b).not.toBeNull(); return b; }));
-    await screen.findByText(/INBOUND/);
+    await screen.findByRole('dialog', { name: 'Join requests' });
     expect(screen.queryByText('Stranger')).toBeNull();
   });
 

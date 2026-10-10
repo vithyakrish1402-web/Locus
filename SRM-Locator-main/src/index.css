@@ -9,6 +9,8 @@
 @import "@fontsource/inter/latin-600.css";
 @import "@fontsource/inter/latin-700.css";
 @import "tailwindcss";
+/* Light and dark design tokens (redesign). Screens move onto them one piece at a time. */
+@import "./theme/tokens.css";
 
 /* ---------------------------------------------------------------- touch feel */
 
@@ -18,22 +20,22 @@
 /* Every control answers on press-down, not on release. The standalone `scale` property
    composes with Tailwind v4's `translate` and with framer-motion's `transform`, so a
    centred button (-translate-x-1/2) or an animated one keeps its position while pressed.
-   Quick in, slower out: the press is felt at once and the release settles.
-   Unlayered on purpose, so it beats Tailwind's layered transition-* utilities: the list
-   is the union of what those animated (colours, shadow, opacity, transforms, filter)
-   plus `scale`, so no control loses a transition it had. */
+   Quick in, slower out: the press is felt at once and the release settles (the redesign's
+   press: 70 ms in, 220 ms out, to 0.97).
+   Unlayered on purpose, so it beats Tailwind's layered transition-* utilities. Only
+   transform and opacity move (the redesign's motion rule): colour, shadow and filter
+   changes on a control are instant, never animated. */
 button, [role="button"], a[href], summary, label[for] {
-  transition-property: scale, color, background-color, border-color, outline-color, box-shadow,
-    opacity, transform, translate, filter, text-shadow;
-  transition-duration: 220ms;
-  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-property: scale, transform, translate, opacity;
+  transition-duration: var(--duration-press-out);
+  transition-timing-function: var(--ease-standard);
   touch-action: manipulation; /* no 300 ms double-tap-zoom wait */
 }
 button:not(:disabled):active,
 [role="button"]:active,
 a[href]:active {
-  scale: 0.95;
-  transition-duration: 70ms;
+  scale: var(--press-scale);
+  transition-duration: var(--duration-press-in);
 }
 /* Map markers and anything else that must not shrink under a finger opts out. */
 [data-no-press]:active,
@@ -47,9 +49,10 @@ a[href]:active {
   height: 14px;
   margin: -7px 0 0 -7px;
   border-radius: 9999px;
-  /* A light core with a red glow: readable on the red buttons as well as the black ones. */
-  border: 1.5px solid rgba(255, 235, 235, 0.95);
-  box-shadow: 0 0 12px 1px rgba(239, 68, 68, 0.75), inset 0 0 6px rgba(239, 68, 68, 0.5);
+  /* An accent ring with a soft halo, in the theme's accent. It grows well past the control
+     it starts on, so it still shows around an accent-coloured button. */
+  border: 1.5px solid var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-halo);
   pointer-events: none;
   z-index: 20000;
   animation: locus-ping 520ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -60,7 +63,7 @@ a[href]:active {
   position: absolute;
   inset: -1.5px;
   border-radius: inherit;
-  border: 1px solid rgba(239, 68, 68, 0.5);
+  border: 1px solid var(--color-accent);
   animation: locus-ping-echo 520ms cubic-bezier(0.16, 1, 0.3, 1) 90ms both;
 }
 @keyframes locus-ping {
@@ -72,16 +75,8 @@ a[href]:active {
   to { transform: scale(1.9); opacity: 0; }
 }
 
-/* Boot screen radar (BootScreen in App.jsx): a wedge of light sweeping the rings. */
-.locus-radar-sweep {
-  background: conic-gradient(from 0deg, rgba(239, 68, 68, 0.55), rgba(239, 68, 68, 0) 70deg, transparent 360deg);
-  mask: radial-gradient(circle, transparent 0 18%, #000 19%);
-  animation: locus-radar-spin 1.6s linear infinite;
-}
-@keyframes locus-radar-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .locus-radar-sweep { animation: none; opacity: 0.5; }
-}
+/* A full turn, for the targeting FAB's orbiting ring below. */
+@keyframes locus-spin { to { transform: rotate(360deg); } }
 
 /* Locate button: a ring breathes out from the button every few seconds, like a beacon. */
 .locus-soft-ring { animation: locus-soft-ring 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
@@ -91,7 +86,7 @@ a[href]:active {
 }
 
 /* Targeting FAB: the dashed ring slowly orbits while a spot is being chosen. */
-.locus-orbit { animation: locus-radar-spin 6s linear infinite; }
+.locus-orbit { animation: locus-spin 6s linear infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .locus-soft-ring { animation: none; opacity: 0; }
@@ -99,7 +94,11 @@ a[href]:active {
 }
 
 /* Join-code tiles (SquadCode.jsx): the blinking caret under the tile being typed into. */
-.locus-caret { animation: locus-guide-cursor-blink 1s steps(1, end) infinite; }
+.locus-caret { animation: locus-caret-blink 1s steps(1, end) infinite; }
+@keyframes locus-caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) { .locus-caret { animation: none; } }
 
 /* Squad roster (SquadMemberCard.jsx): the "LIVE" dot, and the dial's "with you" dot. */
@@ -109,9 +108,17 @@ a[href]:active {
 
 /* Update strip (LiveUpdateToast.jsx): a sweep across the bar while a download has not
    reported any progress yet. Reduced motion: a still, half-lit bar. */
-.locus-download-sweep { animation: locus-download-sweep 1.4s ease-in-out infinite; }
-@keyframes locus-download-sweep { from { left: -33%; } to { left: 100%; } }
-@media (prefers-reduced-motion: reduce) { .locus-download-sweep { animation: none; left: 0; width: 100%; opacity: 0.4; } }
+/* A third-wide bar sliding from just off the left edge to just off the right, by translate in
+   steps of its own width rather than by animating `left` (which re-lays-out every frame). */
+.locus-download-sweep { left: 0; animation: locus-download-sweep 1.4s ease-in-out infinite; }
+@keyframes locus-download-sweep { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .locus-download-sweep { animation: none; transform: none; width: 100%; opacity: 0.4; } }
+
+/* Skeleton placeholders (src/components/ui/Skeleton.jsx): opacity 1 -> 0.55 -> 1 over 1.4 s.
+   Reduced motion: held still. */
+.locus-skeleton { animation: locus-skeleton var(--duration-skeleton) ease-in-out infinite; }
+@keyframes locus-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .locus-skeleton { animation: none; } }
 
 /* Comms feed (CommsFeed.jsx): each notice's time left, as a line draining to nothing. */
 .locus-drain { animation: locus-drain linear forwards; }
@@ -151,24 +158,39 @@ body {
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
-  border-left: 1px dashed rgba(255, 255, 255, 0.2);
 }
+/* The thumb in the theme's control outline colour, darker on hover (it was white, then red). */
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #fff;
-  border-radius: 0;
+  background: var(--color-border-control);
+  border-radius: 9999px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #f00;
-}
-
-/* Dark mode sleek map */
-.dark-map {
-  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) sepia(10%);
+  background: var(--color-text-secondary);
 }
 
 .leaflet-div-icon { background: transparent !important; border: none !important; }
 
 /* SosTrigger ARMED-state pulse (src/components/SosTrigger.jsx) */
+/* Room every screen keeps at its bottom for the Emergency button (Emergency batch, E1). The
+   button stands over every screen but an incoming alert, so a screen's last buttons must end
+   above it: on a phone its top is 10 rem up plus the gesture bar's inset (SosTrigger: bottom-20,
+   h-20), so 11 rem leaves 1 rem; from md up it is 6.5 rem up, so 7.5 rem. Only while the button
+   is on screen (SosTrigger sets data-emergency-button on <html>); otherwise the usual 1 rem. In
+   rem, so it grows with the text size exactly as the button does. */
+:root { --emergency-clearance: calc(1rem + env(safe-area-inset-bottom)); }
+:root[data-emergency-button] { --emergency-clearance: calc(11rem + env(safe-area-inset-bottom)); }
+@media (min-width: 768px) {
+  :root[data-emergency-button] { --emergency-clearance: calc(7.5rem + env(safe-area-inset-bottom)); }
+}
+/* With the keyboard open, a focused field (and anything scrolled into view) stops clear of the
+   button rather than under it. */
+input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--emergency-clearance); }
+
+/* The Emergency button while armed (SosTrigger.jsx): a slow pulse. Reduced motion: held
+   still. Its rings are not touched here: they show time, so they fill and drain either way. */
+.locus-sos-armed { animation: locus-sos-pulse 0.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .locus-sos-armed { animation: none; } }
+
 @keyframes locus-sos-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
@@ -218,74 +240,50 @@ body {
   background-size: 24px 24px;
 }
 
-/* Red accents */
-.text-nothing-red {
-  color: #f00;
-}
-.bg-nothing-red {
-  background-color: #f00;
-}
-.border-nothing-red {
-  border-color: #f00;
-}
-
-/* --- LocusGuide (landing page) --- */
-
-/* Scroll-reveal: IntersectionObserver toggles .vis directly via classList,
-   outside React state, so this stays plain CSS rather than Tailwind classes
-   (which Tailwind's build wouldn't generate for a runtime-only toggle). */
-.reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
-.reveal.vis { opacity: 1; transform: translateY(0); }
-
-@keyframes locus-guide-cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-@keyframes locus-guide-ring-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Glitch title effect: needs a `data-text` attribute mirroring the element's
-   text content so the two offset ::before/::after layers have something to
-   render — Tailwind has no equivalent for content-from-attribute. */
-.locus-glitch { position: relative; display: inline-block; }
-.locus-glitch:hover::before,
-.locus-glitch:hover::after {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  font: inherit;
-  letter-spacing: inherit;
-}
-.locus-glitch:hover::before {
-  color: #fff;
-  clip-path: polygon(0 20%, 100% 20%, 100% 40%, 0 40%);
-  animation: locus-guide-glitch-1 0.3s steps(2) infinite;
-}
-.locus-glitch:hover::after {
-  color: #7f1d1d;
-  clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%);
-  animation: locus-guide-glitch-2 0.3s steps(2) infinite;
-}
-@keyframes locus-guide-glitch-1 {
-  0%, 100% { transform: translateX(-3px); }
-  50% { transform: translateX(3px); }
-}
-@keyframes locus-guide-glitch-2 {
-  0%, 100% { transform: translateX(3px); }
-  50% { transform: translateX(-3px); }
-}
 
 /* Leaflet fallback basemap (TacticalLeafletMap): OpenStreetMap's standard tiles are the
-   only dark-capable raster source that still needs no API key, but they ship light. This
-   inverts them into the app's dark palette in the browser.
+   only raster source that still needs no API key, and they ship light. In the light theme
+   this only calms their colours; in the dark theme it inverts them into the app's dark
+   map colours in the browser. It follows <html data-theme> (src/theme/theme.js).
 
    hue-rotate(180deg) after the invert puts blues and greens back near their true hue, so
    water and parkland don't come out magenta; the rest just takes the glare off. Applied
    to the tile layer's own container, which lives in .leaflet-tile-pane — markers sit in a
    separate pane, so none of this touches the squad/building markers drawn on top. */
-.locus-dark-tiles {
+.locus-map-tiles {
+  filter: saturate(0.55) contrast(0.95) brightness(1.03);
+}
+:root[data-theme="dark"] .locus-map-tiles {
   filter: invert(1) hue-rotate(180deg) brightness(0.62) contrast(1.15) saturate(0.18);
+}
+
+/* AR Scan's plates over the camera picture (redesign AR Scan batch): labels, the top
+   controls, the readout and notices. Translucent so the scene shows through, solid enough to
+   read over bright and dark scenes: white at 90 % in the light theme, ink #161A21 at 86 % in
+   the dark. Text on them uses the theme's own text colours. */
+.ar-plate {
+  background-color: rgb(255 255 255 / 0.9);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+:root[data-theme="dark"] .ar-plate {
+  background-color: rgb(22 26 33 / 0.86);
+}
+
+/* AR Scan's ground arrow (components/ARArrow3D.jsx), in the accent: a lit and a shaded
+   half on top, darker sides below. Never red. */
+.ar-arrow-lit { fill: var(--color-accent); }
+.ar-arrow-shaded { fill: color-mix(in srgb, var(--color-accent) 72%, black); }
+.ar-arrow-side { fill: color-mix(in srgb, var(--color-accent) 45%, black); }
+.ar-arrow-base { fill: color-mix(in srgb, var(--color-accent) 28%, black); }
+.ar-arrow-edge { stroke: color-mix(in srgb, var(--color-accent) 45%, white); }
+
+/* AR Scan's road line (components/ARRoadLine.jsx): a band in the accent. */
+.ar-road-stop { stop-color: var(--color-accent); }
+.ar-road-fill { fill: var(--color-accent); }
+
+/* The faint centre mark: the exact middle of the screen, the point ALIGN measures from. */
+.ar-centre-mark {
+  background-color: rgb(255 255 255 / 0.7);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
 }

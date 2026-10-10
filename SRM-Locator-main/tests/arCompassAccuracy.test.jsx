@@ -61,8 +61,8 @@ const compass = (heading, ms = 16) => {
   act(() => window.dispatchEvent(event));
 };
 const banner = () => screen.getByTestId('ar-calibration-banner');
-const proximity = () => screen.getByText('PROXIMITY').nextSibling.textContent;
-const metresTo = (p) => `${calculateDistanceMeters(p.lat, p.lng, TARGET.lat, TARGET.lng)}M`;
+const proximity = () => screen.getByTestId('ar-readout-distance').textContent;
+const metresTo = (p) => `${calculateDistanceMeters(p.lat, p.lng, TARGET.lat, TARGET.lng)} m`;
 const rotation = () => {
   const r = ((Number(screen.getByTestId('ar-arrow').getAttribute('data-rotate')) % 360) + 360) % 360;
   return r > 180 ? r - 360 : r;
@@ -70,7 +70,7 @@ const rotation = () => {
 
 const openAr = async (props = {}) => {
   const view = render(<ARCompass target={TARGET} liveLocation={HERE} onClose={() => {}} {...props} />);
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   return view;
 };
 
@@ -81,7 +81,7 @@ describe('the calibration banner', () => {
     expect(banner().dataset.visible).toBe('false');
     expect(banner().getAttribute('aria-hidden')).toBe('true');
     expect(banner().className).toContain('opacity-0');
-    expect(banner().textContent).toContain('CALIBRATE SENSOR: PERFORM FIGURE-8 MOTION');
+    expect(banner().textContent).toContain('Calibrate your compass');
   });
 
   it('shows after the compass has been erratic for 2 s, not at the first wobble', async () => {
@@ -112,13 +112,13 @@ describe('the calibration banner', () => {
 });
 
 describe('the debug overlay', () => {
-  it('is hidden until a long-press on the title, and a second long-press hides it', async () => {
+  it('is hidden until a long press on the Finding pill, and a second long press hides it', async () => {
     installGeolocation();
     await openAr();
     compass(30);
     fix(HERE, 6);
     expect(screen.queryByTestId('ar-debug-overlay')).toBeNull();
-    const title = screen.getByText('AR_TRACKER');
+    const title = screen.getByTestId('ar-target-pill');
     // A tap doesn't open it.
     fireEvent.pointerDown(title);
     act(() => vi.advanceTimersByTime(200));
@@ -165,7 +165,7 @@ describe('AR Scan’s own GPS', () => {
       act(() => vi.advanceTimersByTime(1000));
       fix(north(10), 4); // walked 10 m: shown
     }
-    expect(Number(proximity().replace('M', ''))).toBeLessThanOrEqual(Number(fromHere.replace('M', '')) - 8);
+    expect(Number(proximity().replace(' m', ''))).toBeLessThanOrEqual(Number(fromHere.replace(' m', '')) - 8);
     expect(navigator.geolocation.watchPosition.mock.calls[0][2]).toMatchObject({ enableHighAccuracy: true, maximumAge: 0 });
   });
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { notify } from './utils/notify';
-import { X, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { CameraOff, Compass, MoonStar, ScanLine } from 'lucide-react';
+import { Button } from './components/ui';
+import { AR_START } from './copy/permissions';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { calculateBearing, calculateDistanceMeters as calculateDistance, normalizeRotationDelta } from './utils/geoMath';
@@ -18,39 +20,45 @@ import { buildArLandmarks } from './arLandmarks';
 import ARLandmarkLayer from './components/ARLandmarkLayer';
 import { GPS_HEADING_SPEED_MPS } from './LiveLocationMarker';
 import { useArPosition } from './hooks/useArPosition';
-import { formatArDistance, stickyDistance } from './utils/arPosition';
+import { stickyDistance } from './utils/arPosition';
 import { magneticDeclination } from './utils/declination';
 import ARRoadLine from './components/ARRoadLine';
-import { buildRoadRibbon, buildRoadStrip, remainingRouteSamples } from './utils/arRoadLine';
+import { buildRoadRibbon, buildRoadStrip, remainingPath, remainingRouteSamples } from './utils/arRoadLine';
+import { formatMetres, relativeClock, compassPoint, HERE_METRES } from './utils/direction';
+import { directionLabel, distanceLabel, walkLabel } from './copy/place';
+import { AR_ALIGN, AR_NOTICES, AR_READOUT } from './copy/arScan';
+import ArNotice from './components/ar/ArNotice';
+import { useCameraDarkness } from './hooks/useCameraDarkness';
 import { cameraQuaternion, projectGroundPoint } from './utils/arCamera';
 import ARRoadGL from './components/ARRoadGL';
 import ARArrow3D from './components/ARArrow3D';
 import { RealisticArrow } from './components/ARArrowGL';
 import { resolveArFeatures } from './utils/arFeatures';
+import { LAYER } from './utils/layers';
+import ArTopBar from './components/ar/ArTopBar';
+import ArTargetPicker from './components/ar/ArTargetPicker';
 
 const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 
 // The debug overlay (raw and smoothed heading, accuracies, declination) opens and closes
-// with a long-press on the AR_TRACKER title; hidden by default. The tuning constants it
-// helps with live at the top of utils/arHeading.js, utils/arPosition.js and
-// utils/landmarkAnchorEngine.js.
-const DEBUG_LONG_PRESS_MS = 700;
+// with a long press on the "Finding" pill (ArTopBar); hidden by default, and a tap never
+// opens it. The tuning constants it helps with live at the top of utils/arHeading.js,
+// utils/arPosition.js and utils/landmarkAnchorEngine.js.
 const DEBUG_REFRESH_MS = 250;
 // Declination changes by well under 0.1 deg over a few km, so it is worked out again only
 // when the position moves this far (in degrees of latitude/longitude, ~1 km).
 const DECLINATION_GRID_DEG = 0.01;
 
+// The Emergency button stands above AR Scan at the bottom left, 5 rem up and 5 rem tall
+// (SosTrigger: bottom-20, h-20), on the gesture bar's inset. AR Scan's own bottom content (the
+// start screen's buttons, the readout) sits above it, with 1 rem to spare.
+export const CLEAR_OF_EMERGENCY_BUTTON = 'var(--emergency-clearance)';
+
 const fmtDeg = (v, digits = 1) => (Number.isFinite(v) ? `${v.toFixed(digits)}°` : '--');
 const fmtSigned = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}°`;
 
-// Why an ALIGN tap was refused (computeAlignment's reasons), as the toast says it.
-const ALIGN_REFUSALS = {
-  'no-landmark': '[SYS_AR] ALIGN: centre a building in the view first.',
-  gps: '[SYS_AR] ALIGN: GPS fix too rough. Wait for a better signal.',
-  'too-close': '[SYS_AR] ALIGN: too close to that building for this GPS fix. Pick one further away.',
-  'not-centred': '[SYS_AR] ALIGN: that building is too far off centre. Point straight at it.',
-  walking: '[SYS_AR] ALIGN: stand still. While walking the heading comes from GPS.',
-};
+// Why an ALIGN tap was refused (computeAlignment's reasons), in plain words (copy/arScan.js).
+const ALIGN_REFUSALS = AR_ALIGN.refused;
 
 // The app session's storage, where the ALIGN correction is kept; null where it is blocked.
 const sessionStore = () => {
@@ -77,7 +85,11 @@ const sessionStore = () => {
 //     finding the way, as the arrow is.
 // Every tag is placed by the Landmark Anchor Engine (utils/landmarkAnchorEngine.js),
 // rendered by ARLandmarkLayer; this component only gathers its inputs.
-const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', overrides, onClose }) => {
+// onCameraStarted: called once the camera has actually started (App notes it, so the camera
+// explainer stops showing).
+// onChooseTarget: aims AR Scan somewhere else, from its target picker; meetingPoint: the
+// group's meeting point, offered first among the picker's places.
+const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', overrides, onClose, onCameraStarted, onChooseTarget = null, meetingPoint = null }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
   const features = resolveArFeatures(fidelity, overrides);
@@ -120,6 +132,10 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
     compassHeading,
   });
 
+  // Too dark for labels (hooks/useCameraDarkness.js): sampled only while the camera runs.
+  // Only the labels hide; the arrow, road line, readout and controls stay.
+  const tooDark = useCameraDarkness(videoRef, permissionsGranted && !cameraError);
+
   // 1. Initialize Camera
   const startCamera = async () => {
     try {
@@ -130,15 +146,16 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
         videoRef.current.srcObject = stream;
       }
       setCameraError(false);
+      onCameraStarted?.();
     } catch (err) {
-      console.warn("[SYS_AR] Optics offline. Switching to Instrument Flight Rules (IFR).", err);
+      console.warn("AR Scan: the camera is unavailable; carrying on without it.", err);
       setCameraError(true);
     }
   };
 
   const requestPermissions = async () => {
     const granted = await requestHeadingPermission();
-    if (!granted) notify.error("[SYS_ERROR] Compass access denied.");
+    if (!granted) notify.warning(AR_ALIGN.compassRefused);
     startCamera();
   };
 
@@ -275,18 +292,18 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   // of the view is taken to be the one they mean (see computeAlignment).
   const align = () => {
     if (speedMps > GPS_HEADING_SPEED_MPS) {
-      notify.error(ALIGN_REFUSALS.walking);
+      notify.warning(ALIGN_REFUSALS.walking);
       return;
     }
     const tags = (landmarkFrameRef.current?.tags ?? []).filter((t) => t.building && t.visible);
     const tag = tags.reduce((best, t) => (!best || Math.hypot(t.camAzDeg, t.camElDeg) < Math.hypot(best.camAzDeg, best.camElDeg) ? t : best), null);
     const result = computeAlignment({ tag, accuracyM: gpsAccuracy, current: alignment });
     if (!result.ok) {
-      notify.error(ALIGN_REFUSALS[result.reason]);
+      notify.warning(ALIGN_REFUSALS[result.reason]);
       return;
     }
     changeAlignment(result.alignment);
-    notify.success(`[SYS_AR] ALIGNED ON ${tag.name}: HEADING ${fmtSigned(result.alignment.headingOffsetDeg)}, PITCH ${fmtSigned(result.alignment.pitchOffsetDeg)}`);
+    notify.success(AR_ALIGN.aligned(tag.name));
   };
   const aligned = alignment.headingOffsetDeg !== 0 || alignment.pitchOffsetDeg !== 0;
 
@@ -298,18 +315,32 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   const nextShownDistance = stickyDistance(shownDistance, distance);
   if (nextShownDistance !== shownDistance) setShownDistance(nextShownDistance);
 
+  // The readout's direction: a clock face ("2 o'clock") while the compass has a steady
+  // reading, otherwise compass words ("to the north-east"), which need no compass. And
+  // "about N min on foot", only along a real route (routePath is only ever a real one):
+  // what is left of it from here. Without one, distance and direction only.
+  const headingSteady = hasReading && !calibrationNeeded && Number.isFinite(heading);
+  const readoutDirection = liveLocation
+    ? directionLabel({
+      here: distance < HERE_METRES,
+      clock: headingSteady ? relativeClock(bearing, heading) : null,
+      direction: `BEARING ${compassPoint(bearing)}`,
+    })
+    : '';
+  const routeLeftM = useMemo(() => {
+    const left = remainingPath(routePath, liveLocation);
+    let metres = 0;
+    for (let i = 1; i < left.length; i++) metres += calculateDistance(left[i - 1].lat, left[i - 1].lng, left[i].lat, left[i].lng);
+    return left.length >= 2 ? metres : null;
+  }, [routePath, liveLocation]);
+  const readoutWalk = routeLeftM !== null ? walkLabel(routeLeftM) : '';
+
   // Debug overlay: hidden until a long-press on the title. While open it copies the
   // compass hook's diagnostics a few times a second (they live in a ref, updated per
   // sensor event, so reading them doesn't re-render AR Scan 60 times a second).
   const [debugOpen, setDebugOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [debugSnapshot, setDebugSnapshot] = useState(null);
-  const longPressRef = useRef(null);
-  const startLongPress = () => {
-    clearTimeout(longPressRef.current);
-    longPressRef.current = setTimeout(() => setDebugOpen((open) => !open), DEBUG_LONG_PRESS_MS);
-  };
-  const cancelLongPress = () => clearTimeout(longPressRef.current);
-  useEffect(() => () => clearTimeout(longPressRef.current), []);
   useEffect(() => {
     if (!debugOpen) return undefined;
     const copy = () => {
@@ -352,33 +383,33 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
     setDisplayRotation(next);
   }, [bearing, heading]);
 
+  // AR Scan's own start screen, every time it opens: its tap is what starts the compass and
+  // the camera (a sensor permission must come from a tap). Shown in the app's theme.
   if (!permissionsGranted) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center p-6 text-center text-white">
-        <ShieldAlert size={48} className="text-red-500 mb-6 animate-pulse" />
-        <h2 className="font-dot text-2xl tracking-widest uppercase mb-4 text-white">SYS_AR // OPTICS_SYNC</h2>
-        <p className="font-inter text-sm text-zinc-400 mb-8 max-w-sm">
-          Tracking target: <span className="text-red-500 font-bold">{target.name}</span>.<br/><br/>
-          Augmented Reality requires access to your device camera and compass sensors.
-        </p>
-        <button 
-          onClick={requestPermissions}
-          className="w-full max-w-sm py-4 bg-red-500 text-white font-dot uppercase tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.4)] mb-4 hover:bg-red-600 transition-colors"
-        >
-          GRANT_ACCESS & INITIATE
-        </button>
-        <button 
-          onClick={onClose}
-          className="w-full max-w-sm py-4 border border-zinc-700 text-zinc-500 font-dot uppercase tracking-widest hover:bg-white hover:text-black transition-colors"
-        >
-          ABORT
-        </button>
+      <div data-testid="ar-start" className="fixed inset-0 bg-bg text-text font-ui flex flex-col px-5" style={{ zIndex: LAYER.arScan, paddingTop: 'env(safe-area-inset-top)', paddingBottom: CLEAR_OF_EMERGENCY_BUTTON }}>
+        {/* Centred while it fits; on a short phone with large text it scrolls instead of running
+            off the top or into the buttons (my-auto centres without overflowing). Under 700 px
+            high its picture goes, as the guide's does. */}
+        <div data-testid="ar-start-body" className="flex-1 min-h-0 overflow-y-auto flex flex-col max-w-md w-full mx-auto">
+          <div className="my-auto flex flex-col items-center text-center gap-3 py-4">
+            <span className="flex [@media(max-height:699px)]:hidden items-center justify-center w-22 h-22 rounded-full bg-accent-soft text-accent mb-3" aria-hidden="true">
+              <ScanLine size={40} />
+            </span>
+            <h2 className="text-display">{AR_START.title}</h2>
+            <p className="text-body text-text-secondary">{AR_START.body(target.name)}</p>
+          </div>
+        </div>
+        <div className="max-w-md w-full mx-auto flex flex-col gap-2">
+          <Button block size="large" onClick={requestPermissions}>{AR_START.start}</Button>
+          <Button variant="plain" block onClick={onClose}>{AR_START.cancel}</Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div ref={setOverlayEl} className="fixed inset-0 z-[9999] bg-black overflow-hidden pointer-events-auto">
+    <div ref={setOverlayEl} data-testid="ar-scan" className="fixed inset-0 bg-black overflow-hidden pointer-events-auto" style={{ zIndex: LAYER.arScan }}>
       {/* Video Background */}
       <video 
         ref={videoRef}
@@ -389,24 +420,21 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
         className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${cameraError ? 'opacity-0' : 'opacity-100'}`}
       />
 
-      {/* IFR Blackout Background */}
-      {cameraError && (
-        <div className="absolute inset-0 bg-black flex flex-col items-center justify-center z-0">
-          <div className="w-[80vw] h-[80vw] border border-white/5 rounded-full absolute" />
-          <div className="w-[60vw] h-[60vw] border border-white/10 rounded-full absolute" />
-        </div>
-      )}
-
-      {/* Grid Overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none z-10" />
-
       {/* The route to the Rally Point, on the ground: under the HUD and the tags. */}
       {ribbon && <ARRoadLine ribbon={ribbon} width={viewport.width} height={viewport.height} />}
       {strip && roadGl !== 'failed' && <ARRoadGL strip={strip} orientation={orientation} fovDeg={fovDeg} onStatus={onRoadGlStatus} />}
 
+      {/* The faint centre mark: the exact middle of the whole screen, the point ALIGN
+          lines a building up with. Under the tags; it takes no touches. */}
+      <div
+        data-testid="ar-centre-mark"
+        className="ar-centre-mark absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full pointer-events-none z-[24]"
+        aria-hidden="true"
+      />
+
       {/* Floating tags, anchored on the real buildings by the Landmark Anchor Engine.
           Above the arrow ring, below nothing tappable (they take no touches). */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-[25]" aria-hidden="true">
+      <div data-testid="ar-labels" data-too-dark={tooDark || undefined} className={`absolute inset-0 overflow-hidden pointer-events-none z-[25] ${tooDark ? 'invisible' : ''}`} aria-hidden="true">
         <ARLandmarkLayer landmarks={landmarks} position={enginePosition} view={engineView} frameRef={landmarkFrameRef} />
       </div>
 
@@ -417,9 +445,9 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
       {debugOpen && (
         <div
           data-testid="ar-debug-overlay"
-          className="absolute left-6 top-36 z-[40] whitespace-pre bg-black/80 border border-red-500/50 px-3 py-2 font-mono text-[10px] leading-4 text-zinc-300 backdrop-blur-md pointer-events-none"
+          className="ar-plate absolute left-6 top-36 z-[40] whitespace-pre rounded-input border border-border px-3 py-2 font-mono text-[10px] leading-4 text-text pointer-events-none"
         >
-          <div className="font-dot text-red-500 uppercase tracking-widest mb-1">SYS_DEBUG</div>
+          <div className="font-ui font-semibold text-[11px] text-text-secondary mb-1">Debug</div>
           <div>RAW_HDG  {fmtDeg(debugSnapshot?.raw)} MAG</div>
           <div>SMOOTH   {fmtDeg(debugSnapshot?.smoothed)} MAG{debugSnapshot?.fast ? ' FAST' : ''}</div>
           <div>TRUE_HDG {fmtDeg(heading)}</div>
@@ -440,94 +468,73 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
         </div>
       )}
 
-      {/* Tactical UI Layer */}
-      <div className="relative z-20 w-full h-full flex flex-col p-6">
-        
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h3
-              className="font-dot text-xl text-red-500 uppercase tracking-widest leading-none mb-1 select-none"
-              onPointerDown={startLongPress}
-              onPointerUp={cancelLongPress}
-              onPointerLeave={cancelLongPress}
-              onPointerCancel={cancelLongPress}
-              onContextMenu={(e) => e.preventDefault()}
-            >
-              AR_TRACKER
-            </h3>
-            <p className="font-dot text-[10px] text-white uppercase tracking-widest bg-red-500 px-2 py-0.5 inline-block">
-              {cameraError ? 'INSTRUMENT FLIGHT RULES (IFR)' : 'OPTICS ONLINE'}
-            </p>
-          </div>
-          <div className="flex items-start gap-2">
-            <div className="flex flex-col items-end gap-1">
-              <button
-                onClick={align}
-                aria-label="ALIGN"
-                className="h-[50px] px-3 border border-red-500/50 text-red-500 bg-black/50 backdrop-blur-md font-dot text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-colors"
-              >
-                ALIGN
-              </button>
-              {aligned && (
-                <button
-                  onClick={() => changeAlignment(NO_ALIGNMENT)}
-                  aria-label="RESET ALIGN"
-                  className="px-2 py-0.5 bg-black/50 border border-white/20 text-zinc-400 font-dot text-[9px] uppercase tracking-widest hover:text-white"
-                >
-                  RESET {fmtSigned(alignment.headingOffsetDeg)}
-                </button>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              className="p-3 border border-red-500/50 text-red-500 bg-black/50 backdrop-blur-md hover:bg-red-500 hover:text-white transition-colors"
-            >
-              <X size={24} />
-            </button>
-          </div>
-        </div>
+      {/* The HUD. It sets no stacking order of its own, so its parts layer against the labels
+          (z-25) one by one: the controls, notices and readout above them (z-30), so a label
+          never covers words or a button; the arrow below them (z-22), as the labels have
+          always been drawn over it. */}
+      <div data-testid="ar-ui" className="relative w-full h-full flex flex-col p-6" style={{ paddingBottom: CLEAR_OF_EMERGENCY_BUTTON }}>
+        <div data-testid="ar-top" className="relative z-[30] flex flex-col">
 
-        {/* Calibration banner: only while the compass looks unreliable (useDeviceHeading's
-            calibrationNeeded, which already has its own show/hide hysteresis), fading in
-            and out. It keeps its space when hidden, so the layout never jumps. */}
-        <div
-          data-testid="ar-calibration-banner"
-          data-visible={calibrationNeeded ? 'true' : 'false'}
-          aria-hidden={!calibrationNeeded}
-          className={`mt-4 inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 self-start backdrop-blur-md transition-opacity duration-500 ${calibrationNeeded ? 'opacity-100' : 'opacity-0'}`}
-        >
-          <AlertTriangle size={14} className="text-yellow-500" />
-          <span className="font-dot text-[10px] text-yellow-500 uppercase tracking-widest">
-            CALIBRATE SENSOR: PERFORM FIGURE-8 MOTION
-          </span>
+          {/* Close, what AR Scan is finding, and ALIGN (components/ar/ArTopBar.jsx). A long press
+              on the pill opens the debug overlay; a tap never does. */}
+          <ArTopBar
+            targetName={target.name}
+            onClose={onClose}
+            onPick={onChooseTarget ? () => setPickerOpen(true) : null}
+            onAlign={align}
+            aligned={aligned}
+            onReset={() => changeAlignment(NO_ALIGNMENT)}
+            onDebug={() => setDebugOpen((open) => !open)}
+          />
+
+          {/* Calibration notice: only while the compass looks unreliable (useDeviceHeading's
+              calibrationNeeded, which already has its own show/hide hysteresis), fading in
+              and out. It keeps its space when hidden, so the layout never jumps. */}
+          <ArNotice
+            testId="ar-calibration-banner"
+            icon={Compass}
+            title={AR_NOTICES.calibrate.title}
+            body={AR_NOTICES.calibrate.body}
+            visible={calibrationNeeded}
+          />
+
+          {/* Camera off (refused, or no camera): the arrow and readout carry on over a dark
+              screen; the steps to allow it are in words. */}
+          {cameraError && (
+            <ArNotice
+              testId="ar-camera-off"
+              icon={CameraOff}
+              title={AR_NOTICES.cameraOff.title}
+              body={AR_NOTICES.cameraOff.body}
+              steps={AR_NOTICES.cameraOff.steps}
+            />
+          )}
+
+          {/* Too dark: the labels are hidden until there's more light (useCameraDarkness). */}
+          {tooDark && (
+            <ArNotice
+              testId="ar-too-dark"
+              icon={MoonStar}
+              title={AR_NOTICES.tooDark.title}
+              body={AR_NOTICES.tooDark.body}
+            />
+          )}
         </div>
 
         {/* Central Compass Area */}
         <div className="flex-1 flex flex-col items-center justify-center relative">
           
-          {/* Static Crosshair HUD */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-64 h-64 border-2 border-white/20 rounded-full relative">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-4 bg-white/50" />
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-1 h-4 bg-white/50" />
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-1 bg-white/50" />
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-4 h-1 bg-white/50" />
-            </div>
-            {/* Center dot */}
-            <div className="absolute w-2 h-2 bg-red-500 rounded-full" />
-          </div>
-
-          {/* The ring, and the destination arrow turning inside it by the same
-              wraparound-safe angle and spring as before. The arrow depends on its
-              resolved fidelity (AR_RENDER_MODE, or its override): 'efficient' and
-              'standard' (and anything unknown) get the CSS 3D wedge; 'realistic' gets
+          {/* The arrow's box, and the destination arrow turning inside it by the same
+              wraparound-safe angle and spring as before. The box draws nothing (the old red
+              ring and crosshair are gone); the realistic arrow sizes itself to it. The arrow
+              depends on its resolved fidelity (AR_RENDER_MODE, or its override): 'efficient'
+              and 'standard' (and anything unknown) get the CSS 3D wedge; 'realistic' gets
               the three.js arrow (RealisticArrow), which loads three.js only then. */}
           <div
             ref={ringRef}
             data-testid="ar-arrow-ring"
             data-fidelity={features.arrow}
-            className="w-48 h-48 rounded-full border-4 border-red-500 flex items-center justify-center relative z-30 shadow-[0_0_30px_rgba(239,68,68,0.3)] bg-black/20 backdrop-blur-sm"
+            className="w-48 h-48 flex items-center justify-center relative z-[22]"
           >
             {features.arrow === 'realistic' ? (
               <RealisticArrow rotation={displayRotation} spring={ARROW_SPRING} ringRef={ringRef} overlayEl={overlayEl} />
@@ -538,21 +545,41 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
 
         </div>
 
-        {/* Footer Target Data */}
-        <div className="bg-black/60 backdrop-blur-md border border-white/20 p-4 mt-auto">
-          <div className="flex justify-between items-end">
-            <div>
-              <p className="font-dot text-[10px] text-zinc-400 uppercase tracking-widest mb-1">TARGET_LOCK</p>
-              <h2 className="font-dot text-2xl text-white uppercase tracking-widest leading-none">{target.name}</h2>
-            </div>
-            <div className="text-right">
-              <p className="font-dot text-[10px] text-zinc-400 uppercase tracking-widest mb-1">PROXIMITY</p>
-              <p className="font-dot text-3xl text-red-500 uppercase tracking-widest leading-none">{formatArDistance(shownDistance, '')}</p>
-            </div>
-          </div>
+        {/* The readout: how far, large; which way; and the walk, only along a real route.
+            On a plate at the bottom of the HUD, which keeps clear of the Emergency button
+            (CLEAR_OF_EMERGENCY_BUTTON). The pill above already names the destination. */}
+        <div
+          data-testid="ar-readout"
+          role="status"
+          aria-label={AR_READOUT.label(target.name)}
+          className="ar-plate relative z-[30] mt-auto self-center rounded-card border border-border shadow-[var(--shadow-2)] px-5 py-3 flex flex-col items-center text-center font-ui text-text max-w-full"
+        >
+          {liveLocation
+            ? <p data-testid="ar-readout-distance" className="text-[40px] leading-none font-semibold tabular-nums">{distanceLabel(formatMetres(shownDistance))}</p>
+            : <p data-testid="ar-readout-no-fix" className="text-body font-semibold">{AR_READOUT.noFix}</p>}
+          {(readoutDirection || readoutWalk) && (
+            <p data-testid="ar-readout-way" className="mt-1.5 text-secondary text-text-secondary">
+              {[readoutDirection, readoutWalk].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </div>
 
       </div>
+
+      {/* What to find (components/ar/ArTargetPicker.jsx), from the Finding pill. */}
+      {onChooseTarget && (
+        <ArTargetPicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          me={liveLocation}
+          target={target}
+          members={squadMembers}
+          buildings={buildings}
+          meetingPoint={meetingPoint}
+          selfUid={selfUid}
+          onChoose={onChooseTarget}
+        />
+      )}
     </div>
   );
 };

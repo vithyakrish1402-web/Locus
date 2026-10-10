@@ -40,20 +40,107 @@ export const modalBackdrop = () => ({
 });
 
 /**
- * Every modal's card "materializes": it rises a little, sharpens out of a slight blur and
- * settles on one spring, then leaves along the same path it came in by. With reduced
- * motion it only cross-fades.
+ * Every modal's card rises a little and settles on one spring, then leaves along the same
+ * path it came in by. Transform and opacity only: it used to sharpen out of a blur too, and
+ * a blur is a filter, which is repainted every frame. With reduced motion it only fades.
  * @param {boolean} reduceMotion
  */
 export const modalCard = (reduceMotion) =>
   reduceMotion
-    ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.15 } }
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: REDUCED_MOTION_S } }
     : {
-        initial: { opacity: 0, y: 24, scale: 0.96, filter: 'blur(6px)' },
-        animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
-        exit: { opacity: 0, y: 24, scale: 0.96, filter: 'blur(6px)' },
+        initial: { opacity: 0, y: 24, scale: 0.96 },
+        animate: { opacity: 1, y: 0, scale: 1 },
+        exit: { opacity: 0, y: 24, scale: 0.96 },
         transition: PANEL_SPRING,
       };
+
+// The redesign's timings (docs/redesign/handoff.md, "Motion"), in seconds as framer-motion
+// takes them. The same values are CSS variables in src/theme/tokens.css (--duration-*).
+// Everything here moves only transform and opacity.
+
+/** Curves: standard for things that move on screen, enter for arrivals, exit for leaving. */
+export const EASE = {
+  standard: [0.2, 0, 0, 1],
+  enter: [0, 0, 0, 1],
+  exit: [0.3, 0, 1, 1],
+};
+
+const FADE_S = 0.2;
+const SCREEN_S = 0.24;
+const SCREEN_SLIDE_PX = 24;
+const EXIT_S = 0.18;
+const LIST_S = 0.24;
+const LIST_STAGGER_S = 0.04;
+const LIST_STAGGERED_ITEMS = 5;
+/** Reduced motion: slides become fades this long, and sheets settle this fast. */
+export const REDUCED_MOTION_S = 0.15;
+
+/** A plain fade in and out. */
+export const fade = () => ({
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: FADE_S, ease: EASE.standard } },
+  exit: { opacity: 0, transition: { duration: EXIT_S, ease: EASE.exit } },
+});
+
+/**
+ * A full screen arriving: slides 24 px and fades; going forward it comes from the right,
+ * going back from the left. With reduced motion, a short fade.
+ * @param {'forward'|'back'} direction
+ * @param {boolean} reduceMotion
+ */
+export const screenTransition = (direction, reduceMotion) => {
+  if (reduceMotion) {
+    return {
+      initial: { opacity: 0 },
+      animate: { opacity: 1, transition: { duration: REDUCED_MOTION_S } },
+      exit: { opacity: 0, transition: { duration: REDUCED_MOTION_S } },
+    };
+  }
+  const from = direction === 'back' ? -SCREEN_SLIDE_PX : SCREEN_SLIDE_PX;
+  return {
+    initial: { opacity: 0, x: from },
+    animate: { opacity: 1, x: 0, transition: { duration: SCREEN_S, ease: EASE.enter } },
+    exit: { opacity: 0, x: -from, transition: { duration: EXIT_S, ease: EASE.exit } },
+  };
+};
+
+/**
+ * A list row's first appearance: the first five arrive 40 ms apart, the rest with the
+ * fifth. Spread onto the row only while the list first shows; later rows just appear.
+ * With reduced motion, no stagger and no slide.
+ * @param {number} index
+ * @param {boolean} reduceMotion
+ */
+export const listItem = (index, reduceMotion) => (reduceMotion
+  ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: REDUCED_MOTION_S } } }
+  : {
+      initial: { opacity: 0, y: 8 },
+      animate: {
+        opacity: 1,
+        y: 0,
+        transition: { duration: LIST_S, ease: EASE.enter, delay: Math.min(Math.max(index, 0), LIST_STAGGERED_ITEMS - 1) * LIST_STAGGER_S },
+      },
+    });
+
+/**
+ * How a sheet settles once let go: on SHEET_SPRING, or with reduced motion a short ease
+ * (it still follows the finger while dragged).
+ * @param {boolean} reduceMotion
+ */
+export const sheetSettle = (reduceMotion) => (reduceMotion ? { duration: REDUCED_MOTION_S, ease: EASE.standard } : SHEET_SPRING);
+
+/**
+ * What a sheet does when the finger lets go after dragging it down by `offsetY` px at
+ * `velocityY` px/s: close (decided by shouldDismissSheet), or settle back open on
+ * sheetSettle's transition.
+ * @returns {{ close: true } | { close: false, transition: object }}
+ */
+export function releaseSheet(offsetY, velocityY, height, reduceMotion) {
+  return shouldDismissSheet(offsetY, velocityY, height)
+    ? { close: true }
+    : { close: false, transition: sheetSettle(reduceMotion) };
+}
 
 /** Past this fraction of its height (after projection), a released sheet closes. */
 export const SHEET_DISMISS_FRACTION = 0.3;

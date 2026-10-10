@@ -1,0 +1,253 @@
+/* LOCUS design tokens, light and dark (redesign item 1; values from
+   docs/redesign/handoff.md, "Colour roles" and "Spacing, sizes, type").
+
+   Which theme applies is the `data-theme` attribute on <html>: "light" or "dark", set
+   before first paint by the inline script in index.html and kept up to date by
+   src/theme/theme.js. With no attribute at all (that script blocked), the phone's own
+   setting decides through prefers-color-scheme.
+
+   Colours sit in Tailwind's `@theme`, so each one is also a utility (bg-surface,
+   text-text-secondary, border-border-control, bg-accent, ...). `static` emits every
+   variable even before any screen uses it. The light values are the defaults; dark
+   overrides the same variables, and the utilities read the variables, so they follow.
+
+   Swap the accent in one place: the five --color-accent* values in each theme.
+
+   Not a token on purpose: --map-member (a surface-coloured disc with a 2 px accent
+   ring) is two tokens together, so markers use --color-surface and --color-accent. */
+
+@theme static {
+  /* ---- colour roles (light) ---- */
+  --color-bg: #F4F6F8;
+  --color-surface: #FFFFFF;
+  --color-raised: #FFFFFF; /* + --shadow-2 */
+  --color-sunken: #EDF0F3;
+  --color-border: #DCE1E7;
+  --color-border-control: #808A99; /* handoff #8A94A3, darkened to reach 3:1 on bg and sunken */
+  --color-text: #14181F;
+  --color-text-secondary: #566070;
+
+  --color-accent: #1F4FB8;
+  --color-accent-pressed: #183F94;
+  --color-accent-on: #FFFFFF;
+  --color-accent-soft: #E8EEFA;
+  --color-accent-halo: rgba(31, 79, 184, 0.18);
+
+  --color-success: #1E7B3C;
+  --color-success-soft: #E6F4EA;
+  --color-warning: #8F5400;
+  --color-warning-soft: #FDF1DE;
+  --color-danger: #C62828;
+  --color-danger-pressed: #A31F1F;
+  --color-danger-on: #FFFFFF;
+  --color-danger-soft: #FDECEC;
+  --color-emergency: #C62828;
+  --color-backdrop: rgba(20, 24, 31, 0.36);
+
+  --color-map-land: #EEF0EC;
+  --color-map-road: #FFFFFF;
+  --color-map-block: #DDE1E6;
+  --color-map-green: #D6E8D2;
+  --color-map-water: #CFE0EE;
+  --color-map-casing: #FFFFFF;
+  --color-map-plate: rgba(255, 255, 255, 0.94);
+  --color-map-self: var(--color-accent);
+  --color-map-route: var(--color-accent);
+  --color-map-building: #566070;
+  --color-map-meeting: #14181F;
+  --color-map-last-known: #8A94A3; /* drawn dashed at 60 % */
+
+  /* AR Scan label plates: white at 90 % in light, ink #161A21 at 86 % in dark. */
+  --color-ar-plate: rgba(255, 255, 255, 0.9);
+
+  /* ---- type ---- */
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --text-display: 1.75rem;
+  --text-display--line-height: 2.125rem;
+  --text-display--font-weight: 700;
+  --text-title: 1.375rem;
+  --text-title--line-height: 1.75rem;
+  --text-title--font-weight: 600;
+  --text-heading: 1.0625rem;
+  --text-heading--line-height: 1.5rem;
+  --text-heading--font-weight: 600;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.375rem;
+  --text-body--font-weight: 400;
+  --text-label: 0.9375rem;
+  --text-label--line-height: 1.25rem;
+  --text-label--font-weight: 600;
+  --text-secondary: 0.8125rem;
+  --text-secondary--line-height: 1.125rem;
+  --text-secondary--font-weight: 400;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-caption--font-weight: 500;
+  --text-numeric: 2.125rem;
+  --text-numeric--line-height: 2.5rem;
+  --text-numeric--font-weight: 600;
+
+  /* ---- corners ----
+     The handoff calls these --radius-sm/md/lg/xl. Those names are Tailwind's own corner
+     sizes, already in use (rounded-lg), so taking them would change today's screens
+     before they are converted. Same values, named by what they are for. */
+  --radius-fill: 8px;   /* handoff sm: small fills */
+  --radius-input: 12px; /* handoff md: inputs, plates */
+  --radius-card: 16px;  /* handoff lg: cards, notifications */
+  --radius-sheet: 24px; /* handoff xl: sheets, dialogs. Buttons, chips, toggles: rounded-full */
+
+  /* ---- motion ---- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+}
+
+/* Values that are not Tailwind utilities: read with var(), in CSS or from code. */
+:root {
+  /* Shadows differ per theme, and Tailwind's shadow utilities copy their value in at build
+     time, so these stay plain variables: shadow-[var(--shadow-1)]. */
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 2px 8px rgba(16, 24, 40, 0.06);
+  --shadow-2: 0 2px 4px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.12);
+  --shadow-3: 0 -4px 12px rgba(16, 24, 40, 0.06), 0 -12px 40px rgba(16, 24, 40, 0.12);
+
+  /* Spacing, numbered as the handoff numbers them (by multiples of 4 px). Tailwind's own
+     p-1 ... p-12 are the same sizes. Screen margin 16 px, map overlays 12 px. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-screen: 16px;
+  --space-map-overlay: 12px;
+
+  /* Sizes. Text must still fit at 130 % text size: use these as minimum heights. */
+  --size-touch: 44px;
+  --size-button: 48px;
+  --size-button-large: 56px;
+  --size-meeting-point-button: 56px;
+  --size-emergency-button: 72px; /* including its 4 px casing */
+  --size-top-bar: 56px;
+  --size-tab-bar: 64px;          /* + the bottom safe-area inset */
+  --size-avatar: 40px;
+  --size-avatar-map: 36px;
+  --size-input: 52px;
+  --size-map-self: 22px;
+  --size-map-building: 12px;
+  --size-map-route: 5px;
+  --size-map-route-casing: 9px;
+  --size-map-casing-ring: 3px;
+
+  /* Durations (the handoff's motion table; springs stay in src/utils/motion.js). */
+  --duration-press-in: 70ms;
+  --duration-press-out: 220ms;
+  --press-scale: 0.97;
+  --duration-fade: 200ms;
+  --duration-screen: 240ms;
+  --distance-screen: 24px;
+  --duration-exit: 180ms;
+  --duration-list: 240ms;
+  --stagger-list: 40ms;
+  --duration-skeleton: 1400ms;
+  --duration-emergency-hold: 1200ms;
+  --duration-emergency-armed: 4000ms;
+  --duration-reduced-motion: 150ms;
+}
+
+/* Dark. Two selectors for one set of values: the attribute when the theme script ran, and
+   the phone's own setting when it could not (no attribute at all). */
+:root[data-theme="dark"] {
+  --color-bg: #0E1116;
+  --color-surface: #161A21;
+  --color-raised: #1E232C;
+  --color-sunken: #12161C;
+  --color-border: #2A303A;
+  --color-border-control: #666F7D; /* handoff #5F6875, lightened to reach 3:1 on raised */
+  --color-text: #EEF1F5;
+  --color-text-secondary: #A3ACB9;
+
+  --color-accent: #8AB0FF;
+  --color-accent-pressed: #A9C4FF;
+  --color-accent-on: #0B1A3A;
+  --color-accent-soft: #1B2740;
+  --color-accent-halo: rgba(138, 176, 255, 0.22);
+
+  --color-success: #5BC77E;
+  --color-success-soft: #15291D;
+  --color-warning: #F0B44C;
+  --color-warning-soft: #2E2412;
+  --color-danger: #FF6B6B;
+  --color-danger-pressed: #FF8A8A;
+  --color-danger-on: #2A0606;
+  --color-danger-soft: #3A1717;
+  --color-emergency: #9F1D1D;
+  --color-backdrop: rgba(0, 0, 0, 0.56);
+
+  --color-map-land: #171B21;
+  --color-map-road: #262C35;
+  --color-map-block: #20252D;
+  --color-map-green: #18241C;
+  --color-map-water: #142230;
+  --color-map-casing: #0E1116;
+  --color-map-plate: rgba(22, 26, 33, 0.92);
+  --color-map-building: #A3ACB9;
+  --color-map-meeting: #EEF1F5;
+  --color-map-last-known: #6B7480;
+
+  --color-ar-plate: rgba(22, 26, 33, 0.86);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 -12px 40px rgba(0, 0, 0, 0.55);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --color-bg: #0E1116;
+    --color-surface: #161A21;
+    --color-raised: #1E232C;
+    --color-sunken: #12161C;
+    --color-border: #2A303A;
+    --color-border-control: #666F7D; /* handoff #5F6875, lightened to reach 3:1 on raised */
+    --color-text: #EEF1F5;
+    --color-text-secondary: #A3ACB9;
+
+    --color-accent: #8AB0FF;
+    --color-accent-pressed: #A9C4FF;
+    --color-accent-on: #0B1A3A;
+    --color-accent-soft: #1B2740;
+    --color-accent-halo: rgba(138, 176, 255, 0.22);
+
+    --color-success: #5BC77E;
+    --color-success-soft: #15291D;
+    --color-warning: #F0B44C;
+    --color-warning-soft: #2E2412;
+    --color-danger: #FF6B6B;
+    --color-danger-pressed: #FF8A8A;
+    --color-danger-on: #2A0606;
+    --color-danger-soft: #3A1717;
+    --color-emergency: #9F1D1D;
+    --color-backdrop: rgba(0, 0, 0, 0.56);
+
+    --color-map-land: #171B21;
+    --color-map-road: #262C35;
+    --color-map-block: #20252D;
+    --color-map-green: #18241C;
+    --color-map-water: #142230;
+    --color-map-casing: #0E1116;
+    --color-map-plate: rgba(22, 26, 33, 0.92);
+    --color-map-building: #A3ACB9;
+    --color-map-meeting: #EEF1F5;
+    --color-map-last-known: #6B7480;
+
+    --color-ar-plate: rgba(22, 26, 33, 0.86);
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-3: 0 -12px 40px rgba(0, 0, 0, 0.55);
+  }
+}

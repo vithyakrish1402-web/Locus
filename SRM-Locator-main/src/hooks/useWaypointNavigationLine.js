@@ -10,53 +10,58 @@ import { useEffect, useRef } from 'react';
 // (which redraws fresh every render — see useWalkingRoute.js).
 //
 // `isRealRoute` distinguishes a real routed path from the straight-line
-// "best effort" fallback: a sparser, lighter dash reads as less certain than
-// the normal route styling, per the fallback-behavior spec. Recreates the
-// Polyline (rather than just re-pathing it) whenever this flips, since the
-// dash pattern lives in the `icons` config, not something .setPath() touches.
+// "best effort" fallback. A real route is the design's line: solid, 5 px on a
+// 9 px casing (a second, wider Polyline under it in the map's casing colour).
+// The fallback stays a sparse, light dash with no casing, which reads as less
+// certain, per the fallback-behavior spec. Recreates the lines (rather than
+// just re-pathing them) whenever this or a colour changes.
 //
 // Leaflet-fallback rendering is separate — TacticalLeafletMap.jsx renders the
 // same path declaratively via react-leaflet's <Polyline>.
-export function useWaypointNavigationLine(map, path, isRealRoute, color = '#EF4444') {
-  const lineRef = useRef(null);
-  const styleRef = useRef(null); // which isRealRoute value the current instance was built with
+// The design's widths (tokens.css --size-map-route / --size-map-route-casing).
+export const ROUTE_WIDTH = 5;
+export const ROUTE_CASING_WIDTH = 9;
+
+export function useWaypointNavigationLine(map, path, isRealRoute, color = '#1F4FB8', casingColor = '#FFFFFF') {
+  const linesRef = useRef([]); // the casing (real routes only), then the line on top
+  const styleRef = useRef(null); // which isRealRoute and colours the current lines were built with
 
   useEffect(() => {
+    const clear = () => {
+      linesRef.current.forEach((line) => line.setMap(null));
+      linesRef.current = [];
+      styleRef.current = null;
+    };
     if (!map || !window.google || !path || path.length < 2) {
-      if (lineRef.current) {
-        lineRef.current.setMap(null);
-        lineRef.current = null;
-        styleRef.current = null;
-      }
+      clear();
       return;
     }
 
-    if (lineRef.current && styleRef.current !== isRealRoute) {
-      lineRef.current.setMap(null);
-      lineRef.current = null;
-    }
+    const style = `${isRealRoute}|${color}|${casingColor}`; // a theme change rebuilds the lines in its colours
+    if (linesRef.current.length && styleRef.current !== style) clear();
 
-    if (!lineRef.current) {
-      lineRef.current = new window.google.maps.Polyline({
-        path,
-        map,
-        strokeOpacity: 0, // dashing comes from the repeating icon below, not the base stroke
-        icons: [{
-          icon: {
-            path: 'M 0,-1 0,1',
-            strokeOpacity: isRealRoute ? 0.8 : 0.45,
-            strokeColor: color,
-            scale: isRealRoute ? 3 : 2,
-          },
-          offset: '0',
-          repeat: isRealRoute ? '14px' : '22px', // sparser dash = "best effort", not a real route
-        }],
-      });
-      styleRef.current = isRealRoute;
+    if (!linesRef.current.length) {
+      const { Polyline } = window.google.maps;
+      linesRef.current = isRealRoute
+        ? [
+          new Polyline({ path, map, strokeColor: casingColor, strokeOpacity: 1, strokeWeight: ROUTE_CASING_WIDTH, zIndex: 1 }),
+          new Polyline({ path, map, strokeColor: color, strokeOpacity: 1, strokeWeight: ROUTE_WIDTH, zIndex: 2 }),
+        ]
+        : [new Polyline({
+          path,
+          map,
+          strokeOpacity: 0, // dashing comes from the repeating icon below, not the base stroke
+          icons: [{
+            icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.45, strokeColor: color, scale: 2 },
+            offset: '0',
+            repeat: '22px', // a sparse dash = "best effort", not a real route
+          }],
+        })];
+      styleRef.current = style;
     } else {
-      lineRef.current.setPath(path);
+      linesRef.current.forEach((line) => line.setPath(path));
     }
-  }, [map, path, isRealRoute, color]);
+  }, [map, path, isRealRoute, color, casingColor]);
 
   // True-unmount-only teardown — the effect above already removes the line
   // the moment the path clears via its own guard clause; this only catches
@@ -64,10 +69,8 @@ export function useWaypointNavigationLine(map, path, isRealRoute, color = '#EF44
   // Leaflet mid-session).
   useEffect(() => {
     return () => {
-      if (lineRef.current) {
-        lineRef.current.setMap(null);
-        lineRef.current = null;
-      }
+      linesRef.current.forEach((line) => line.setMap(null));
+      linesRef.current = [];
     };
   }, []);
 }

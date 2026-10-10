@@ -1,8 +1,8 @@
 import React, { useId } from 'react';
 import { ROAD_LINE_NEAR_OPACITY, ROAD_LINE_FAR_OPACITY } from '../utils/arRoadLine';
 
-// AR Scan's road line: the ribbon from buildRoadRibbon, filled in the app's tactical red
-// and fading out with distance (solid at your feet, faint at the draw limit). Drawn in
+// AR Scan's road line: the ribbon from buildRoadRibbon, a band in the accent (index.css,
+// .ar-road-*) narrowing and fading out with distance (solid at your feet, faint at the draw limit). Drawn in
 // screen pixels over the camera, taking no touches.
 const ARRoadLine = ({ ribbon, width, height }) => {
   const fadeId = `ar-road-fade-${useId().replace(/:/g, '')}`;
@@ -24,12 +24,12 @@ const ARRoadLine = ({ ribbon, width, height }) => {
       {!flat && (
         <defs>
           <linearGradient id={fadeId} gradientUnits="userSpaceOnUse" x1="0" y1={ribbon.nearY} x2="0" y2={ribbon.farY}>
-            <stop offset="0" stopColor="#EF4444" stopOpacity={ROAD_LINE_NEAR_OPACITY} />
-            <stop offset="1" stopColor="#EF4444" stopOpacity={ROAD_LINE_FAR_OPACITY} />
+            <stop offset="0" className="ar-road-stop" stopOpacity={ROAD_LINE_NEAR_OPACITY} />
+            <stop offset="1" className="ar-road-stop" stopOpacity={ROAD_LINE_FAR_OPACITY} />
           </linearGradient>
         </defs>
       )}
-      <polygon points={outline} fill={flat ? '#EF4444' : `url(#${fadeId})`} fillOpacity={flat ? 0.35 : 1} />
+      <polygon points={outline} className={flat ? 'ar-road-fill' : undefined} fill={flat ? undefined : `url(#${fadeId})`} fillOpacity={flat ? 0.35 : 1} />
     </svg>
   );
 };

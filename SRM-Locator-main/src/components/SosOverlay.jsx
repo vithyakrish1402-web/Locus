@@ -1,34 +1,55 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { AlertTriangle, MapPin, MapPinOff, Navigation2 } from 'lucide-react';
 import { useAlertAudio } from '../hooks/useAlertAudio';
+import { LAYER } from '../utils/layers';
+import { locateTarget } from '../utils/direction';
+import { directionLabel, distanceLabel } from '../copy/place';
+import { SOS_RECEIVED } from '../copy/emergency';
+import Button from './ui/Button';
 
-// Full-viewport takeover for an incoming squad-wide SOS. Deliberately NOT a
-// toast/modal: no click-outside dismiss, no Escape dismiss, no auto-timeout.
-// ACKNOWLEDGE is the only way out, on purpose — a distress beacon that can be
-// missed by glancing away, or dismissed by an accidental tap, defeats the point.
-// (Android's Back button is held off separately, in useBackButtonGuard.)
+// Full-viewport takeover for an incoming Emergency alert (redesign Emergency batch, E4).
+// Deliberately NOT a toast/modal: no click-outside dismiss, no Escape dismiss, no
+// auto-timeout. Acknowledge is the only way out, on purpose — a distress beacon that can be
+// missed by glancing away, or dismissed by an accidental tap, defeats the point. (Android's
+// Back button is held off separately, in useBackButtonGuard.)
 //
-// z-[10002]: one above every other z-index in the app (UpdateModal's 10000 is the
-// next highest actual-runtime value; LocusGuide's 10000 never coexists with this
-// screen since it only renders pre-login). A distress beacon outranks everything
-// else on screen, including a mandatory update gate. Rendered as a `fixed` sibling at the
+// LAYER.emergency (utils/layers.js): the top of the app's stacking order, over AR Scan,
+// the notices and UpdateModal. A distress beacon outranks everything else on
+// screen, including a mandatory update gate. Rendered as a `fixed` sibling at the
 // top level of App.jsx's return, not nested inside the map component tree, so it
 // isn't trapped inside a Leaflet/Google Maps stacking context — those libraries
 // only establish stacking contexts within their own subtree.
 //
-// HexGridOverlay.js, referenced as a possible texture source, no longer exists —
-// it was deliberately deleted (commit 5353d06, "completely remove GeoFencePainter
-// and HexGridOverlay canvas features"). The hex pattern below is a fresh inline
-// SVG tile, not a resurrection of that file.
-const HEX_PATTERN_ID = 'sos-hex-pattern';
+// The look: a red band (the emergency colour, white text) with who needs help, how long ago,
+// and where their phone's last known location is from here; then the footer line and
+// Acknowledge. No glow and no flashing: the alarm and the vibration carry the urgency.
 
-const minutesAgo = (ageMs) => Math.floor((ageMs || 0) / 60000);
+const AGE_TICK_MS = 15000;
 
-const SosOverlay = ({ senderName, lat, lng, ageMs = 0, pendingCount = 0, onAcknowledge }) => {
+const SosOverlay = ({
+  senderName,
+  lat,
+  lng,
+  // How old the alert was when the server sent it (the server's own clock), and when it
+  // reached this phone (this phone's clock). Its age counts on from there.
+  ageMs = 0,
+  receivedAt = null,
+  pendingCount = 0,
+  // "1 of 2" when alerts are queued (useIncomingSos).
+  position = 1,
+  total = 1,
+  // This phone's position and heading, to say where the sender is from here.
+  me = null,
+  heading = null,
+  headingLive = false,
+  onAcknowledge,
+}) => {
   const { start, stop } = useAlertAudio();
   const overlayRef = useRef(null);
   const acknowledgeRef = useRef(null);
   const titleId = useId();
   const descriptionId = useId();
+  const [now, setNow] = useState(() => Date.now());
 
   // No "already started" guard on purpose: start() is idempotent and stop() fully
   // tears down, so mount -> cleanup -> mount (what <StrictMode> does in dev) ends
@@ -41,6 +62,12 @@ const SosOverlay = ({ senderName, lat, lng, ageMs = 0, pendingCount = 0, onAckno
     }
     return () => stop();
   }, [start, stop]);
+
+  // The age goes on counting while the alert is up.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), AGE_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
 
   // Modal focus handling. The page underneath stays mounted and focusable, so without
   // this a keyboard or screen-reader user could Tab straight out of the alert into the
@@ -64,23 +91,31 @@ const SosOverlay = ({ senderName, lat, lng, ageMs = 0, pendingCount = 0, onAckno
   }, []);
 
   const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
-  const minutes = minutesAgo(ageMs);
-  const displayName = (senderName || 'UNKNOWN NODE').toUpperCase();
+  const elapsed = (ageMs || 0) + (Number.isFinite(receivedAt) ? Math.max(0, now - receivedAt) : 0);
+  const minutes = Math.floor(elapsed / 60000);
+  const name = senderName || SOS_RECEIVED.someone;
+  const ageText = SOS_RECEIVED.age(minutes);
 
-  const statusLine = minutes >= 1
-    ? `Sent ${minutes} min ago // Unacknowledged`
-    : 'Transmitting // Unacknowledged';
+  // Where their phone's last known location is from here (13a): distance and a clock
+  // direction while the compass is live, compass words otherwise; coordinates if this phone
+  // has no position of its own.
+  const where = hasLocation ? locateTarget(me, { lat, lng }, { heading, headingLive }) : null;
+  let whereText = null;
+  if (hasLocation && where?.here) whereText = SOS_RECEIVED.closeBy;
+  else if (hasLocation && where) whereText = [SOS_RECEIVED.about(distanceLabel(where.shownDistance)), directionLabel(where)].filter(Boolean).join(' · ');
+  else if (hasLocation) whereText = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  const locationLine = hasLocation ? `${SOS_RECEIVED.located} · ${whereText}` : SOS_RECEIVED.noLocation;
+  const arrowTurn = where?.clock && Number.isFinite(heading) ? where.bearing - heading : null;
 
-  // What a screen reader announces on open (role="alertdialog" is announced
-  // assertively) — the visible layout is terse and all-caps, so say it in words.
+  const counter = total > 1 ? SOS_RECEIVED.ofTotal(position, total) : null;
+
+  // What a screen reader announces on open (role="alertdialog" is announced assertively).
   const spokenDescription = [
-    `${senderName || 'An unknown squad member'} has triggered an SOS beacon.`,
-    hasLocation ? `Last known position ${lat.toFixed(4)}, ${lng.toFixed(4)}.` : 'Position unavailable.',
-    minutes >= 1 ? `Sent ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago.` : null,
-    pendingCount > 0
-      ? `${pendingCount} more SOS ${pendingCount === 1 ? 'alert is' : 'alerts are'} waiting after this one.`
-      : null,
-    'Activate Acknowledge to dismiss.',
+    `${SOS_RECEIVED.needsHelp(name)}.`,
+    `${ageText}.`,
+    `${locationLine}.`,
+    counter ? `Alert ${counter}.` : null,
+    `Activate ${SOS_RECEIVED.acknowledge} to dismiss.`,
   ].filter(Boolean).join(' ');
 
   const handleAcknowledge = () => {
@@ -104,100 +139,49 @@ const SosOverlay = ({ senderName, lat, lng, ageMs = 0, pendingCount = 0, onAckno
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
       onKeyDown={handleKeyDown}
-      className="fixed inset-0 z-[10002] flex items-center justify-center pointer-events-auto"
-      // #4A0A0A, opaque: a deep maroon that reads as "emergency" without being
-      // mistaken for the tactical-red (#EF4444) UI chrome, and hides the map fully.
-      style={{ background: '#4A0A0A' }}
+      data-testid="sos-overlay"
+      className="fixed inset-0 flex flex-col bg-bg text-text font-ui pointer-events-auto overflow-y-auto"
+      style={{ zIndex: LAYER.emergency }}
     >
       <p id={descriptionId} className="sr-only">{spokenDescription}</p>
 
-      {/* Hex grid layer: clipped to the rounded frame, static. Kept separate from
-          the border below so the strobe (opacity) only touches the border and not
-          the pattern or the text. */}
+      {/* The red band: who, how long ago, where. White on the emergency colour in both themes. */}
       <div
-        aria-hidden="true"
-        className="absolute inset-4 sm:inset-8 overflow-hidden"
-        style={{ borderRadius: '20px' }}
+        data-testid="sos-band"
+        className="bg-emergency text-white px-5 pb-6"
+        style={{ paddingTop: 'calc(2rem + env(safe-area-inset-top))' }}
       >
-        <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.12 }}>
-          <defs>
-            <pattern id={HEX_PATTERN_ID} width="44" height="76" patternUnits="userSpaceOnUse" patternTransform="scale(1)">
-              <path
-                d="M22 0 L44 12.7 L44 38 L22 50.7 L0 38 L0 12.7 Z"
-                fill="none"
-                stroke="#EF4444"
-                strokeWidth="1"
-              />
-              <path
-                d="M22 50.7 L44 63.4 L44 76 L22 88.7 L0 76 L0 63.4 Z"
-                fill="none"
-                stroke="#EF4444"
-                strokeWidth="1"
-              />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill={`url(#${HEX_PATTERN_ID})`} />
-        </svg>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20" aria-hidden="true">
+            <AlertTriangle size={24} />
+          </span>
+          <span className="flex-1 text-label">{SOS_RECEIVED.kicker}</span>
+          {counter && (
+            <span data-testid="sos-counter" className="rounded-full bg-white/20 px-3 py-1 text-label tabular-nums">{counter}</span>
+          )}
+        </div>
+        <h1 id={titleId} className="mt-6 text-display break-words">{SOS_RECEIVED.needsHelp(name)}</h1>
+        <p data-testid="sos-age" className="mt-2 text-body text-white/90">{ageText}</p>
 
-        <span
-          className="absolute top-4 left-5 font-dot uppercase tracking-[0.25em]"
-          style={{ fontSize: '10px', color: 'rgba(200,140,140,0.55)' }}
-        >
-          Tactical Grid
-        </span>
+        <div data-testid="sos-location" data-has-location={hasLocation || undefined} className="mt-5 flex items-center gap-4 rounded-card bg-black/15 p-4">
+          <span className="flex items-center justify-center w-14 h-14 shrink-0 rounded-full bg-white/20" aria-hidden="true">
+            {!hasLocation
+              ? <MapPinOff size={26} />
+              : arrowTurn !== null
+                ? <Navigation2 size={26} style={{ transform: `rotate(${arrowTurn}deg)` }} />
+                : <MapPin size={26} />}
+          </span>
+          <p className="text-body font-semibold">{locationLine}</p>
+        </div>
       </div>
 
-      {/* Strobing border + glow (see .locus-sos-strobe in index.css). Its own
-          layer so the animation is opacity-only and the glow isn't repainted. */}
-      <div
-        aria-hidden="true"
-        className="locus-sos-strobe absolute inset-4 sm:inset-8 pointer-events-none"
-        style={{
-          border: '2px solid #EF4444',
-          borderRadius: '20px',
-          boxShadow: '0 0 60px rgba(239,68,68,0.45), inset 0 0 60px rgba(239,68,68,0.08)',
-        }}
-      />
-
-      {/* Center content */}
-      <div className="relative z-10 flex flex-col items-center text-center px-6">
-        <h1
-          id={titleId}
-          className="font-dot font-bold text-white leading-none"
-          style={{ fontSize: 'clamp(52px, 12vw, 72px)', letterSpacing: '0.15em' }}
-        >
-          SOS
-        </h1>
-
-        <div className="mt-6 font-mono text-white" style={{ fontSize: '20px', lineHeight: 1.5 }}>
-          <div>{displayName}</div>
-          <div>{hasLocation ? `${lat.toFixed(4)}, ${lng.toFixed(4)}` : 'COORDINATES UNAVAILABLE'}</div>
-        </div>
-
-        <p
-          className="font-mono uppercase tracking-widest mt-4"
-          style={{ fontSize: '14px', color: '#F0997B' }}
-        >
-          {statusLine}
-        </p>
-
-        <button
-          ref={acknowledgeRef}
-          onClick={handleAcknowledge}
-          className="mt-8 bg-white text-black font-mono font-bold uppercase tracking-widest focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-white"
-          style={{ fontSize: '16px', padding: '16px 40px', borderRadius: '20px' }}
-        >
-          Acknowledge
-        </button>
-
-        {pendingCount > 0 && (
-          <p
-            className="font-mono uppercase tracking-widest mt-4"
-            style={{ fontSize: '12px', color: '#F0997B' }}
-          >
-            +{pendingCount} more waiting
-          </p>
-        )}
+      <div className="flex-1 flex flex-col px-5 pt-5" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
+        <p data-testid="sos-footer" className="text-secondary text-text-secondary">{SOS_RECEIVED.footer}</p>
+        <div className="flex-1" />
+        <Button ref={acknowledgeRef} variant="danger" size="large" block onClick={handleAcknowledge} className="mt-6">
+          {SOS_RECEIVED.acknowledge}
+        </Button>
+        {pendingCount > 0 && <span className="sr-only">{`${pendingCount} more waiting`}</span>}
       </div>
     </div>
   );

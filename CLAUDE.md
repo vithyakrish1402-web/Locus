@@ -42,9 +42,12 @@ npm run release:verify            # check a published release the way a device w
 npm run release:verify -- --bundle  # the same for the latest js-* bundle
 
 npm run device-check:wifi         # prove the wifi_aps Firestore read on a USB-connected phone
+npm run sidetest:install          # install "LOCUS Test" next to LOCUS on a USB phone (publishes nothing)
 ```
 
 `device-check:wifi` needs one phone on adb running a signed-in *debug* LOCUS. It builds in Vite's `device-check` mode, the only build that contains `src/devtools/` (the `MODE` check in `main.jsx` compiles it out of every other build, releases included). It then cold-starts the app three times, reads each run's report from logcat, and reinstalls the normal debug build (`--keep` skips that). It refuses to run if the phone is on a downloaded live-update bundle: capgo only resets to an APK's built-in JS when `versionCode` changes, and an in-place debug install keeps it.
+
+`sidetest:install` builds the real app as a separate app, **LOCUS Test** (`com.locus.app.sidetest`, debug-signed), with both updaters off (Vite mode `sidetest`, `src/utils/buildMode.js`), and installs it next to LOCUS. It always puts a production web build back afterwards, and the release scripts and the Android release build refuse any web build that isn't production (`dist/locus-build.json`). See `UPDATER.md`.
 
 Both release commands need the `gh` CLI authenticated; `npm run release` also needs the
 signing keystore configured in `android/local.properties`. See **`UPDATER.md`** — it is the

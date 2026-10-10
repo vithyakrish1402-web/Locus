@@ -77,6 +77,8 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 const { default: App } = await import('../src/App.jsx');
 
 beforeEach(() => {
+  // The camera was allowed before, so AR Scan opens without its explainer (see cameraExplainer.test.jsx).
+  try { localStorage.setItem('locus.cameraAllowed', '1'); } catch { /* no storage */ }
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
     value: {
@@ -95,23 +97,23 @@ afterEach(() => {
 
 const HERE = { lat: 12.8230, lng: 80.0440 };
 const tabBar = () => within(screen.getByRole('navigation', { name: 'Main' }));
-const proximity = () => Number(screen.getByText('PROXIMITY').nextSibling.textContent.replace('M', ''));
+const proximity = () => Number(screen.getByTestId('ar-readout-distance').textContent.replace(' m', ''));
 
 let code;
 const member = (lat, lng, extra = {}) => ({ uid: 'u-bravo', name: 'Bravo', roomCode: code, lat, lng, battery: 50, lastSeen: 1, ...extra });
 const roster = (entries) => act(() => fakeSocket.receive('users-update', entries));
 
-// On the map, with Bravo ~110 m north, then SCAN (which aims at Bravo) and GRANT_ACCESS.
+// On the map, with Bravo ~110 m north, then SCAN (which aims at Bravo) and Start AR Scan.
 const scanAtBravo = async () => {
   navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: HERE.lat, longitude: HERE.lng, speed: 0 } });
   render(<App />);
   code = document.querySelector('.sr-only').textContent;
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
   roster({ 'sock-1': member(HERE.lat + 0.001, HERE.lng) });
-  fireEvent.click(tabBar().getByRole('button', { name: /SCAN/ }));
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
-  expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
+  fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
+  expect(screen.getByTestId('ar-target-pill').textContent).toContain('Bravo');
 };
 
 // Bravo walks ~550 m further north, over a few updates (the roster smooths positions).
@@ -119,21 +121,19 @@ const bravoWalksAway = (id = 'sock-1', extra = {}) => {
   for (let i = 0; i < 8; i++) roster({ [id]: member(HERE.lat + 0.006, HERE.lng, extra) });
 };
 
-// Same, but opened from Bravo's card in the SQUAD sheet (its AR Tracking button).
+// Same, but opened from Bravo's row in the group panel (Find with AR Scan, in their options).
 const cardArAtBravo = async () => {
   navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: HERE.lat, longitude: HERE.lng, speed: 0 } });
   render(<App />);
   code = document.querySelector('.sr-only').textContent;
-  fireEvent.click(screen.getByRole('button', { name: /initialize squad/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
   roster({ 'sock-1': member(HERE.lat + 0.001, HERE.lng) });
-  fireEvent.click(tabBar().getByRole('button', { name: /SQUAD/ }));
-  // The smallest element around Bravo's name that holds an AR Tracking button: their card.
-  let card = screen.getByRole('heading', { level: 4, name: 'Bravo' });
-  while (!within(card).queryByTitle('AR Tracking')) card = card.parentElement;
-  fireEvent.click(within(card).getByTitle('AR Tracking'));
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
-  expect(screen.getByText('Bravo', { selector: 'h2' })).toBeTruthy();
+  fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Options for Bravo' })).getByRole('button', { name: 'Find with AR Scan' }));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
+  expect(screen.getByTestId('ar-target-pill').textContent).toContain('Bravo');
 };
 
 describe('AR Scan on a squad member', () => {

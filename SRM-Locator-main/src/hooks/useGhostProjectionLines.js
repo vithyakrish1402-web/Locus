@@ -11,7 +11,7 @@ import { getProjectionSegments } from '../utils/ghostProjection';
 //
 // Leaflet-fallback rendering is separate — TacticalLeafletMap.jsx renders
 // the same segments declaratively via react-leaflet's <Polyline>.
-export function useGhostProjectionLines(map, ghostMembers, color = '#A1A1AA') {
+export function useGhostProjectionLines(map, ghostMembers, color = '#8A94A3') {
   useEffect(() => {
     if (!map || !window.google) return;
     const maps = window.google.maps;

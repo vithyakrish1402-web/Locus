@@ -1,42 +1,56 @@
-import React from 'react';
-import { Crosshair, Navigation, X } from 'lucide-react';
+import React, { useRef } from 'react';
+import { Flag, ScanLine, X } from 'lucide-react';
+import { MARKERS } from '../copy/map';
+import { useClearOfControls } from '../hooks/useClearOfControls';
 
 // Extracted out of App.jsx so both the google-map-react primary map and the
-// Leaflet fallback (TacticalLeafletMap.jsx) can render the same rally-point
+// Leaflet fallback (TacticalLeafletMap.jsx) can render the same meeting point
 // marker without duplicating it.
-const WaypointMarker = ({ name, onClick, onClear, canClear, onTrack }) => (
-  <div
-    onClick={onClick}
-    className="w-12 h-12 -ml-6 -mt-6 rounded-full flex items-center justify-center cursor-pointer relative z-[60]"
-  >
-    <div className="absolute inset-0 rounded-full border-2 border-red-500 bg-red-500/20 animate-ping" />
-    <div className="absolute inset-2 rounded-full border-2 border-red-500 bg-black/80 shadow-[0_0_20px_rgba(239,68,68,0.8)] flex items-center justify-center">
-      <Crosshair size={18} className="text-red-500" />
+//
+// Redesign (Map batch, piece 5): an ink pin with a flag (--color-map-meeting), a plate
+// "Meeting point · {place}", and its two small round buttons: Find with AR Scan, for every
+// member, and Remove, only for who may remove it (the Group Lead, or whoever set it).
+const WaypointMarker = ({ name, onClick, onClear, canClear, onTrack }) => {
+  // The plate slides left, out from under the map controls, when the pin is near them.
+  const plateRef = useRef(null);
+  useClearOfControls(plateRef);
+  return (
+    <div
+      onClick={onClick}
+      data-testid="meeting-point-marker"
+      className="w-12 h-12 -ml-6 -mt-6 flex items-center justify-center cursor-pointer relative z-[60] font-ui"
+    >
+      <div className="absolute inset-1.5 rounded-full bg-[var(--color-map-meeting)] text-bg border-[3px] border-[var(--color-map-casing)] shadow-[var(--shadow-2)] flex items-center justify-center">
+        <Flag size={18} aria-hidden="true" />
+      </div>
+      <div ref={plateRef} data-testid="meeting-point-plate" className="absolute top-full mt-1 whitespace-nowrap rounded-full bg-[var(--color-map-plate)] px-2 py-0.5 text-caption font-semibold text-text shadow-[var(--shadow-1)] pointer-events-none">
+        {MARKERS.meetingPointPlate(name)}
+      </div>
+      {/* Find with AR Scan: every member (not just whoever set it) gets a bearing to it. */}
+      {onTrack && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onTrack(); }}
+          title={MARKERS.findWithAr}
+          aria-label={MARKERS.findWithAr}
+          className="absolute -bottom-1 -right-2 w-7 h-7 rounded-full bg-raised text-accent border border-border shadow-[var(--shadow-1)] flex items-center justify-center z-[61]"
+        >
+          <ScanLine size={14} aria-hidden="true" />
+        </button>
+      )}
+      {canClear && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClear(); }}
+          title={MARKERS.removeMeetingPoint}
+          aria-label={MARKERS.removeMeetingPoint}
+          className="absolute -top-1 -right-2 w-7 h-7 rounded-full bg-raised text-text-secondary border border-border shadow-[var(--shadow-1)] flex items-center justify-center z-[61]"
+        >
+          <X size={14} aria-hidden="true" />
+        </button>
+      )}
     </div>
-    <div className="absolute top-full mt-1 whitespace-nowrap bg-red-500 text-white font-dot text-[10px] uppercase px-2 py-0.5 tracking-widest pointer-events-none">
-      {name}
-    </div>
-    {/* AR_TRACK — every squad member (not just the Commander who dropped it) needs a
-        live bearing from their own position to the rally point, not just a static pin. */}
-    {onTrack && (
-      <button
-        onClick={(e) => { e.stopPropagation(); onTrack(); }}
-        title="AR Track Rally Point"
-        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-black border-2 border-white/60 flex items-center justify-center text-white hover:bg-red-500 hover:border-red-500 transition-colors z-[61] shadow-[0_0_8px_rgba(0,0,0,0.6)]"
-      >
-        <Navigation size={12} />
-      </button>
-    )}
-    {canClear && (
-      <button
-        onClick={(e) => { e.stopPropagation(); onClear(); }}
-        title="Clear Rally Point"
-        className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-black border-2 border-white/60 flex items-center justify-center text-white hover:bg-red-500 hover:border-red-500 transition-colors z-[61] shadow-[0_0_8px_rgba(0,0,0,0.6)]"
-      >
-        <X size={12} />
-      </button>
-    )}
-  </div>
-);
+  );
+};
 
 export default WaypointMarker;

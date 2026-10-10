@@ -15,6 +15,8 @@ vi.mock('framer-motion', () => ({
   },
 }));
 
+import fs from 'node:fs';
+import { ARROW_TOP_COLOR, ARROW_SIDE_COLOR, ARROW_EDGE_COLOR } from '../src/utils/arArrowScene.js';
 import ARArrow3D, { ARROW_BASE_TILT_DEG, ARROW_PERSPECTIVE_PX, ARROW_THICKNESS_PX } from '../src/components/ARArrow3D.jsx';
 
 const { default: ARCompass } = await import('../src/ARCompass.jsx');
@@ -49,10 +51,31 @@ describe('ARArrow3D', () => {
     expect([...sideZ].sort((a, b) => a - b)).toEqual(sideZ);
     expect(zOf(top)).toBe(ARROW_THICKNESS_PX);
     expect(Math.max(...sideZ)).toBeLessThan(zOf(top));
-    const fills = [...top.querySelectorAll('polygon')].map((p) => p.getAttribute('fill')).filter((f) => f !== 'none');
+    const fills = [...top.querySelectorAll('polygon')].filter((p) => p.getAttribute('fill') !== 'none').map((p) => p.getAttribute('class'));
     expect(new Set(fills).size).toBe(2); // lit and shaded halves
-    const sideFill = sides[1].querySelector('polygon').getAttribute('fill');
+    const sideFill = sides[1].querySelector('polygon').getAttribute('class');
     expect(fills).not.toContain(sideFill);
+  });
+
+  it("lies on the ground at the redesign's angle: perspective(520px) rotateX(58deg)", () => {
+    expect(ARROW_PERSPECTIVE_PX).toBe(520);
+    expect(ARROW_BASE_TILT_DEG).toBe(58);
+  });
+
+  it('is in the accent, never red', () => {
+    render(<ARArrow3D rotation={0} transition={{ duration: 0 }} />);
+    const html = screen.getByTestId('ar-arrow-3d').outerHTML;
+    expect(html).not.toMatch(/fill="#|stroke="#|red/i);
+    const css = fs.readFileSync(`${process.cwd()}/src/index.css`, 'utf8');
+    for (const cls of ['ar-arrow-lit', 'ar-arrow-shaded', 'ar-arrow-side', 'ar-arrow-base', 'ar-arrow-edge']) {
+      expect(html).toContain(cls);
+      expect(css).toMatch(new RegExp(`\\.${cls} \\{[^}]*var\\(--color-accent\\)`));
+    }
+  });
+
+  it('the realistic (three.js) arrow is blue too', () => {
+    const blue = (hex) => (hex & 0xff) > ((hex >> 16) & 0xff);
+    for (const c of [ARROW_TOP_COLOR, ARROW_SIDE_COLOR, ARROW_EDGE_COLOR]) expect(blue(c)).toBe(true);
   });
 });
 
@@ -60,7 +83,7 @@ describe('ARCompass arrow by AR_RENDER_MODE', () => {
   const HERE = { lat: 12.8230, lng: 80.0440 };
   const open = async (fidelity) => {
     render(<ARCompass target={{ name: 'X', lat: 12.8240, lng: 80.0440 }} liveLocation={HERE} fidelity={fidelity} onClose={() => {}} />);
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   };
 
   // 'realistic' has its own arrow since Stage 5a: see arArrowRealistic.test.jsx.
@@ -79,6 +102,17 @@ describe('ARCompass arrow by AR_RENDER_MODE', () => {
     // Target due north, phone facing north (no compass reading yet): 0 degrees.
     expect(Number(spinner.dataset.rotate)).toBeCloseTo(0, 6);
     expect(JSON.parse(spinner.dataset.transition)).toEqual({ type: 'spring', damping: 15, stiffness: 100 });
+  });
+
+  it('no red ring and no crosshair round the arrow; a faint mark at the exact centre of the screen', async () => {
+    await open('standard');
+    const ring = screen.getByTestId('ar-arrow-ring');
+    expect(ring.className).not.toMatch(/border|shadow|bg-|rounded/);
+    expect(screen.getByTestId('ar-scan').outerHTML).not.toMatch(/border-white\/20 rounded-full|bg-red-500 rounded-full/);
+    const mark = screen.getByTestId('ar-centre-mark');
+    expect(mark.parentElement).toBe(screen.getByTestId('ar-scan')); // the whole screen, not the HUD
+    expect(mark.className).toContain('left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2');
+    expect(mark.className).toMatch(/pointer-events-none/);
   });
 
   it('defaults to standard when no fidelity is given', async () => {

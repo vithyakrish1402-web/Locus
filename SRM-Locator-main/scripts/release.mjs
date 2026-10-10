@@ -19,6 +19,7 @@ import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSyn
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { releaseVersionConflict } from '../src/utils/liveUpdateManifest.js';
+import { webBuildProblem } from './lib/webBuild.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
@@ -155,8 +156,15 @@ if (gradleChanged) {
 
 // ---------------------------------------------------------------- build
 
+// Only a production web build made by this run goes into the APK: never test JavaScript
+// left by npm run sidetest:install, nor a device check (scripts/lib/webBuild.mjs).
+const webBuildStarted = Date.now();
 run('npm', ['run', 'build']);
 run('npx', ['cap', 'sync', 'android']);
+for (const [dir, label] of [[join(ROOT, 'dist'), 'dist/'], [join(ROOT, 'android', 'app', 'src', 'main', 'assets', 'public'), "the APK's web assets"]]) {
+  const problem = webBuildProblem({ dir, builtAfter: webBuildStarted, label });
+  if (problem) die(problem);
+}
 
 // The ".\" is load-bearing on Windows. A .bat can only be spawned through a shell, and
 // cmd.exe does not search the current directory for executables - so a bare

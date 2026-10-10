@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 //
-// SYS_CONFIG -> SEND_APP: download or copy the installer for the version on this phone.
+// Settings -> Send LOCUS to someone: download or copy the installer for the version on this phone.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SEND_APP } from '../src/copy/settings.js';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const platform = vi.hoisted(() => ({ native: true, version: '1.1.0' }));
@@ -56,39 +57,39 @@ describe('SendApp', () => {
     platform.version = '1.0.0';
     const openUrl = vi.fn();
     render(<SendApp openUrl={openUrl} />);
-    expect(await screen.findByText(/LOCUS v1\.0\.0 · 4\.8 MB/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /DOWNLOAD APK/ }));
+    expect(await screen.findByText(/LOCUS 1\.0\.0 · 4\.8 MB/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: SEND_APP.download }));
     expect(openUrl).toHaveBeenCalledWith('https://example.test/v1.0.0/locus-latest.apk');
   });
 
   it('off the phone, sends the newest APK', async () => {
     platform.native = false;
     render(<SendApp openUrl={vi.fn()} />);
-    expect(await screen.findByText(/LOCUS v1\.1\.0/)).toBeTruthy();
+    expect(await screen.findByText(/LOCUS 1\.1\.0/)).toBeTruthy();
   });
 
   it('COPY LINK copies the installer link and says so', async () => {
     render(<SendApp openUrl={vi.fn()} />);
-    await screen.findByText(/LOCUS v1\.1\.0/);
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /COPY LINK/ })));
+    await screen.findByText(/LOCUS 1\.1\.0/);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: SEND_APP.copyLink })));
     expect(clip.copyText).toHaveBeenCalledWith('https://example.test/v1.1.0/locus-latest.apk');
-    expect(screen.getByRole('button', { name: /COPIED/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: SEND_APP.copied })).toBeTruthy();
   });
 
   it('says when the copy failed', async () => {
     clip.copyText = vi.fn(async () => false);
     render(<SendApp openUrl={vi.fn()} />);
-    await screen.findByText(/LOCUS v1\.1\.0/);
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /COPY LINK/ })));
-    expect(screen.getByRole('button', { name: /COPY FAILED/ })).toBeTruthy();
+    await screen.findByText(/LOCUS 1\.1\.0/);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: SEND_APP.copyLink })));
+    expect(screen.getByRole('button', { name: SEND_APP.copyFailed })).toBeTruthy();
   });
 
   it('keeps both buttons off until the installer is found', () => {
     globalThis.fetch = vi.fn(() => new Promise(() => {}));
     render(<SendApp openUrl={vi.fn()} />);
     expect(screen.getByText(/Finding the installer/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: /DOWNLOAD APK/ }).disabled).toBe(true);
-    expect(screen.getByRole('button', { name: /COPY LINK/ }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: SEND_APP.download }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: SEND_APP.copyLink }).disabled).toBe(true);
   });
 
   it('says why it failed, and TRY AGAIN looks again', async () => {
@@ -98,7 +99,7 @@ describe('SendApp', () => {
       .mockResolvedValue({ ok: true, json: async () => RELEASES });
     render(<SendApp openUrl={vi.fn()} />);
     expect(await screen.findByText(/GitHub returned HTTP 403/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'TRY AGAIN' }));
-    await waitFor(() => expect(screen.getByText(/LOCUS v1\.1\.0/)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: SEND_APP.tryAgain }));
+    await waitFor(() => expect(screen.getByText(/LOCUS 1\.1\.0/)).toBeTruthy());
   });
 });

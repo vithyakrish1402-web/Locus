@@ -3,7 +3,7 @@ import React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { INDICATOR_SPRING } from '../utils/motion';
 
-// The phone's bottom bar. One highlight slides between the tabs on a spring (a shared
+// The phone's bottom bar (redesign Map batch): Map, Scan and Group. One highlight slides between the tabs on a spring (a shared
 // layoutId), so changing tab reads as one object moving rather than two states swapping.
 // Each icon also answers in its own way when its tab becomes active - the map lifts, the
 // scan reticle turns a quarter, the squad pops - keyed on `active` so it plays once per
@@ -26,28 +26,30 @@ function Tab({ tab, active, onSelect, reduceMotion }) {
       type="button"
       onClick={() => onSelect(id)}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex-1 flex flex-col items-center justify-center gap-1 py-2 ${
-        active ? 'text-red-500' : 'text-zinc-500'
+      className={`relative flex-1 flex flex-col items-center justify-center gap-1 py-1.5 font-ui focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${
+        active ? 'text-accent' : 'text-text-secondary'
       }`}
     >
-      {active && (
+      <span className="relative flex items-center justify-center w-16 h-8">
+        {active && (
+          <motion.span
+            layoutId="locus-tab-highlight"
+            transition={reduceMotion ? { duration: 0 } : INDICATOR_SPRING}
+            className="absolute inset-0 rounded-full bg-accent-soft"
+            aria-hidden="true"
+          />
+        )}
         <motion.span
-          layoutId="locus-tab-highlight"
-          transition={reduceMotion ? { duration: 0 } : INDICATOR_SPRING}
-          className="absolute inset-x-3 inset-y-0.5 border border-red-500/40 bg-red-500/10 shadow-[0_0_18px_rgba(239,68,68,0.25),inset_0_0_12px_rgba(239,68,68,0.12)]"
-          aria-hidden="true"
-        />
-      )}
-      <motion.span
-        key={active ? `${id}-on` : `${id}-off`}
-        initial={false}
-        animate={active && !reduceMotion ? ICON_ENTER[flourish] : undefined}
-        transition={{ duration: 0.42, ease: [0.2, 0.8, 0.2, 1] }}
-        className={`relative flex ${active ? 'drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : ''}`}
-      >
-        <Icon className="w-5 h-5" />
-      </motion.span>
-      <span className="relative text-[9px] tracking-widest font-dot uppercase">{label}</span>
+          key={active ? `${id}-on` : `${id}-off`}
+          initial={false}
+          animate={active && !reduceMotion ? ICON_ENTER[flourish] : undefined}
+          transition={{ duration: 0.42, ease: [0.2, 0.8, 0.2, 1] }}
+          className="relative flex"
+        >
+          <Icon className="w-6 h-6" aria-hidden="true" />
+        </motion.span>
+      </span>
+      <span className={`relative text-caption ${active ? 'font-semibold' : ''}`}>{label}</span>
     </button>
   );
 }
@@ -61,10 +63,8 @@ export default function BottomTabBar({ tabs, activeId, onSelect }) {
   return (
     <nav
       aria-label="Main"
-      className="md:hidden fixed bottom-0 w-full bg-black/90 backdrop-blur-xl border-t border-white/10 flex items-stretch px-2 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto"
+      className="md:hidden fixed bottom-0 w-full bg-surface border-t border-border flex items-stretch px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto"
     >
-      {/* Light catching the top edge of the glass, instead of a flat divider. */}
-      <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent" aria-hidden="true" />
       {tabs.map((tab) => (
         <Tab key={tab.id} tab={tab} active={tab.id === activeId} onSelect={onSelect} reduceMotion={reduceMotion} />
       ))}

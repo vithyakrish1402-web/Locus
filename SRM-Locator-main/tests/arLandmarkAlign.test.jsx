@@ -68,7 +68,7 @@ const tagTop = (name) => parseFloat(tagEl(name).style.top);
 
 const openAr = async (props = {}) => {
   const view = render(<ARCompass target={TARGET} liveLocation={HERE} buildings={[TOWER]} onClose={() => {}} {...props} />);
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: /GRANT_ACCESS/ })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   return view;
 };
 
@@ -81,17 +81,18 @@ describe('one-tap ALIGN', () => {
     for (let i = 0; i < 4; i++) compass(towerBearing, 6);
     settle();
     expect(tagLeft('TOWER')).toBeLessThan(45); // drawn off to the left of the real tower
-    expect(screen.queryByRole('button', { name: 'RESET ALIGN' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reset the alignment' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'ALIGN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Align with the building in the middle of the view' }));
     for (let i = 0; i < 4; i++) compass(towerBearing, 6); // same error, now corrected
     settle();
     expect(tagLeft('TOWER')).toBeCloseTo(50, 0);
     // The pitch correction too: the user centred the tower, so its tag's point is on the
     // centre row as well (it was a little above: the anchor is 60% up the building).
     expect(tagTop('TOWER')).toBeCloseTo(50, 0);
-    expect(success).toHaveBeenCalledWith(expect.stringContaining('ALIGNED ON TOWER: HEADING -6.0°'));
-    expect(screen.getByRole('button', { name: 'RESET ALIGN' }).textContent).toBe('RESET -6.0°');
+    expect(success).toHaveBeenCalledWith('Aligned on TOWER');
+    // Reset appears once an alignment is in use.
+    expect(screen.getByRole('button', { name: 'Reset the alignment' })).toBeTruthy();
     expect(JSON.parse(window.sessionStorage.getItem(ALIGNMENT_STORAGE_KEY)).headingOffsetDeg).toBeCloseTo(-6, 0);
   });
 
@@ -101,7 +102,7 @@ describe('one-tap ALIGN', () => {
     fix(5);
     for (let i = 0; i < 4; i++) compass(towerBearing, 6);
     settle();
-    fireEvent.click(screen.getByRole('button', { name: 'ALIGN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Align with the building in the middle of the view' }));
     first.unmount();
 
     await openAr(); // AR Scan opened again later in the same app session
@@ -110,45 +111,45 @@ describe('one-tap ALIGN', () => {
     settle();
     expect(tagLeft('TOWER')).toBeCloseTo(50, 0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'RESET ALIGN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset the alignment' }));
     for (let i = 0; i < 4; i++) compass(towerBearing, 6);
     settle();
     expect(tagLeft('TOWER')).toBeLessThan(45);
-    expect(screen.queryByRole('button', { name: 'RESET ALIGN' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reset the alignment' })).toBeNull();
     expect(window.sessionStorage.getItem(ALIGNMENT_STORAGE_KEY)).toBeNull();
   });
 
   it('refuses with a rough GPS fix, and changes nothing', async () => {
-    const error = vi.spyOn(notify, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(notify, 'warning').mockImplementation(() => {});
     await openAr();
     fix(25);
     for (let i = 0; i < 4; i++) compass(towerBearing, 6);
     settle();
     const before = tagLeft('TOWER');
-    fireEvent.click(screen.getByRole('button', { name: 'ALIGN' }));
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('GPS fix too rough'));
+    fireEvent.click(screen.getByRole('button', { name: 'Align with the building in the middle of the view' }));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('isn’t accurate enough'));
     settle();
     expect(tagLeft('TOWER')).toBe(before);
-    expect(screen.queryByRole('button', { name: 'RESET ALIGN' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reset the alignment' })).toBeNull();
   });
 
   it('refuses while walking, when the heading comes from GPS rather than the compass', async () => {
-    const error = vi.spyOn(notify, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(notify, 'warning').mockImplementation(() => {});
     await openAr({ speedMps: 2 });
     fix(5);
     for (let i = 0; i < 4; i++) compass(towerBearing, 6);
-    fireEvent.click(screen.getByRole('button', { name: 'ALIGN' }));
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('stand still'));
+    fireEvent.click(screen.getByRole('button', { name: 'Align with the building in the middle of the view' }));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('Stand still'));
   });
 
   it('refuses with no building in view', async () => {
-    const error = vi.spyOn(notify, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(notify, 'warning').mockImplementation(() => {});
     await openAr();
     fix(5);
     for (let i = 0; i < 4; i++) compass(towerBearing + 150); // facing away
     settle();
-    fireEvent.click(screen.getByRole('button', { name: 'ALIGN' }));
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('centre a building'));
+    fireEvent.click(screen.getByRole('button', { name: 'Align with the building in the middle of the view' }));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('Point at a building first'));
   });
 });
 
@@ -173,7 +174,7 @@ describe('landmark list', () => {
     // Up the building, not on the ground: above the centre row with the phone level (a
     // ground point would sit below it, the camera being 1.4 m up).
     expect(tagTop('TOWER')).toBeLessThan(49);
-    fireEvent.click(screen.getByRole('button', { name: 'ALIGN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Align with the building in the middle of the view' }));
     for (let i = 0; i < 4; i++) compass(towerBearing, 6);
     settle();
     expect(tagLeft('TOWER')).toBeCloseTo(50, 0);

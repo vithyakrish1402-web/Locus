@@ -10,8 +10,10 @@ import GhostMemberMarker from '../GhostMemberMarker';
 import WaypointMarker from './WaypointMarker';
 import BuildingMarker from './BuildingMarker';
 import LeafletReactMarker from './LeafletReactMarker';
+import MemberMarker from './MemberMarker';
 import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
 import { registerMapDriver } from '../utils/mapFocus';
+import { ROUTE_CASING_WIDTH, ROUTE_WIDTH } from '../hooks/useWaypointNavigationLine';
 
 // This engine exists precisely because there is no Google Maps key (see App.jsx's
 // mapEngineFailed / the "keyless Leaflet/OSM engine" warning), so its own basemap must
@@ -20,13 +22,14 @@ import { registerMapDriver } from '../utils/mapFocus';
 // diagonally across every tile served to an unregistered caller — so the fallback
 // advertised as keyless was quietly rendering a watermarked map.
 //
-// OpenStreetMap's standard raster tiles need no key and go to z19, but they're light.
-// The `locus-dark-tiles` filter in index.css inverts them into the dark tactical palette
-// client-side, so the look survives without a paid basemap account.
+// OpenStreetMap's standard raster tiles need no key and go to z19. The `locus-map-tiles`
+// filter in index.css calms them in the light theme and inverts them into the app's dark
+// map colours in the dark theme (it follows <html data-theme>), so both looks survive
+// without a paid basemap account.
 const OSM_DARK_TILES = {
   url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   attribution: '&copy; OpenStreetMap contributors',
-  className: 'locus-dark-tiles',
+  className: 'locus-map-tiles',
   maxNativeZoom: 19,
 };
 
@@ -137,6 +140,13 @@ const TacticalLeafletMap = ({
   onArTrack,
   isSatellite,
   highlightBuildingId,
+  // The theme's line colours (App.jsx reads them; Leaflet's path options take literals), a
+  // member's distance for their plate, and what a lost-connection member's card says.
+  routeColor = '#1F4FB8',
+  casingColor = '#FFFFFF',
+  lastKnownColor = '#8A94A3',
+  memberDistance = () => null,
+  ghostFocusItem = (ghost) => ({ name: ghost.name }),
 }) => {
   const tiles = isSatellite ? SATELLITE_TILES : DARK_TILES;
 
@@ -145,7 +155,7 @@ const TacticalLeafletMap = ({
       center={[center?.lat || SRM_KTR_COORDS.lat, center?.lng || SRM_KTR_COORDS.lng]}
       zoom={zoom || 17}
       zoomControl={false}
-      className="w-full h-full bg-black"
+      className="w-full h-full bg-[var(--color-map-land)]"
     >
       <TileLayer
         key={tiles.url}
@@ -169,7 +179,7 @@ const TacticalLeafletMap = ({
           {/* The wrapper gives the halo a positioned parent at the anchor; see IndoorMarkers. */}
           <div style={{ position: 'relative' }}>
             {WIFI_POSITIONING_ENABLED && liveIndoor && <ConfidenceHalo confidence={liveIndoor.confidence} color="#10B981" />}
-            <LiveLocationMarker zoom={currentZoom} isNavigating={liveIsNavigating} heading={liveHeading} color="#10B981" />
+            <LiveLocationMarker zoom={currentZoom} isNavigating={liveIsNavigating} heading={liveHeading} />
           </div>
         </LeafletReactMarker>
       )}
@@ -197,16 +207,22 @@ const TacticalLeafletMap = ({
           Polyline (see App.jsx's useWaypointNavigationLine). walkingRoute is
           computed once in App.jsx (useWalkingRoute) and shared with the
           Google engine so there's a single throttling clock, not two.
-          Sparser/lighter dash when it's the straight-line "best effort"
-          fallback rather than a real routed path, so it visually reads as
-          less certain. */}
+          A real route is solid, 5 px on a 9 px casing, as the Google line;
+          the straight-line "best effort" fallback stays a sparse, light dash
+          with no casing, so it visually reads as less certain. */}
+      {walkingRoute && walkingRoute.isRealRoute && (
+        <Polyline
+          positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
+          pathOptions={{ color: casingColor, weight: ROUTE_CASING_WIDTH, opacity: 1 }}
+        />
+      )}
       {walkingRoute && (
         <Polyline
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
           pathOptions={
             walkingRoute.isRealRoute
-              ? { color: '#EF4444', dashArray: '6 8', weight: 2, opacity: 0.8 }
-              : { color: '#EF4444', dashArray: '2 12', weight: 2, opacity: 0.45 }
+              ? { color: routeColor, weight: ROUTE_WIDTH, opacity: 1 }
+              : { color: routeColor, dashArray: '2 12', weight: 4, opacity: 0.5 }
           }
         />
       )}
@@ -224,11 +240,12 @@ const TacticalLeafletMap = ({
                 ...(SHOW_INDOOR_POSITION_TO_SQUAD && isOnOtherFloor(u, indoorView) ? { opacity: 0.35 } : {}),
               }}
             >
-              <LiveLocationMarker
-                zoom={currentZoom}
+              <MemberMarker
+                name={u.name}
+                paused={u.status === 'FROZEN'}
                 isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
                 heading={u.heading}
-                color="#EF4444"
+                distance={memberDistance(u)}
               />
               {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
             </div>
@@ -241,7 +258,7 @@ const TacticalLeafletMap = ({
           <Polyline
             key={`ghost-line-${ghost.id}-${i}`}
             positions={[[segment.from.lat, segment.from.lng], [segment.to.lat, segment.to.lng]]}
-            pathOptions={{ color: '#A1A1AA', opacity: segment.opacity, weight: 2, dashArray: '4 6' }}
+            pathOptions={{ color: lastKnownColor, opacity: segment.opacity, weight: 2, dashArray: '4 6' }}
           />
         ));
       })}
@@ -251,10 +268,10 @@ const TacticalLeafletMap = ({
           key={`ghost-${ghost.id}`}
           lat={ghost.position.lat}
           lng={ghost.position.lng}
-          onClick={() => onFocus(ghost.position, { name: `${ghost.phase === 'expired' ? 'LAST KNOWN' : 'SIGNAL LOST'}: ${ghost.name}`, info: `Last seen with ${ghost.battery ?? 0}% battery.` })}
+          onClick={() => onFocus(ghost.position, ghostFocusItem(ghost))}
         >
           <div style={{ opacity: ghost.fading ? 0 : 1, transition: `opacity ${GHOST_FADE_MS}ms ease` }}>
-            <GhostMemberMarker phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} color="#A1A1AA" />
+            <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} />
           </div>
         </LeafletReactMarker>
       ))}
