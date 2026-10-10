@@ -103,6 +103,14 @@ const SCREENS = {
     label: 'Update downloading',
     render: () => <UpdateModal update={appUpdate(UpdateStatus.DOWNLOADING)} />,
   },
+  'update-verifying': {
+    label: 'Update being checked',
+    render: () => <UpdateModal update={appUpdate(UpdateStatus.VERIFYING, { progress: { percent: 100, loaded: 14.2 * 1024 * 1024, total: 14.2 * 1024 * 1024 } })} />,
+  },
+  'update-ready': {
+    label: 'Update ready to install',
+    render: () => <UpdateModal update={appUpdate(UpdateStatus.READY)} />,
+  },
   'update-install-permission': {
     label: 'Update needs install permission',
     render: () => <UpdateModal update={appUpdate(UpdateStatus.PERMISSION_REQUIRED)} />,

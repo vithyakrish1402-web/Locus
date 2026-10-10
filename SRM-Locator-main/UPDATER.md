@@ -59,8 +59,18 @@ nothing unverified is ever handed to the installer. Version comparison also fail
 an unparseable tag means "no update", not "update every launch". A listing with no usable
 `v*` release at all is treated the same way: no update offered.
 
-Then: download to the app cache with a progress bar → verify SHA-256 → `FileProvider` URI
-+ `ACTION_VIEW` → Android's own installer UI takes over.
+Then: download to the app cache with a progress bar → "Checking the update…" (size and
+SHA-256; the hash is built as the bytes arrive, so this is quick) → "Update ready. Tap to
+install." → on that tap, `FileProvider` URI + `ACTION_VIEW` → Android's own installer UI
+takes over. The bar never reads 100% before the checks pass (`displayPercent`), and the
+ready screen keeps its Install button: if the installer is cancelled or refuses, tapping
+Install again reuses the checked file instead of downloading it again.
+
+Every download ends on a screen with a button. No progress for
+`APK_DOWNLOAD_STALL_TIMEOUT_MS` (30 s, top of `useAppUpdate.js`) cancels it, the native side
+deletes the partial file, and the screen offers Try again, which starts from nothing.
+`APK_DOWNLOAD_MAX_RETRIES_AUTO` (0) is how many silent retries come first; a damaged file
+(checksum or size mismatch) is never retried silently.
 
 **Check frequency is once per cold start plus the manual button.** No periodic background
 polling, deliberately — it would cost battery and network for a build that changes weekly
@@ -266,6 +276,13 @@ verify on real hardware.
 5. **UPDATE NOW** → on the first ever update Android shows the "install unknown apps"
    consent. Grant it; returning to LOCUS should resume the download automatically with no
    second tap. On the *next* update that prompt must not reappear.
+5a. **The end of the download.** At the last percent the sheet must move to "Checking the
+   update…" and then "Update ready. Tap to install." within a few seconds. Tap Install, then
+   Cancel in Android's installer: you must land back on the ready screen with Install still
+   working, and no second download.
+5b. **Stall.** Turn on airplane mode mid-download (it also cuts the dev PC's hotspot; fine
+   here, with no scripted clients running): after about 30 s the sheet must say the download didn't finish,
+   and Try again must start a fresh download.
 6. **Mandatory gate.** Publish with `--mandatory` and confirm the app is unusable until
    installed: no LATER, Back does nothing, and it shows before the login screen.
 

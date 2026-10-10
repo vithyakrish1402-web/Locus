@@ -26,7 +26,7 @@ import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Native half of LOCUS's full-APK self-updater (Phase 1).
@@ -37,7 +37,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * stream a file into the cache dir. Three responsibilities, nothing more:
  *
  *   1. download()  - stream an APK into cacheDir/updates with progress events, hashing
- *                    as it goes so verification costs no second pass over the file.
+ *                    as it goes so verification costs no second pass over the file. One
+ *                    last event with stage "verifying" marks the moment the last byte is
+ *                    written and the file closed, before the size and checksum checks.
  *   2. install()   - hand the APK to the system installer via FileProvider + ACTION_VIEW.
  *   3. permission  - query and deep-link Android's per-app "install unknown apps" consent.
  *
@@ -58,7 +60,13 @@ public class LocusUpdaterPlugin extends Plugin {
     private static final long PROGRESS_INTERVAL_MS = 150;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private final AtomicBoolean cancelled = new AtomicBoolean(false);
+    /**
+     * Bumped by every download() and cancelDownload(). A running download whose number is
+     * no longer current has been cancelled or superseded, and stops.
+     */
+    private final AtomicInteger generation = new AtomicInteger();
+    /** The download's open connection, so a cancel can break a read that is stuck waiting. */
+    private volatile HttpURLConnection activeConnection;
 
     /**
      * Whether this app may ask the system to install packages.
@@ -100,7 +108,19 @@ public class LocusUpdaterPlugin extends Plugin {
     /** Abort an in-flight download; the partial file is discarded. */
     @PluginMethod
     public void cancelDownload(PluginCall call) {
-        cancelled.set(true);
+        generation.incrementAndGet();
+        final HttpURLConnection connection = activeConnection;
+        if (connection != null) {
+            // A stalled read only notices a cancel when it returns, which may be never on a
+            // dead network. Closing the connection makes it throw now. Off this thread, as
+            // closing a socket counts as network work.
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    connection.disconnect();
+                }
+            }).start();
+        }
         call.resolve();
     }
 
@@ -117,12 +137,17 @@ public class LocusUpdaterPlugin extends Plugin {
      * @param url       absolute HTTPS URL of the APK asset
      * @param sha256    expected digest, 64 hex chars (case-insensitive)
      * @param fileName  optional file name within cacheDir/updates
+     * @param size      optional expected size in bytes; a different size is refused
      */
     @PluginMethod
     public void download(PluginCall call) {
         final String url = call.getString("url");
         final String expectedSha = call.getString("sha256");
         final String fileName = call.getString("fileName", "locus-update.apk");
+        // Not call.getLong(): it answers null for any number JSON parsed as an Integer,
+        // which every APK under 2 GB is.
+        Object sizeValue = call.getData().opt("size");
+        final Long expectedSize = sizeValue instanceof Number ? ((Number) sizeValue).longValue() : null;
 
         if (url == null || url.isEmpty()) {
             call.reject("Missing 'url'");
@@ -135,16 +160,16 @@ public class LocusUpdaterPlugin extends Plugin {
             return;
         }
 
-        cancelled.set(false);
+        final int myGeneration = generation.incrementAndGet();
         executor.execute(new Runnable() {
             @Override
             public void run() {
-                runDownload(call, url, expectedSha, fileName);
+                runDownload(call, url, expectedSha, expectedSize, fileName, myGeneration);
             }
         });
     }
 
-    private void runDownload(PluginCall call, String url, String expectedSha, String fileName) {
+    private void runDownload(PluginCall call, String url, String expectedSha, Long expectedSize, String fileName, int myGeneration) {
         File target = null;
         HttpURLConnection connection = null;
         try {
@@ -158,7 +183,12 @@ public class LocusUpdaterPlugin extends Plugin {
             purgeUpdateDir();
             target = new File(dir, sanitiseFileName(fileName));
 
+            if (generation.get() != myGeneration) {
+                call.reject("Download cancelled", "CANCELLED");
+                return;
+            }
             connection = (HttpURLConnection) new URL(url).openConnection();
+            activeConnection = connection;
             connection.setInstanceFollowRedirects(true);
             connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
             connection.setReadTimeout(READ_TIMEOUT_MS);
@@ -179,12 +209,16 @@ public class LocusUpdaterPlugin extends Plugin {
 
             InputStream in = null;
             OutputStream out = null;
+            boolean cancelledPartial = false;
             try {
                 in = connection.getInputStream();
                 out = new FileOutputStream(target);
                 int read;
                 while ((read = in.read(buffer)) != -1) {
-                    if (cancelled.get()) {
+                    if (generation.get() != myGeneration) {
+                        // Closed in the finally below, then deleted: a cancelled download
+                        // never leaves a partial APK behind.
+                        cancelledPartial = true;
                         call.reject("Download cancelled", "CANCELLED");
                         return;
                     }
@@ -194,7 +228,7 @@ public class LocusUpdaterPlugin extends Plugin {
 
                     long now = System.currentTimeMillis();
                     if (now - lastEmit >= PROGRESS_INTERVAL_MS) {
-                        emitProgress(received, total);
+                        emitProgress(received, total, "downloading");
                         lastEmit = now;
                     }
                 }
@@ -202,8 +236,23 @@ public class LocusUpdaterPlugin extends Plugin {
             } finally {
                 closeQuietly(out);
                 closeQuietly(in);
+                if (cancelledPartial) {
+                    target.delete();
+                }
             }
-            emitProgress(received, total);
+            // Every byte is written and the file closed. What is left is checking it.
+            emitProgress(received, total, "verifying");
+
+            // Fail closed on size as well as on checksum: fewer bytes than the server or the
+            // release promised is a broken download whatever it hashes to.
+            boolean sizeWrong = (total > 0 && received != total)
+                || (expectedSize != null && expectedSize > 0 && received != expectedSize);
+            if (sizeWrong) {
+                Log.w(TAG, "Size mismatch: got " + received + " bytes, header " + total + ", release " + expectedSize);
+                purgeUpdateDir();
+                call.reject("Size mismatch - download rejected", "SIZE_MISMATCH");
+                return;
+            }
 
             String actualSha = toHex(digest.digest());
             if (!actualSha.equalsIgnoreCase(expectedSha)) {
@@ -222,13 +271,21 @@ public class LocusUpdaterPlugin extends Plugin {
             result.put("bytes", received);
             result.put("sha256", actualSha);
             call.resolve(result);
-        } catch (Exception e) {
-            Log.e(TAG, "Download failed", e);
+        } catch (Throwable e) {
+            // Throwable, not Exception: an Error (out of memory, say) would otherwise end
+            // this thread without ever answering the call, and the screen would wait forever.
             if (target != null) {
                 target.delete();
             }
-            call.reject(e.getMessage() == null ? "Download failed" : e.getMessage(), "IO_ERROR", e);
+            if (generation.get() != myGeneration) {
+                call.reject("Download cancelled", "CANCELLED");
+                return;
+            }
+            Log.e(TAG, "Download failed", e);
+            String message = e.getMessage() == null ? "Download failed" : e.getMessage();
+            call.reject(message, "IO_ERROR", e instanceof Exception ? (Exception) e : null);
         } finally {
+            activeConnection = null;
             if (connection != null) {
                 connection.disconnect();
             }
@@ -305,8 +362,9 @@ public class LocusUpdaterPlugin extends Plugin {
         return pm != null && pm.canRequestPackageInstalls();
     }
 
-    private void emitProgress(long received, long total) {
+    private void emitProgress(long received, long total, String stage) {
         JSObject progress = new JSObject();
+        progress.put("stage", stage);
         progress.put("loaded", received);
         progress.put("total", total);
         progress.put("percent", total > 0 ? (int) ((received * 100L) / total) : -1);
