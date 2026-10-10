@@ -27,6 +27,7 @@ const makeUpdate = (overrides = {}) => ({
   dismissed: false,
   check: vi.fn(),
   startDownload: vi.fn(),
+  installUpdate: vi.fn(),
   openInstallSettings: vi.fn(),
   dismiss: vi.fn(),
   reset: vi.fn(),
@@ -108,25 +109,38 @@ describe('UpdateModal', () => {
   describe('failures', () => {
     const failing = (code) => makeUpdate({ status: UpdateStatus.ERROR, error: { code, message: 'raw' } });
 
-    it('a checksum mismatch says it failed its safety check, and only Try again (no install)', () => {
-      render(<UpdateModal update={failing('CHECKSUM_MISMATCH')} />);
+    it.each(['CHECKSUM_MISMATCH', 'SIZE_MISMATCH'])('%s says the file looks damaged, and only Try again (no install)', (code) => {
+      render(<UpdateModal update={failing(code)} />);
       expect(screen.getByRole('heading', { name: UPDATE.failed.installTitle })).toBeTruthy();
-      expect(screen.getByText(failureSentence('CHECKSUM_MISMATCH'))).toBeTruthy();
-      expect(failureSentence('CHECKSUM_MISMATCH')).toMatch(/safety check/);
-      expect(screen.queryByRole('button', { name: /^install$/i })).toBeNull();
+      expect(screen.getByText('The update file looks damaged, so it was not installed. Tap to try again.')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: UPDATE.ready.install })).toBeNull();
       expect(screen.getByRole('button', { name: UPDATE.failed.tryAgain })).toBeTruthy();
     });
 
-    it.each(['NETWORK', 'PERMISSION_DENIED', 'IO_ERROR', 'RATE_LIMITED', 'CANCELLED', 'NO_RELEASES'])(
-      '%s has its own plain sentence, never the safety-check one',
+    it.each(['NETWORK', 'PERMISSION_DENIED', 'IO_ERROR', 'STALLED', 'RATE_LIMITED', 'CANCELLED', 'NO_RELEASES'])(
+      '%s has its own plain sentence, never the damaged-file one',
       (code) => {
         render(<UpdateModal update={failing(code)} />);
         const text = screen.getByRole('dialog').textContent;
         expect(text).toContain(failureSentence(code));
-        expect(text).not.toMatch(/safety check/);
+        expect(text).not.toMatch(/damaged/);
         expect(text).not.toContain('raw');
       },
     );
+
+    it.each(['IO_ERROR', 'STALLED'])('%s says the download did not finish, with Try again', (code) => {
+      const update = failing(code);
+      render(<UpdateModal update={update} />);
+      expect(screen.getByText("The download didn't finish. Check your internet and tap to try again.")).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: UPDATE.failed.tryAgain }));
+      expect(update.startDownload).toHaveBeenCalledTimes(1);
+    });
+
+    it('any other failure while downloading reads as a download failure, not a failed check', () => {
+      render(<UpdateModal update={makeUpdate({ status: UpdateStatus.ERROR, error: { code: 'HTTP_502', message: 'raw', during: 'download' } })} />);
+      expect(screen.getByRole('heading', { name: UPDATE.failed.installTitle })).toBeTruthy();
+      expect(screen.getByText("The download didn't finish. Check your internet and tap to try again.")).toBeTruthy();
+    });
 
     it('a failure while looking for an update says so, not that an install failed', () => {
       render(<UpdateModal update={failing('NETWORK')} />);
@@ -143,7 +157,7 @@ describe('UpdateModal', () => {
   it('explains the one-time install permission and routes to Android settings', () => {
     const update = makeUpdate({ status: UpdateStatus.PERMISSION_REQUIRED });
     render(<UpdateModal update={update} />);
-    expect(screen.getByText(UPDATE.permission.body)).toBeTruthy();
+    expect(screen.getByText('To install this update, allow LOCUS to install apps. Tap here to open the setting.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: UPDATE.permission.open }));
     expect(update.openInstallSettings).toHaveBeenCalledTimes(1);
   });
@@ -155,10 +169,56 @@ describe('UpdateModal', () => {
     });
     render(<UpdateModal update={update} />);
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('42');
+    expect(screen.getByText('Downloading update… 42%')).toBeTruthy();
     expect(screen.getByText(UPDATE.downloading.amount('5.0 MB', '12.0 MB'))).toBeTruthy();
     expect(screen.queryAllByRole('button')).toEqual([]);
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(update.dismiss).not.toHaveBeenCalled();
+  });
+
+  describe('the end of the download', () => {
+    const at = (status, percent = 100) =>
+      makeUpdate({ status, progress: { percent, loaded: 12 * 1024 * 1024, total: 12 * 1024 * 1024 } });
+
+    it('never shows 100% before the file is saved and checked', () => {
+      for (const status of [UpdateStatus.DOWNLOADING, UpdateStatus.VERIFYING]) {
+        render(<UpdateModal update={at(status)} />);
+        expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('99');
+        expect(screen.getByRole('dialog').textContent).not.toMatch(/100%/);
+        cleanup();
+      }
+    });
+
+    it('shows "Checking the update…" after the last byte, still with no way out', () => {
+      const update = at(UpdateStatus.VERIFYING);
+      render(<UpdateModal update={update} />);
+      expect(screen.getByText('Checking the update…')).toBeTruthy();
+      expect(screen.queryAllByRole('button')).toEqual([]);
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      expect(update.dismiss).not.toHaveBeenCalled();
+    });
+
+    it('when ready, shows 100% and an Install button that hands it to Android', () => {
+      const update = at(UpdateStatus.READY);
+      render(<UpdateModal update={update} />);
+      expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('100');
+      expect(screen.getByText('Update ready. Tap to install.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: UPDATE.ready.install }));
+      expect(update.installUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    it('a mandatory update also reaches a usable Install button, with no Later', () => {
+      render(<UpdateModal update={{ ...at(UpdateStatus.READY), mandatory: true }} />);
+      expect(screen.getByRole('button', { name: UPDATE.ready.install })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: UPDATE.available.later })).toBeNull();
+    });
+
+    it('shows plain "Downloading…" with no number when the size is unknown', () => {
+      render(<UpdateModal update={makeUpdate({ status: UpdateStatus.DOWNLOADING, progress: { percent: -1, loaded: 1024 * 1024, total: -1 } })} />);
+      expect(screen.getByRole('progressbar').hasAttribute('aria-valuenow')).toBe(false);
+      expect(screen.getByText('Downloading…')).toBeTruthy();
+      expect(screen.getByRole('dialog').textContent).not.toMatch(/%/);
+    });
   });
 
   it('is an accessible modal dialog', () => {

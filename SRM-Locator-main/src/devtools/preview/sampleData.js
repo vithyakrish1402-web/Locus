@@ -55,6 +55,7 @@ export const appUpdate = (status, extra = {}) => ({
   dismissed: false,
   check: noop,
   startDownload: noop,
+  installUpdate: noop,
   openInstallSettings: noop,
   dismiss: noop,
   reset: noop,

@@ -22,6 +22,7 @@ export const LocusUpdater = registerPlugin('LocusUpdater', {
     openInstallSettings: unavailable,
     download: unavailable,
     install: unavailable,
+    shareFile: unavailable,
     cancelDownload: () => Promise.resolve(),
     clearCache: () => Promise.resolve(),
     addListener: () => Promise.resolve({ remove: () => {} }),
@@ -31,4 +32,15 @@ export const LocusUpdater = registerPlugin('LocusUpdater', {
 /** True only inside the native Android shell, where self-updating is possible at all. */
 export function isUpdaterAvailable() {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+}
+
+/**
+ * True when this app's native plugin has shareFile(), which came after v1.1.0. A JS bundle
+ * also runs on older shells, so ask the plugin's native method list rather than assume:
+ * calling a missing method would only fail after the whole download.
+ */
+export function canShareInstaller() {
+  if (!isUpdaterAvailable()) return false;
+  const header = Capacitor.PluginHeaders?.find((h) => h.name === 'LocusUpdater');
+  return Boolean(header?.methods?.some((m) => m.name === 'shareFile'));
 }

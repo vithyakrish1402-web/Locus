@@ -1,8 +1,8 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { AlertCircle, ArrowRight, Download, ShieldCheck } from 'lucide-react';
-import { UpdateStatus } from '../hooks/useAppUpdate';
+import { UpdateStatus, displayPercent } from '../hooks/useAppUpdate';
 import { LAYER } from '../utils/layers';
-import { Button } from './ui';
+import { Button, ProgressBar } from './ui';
 import { INSTALL_FAILURES, UPDATE, failureSentence } from '../copy/updates';
 
 // The full app update (redesign P10). Two shapes, one component:
@@ -23,25 +23,6 @@ const formatBytes = (bytes) => {
   return `${mb.toFixed(1)} MB`;
 };
 
-const ProgressBar = ({ percent }) => {
-  const indeterminate = typeof percent !== 'number' || percent < 0;
-  return (
-    <div
-      className="h-2 w-full rounded-full bg-sunken overflow-hidden"
-      role="progressbar"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      {...(indeterminate ? {} : { 'aria-valuenow': percent })}
-    >
-      {/* Full width, scaled from the left edge: a transform, not a width animation. */}
-      <div
-        className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-200"
-        style={{ transform: `scaleX(${indeterminate ? 1 : Math.min(100, Math.max(0, percent)) / 100})`, opacity: indeterminate ? 0.4 : 1 }}
-      />
-    </div>
-  );
-};
-
 const TONE = {
   accent: 'bg-accent-soft text-accent',
   warning: 'bg-warning-soft text-warning',
@@ -53,7 +34,10 @@ const UpdateModal = ({ update }) => {
   const panelRef = useRef(null);
   const primaryRef = useRef(null);
   const { status, manifest, installedVersion, progress, error, mandatory, dismissed } = update;
-  const busy = status === UpdateStatus.DOWNLOADING || status === UpdateStatus.READY;
+  // Busy = no buttons and no dismiss. READY is not busy: it has the Install button, so a
+  // cancelled or refused install never leaves the screen with nothing to tap.
+  const busy = status === UpdateStatus.DOWNLOADING || status === UpdateStatus.VERIFYING;
+  const ready = status === UpdateStatus.READY;
 
   const visible =
     !dismissed &&
@@ -62,6 +46,7 @@ const UpdateModal = ({ update }) => {
       UpdateStatus.AVAILABLE,
       UpdateStatus.PERMISSION_REQUIRED,
       UpdateStatus.DOWNLOADING,
+      UpdateStatus.VERIFYING,
       UpdateStatus.READY,
       UpdateStatus.ERROR,
     ].includes(status);
@@ -110,7 +95,8 @@ const UpdateModal = ({ update }) => {
 
   const size = formatBytes(manifest?.apkSize);
   const failed = status === UpdateStatus.ERROR;
-  const installFailure = failed && INSTALL_FAILURES.has(error?.code);
+  const downloadFailure = error?.during === 'download';
+  const installFailure = failed && (downloadFailure || INSTALL_FAILURES.has(error?.code));
 
   // What this state shows: icon, title, sentence, and the actions under them.
   let icon = Download;
@@ -124,7 +110,7 @@ const UpdateModal = ({ update }) => {
     icon = AlertCircle;
     tone = 'warning';
     title = installFailure ? UPDATE.failed.installTitle : UPDATE.failed.checkTitle;
-    body = failureSentence(error?.code);
+    body = failureSentence(error?.code, { download: downloadFailure });
     actions = (
       <>
         <Button ref={primaryRef} block size="large" onClick={update.startDownload} disabled={!manifest}>{UPDATE.failed.tryAgain}</Button>
@@ -142,9 +128,18 @@ const UpdateModal = ({ update }) => {
       </>
     );
   } else if (busy) {
-    const ready = status === UpdateStatus.READY;
-    title = mandatory ? UPDATE.mandatory.downloadingTitle : ready ? UPDATE.installing.title : UPDATE.downloading.title;
-    body = mandatory ? UPDATE.mandatory.downloadingBody : ready ? UPDATE.installing.body : UPDATE.downloading.body;
+    title = mandatory ? UPDATE.mandatory.downloadingTitle : UPDATE.downloading.title;
+    body = mandatory ? UPDATE.mandatory.downloadingBody : UPDATE.downloading.body;
+  } else if (ready) {
+    icon = ShieldCheck;
+    title = UPDATE.ready.title;
+    body = UPDATE.ready.body;
+    actions = (
+      <>
+        <Button ref={primaryRef} block size="large" onClick={update.installUpdate}>{UPDATE.ready.install}</Button>
+        {later}
+      </>
+    );
   } else if (mandatory) {
     title = UPDATE.mandatory.title;
     body = UPDATE.mandatory.body;
@@ -163,14 +158,23 @@ const UpdateModal = ({ update }) => {
   const Icon = icon;
   const loaded = formatBytes(progress?.loaded);
   const total = formatBytes(progress?.total);
-  const progressBlock = busy && (
+  // 100% only at READY: displayPercent holds the bar and its number at 99 until the file is
+  // saved and checked.
+  const percent = displayPercent(status, progress?.percent);
+  const downloading = status === UpdateStatus.DOWNLOADING;
+  const progressLabel = ready
+    ? UPDATE.ready.progress
+    : status === UpdateStatus.VERIFYING
+      ? UPDATE.verifying.progress
+      : mandatory
+        ? UPDATE.mandatory.progress(percent)
+        : UPDATE.downloading.progress(percent);
+  const progressBlock = (busy || ready) && (
     <div className="flex flex-col gap-2 w-full">
-      <ProgressBar percent={status === UpdateStatus.READY ? 100 : progress.percent} />
+      <ProgressBar percent={percent} />
       <div className="flex justify-between gap-3 text-secondary text-text-secondary">
-        <span>
-          {status === UpdateStatus.READY ? UPDATE.installing.progress : mandatory ? UPDATE.mandatory.progress : UPDATE.downloading.progress}
-        </span>
-        {status !== UpdateStatus.READY && loaded && total && <span>{UPDATE.downloading.amount(loaded, total)}</span>}
+        <span role="status">{progressLabel}</span>
+        {downloading && loaded && total && <span>{UPDATE.downloading.amount(loaded, total)}</span>}
       </div>
     </div>
   );

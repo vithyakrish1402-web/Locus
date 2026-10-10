@@ -14,18 +14,23 @@ export const UPDATE = {
   },
   downloading: {
     title: 'Downloading the update',
-    body: 'When it finishes, Android will ask you to confirm the install.',
-    progress: 'Downloading…',
+    body: 'When it finishes, LOCUS checks it, then you can install it.',
+    // A percent only when the size is known (see displayPercent in useAppUpdate).
+    progress: (percent) => (percent >= 0 ? `Downloading update… ${percent}%` : 'Downloading…'),
     amount: (loaded, total) => `${loaded} of ${total}`,
   },
-  installing: {
-    title: 'Installing the update',
-    body: 'Android is asking you to confirm the install.',
-    progress: 'Checked and ready to install',
+  verifying: {
+    progress: 'Checking the update…',
+  },
+  ready: {
+    title: 'The update is ready',
+    body: 'Android will ask you to confirm the install.',
+    progress: 'Update ready. Tap to install.',
+    install: 'Install',
   },
   permission: {
     title: 'Allow LOCUS to install its update',
-    body: 'LOCUS updates itself instead of through the Play Store, so Android needs your permission once. Turn on "Allow from this source" for LOCUS, then come back.',
+    body: 'To install this update, allow LOCUS to install apps. Tap here to open the setting.',
     open: 'Open Android settings',
     notNow: 'Not now',
   },
@@ -40,22 +45,31 @@ export const UPDATE = {
     title: 'Please update LOCUS',
     body: 'This version needs updating before you can keep using LOCUS. The update takes about a minute.',
     downloadingTitle: 'Updating LOCUS',
-    downloadingBody: 'When the download finishes, Android will ask you to confirm the install.',
-    progress: 'Downloading… keep LOCUS open',
+    downloadingBody: 'When the download finishes, LOCUS checks it, then you can install it.',
+    progress: (percent) => (percent >= 0 ? `Downloading update… ${percent}% · keep LOCUS open` : 'Downloading… keep LOCUS open'),
     emergencyNote: 'Emergency alerts from your group still appear while you update.',
   },
 };
 
 // Which failures happen while installing (the rest happen while looking for an update).
-export const INSTALL_FAILURES = new Set(['CHECKSUM_MISMATCH', 'CHECKSUM_MISSING', 'MISSING_CHECKSUM', 'IO_ERROR', 'CANCELLED', 'PERMISSION_DENIED']);
+// A failure from useAppUpdate's download or install also carries `during: 'download'`.
+export const INSTALL_FAILURES = new Set([
+  'CHECKSUM_MISMATCH', 'SIZE_MISMATCH', 'CHECKSUM_MISSING', 'MISSING_CHECKSUM', 'IO_ERROR', 'STALLED',
+  'CANCELLED', 'PERMISSION_DENIED', 'INSTALL_FAILED', 'NOT_FOUND',
+]);
 
-// One plain sentence per failure. The "safety check" sentence is only for a download that
-// really failed its checksum.
+// One plain sentence per failure. The "damaged" sentence is only for a download that really
+// failed its checksum or size check.
+const DIDNT_FINISH = "The download didn't finish. Check your internet and tap to try again.";
+const DAMAGED = 'The update file looks damaged, so it was not installed. Tap to try again.';
 const FAILURE_SENTENCES = {
-  CHECKSUM_MISMATCH: "The download didn't pass its safety check, so nothing was changed. Try again on a steady connection.",
+  CHECKSUM_MISMATCH: DAMAGED,
+  SIZE_MISMATCH: DAMAGED,
   CHECKSUM_MISSING: "This version was published without its safety check, so it can't be installed. Nothing was changed.",
   MISSING_CHECKSUM: "This version was published without its safety check, so it can't be installed. Nothing was changed.",
-  IO_ERROR: "The download didn't finish, so nothing was changed. Check your connection and try again.",
+  IO_ERROR: DIDNT_FINISH,
+  STALLED: DIDNT_FINISH,
+  INSTALL_FAILED: "Android couldn't open the installer, so nothing was changed. Tap to try again.",
   CANCELLED: 'The download was stopped, so nothing was changed.',
   PERMISSION_DENIED: 'Android didn\'t allow the install. Turn on "Allow from this source" for LOCUS, then try again.',
   NETWORK: "LOCUS couldn't reach the update server. Check your connection and try again.",
@@ -63,8 +77,12 @@ const FAILURE_SENTENCES = {
 };
 const OTHER_FAILURE = "This update can't be installed right now. Nothing was changed.";
 
-/** The sentence for a failure's code (error.code from useAppUpdate). */
-export const failureSentence = (code) => FAILURE_SENTENCES[code] ?? OTHER_FAILURE;
+/**
+ * The sentence for a failure's code (error.code from useAppUpdate). A download failure with
+ * a code of its own (an HTTP status, say) reads as a download that didn't finish.
+ */
+export const failureSentence = (code, { download = false } = {}) =>
+  FAILURE_SENTENCES[code] ?? (download ? DIDNT_FINISH : OTHER_FAILURE);
 
 export const LIVE_UPDATE = {
   ready: { title: 'Update ready', body: (version) => `Restart to use version ${version}.` },

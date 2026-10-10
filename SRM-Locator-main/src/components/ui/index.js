@@ -15,3 +15,4 @@ export { initialsOf } from './initials';
 export { default as ListRow } from './ListRow';
 export { default as Sheet } from './Sheet';
 export { default as Skeleton } from './Skeleton';
+export { default as ProgressBar } from './ProgressBar';
