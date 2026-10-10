@@ -283,6 +283,11 @@ verify on real hardware.
 5b. **Stall.** Turn on airplane mode mid-download (it also cuts the dev PC's hotspot; fine
    here, with no scripted clients running): after about 30 s the sheet must say the download didn't finish,
    and Try again must start a fresh download.
+5c. **Send LOCUS to someone** (Settings → More). Send installer downloads with the same
+   stages ("Downloading installer… 42%", "Checking the installer…") using the same native
+   downloader and checks, then opens Android's share sheet with `LOCUS-<version>.apk`. Send
+   it to another phone and install it there. On an app older than the one with
+   `shareFile` (v1.1.0), the button is still Download installer and opens the browser.
 6. **Mandatory gate.** Publish with `--mandatory` and confirm the app is unusable until
    installed: no LATER, Back does nothing, and it shows before the login screen.
 

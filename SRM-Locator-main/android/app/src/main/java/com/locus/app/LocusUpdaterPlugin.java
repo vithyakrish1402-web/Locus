@@ -1,6 +1,7 @@
 package com.locus.app;
 
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -42,6 +43,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *                    written and the file closed, before the size and checksum checks.
  *   2. install()   - hand the APK to the system installer via FileProvider + ACTION_VIEW.
  *   3. permission  - query and deep-link Android's per-app "install unknown apps" consent.
+ *   4. shareFile() - hand a checked APK to Android's share sheet (Send LOCUS to someone).
  *
  * The JS side owns all policy (when to check, whether an update is mandatory, what the
  * expected checksum is); this class just refuses to resolve download() if the bytes on
@@ -301,28 +303,10 @@ public class LocusUpdaterPlugin extends Plugin {
      */
     @PluginMethod
     public void install(PluginCall call) {
-        String path = call.getString("path");
-        if (path == null || path.isEmpty()) {
-            call.reject("Missing 'path'");
-            return;
-        }
-        File apk = new File(path);
-        if (!apk.exists()) {
-            call.reject("APK not found at " + path, "NOT_FOUND");
-            return;
-        }
         // Belt and braces: only ever install out of our own cache dir, never an arbitrary
         // path handed in from the WebView.
-        File expectedDir = new File(getContext().getCacheDir(), UPDATE_DIR);
-        try {
-            String apkPath = apk.getCanonicalPath();
-            String dirPath = expectedDir.getCanonicalPath() + File.separator;
-            if (!apkPath.startsWith(dirPath)) {
-                call.reject("Refusing to install from outside the update cache", "FORBIDDEN_PATH");
-                return;
-            }
-        } catch (Exception e) {
-            call.reject("Could not resolve APK path", "IO_ERROR", e);
+        File apk = resolveCachedApk(call);
+        if (apk == null) {
             return;
         }
         if (!canRequestPackageInstalls()) {
@@ -352,6 +336,74 @@ public class LocusUpdaterPlugin extends Plugin {
             Log.e(TAG, "Install intent failed", e);
             call.reject(e.getMessage() == null ? "Install failed" : e.getMessage(), "INSTALL_FAILED", e);
         }
+    }
+
+    /**
+     * Open Android's share sheet with a checked APK, so it can be passed to someone who does
+     * not have LOCUS yet (Settings -> Send LOCUS to someone). Like install(), only ever a
+     * file in our own update cache. Resolving means the share sheet opened.
+     */
+    @PluginMethod
+    public void shareFile(PluginCall call) {
+        File apk = resolveCachedApk(call);
+        if (apk == null) {
+            return;
+        }
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("No activity available");
+            return;
+        }
+        try {
+            Uri uri = FileProvider.getUriForFile(
+                getContext(),
+                getContext().getPackageName() + ".fileprovider",
+                apk
+            );
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("application/vnd.android.package-archive");
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            // ClipData carries the read grant through the chooser to the app picked.
+            send.setClipData(ClipData.newRawUri(apk.getName(), uri));
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, call.getString("title", "Send LOCUS"));
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            activity.startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) {
+            Log.e(TAG, "Share intent failed", e);
+            call.reject(e.getMessage() == null ? "Share failed" : e.getMessage(), "SHARE_FAILED", e);
+        }
+    }
+
+    /**
+     * The APK at call's "path" if it exists and lies inside our update cache; otherwise
+     * rejects the call and returns null.
+     */
+    private File resolveCachedApk(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null || path.isEmpty()) {
+            call.reject("Missing 'path'");
+            return null;
+        }
+        File apk = new File(path);
+        if (!apk.exists()) {
+            call.reject("APK not found at " + path, "NOT_FOUND");
+            return null;
+        }
+        File expectedDir = new File(getContext().getCacheDir(), UPDATE_DIR);
+        try {
+            String apkPath = apk.getCanonicalPath();
+            String dirPath = expectedDir.getCanonicalPath() + File.separator;
+            if (!apkPath.startsWith(dirPath)) {
+                call.reject("Refusing to use a file outside the update cache", "FORBIDDEN_PATH");
+                return null;
+            }
+        } catch (Exception e) {
+            call.reject("Could not resolve APK path", "IO_ERROR", e);
+            return null;
+        }
+        return apk;
     }
 
     private boolean canRequestPackageInstalls() {
