@@ -39,6 +39,7 @@ vi.mock('@capacitor/app', () => ({
 }));
 
 import { useAppUpdate, UpdateStatus, displayPercent, __resetColdStartThrottle } from '../src/hooks/useAppUpdate.js';
+import { __resetReleasesLookup } from '../src/utils/releasesLookup.js';
 
 const SIZE = 12_000_000;
 const SHA = 'a'.repeat(64);
@@ -89,6 +90,7 @@ const shown = (hook) => displayPercent(hook.result.current.status, hook.result.c
 
 beforeEach(() => {
   __resetColdStartThrottle();
+  __resetReleasesLookup();
   vi.spyOn(globalThis, 'fetch').mockResolvedValue({ status: 200, ok: true, json: async () => [release] });
 });
 afterEach(() => {
