@@ -31,6 +31,10 @@ GET https://api.github.com/repos/vithyakrish1402-web/Locus/releases?per_page=30
 
 then keeps only `v*` tags and picks the **highest version** among them.
 
+That request lives in one place, [src/utils/releasesLookup.js](src/utils/releasesLookup.js),
+shared by this check, the Phase 2 check and Send LOCUS to someone: one request per launch,
+whoever asks first, and a manual check asks again. See [Limits worth knowing](#limits-worth-knowing).
+
 This used to read `/releases/latest`, which is wrong once both tag series exist: "latest"
 means whichever release was published most recently across *every* tag, so cutting a
 `js-*` bundle handed this check a tag it cannot parse. It failed closed, as designed — but
@@ -295,8 +299,16 @@ verify on real hardware.
 
 ## Limits worth knowing
 
-- **Unauthenticated GitHub API**: 60 requests/hour per IP. One check per cold start is far
-  inside that; a 403 surfaces as "rate limit reached, try again in a few minutes".
+- **Unauthenticated GitHub API**: 60 requests/hour per **public IP**, and everyone behind
+  that address shares them: campus Wi-Fi (RailTel, in testing) or a carrier's shared address
+  can use them up with LOCUS doing nothing wrong. That happened on 2026-10-12, and Send LOCUS
+  showed "GitHub returned HTTP 403". So the three lookups share one request per launch (see
+  [How it works](#how-it-works)), and a refusal (403 or 429) is `RATE_LIMITED`: the manual
+  check says the update server is busy, Send LOCUS says when to try again (from
+  `X-RateLimit-Reset`), and the automatic checks stay quiet. Conditional requests
+  (`If-None-Match`) don't help: GitHub counts an anonymous 304 against the limit like any other
+  answer (measured 2026-10-12). A busy network can still block updates for up to an hour;
+  only moving the lookup off the anonymous API would fix that.
 - **The install is not silent.** Android always shows its own installer confirmation. The
   app is killed and replaced when the user accepts, so there is no post-install callback.
 - **Private repos won't work** without an access token in the client, which is exactly the
