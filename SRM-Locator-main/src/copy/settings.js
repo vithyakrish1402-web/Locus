@@ -69,6 +69,8 @@ export const SEND_APP = {
   // On a phone whose app can share the file itself (see canShareInstaller).
   readyShare: (version, size) => `LOCUS ${version}${size ? ` · ${size}` : ''}. Send the installer straight to someone's chat, or copy its link. It keeps itself up to date once installed.`,
   error: (reason) => `Couldn't find the installer: ${reason}.`,
+  // GitHub refused the lookup: its hourly limit, shared by everyone on this network, is used up.
+  busy: (time) => `The download server is busy. Try again ${time ? `after ${time}` : 'in a few minutes'}.`,
   tryAgain: 'Try again',
   download: 'Download installer',
   send: 'Send installer',

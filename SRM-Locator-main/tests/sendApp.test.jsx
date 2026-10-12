@@ -25,6 +25,7 @@ vi.mock('../src/utils/locusUpdater', () => {
 
 const { default: SendApp } = await import('../src/components/SendApp.jsx');
 const { selectInstallerRelease } = await import('../src/utils/updateManifest.js');
+const { __resetReleasesLookup } = await import('../src/utils/releasesLookup.js');
 
 const SHA = 'a'.repeat(64);
 const apk = (tag, extra = {}) => ({
@@ -38,6 +39,7 @@ const apk = (tag, extra = {}) => ({
 const RELEASES = [{ tag_name: 'js-1.1.3', draft: false, prerelease: false, body: '', assets: [] }, apk('v1.1.0'), apk('v1.0.0')];
 
 beforeEach(async () => {
+  __resetReleasesLookup();
   native.canShare = false;
   // The mocked bridge is built when something first imports it.
   if (!native.plugin) await import('../src/utils/locusUpdater');
@@ -120,12 +122,55 @@ describe('SendApp', () => {
   it('says why it failed, and TRY AGAIN looks again', async () => {
     globalThis.fetch = vi
       .fn()
-      .mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) })
       .mockResolvedValue({ ok: true, json: async () => RELEASES });
     render(<SendApp openUrl={vi.fn()} />);
-    expect(await screen.findByText(/GitHub returned HTTP 403/)).toBeTruthy();
+    expect(await screen.findByText(SEND_APP.error('GitHub returned HTTP 500'))).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: SEND_APP.tryAgain }));
     await waitFor(() => expect(screen.getByText(/LOCUS 1\.1\.0/)).toBeTruthy());
+  });
+
+  describe('when GitHub refuses (its hourly limit for this network is used up)', () => {
+    const headers = (h) => ({ get: (name) => h[name.toLowerCase()] ?? null });
+    const refused = (h = {}) => ({ ok: false, status: 403, headers: headers(h), json: async () => ({}) });
+    const clock = (date) => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    it('says the server is busy and when to try again, never "HTTP 403"', async () => {
+      const resetAt = new Date(Math.ceil((Date.now() + 20 * 60 * 1000) / 1000) * 1000);
+      globalThis.fetch = vi.fn(async () => refused({ 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(resetAt.getTime() / 1000) }));
+      render(<SendApp openUrl={vi.fn()} />);
+      expect(await screen.findByText(SEND_APP.busy(clock(resetAt)))).toBeTruthy();
+      expect(SEND_APP.busy(clock(resetAt))).toBe(`The download server is busy. Try again after ${clock(resetAt)}.`);
+      expect(document.body.textContent).not.toMatch(/HTTP|403/);
+    });
+
+    it('without a refill time, or with one already past or over an hour off, says "in a few minutes"', async () => {
+      for (const h of [{}, { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) - 60) }, { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 3 * 3600) }]) {
+        __resetReleasesLookup();
+        globalThis.fetch = vi.fn(async () => refused(h));
+        render(<SendApp openUrl={vi.fn()} />);
+        expect(await screen.findByText('The download server is busy. Try again in a few minutes.')).toBeTruthy();
+        cleanup();
+      }
+    });
+
+    it('TRY AGAIN asks GitHub again and finds the installer once it answers', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce(refused()).mockResolvedValue({ ok: true, json: async () => RELEASES });
+      render(<SendApp openUrl={vi.fn()} />);
+      await screen.findByText(SEND_APP.busy(null));
+      fireEvent.click(screen.getByRole('button', { name: SEND_APP.tryAgain }));
+      await waitFor(() => expect(screen.getByText(/LOCUS 1\.1\.0/)).toBeTruthy());
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('opened again in the same launch, reuses the answer instead of asking GitHub again', async () => {
+    render(<SendApp openUrl={vi.fn()} />);
+    await screen.findByText(/LOCUS 1\.1\.0/);
+    cleanup();
+    render(<SendApp openUrl={vi.fn()} />);
+    await screen.findByText(/LOCUS 1\.1\.0/);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 });
 

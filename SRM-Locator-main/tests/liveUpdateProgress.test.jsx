@@ -30,6 +30,7 @@ vi.mock('@capacitor/app', () => ({ App: { getInfo: async () => ({ version: '1.1.
 const { useLiveUpdate, LiveUpdateStatus, __resetLiveColdStartThrottle } = await import('../src/hooks/useLiveUpdate.js');
 const { default: LiveUpdateToast } = await import('../src/components/LiveUpdateToast.jsx');
 const { LIVE_UPDATE } = await import('../src/copy/updates.js');
+const { __resetReleasesLookup } = await import('../src/utils/releasesLookup.js');
 
 const SHA = 'f'.repeat(64);
 const RELEASES = [
@@ -47,6 +48,7 @@ let failDownload;
 
 beforeEach(() => {
   __resetLiveColdStartThrottle();
+  __resetReleasesLookup();
   updater.listeners = new Map();
   updater.remove = vi.fn();
   updater.addListener = vi.fn(async (event, fn) => {
