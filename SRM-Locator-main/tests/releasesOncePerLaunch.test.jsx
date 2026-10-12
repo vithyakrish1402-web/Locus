@@ -3,8 +3,7 @@
 // One launch asks GitHub for the releases list once: the APK update check and the live-update
 // check both run at launch, and Send LOCUS opened later, all share that answer. Before, each
 // asked on its own, three of the 60 requests an hour that everyone on the same network
-// (campus Wi-Fi) shares. A manual "Check for updates" still asks again, sending the last
-// list's ETag so an unchanged list costs nothing.
+// (campus Wi-Fi) shares. A manual "Check for updates" still asks again.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 
@@ -61,7 +60,7 @@ beforeEach(() => {
   __resetColdStartThrottle();
   __resetLiveColdStartThrottle();
   __resetReleasesLookup();
-  globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, headers: headers({ etag: 'W/"list-1"' }), json: async () => RELEASES }));
+  globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, headers: headers({}), json: async () => RELEASES }));
 });
 afterEach(() => {
   cleanup();
@@ -103,15 +102,25 @@ describe('the releases list, once per launch', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('Check for updates asks again, sending the last list\'s ETag; unchanged (304) is "up to date"', async () => {
+  it('Check for updates asks GitHub again, and says "up to date" from that answer', async () => {
     render(<Launch />);
     await settle();
     await settle();
-    globalThis.fetch.mockResolvedValueOnce({ ok: false, status: 304, headers: headers({}), json: async () => ({}) });
     await act(async () => probe.app.check({ manual: true }));
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
-    expect(globalThis.fetch.mock.calls[1][1].headers['If-None-Match']).toBe('W/"list-1"');
     expect(probe.app.status).toBe(UpdateStatus.UP_TO_DATE);
+  });
+
+  it('no releases visible (404) is not an error: quiet at launch, "up to date" when asked', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: false, status: 404, headers: headers({}), json: async () => ({}) });
+    render(<Launch />);
+    await settle();
+    await settle();
+    expect(probe.app.status).toBe(UpdateStatus.IDLE);
+    expect(probe.app.error).toBeNull();
+    await act(async () => probe.app.check({ manual: true }));
+    expect(probe.app.status).toBe(UpdateStatus.UP_TO_DATE);
+    expect(probe.app.error).toBeNull();
   });
 
   it('Check for updates refused by GitHub says the update server is busy', async () => {

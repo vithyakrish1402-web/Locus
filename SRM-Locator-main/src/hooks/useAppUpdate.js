@@ -165,7 +165,7 @@ export function useAppUpdate({
         // (utils/releasesLookup.js). Its errors carry a code: RATE_LIMITED, HTTP_<status>.
         let releases;
         try {
-          releases = await getReleases({ revalidate: manual });
+          releases = await getReleases({ fresh: manual });
         } catch (e) {
           if (e?.status === 404) {
             // No repo/releases visible - not an error state for the user. The listing
