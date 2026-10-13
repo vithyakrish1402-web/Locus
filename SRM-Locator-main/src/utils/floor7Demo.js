@@ -20,6 +20,7 @@ import { createPositionFilter } from './positionFilter.js';
 import { WIFI_CONFIDENCE_THRESHOLD } from './positionSource.js';
 import { setLocalAccessPoints } from './wifiPositioning.js';
 import { WIFI_ESTIMATE_MAX_AGE_MS } from './wifiFusion.js';
+import { recorder } from './floor7Recorder.js';
 
 export { DEMO_BUILDING, DEMO_FLOOR };
 
@@ -67,6 +68,25 @@ export function subscribeTrail(listener) {
  * @param {number} [options.staleMs] defaults to the WiFi staleness constant
  * @returns {{apply(estimate: object, atMs: number): object, reset(): void}}
  */
+/**
+ * Hands the walk recorder what the tracker just computed (it ignores it unless a recording is
+ * running). Observes only: it can neither change a position nor stop the pipeline.
+ */
+function observe(estimate, { atMs, raw, snapped, filtered, status, uncertaintyM, before, scans }) {
+  if (!recorder.recording) return;
+  try {
+    const corridor = floor7Plan.snapToCorridor(raw.x, raw.y);
+    recorder.recordEstimate({
+      at: atMs, raw, filtered, status, unc: uncertaintyM, scans,
+      snapped: { x: snapped.x, y: snapped.y, edge: corridor.edge, offset: corridor.offset },
+      walkFromLastM: before ? floor7Plan.walkingDistance(before, snapped) : null,
+      confidence: estimate.confidence, matched: estimate.matchedApCount, total: estimate.totalApsSeen,
+    });
+  } catch (e) {
+    console.warn('[F7 recorder]', e?.message);
+  }
+}
+
 export function createFloor7Tracker({ staleMs = WIFI_ESTIMATE_MAX_AGE_MS } = {}) {
   const filter = createPositionFilter({ staleMs, plan: floor7Plan });
 
@@ -78,11 +98,13 @@ export function createFloor7Tracker({ staleMs = WIFI_ESTIMATE_MAX_AGE_MS } = {})
      * take over from it indoors. While the filter has no confirmed position yet (a start
      * waiting for a second estimate) the estimate carries no position and confidence 0.
      * Anything that is not a Floor 7 estimate is returned as is.
+     * `scans` (the buffer the estimate was made from) is only handed on to the walk recorder.
      */
-    apply(estimate, atMs) {
+    apply(estimate, atMs, scans) {
       if (estimate?.building !== DEMO_BUILDING || estimate.floor !== DEMO_FLOOR) return estimate;
       if (!Number.isFinite(estimate.lat) || !Number.isFinite(estimate.lng)) return estimate;
       const raw = toLocal(estimate.lat, estimate.lng);
+      const before = recorder.recording ? filter.position : null; // for the recorder only
       const status = filter.update({ ...raw, confidence: estimate.confidence }, atMs);
       const filtered = filter.position;
       const snapped = filter.lastSnapped;
@@ -95,6 +117,7 @@ export function createFloor7Tracker({ staleMs = WIFI_ESTIMATE_MAX_AGE_MS } = {})
         at: atMs, status, x: filtered && round2(filtered.x), y: filtered && round2(filtered.y),
         rawX: round2(raw.x), rawY: round2(raw.y), snapX: round2(snapped.x), snapY: round2(snapped.y), unc: round2(uncertaintyM),
       }));
+      observe(estimate, { atMs, raw, snapped, filtered, status, uncertaintyM, before, scans });
       if (!filtered) {
         // No confirmed position yet (a start waiting for a second estimate that agrees): show
         // nothing, so the map stays on GPS rather than on one stray reading.
@@ -122,5 +145,5 @@ export function createFloor7Tracker({ staleMs = WIFI_ESTIMATE_MAX_AGE_MS } = {})
 /** What useWifiFusion passes to startWifiFusion: the bundled AP table is installed here. */
 export function floor7FusionOptions() {
   setLocalAccessPoints(floor7AccessPointTable());
-  return { tracker: createFloor7Tracker() };
+  return { tracker: createFloor7Tracker(), onCycle: (outcome) => recorder.recordCycle(outcome) };
 }

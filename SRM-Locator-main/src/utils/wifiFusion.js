@@ -181,7 +181,7 @@ export function startWifiFusion({
         return finish(null, 'estimate-error', { apsInScan: aps.length, error: err?.code || err?.message || 'unknown' });
       }
       if (stopped) return;
-      if (tracker) next = tracker.apply(next, now());
+      if (tracker) next = tracker.apply(next, now(), buffer);
 
       // The floor picker's tabs. Only worth the lookup for an estimate that will be shown,
       // and a failure costs the other tabs, never the estimate itself.

@@ -14,7 +14,12 @@ import { build } from 'vite';
 //   reacquiring      the position filter's status
 //   floor7-debug     the alignment overlay
 //   Junction: lab   a station name inside the Floor 7 plan data (floor7-inputs/floor7_plan.json)
-const MARKERS = ['wifi_aps', 'floor7-aps-v2', 'reacquiring', 'floor7-debug', 'Junction: lab passage / east spine'];
+//   floor7-recorder, recovered_after_app_closed, Nothing is stored until you press Start
+//                    the walk recorder (its panel, its recovery event, its Start line)
+const MARKERS = [
+  'wifi_aps', 'floor7-aps-v2', 'reacquiring', 'floor7-debug', 'Junction: lab passage / east spine',
+  'floor7-recorder', 'recovered_after_app_closed', 'Nothing is stored until you press Start',
+];
 
 // The survey CSVs, name table and notes live in floor7-inputs/, outside src/ and public/, so
 // no build copies them. These are bytes that appear only in them.
@@ -63,6 +68,15 @@ describe('what ships', () => {
       expect(names.filter((n) => /\.csv$/i.test(n)), mode).toEqual([]);
       for (const bytes of INPUT_CONTENT) expect(text[mode].includes(bytes), `${mode}: ${bytes}`).toBe(false);
     }
+  });
+
+  it('the walk-recorder native plugin is in the LOCUS Test source set only, found by name so no other build needs it', () => {
+    const java = join(process.cwd(), 'android', 'app', 'src');
+    expect(readdirSync(join(java, 'main', 'java', 'com', 'locus', 'app'))).not.toContain('RecorderPlugin.java');
+    expect(readdirSync(join(java, 'sidetest', 'java', 'com', 'locus', 'app'))).toContain('RecorderPlugin.java');
+    expect(readFileSync(join(java, 'main', 'java', 'com', 'locus', 'app', 'MainActivity.java'), 'utf8')).toContain('Class.forName("com.locus.app.RecorderPlugin")');
+    expect(readFileSync(join(java, 'main', 'AndroidManifest.xml'), 'utf8')).not.toContain('recorder_paths');
+    expect(readFileSync(join(java, 'sidetest', 'AndroidManifest.xml'), 'utf8')).toContain('recorder_paths');
   });
 
   it('the test build has the flag on and carries all of it', () => {

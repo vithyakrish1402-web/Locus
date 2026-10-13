@@ -36,6 +36,9 @@ describe('red is for the Emergency alert and destructive actions only', () => {
     'App.jsx': 'the WiFi floor tag colour',
     'components/IndoorMarkers.jsx': 'the WiFi floor tag colour (positioning is off)',
     'components/TacticalLeafletMap.jsx': 'the WiFi floor tag colour (positioning is off)',
+    // The Floor 7 walk recorder (test build, owner only): its red "Recording" label and REC badge.
+    'components/Floor7RecorderPanel.jsx': 'the red Recording label (LOCUS Test, owner only)',
+    'components/Floor7DebugOverlay.jsx': 'the red REC badge on the F7 button (LOCUS Test, owner only)',
     'theme/tokens.css': 'the tokens themselves',
   };
 

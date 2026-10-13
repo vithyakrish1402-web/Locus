@@ -4,6 +4,9 @@ import planDrawingSvg from '../../floor7-inputs/floor7_plan_v3.svg?raw';
 import { getTrail, subscribeTrail } from '../utils/floor7Demo.js';
 import { PLAN_SCALE, PLAN_SVG, floor7Plan } from '../utils/floor7Plan.js';
 import { layoutRadios, radioFlags, radioLabel } from '../utils/floor7RadioLayout.js';
+import { recorder } from '../utils/floor7Recorder.js';
+import { useFloor7Recorder } from '../hooks/useFloor7Recorder.js';
+import Floor7RecorderPanel from './Floor7RecorderPanel.jsx';
 
 // Floor 7 alignment check, for the test build only (rendered under FLOOR7_DEMO, owner only):
 // the team's drawing of the floor with the corridor centrelines, where each access point was
@@ -104,6 +107,7 @@ export default function Floor7DebugOverlay() {
   const [trail, setTrail] = useState(getTrail);
   useEffect(() => subscribeTrail(() => setTrail(getTrail())), []);
   const last = trail[trail.length - 1];
+  const recording = useFloor7Recorder(recorder).recording;
 
   return (
     <div className="fixed left-2 bottom-24 z-[1200] font-mono text-[10px] text-white">
@@ -112,10 +116,10 @@ export default function Floor7DebugOverlay() {
         onClick={() => setOpen((v) => !v)}
         className="px-2 py-1 rounded-full bg-black/80 border border-emerald-400/60 uppercase tracking-widest"
       >
-        F7 {open ? 'hide' : 'debug'}
+        {recording && <span className="text-red-500" data-testid="rec-badge">● REC </span>}F7 {open ? 'hide' : 'debug'}
       </button>
       {open && (
-        <div className="mt-1 w-[min(92vw,26rem)] p-2 rounded-lg bg-black/85 border border-white/15">
+        <div className="mt-1 w-[min(92vw,26rem)] max-h-[70vh] overflow-y-auto p-2 rounded-lg bg-black/85 border border-white/15">
           <Floor7DebugView trail={trail} />
           <p className="mt-1">
             {last
@@ -125,6 +129,7 @@ export default function Floor7DebugOverlay() {
               : 'No Floor 7 estimate yet'}
             <span className="text-amber-300"> · scale ESTIMATED ×{PLAN_SCALE}</span>
           </p>
+          <Floor7RecorderPanel />
           <p className="opacity-70">
             circle = raw, blue dot = snapped to the corridor, green = filtered. Diamonds are access points, named by their last two bytes
             (purple: best spot, light purple: between two spots, amber: heard at one spot only, orange dashed edge: rests on a guess).

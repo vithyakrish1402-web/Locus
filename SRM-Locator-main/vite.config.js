@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 
 // Every web build says which Vite mode built it, in dist/locus-build.json. The release
 // scripts and the Android release build refuse anything but 'production', so a test build
@@ -14,8 +16,18 @@ const buildModeMarker = (mode) => ({
   },
 })
 
+// Which source a build came from, for the Floor 7 walk recorder's summary file (test build
+// only: nothing else reads it, so no other build contains it).
+const git = (cmd) => { try { return execSync(`git ${cmd}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return 'unknown' } }
+const buildInfo = () => ({
+  version: JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version,
+  branch: git('rev-parse --abbrev-ref HEAD'),
+  commit: git('rev-parse --short HEAD'),
+})
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: { __LOCUS_BUILD__: JSON.stringify(buildInfo()) },
   plugins: [
     react(),
     tailwindcss(),
