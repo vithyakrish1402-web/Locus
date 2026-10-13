@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { zipDirectory } from './lib/zip.mjs';
 import { releaseVersionConflict } from '../src/utils/liveUpdateManifest.js';
 import { webBuildProblem } from './lib/webBuild.mjs';
+import { publishUpdateIndex, reportUpdateIndex } from './lib/updateIndex.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
@@ -175,3 +176,9 @@ run('gh', [
 ]);
 
 console.log(`\n  Published js-${version}. Devices on native >= ${minNative} pick it up on their next cold start.\n`);
+
+// ---------------------------------------------------------------- update index
+
+// Last, and only once the release exists: phones read this file at launch
+// (src/utils/updateIndex.js). A failure is reported loudly but never undoes the release.
+reportUpdateIndex(publishUpdateIndex({ dir: join(STAGING_DIR, 'update-index') }));

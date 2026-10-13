@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import { APK_ASSET_NAME, selectLatestApkRelease } from '../src/utils/updateManifest.js';
 import { BUNDLE_ASSET_NAME, selectLatestBundleRelease } from '../src/utils/liveUpdateManifest.js';
+import { UPDATE_INDEX_TAG, buildUpdateIndex, parseUpdateIndex, updateIndexUrl } from '../src/utils/updateIndex.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
@@ -138,7 +139,11 @@ async function main() {
     // is newest across every tag series, so once js-* releases existed it started handing
     // the APK check a tag it cannot parse — and the verifier has to look for a release
     // the same way the app does, or "the verifier passed" stops meaning anything.
-    const api = `https://api.github.com/repos/${REPO}/releases?per_page=30`;
+    //
+    // 100 rather than the app's 30, still one request: the update index check below needs the
+    // newest 30 v* and js-* releases, and the update-index release can take one of the first
+    // 30 places. The newest releases, which the app picks from, are the same either way.
+    const api = `https://api.github.com/repos/${REPO}/releases?per_page=100`;
 
     const response = await fetch(api, { headers: { Accept: 'application/vnd.github+json' } });
     if (response.status === 404) die('repository or releases not visible - check VITE_UPDATE_REPO');
@@ -172,6 +177,42 @@ async function main() {
         ? `  minNative   ${manifest.minNative}`
         : `  mandatory   ${manifest.mandatory ? 'YES - clients will be locked until they install it' : 'no'}`
     );
+    console.log('');
+
+    // ---------------------------------------------------------- the update index
+    // Phones read this file at launch before ever asking the listing above (see
+    // src/utils/updateIndex.js), so it must pass the app's own check and match the real
+    // releases. Downloaded the way the app does, which the anonymous API limit does not count.
+    const fixIt = 'run npm run release:index';
+    const indexResponse = await fetch(updateIndexUrl(REPO, Date.now()));
+    if (!indexResponse.ok) {
+      fail(`could not download the update index: HTTP ${indexResponse.status} - ${fixIt}`);
+    } else {
+      let index;
+      try {
+        index = parseUpdateIndex(await indexResponse.json(), { repo: REPO });
+      } catch {
+        index = { ok: false, reason: 'MALFORMED' };
+      }
+      if (!index.ok) {
+        fail(`the app would not trust the update index (${index.reason}) - ${fixIt}`);
+      } else {
+        pass('the update index passes the app\'s checks');
+        const expected = buildUpdateIndex(payload).releases;
+        const firstDifference = expected.findIndex((release, i) => JSON.stringify(release) !== JSON.stringify(index.releases[i]));
+        if (firstDifference === -1 && expected.length === index.releases.length) {
+          pass(`the update index matches the published releases (${expected.length}, newest ${expected[0]?.tag_name})`);
+        } else {
+          const at = firstDifference === -1 ? expected.length : firstDifference;
+          fail(`the update index does not match the published releases (from ${expected[at]?.tag_name ?? index.releases[at]?.tag_name}) - ${fixIt}`);
+        }
+      }
+    }
+    // A pre-release is never GitHub's "latest" release.
+    const indexRelease = payload.find((release) => release?.tag_name === UPDATE_INDEX_TAG);
+    if (!indexRelease) warn(`no ${UPDATE_INDEX_TAG} release in the listing`);
+    else if (indexRelease.prerelease) pass(`the ${UPDATE_INDEX_TAG} release is a pre-release`);
+    else fail(`the ${UPDATE_INDEX_TAG} release is not marked pre-release - tick it on GitHub`);
     console.log('');
 
     // ---------------------------------------------------------- download + checksum
