@@ -13,7 +13,13 @@ import { build } from 'vite';
 //   floor7-aps-v1    the bundled Floor 7 access point file
 //   reacquiring      the position filter's status
 //   floor7-debug     the alignment overlay
-const MARKERS = ['wifi_aps', 'floor7-aps-v1', 'reacquiring', 'floor7-debug'];
+//   Junction: lab   a station name inside the Floor 7 plan data (floor7-inputs/floor7_plan.json)
+const MARKERS = ['wifi_aps', 'floor7-aps-v1', 'reacquiring', 'floor7-debug', 'Junction: lab passage / east spine'];
+
+// The survey CSVs, name table and notes live in floor7-inputs/, outside src/ and public/, so
+// no build copies them. These are bytes that appear only in them.
+const INPUT_CONTENT = ['wifi_survey_2026', 'survey_name_to_plan_spot', 'DIRECT-03-HP Smart Tank', 'point_id,timestamp,lat,lng'];
+const INPUT_FILES = readdirSync(join(process.cwd(), 'floor7-inputs')).filter((f) => !f.startsWith('.'));
 
 const out = mkdtempSync(join(tmpdir(), 'locus-floor7-build-'));
 const dirs = { production: join(out, 'production'), sidetest: join(out, 'sidetest') };
@@ -48,6 +54,15 @@ describe('what ships', () => {
   it('the Floor 7 filter, plan and bundled access points never reach it either', () => {
     const names = filesUnder(dirs.production).map((f) => basename(f).toLowerCase());
     expect(names.filter((n) => /floor7|wififusion/.test(n))).toEqual([]);
+  });
+
+  it('the Floor 7 inputs folder is in no build: not the survey CSVs, not the name table, not the notes', () => {
+    for (const mode of ['production', 'sidetest']) {
+      const names = filesUnder(dirs[mode]).map((f) => basename(f));
+      for (const input of INPUT_FILES) expect(names, `${mode}: ${input}`).not.toContain(input);
+      expect(names.filter((n) => /\.csv$/i.test(n)), mode).toEqual([]);
+      for (const bytes of INPUT_CONTENT) expect(text[mode].includes(bytes), `${mode}: ${bytes}`).toBe(false);
+    }
   });
 
   it('the test build has the flag on and carries all of it', () => {
