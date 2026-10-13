@@ -29,16 +29,8 @@ export const HALO_FULL_UNCERTAINTY_M = 20;
 /** How many steps the debug overlay remembers. */
 export const TRAIL_LENGTH = 60;
 
-/**
- * The plan as the filter and the overlay use it: { walkable: {x,y}[][], walls: {a,b}[], spots }.
- * Walkable space is the corridors and lift lobbies only, so a point inside a room is snapped
- * out to the corridor in front of it. Straight from floor7Plan.js: one plan, one scale.
- */
-export const floor7Geometry = {
-  walkable: floor7Plan.walkable,
-  walls: floor7Plan.walls,
-  spots: floor7Plan.spots,
-};
+/** The surveyed spots of the plan, by name (Room 701, Lift lobby B near 706, ...): plan metres. */
+export const floor7Spots = floor7Plan.spots;
 
 /** floor7Aps.json -> the table wifiPositioning.js expects (see floor7ApTable.js). */
 export const floor7AccessPointTable = (doc = floor7Aps, scale = PLAN_SCALE) => accessPointTable(doc.radios, scale);
@@ -71,7 +63,7 @@ export function subscribeTrail(listener) {
  * @returns {{apply(estimate: object, atMs: number): object, reset(): void}}
  */
 export function createFloor7Tracker({ staleMs = WIFI_ESTIMATE_MAX_AGE_MS } = {}) {
-  const filter = createPositionFilter({ staleMs, walls: floor7Geometry.walls, walkable: floor7Geometry.walkable });
+  const filter = createPositionFilter({ staleMs, plan: floor7Plan });
 
   return {
     /**
@@ -84,11 +76,11 @@ export function createFloor7Tracker({ staleMs = WIFI_ESTIMATE_MAX_AGE_MS } = {})
       if (estimate?.building !== DEMO_BUILDING || estimate.floor !== DEMO_FLOOR) return estimate;
       if (!Number.isFinite(estimate.lat) || !Number.isFinite(estimate.lng)) return estimate;
       const raw = toLocal(estimate.lat, estimate.lng);
-      const { x: sx, y: sy } = floor7Plan.snapToCorridor(raw.x, raw.y);
       const status = filter.update({ ...raw, confidence: estimate.confidence }, atMs);
       const filtered = filter.position;
+      const snapped = filter.lastSnapped;
       const uncertaintyM = filter.uncertaintyM;
-      trail = [...trail, { at: atMs, raw, snapped: { x: sx, y: sy }, filtered, status, uncertaintyM }].slice(-TRAIL_LENGTH);
+      trail = [...trail, { at: atMs, raw, snapped, filtered, status, uncertaintyM }].slice(-TRAIL_LENGTH);
       listeners.forEach((l) => l());
       const geo = toGeo(filtered.x, filtered.y);
       return {

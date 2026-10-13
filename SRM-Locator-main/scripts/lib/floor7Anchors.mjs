@@ -14,6 +14,22 @@ export const CAMPUS_SSIDS = ['SRMIST', 'SRMIST-UA'];
 /** Two spots whose best readings are this close (dB) share the access point between them. */
 export const TIE_DB = 3;
 
+/**
+ * A radio whose strongest reading anywhere is weaker than this (dBm) is left out: heard that
+ * faintly it says little about where it is. Compared with and without in the leave-one-scan-out
+ * report (scripts/floor7-leave-one-out.mjs); pass `minBestDbm: -Infinity` to buildAnchors for
+ * "without".
+ */
+export const MIN_ANCHOR_BEST_DBM = -80;
+
+/**
+ * Whether the cut above is applied by default. It is NOT: in the leave-one-scan-out comparison
+ * (floor7-reports/leave_one_scan_out.md, section 4) leaving those radios out did not lower the
+ * error, and it removes every radio anchored at Room 704 and makes more scans fail to produce an
+ * estimate at all. tests/floor7Replay.test.js checks that this still matches the report.
+ */
+export const ANCHOR_CUT_ENABLED = false;
+
 /** A gap this long (ms) between two scans of one file starts a new session (morning / afternoon). */
 export const SESSION_GAP_MS = 60 * 60 * 1000;
 
@@ -219,8 +235,10 @@ export function guessReasons(placeId, planDoc, mapping) {
 
 /**
  * Places every radio at the plan spot where any of its BSSIDs was heard strongest. Within
- * TIE_DB of the runner-up spot, it sits at the midpoint of those two spots. A radio heard at
- * one spot only is flagged `single_spot`.
+ * TIE_DB of the runner-up spot, it sits at the midpoint of those two spots: the WALKING
+ * midpoint along the corridor graph when `midpoint` is given (on a corridor even when the two
+ * spots are on different ones), else the straight-line midpoint. A radio heard at one spot only
+ * is flagged `single_spot`. A radio never heard stronger than `minBestDbm` is left out.
  *
  * @param {object[]} placed campus readings from placeReadings()
  * @param {object} [options]
@@ -228,13 +246,21 @@ export function guessReasons(placeId, planDoc, mapping) {
  *   radio (first five BSSID bytes); a hand-set position wins over everything measured
  * @param {(reading: object) => boolean} [options.use] which readings count (default all);
  *   how the replay leaves a scan or a whole session out
+ * @param {(a: number[], b: number[]) => number[]} [options.midpoint] [x, y] halfway between two
+ *   [x, y] spots; the build script gives the walking midpoint of the plan
+ * @param {number} [options.minBestDbm] default MIN_ANCHOR_BEST_DBM when ANCHOR_CUT_ENABLED, else no cut
  * @param {object} [options.planDoc] with `mapping`, marks anchors that rest on a guess item
  * @param {Map} [options.mapping]
  * @returns {{radio:string, x:number, y:number, place:string|null, basis:'best'|'tie'|'override',
  *   single_spot:boolean, tie?:string[], guess:string[], heard:[string, number][],
  *   bssids:{bssid:string, ssid:string}[]}[]} sorted by radio
  */
-export function buildAnchors(placed, { overrides = {}, use = () => true, planDoc = null, mapping = null } = {}) {
+const straightMidpoint = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+
+export function buildAnchors(
+  placed,
+  { overrides = {}, use = () => true, planDoc = null, mapping = null, midpoint = straightMidpoint, minBestDbm = ANCHOR_CUT_ENABLED ? MIN_ANCHOR_BEST_DBM : -Infinity } = {}
+) {
   const spotXY = new Map();
   const radios = new Map();
   for (const r of placed) {
@@ -251,6 +277,7 @@ export function buildAnchors(placed, { overrides = {}, use = () => true, planDoc
   const out = [];
   for (const [radio, { best, bssids }] of radios) {
     const ranked = [...best].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'en'));
+    if (ranked[0][1] < minBestDbm && !overrides[radio]) continue; // too faint to place
     const list = [...bssids].map(([bssid, ssid]) => ({ bssid, ssid })).sort((a, b) => a.bssid.localeCompare(b.bssid));
     const over = overrides[radio];
     let placedAt;
@@ -259,9 +286,9 @@ export function buildAnchors(placed, { overrides = {}, use = () => true, planDoc
       if (!xy) throw new Error(`Override for ${radio} names place "${over.place}", which no scan used`);
       placedAt = { x: xy[0], y: xy[1], place: over.place ?? null, basis: 'override', guess: [] };
     } else if (ranked.length > 1 && ranked[0][1] - ranked[1][1] < TIE_DB) {
-      const [a, b] = [spotXY.get(ranked[0][0]), spotXY.get(ranked[1][0])];
+      const [x, y] = midpoint(spotXY.get(ranked[0][0]), spotXY.get(ranked[1][0]));
       placedAt = {
-        x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, place: null, basis: 'tie',
+        x, y, place: null, basis: 'tie',
         tie: [ranked[0][0], ranked[1][0]], guess: [...new Set([...reasonsFor(ranked[0][0]), ...reasonsFor(ranked[1][0])])],
       };
     } else {

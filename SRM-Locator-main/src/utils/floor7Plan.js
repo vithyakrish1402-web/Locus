@@ -151,11 +151,15 @@ export function buildPlan(doc, scale = PLAN_SCALE) {
   // ------------------------------------------------------------ walking distance
   const asSnapped = (p) => (Number.isInteger(p.edge) && Number.isFinite(p.offset) ? p : snapToCorridor(p.x, p.y));
 
-  /** Shortest walk, in metres, from the nearest corridor point of `a` to that of `b`. */
-  function walkingDistance(a, b) {
+  /**
+   * The shortest walk from the nearest corridor point of `a` to that of `b`:
+   * { distance, points } where `points` is the route as a polyline, corner to corner.
+   */
+  function route(a, b) {
     const from = asSnapped(a);
     const to = asSnapped(b);
     const best = new Array(nodes.length).fill(Infinity);
+    const via = new Array(nodes.length).fill(-1); // the node we came from; -1 = straight from `from`
     const done = new Array(nodes.length).fill(false);
     const ea = edges[from.edge];
     best[ea.a] = from.offset;
@@ -165,12 +169,48 @@ export function buildPlan(doc, scale = PLAN_SCALE) {
       for (let i = 0; i < nodes.length; i++) if (!done[i] && best[i] < Infinity && (u < 0 || best[i] < best[u])) u = i;
       if (u < 0) break;
       done[u] = true;
-      for (const { to: v, length } of adjacency[u]) best[v] = Math.min(best[v], best[u] + length);
+      for (const { to: v, length } of adjacency[u]) {
+        if (best[u] + length < best[v]) {
+          best[v] = best[u] + length;
+          via[v] = u;
+        }
+      }
     }
     const eb = edges[to.edge];
-    let result = Math.min(best[eb.a] + to.offset, best[eb.b] + (eb.length - to.offset));
-    if (from.edge === to.edge) result = Math.min(result, Math.abs(from.offset - to.offset));
-    return result;
+    const viaA = best[eb.a] + to.offset;
+    const viaB = best[eb.b] + (eb.length - to.offset);
+    const end = viaA <= viaB ? eb.a : eb.b;
+    const distance = Math.min(viaA, viaB);
+    if (from.edge === to.edge && Math.abs(from.offset - to.offset) <= distance) {
+      return { distance: Math.abs(from.offset - to.offset), points: [{ x: from.x, y: from.y }, { x: to.x, y: to.y }] };
+    }
+    const chain = [];
+    for (let n = end; n !== -1; n = via[n]) chain.push(n);
+    chain.reverse();
+    const points = [{ x: from.x, y: from.y }, ...chain.map((n) => ({ x: nodes[n].x, y: nodes[n].y })), { x: to.x, y: to.y }];
+    // A start or end that is itself a node would otherwise appear twice.
+    return { distance, points: points.filter((p, i) => i === 0 || dist(p, points[i - 1]) > 1e-9) };
+  }
+
+  /** Shortest walk, in metres, from the nearest corridor point of `a` to that of `b`. */
+  const walkingDistance = (a, b) => route(a, b).distance;
+
+  /**
+   * The point `fraction` (0 to 1) of the way along the shortest walk from `a` to `b`. At 0.5
+   * it is the walking midpoint: on a corridor even when the straight-line midpoint is not.
+   */
+  function pointAlongWalk(a, b, fraction) {
+    const { distance, points } = route(a, b);
+    let left = distance * Math.max(0, Math.min(1, fraction));
+    for (let i = 0; i < points.length - 1; i++) {
+      const len = dist(points[i], points[i + 1]);
+      if (left <= len || i === points.length - 2) {
+        const t = len === 0 ? 0 : Math.min(1, left / len);
+        return { x: points[i].x + t * (points[i + 1].x - points[i].x), y: points[i].y + t * (points[i + 1].y - points[i].y) };
+      }
+      left -= len;
+    }
+    return points[0];
   }
 
   // ------------------------------------------------------------ the drawing
@@ -199,6 +239,8 @@ export function buildPlan(doc, scale = PLAN_SCALE) {
     spots,
     snapToCorridor,
     walkingDistance,
+    route,
+    pointAlongWalk,
     toSvg,
     isConnected,
     /** The node named `name` (a station name from the plan), or undefined. */

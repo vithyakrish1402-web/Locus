@@ -7,7 +7,7 @@ import overrides from '../src/data/floor7ApsOverrides.json';
 import {
   assignSessions, buildAnchors, campusOnly, fileShort, placeReadings, radioOf, readMapping, readSurvey,
 } from '../scripts/lib/floor7Anchors.mjs';
-import { floor7Plan as plan } from '../src/utils/floor7Plan.js';
+import { buildPlan, floor7Plan as plan } from '../src/utils/floor7Plan.js';
 
 // The real survey, the real name table and the real plan, together: what the build script does,
 // checked, and the committed floor7Aps.json checked against a fresh build so it cannot go stale.
@@ -18,7 +18,12 @@ const mapping = readMapping(read('survey_name_to_plan_spot.csv'));
 const raw = assignSessions(files.flatMap((f) => readSurvey(read(f), f)));
 const { placed, dropped, held } = placeReadings(raw, mapping);
 const campus = campusOnly(placed);
-const fresh = buildAnchors(campus, { overrides, planDoc, mapping });
+const drawn = buildPlan(planDoc, 1);
+const midpoint = (a, b) => {
+  const m = drawn.pointAlongWalk({ x: a[0], y: a[1] }, { x: b[0], y: b[1] }, 0.5);
+  return [m.x, m.y];
+};
+const fresh = buildAnchors(campus, { overrides, planDoc, mapping, midpoint });
 const scanOf = (file, point) => `wifi_survey_20261013_${file}.csv#${point}`;
 
 describe('the survey and the name table', () => {
@@ -118,18 +123,23 @@ describe('the committed floor7Aps.json', () => {
     for (const r of floor7Aps.radios) expect(r.bssids.some((b) => ['SRMIST', 'SRMIST-UA'].includes(b.ssid)), r.radio).toBe(true);
   });
 
-  it('places every radio on a corridor of the plan, except two midpoints between spots on different corridors', () => {
-    // The agreed rule is the plain midpoint of the two best spots. Where those spots are on
-    // different corridors (a room on the east spine and the stairs beside lobby B; Lab C and
-    // Room 705) the midpoint falls between corridors, inside a stairwell or the lobby. The
-    // position filter snaps every estimate onto a corridor anyway; this pins the two cases so a
-    // third cannot appear unseen. Say so to the team: it is a decision, not a bug in the rule.
-    const off = floor7Aps.radios.filter((r) => plan.snapToCorridor(r.x, r.y).distanceMoved > 1e-6);
-    expect(off.map((r) => r.radio)).toEqual(['54:f0:b1:3e:5b', 'd0:4d:c6:db:64']);
-    for (const r of off) {
-      expect(r.basis).toBe('tie');
-      expect(plan.snapToCorridor(r.x, r.y).distanceMoved).toBeLessThan(4);
-    }
+  it('places EVERY radio on a corridor of the plan, the midpoint ones too (walking midpoint)', () => {
+    for (const r of floor7Aps.radios) expect(plan.snapToCorridor(r.x, r.y).distanceMoved, r.radio).toBeLessThan(1e-6);
+  });
+
+  it('puts a radio whose best two spots are on different corridors at the WALKING midpoint, not the straight-line one', () => {
+    const at = (id) => floor7Aps.radios.find((r) => r.radio === id);
+    // Room 706A (east spine) and the stairs beside lobby B (passage): up the spine 7.75 m, then 3.625 m west
+    expect([at('54:f0:b1:3e:5b').x, at('54:f0:b1:3e:5b').y]).toEqual([33.38, 0]);
+    // Computing Lab C (passage, x 17) and Room 705 (east spine): along the passage 20 m, then 5.25 m up the spine
+    expect(at('d0:4d:c6:db:64').x).toBeCloseTo(17 + (20 + 5.25) / 2, 2);
+    expect(at('d0:4d:c6:db:64').y).toBe(0);
+    for (const id of ['54:f0:b1:3e:5b', 'd0:4d:c6:db:64']) expect(at(id).basis).toBe('tie');
+  });
+
+  it('keeps radios heard only faintly: the -80 dBm cut is off, so Room 704 keeps its anchors', () => {
+    expect(floor7Aps.radios.filter((r) => r.heard[0][1] < -80).length).toBe(7);
+    expect(floor7Aps.radios.filter((r) => r.place === 'r704')).toHaveLength(2);
   });
 
   it('anchors the radios heard best at the old ladies restroom there, and none at the disabled one', () => {

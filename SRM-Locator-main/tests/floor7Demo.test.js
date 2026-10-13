@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WIFI_CONFIDENCE_THRESHOLD } from '../src/utils/positionSource.js';
 import { inWalkable, pathCrossesWall } from '../src/utils/floorGeometry.js';
 import { toGeo, toLocal } from '../src/utils/floor7Frame.js';
+import { floor7Plan } from '../src/utils/floor7Plan.js';
 import { estimatePosition } from '../src/utils/wifiPositioning.js';
 import { startWifiFusion } from '../src/utils/wifiFusion.js';
 import floor7Aps from '../src/data/floor7Aps.json';
 import { __resetAccessPointCache, loadAccessPoints } from '../src/utils/wifiPositioning.js';
 import {
   DEMO_BUILDING, DEMO_FLOOR, HALO_FULL_UNCERTAINTY_M, confidenceFromUncertainty, createFloor7Tracker,
-  floor7AccessPointTable, floor7FusionOptions, floor7Geometry, getTrail, subscribeTrail,
+  floor7AccessPointTable, floor7FusionOptions, floor7Spots, getTrail, subscribeTrail,
 } from '../src/utils/floor7Demo.js';
 
 vi.mock('../src/firebase.js', () => ({ auth: {}, db: {} }));
@@ -16,7 +17,7 @@ vi.mock('firebase/firestore', () => ({ collection: vi.fn(), getDocsFromServer: v
 
 const STEP = 35_000;
 const T0 = 1_700_000_000_000;
-const SPOTS = floor7Geometry.spots;
+const SPOTS = floor7Spots;
 const atSpot = (name) => toGeo(SPOTS[name].x, SPOTS[name].y);
 const estimateAt = (name, confidence = 0.9, extra = {}) => ({
   ...atSpot(name), building: DEMO_BUILDING, floor: DEMO_FLOOR, confidence, matchedApCount: 5, totalApsSeen: 8, ...extra,
@@ -25,20 +26,20 @@ const estimateAt = (name, confidence = 0.9, extra = {}) => ({
 describe('the Floor 7 plan data', () => {
   it('has the 23 surveyed spots of the plan, every one in walkable space', () => {
     expect(Object.keys(SPOTS)).toHaveLength(23);
-    for (const [name, p] of Object.entries(SPOTS)) expect(inWalkable(p, floor7Geometry.walkable), name).toBe(true);
+    for (const [name, p] of Object.entries(SPOTS)) expect(inWalkable(p, floor7Plan.walkable), name).toBe(true);
   });
 
   it('has walls between a room and the corridor, with the doorway left open', () => {
     // Room 702's own wall lies between its middle and the west spine...
-    expect(pathCrossesWall({ x: -14.2, y: 3 }, { x: -9, y: 3 }, floor7Geometry.walls)).toBe(true);
+    expect(pathCrossesWall({ x: -14.2, y: 3 }, { x: -9, y: 3 }, floor7Plan.walls)).toBe(true);
     // ...but its doorway (y 4.8 to 5.7) is a gap, and the passage is open end to end.
-    expect(pathCrossesWall({ x: -14.2, y: 5.25 }, { x: -9, y: 5.25 }, floor7Geometry.walls)).toBe(false);
-    expect(pathCrossesWall({ x: -9, y: 0 }, { x: 37, y: 0 }, floor7Geometry.walls)).toBe(false);
+    expect(pathCrossesWall({ x: -14.2, y: 5.25 }, { x: -9, y: 5.25 }, floor7Plan.walls)).toBe(false);
+    expect(pathCrossesWall({ x: -9, y: 0 }, { x: 37, y: 0 }, floor7Plan.walls)).toBe(false);
   });
 
   it('counts only corridors and lift lobbies as walkable: a room is not', () => {
-    expect(inWalkable({ x: -14.2, y: 3 }, floor7Geometry.walkable)).toBe(false);
-    expect(inWalkable({ x: -9, y: 3 }, floor7Geometry.walkable)).toBe(true);
+    expect(inWalkable({ x: -14.2, y: 3 }, floor7Plan.walkable)).toBe(false);
+    expect(inWalkable({ x: -9, y: 3 }, floor7Plan.walkable)).toBe(true);
   });
 });
 

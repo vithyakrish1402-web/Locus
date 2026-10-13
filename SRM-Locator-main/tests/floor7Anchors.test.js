@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  LAB_F_RULE, TIE_DB, assignSessions, buildAnchors, campusOnly, fileShort, guessReasons, parseCsv, placeReadings,
+  ANCHOR_CUT_ENABLED, LAB_F_RULE, MIN_ANCHOR_BEST_DBM, TIE_DB, assignSessions, buildAnchors, campusOnly, fileShort, guessReasons, parseCsv, placeReadings,
   radioOf, readMapping, readSurvey, shortScan,
 } from '../scripts/lib/floor7Anchors.mjs';
 
@@ -222,6 +222,56 @@ describe('placing radios', () => {
     const out = buildAnchors(rs);
     expect(out.map((r) => r.radio)).toEqual(['aa:aa:aa:aa:aa', 'bb:bb:bb:bb:bb']);
     expect(out[0]).toMatchObject({ x: 0.33, y: 0.67 });
+  });
+});
+
+describe('where a tie puts the radio', () => {
+  const R = 'aa:bb:cc:dd:ee';
+  const a = reading('s#1', `${R}:01`, 'SRMIST', -55, 'rW', 6, 7.9);
+  const b = reading('s#2', `${R}:01`, 'SRMIST', -56, 'labD', 11, 0);
+
+  it('uses the straight-line midpoint when no walking midpoint is given', () => {
+    expect(buildAnchors([a, b])[0]).toMatchObject({ x: 8.5, y: 3.95, basis: 'tie' });
+  });
+
+  it('uses the walking midpoint when one is given, and tells it the two spots in rank order', () => {
+    const seen = [];
+    const [r] = buildAnchors([a, b], { midpoint: (p, q) => (seen.push([p, q]), [-9, 3]) });
+    expect(seen).toEqual([[[6, 7.9], [11, 0]]]);
+    expect(r).toMatchObject({ x: -9, y: 3, basis: 'tie', tie: ['rW', 'labD'] });
+  });
+
+  it('does not call it for a radio with a clear best spot', () => {
+    const calls = [];
+    buildAnchors([a, { ...b, rssi: -70 }], { midpoint: (p) => (calls.push(1), p) });
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('the weak-radio cut', () => {
+  const R = 'aa:bb:cc:dd:ee';
+  const weak = reading('s#1', `${R}:01`, 'SRMIST', -81, 'r701', -9, 11.75);
+  const strong = reading('s#1', 'bb:bb:bb:bb:bb:01', 'SRMIST', -80, 'r701', -9, 11.75);
+
+  it('is -80 dBm, and off by default because the comparison did not favour it', () => {
+    expect(MIN_ANCHOR_BEST_DBM).toBe(-80);
+    expect(ANCHOR_CUT_ENABLED).toBe(false);
+    expect(buildAnchors([weak, strong]).map((r) => r.radio)).toEqual([R, 'bb:bb:bb:bb:bb']);
+  });
+
+  it('leaves out a radio never heard stronger than the cut, and keeps one at exactly the cut', () => {
+    expect(buildAnchors([weak, strong], { minBestDbm: MIN_ANCHOR_BEST_DBM }).map((r) => r.radio)).toEqual(['bb:bb:bb:bb:bb']);
+  });
+
+  it('judges a radio by its strongest reading anywhere, not by where it was placed', () => {
+    const elsewhere = reading('s#2', `${R}:01`, 'SRMIST', -60, 'r703', -9, -1.25);
+    expect(buildAnchors([weak, elsewhere], { minBestDbm: MIN_ANCHOR_BEST_DBM }).map((r) => r.radio)).toEqual([R]);
+  });
+
+  it('never drops a radio the team placed by hand', () => {
+    const out = buildAnchors([weak], { minBestDbm: MIN_ANCHOR_BEST_DBM, overrides: { [R]: { x: 1, y: 2 } } });
+    expect(out).toHaveLength(1);
+    expect(out[0].basis).toBe('override');
   });
 });
 

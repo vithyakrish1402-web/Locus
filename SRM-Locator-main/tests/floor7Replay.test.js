@@ -8,7 +8,10 @@ import { toGeo } from '../src/utils/floor7Frame.js';
 import { buildPlan, floor7Plan as plan } from '../src/utils/floor7Plan.js';
 import planDoc from '../floor7-inputs/floor7_plan.json';
 import { readMapping } from '../scripts/lib/floor7Anchors.mjs';
-import { blindGuessWalk, evaluate, groupBy, scansOf, stats } from '../scripts/lib/floor7Replay.mjs';
+import { blindGuessWalk, compareWalk, evaluate, groupBy, scansOf, stats, walkReplay } from '../scripts/lib/floor7Replay.mjs';
+import { ANCHOR_CUT_ENABLED } from '../scripts/lib/floor7Anchors.mjs';
+import { createPositionFilter } from '../src/utils/positionFilter.js';
+import { WIFI_ESTIMATE_MAX_AGE_MS } from '../src/utils/wifiFusion.js';
 
 const row = (walk, extra = {}) => ({ walk, ...extra });
 const near = (v, e, d = 6) => expect(v).toBeCloseTo(e, d);
@@ -111,6 +114,74 @@ describe('blindGuessWalk', () => {
   });
 });
 
+describe('walkReplay: scans in time order through the position filter', () => {
+  const scans = new Map([
+    ['b', { scan: 'b', time: 1_000_000 + 35_000, x: 6, y: 7.9 }], // the new ladies restroom
+    ['a', { scan: 'a', time: 1_000_000, x: -9, y: 7.9 }], // the back-path junction, first in time
+    ['c', { scan: 'c', time: 1_000_000 + 70_000, x: 6, y: 7.9 }],
+    ['d', { scan: 'd', time: 1_000_000 + 105_000, x: 6, y: 7.9 }],
+  ]);
+  const row = (scan, est, walk) => ({ scan, place: scan, est, walk });
+  const makeFilter = () => createPositionFilter({ staleMs: WIFI_ESTIMATE_MAX_AGE_MS, plan });
+  const near = (v, e) => expect(v).toBeCloseTo(e, 6);
+
+  it('replays by time, whatever order the rows come in', () => {
+    const rows = [row('b', { x: 6, y: 7.9, confidence: 1 }, 0), row('a', { x: -9, y: 7.9, confidence: 1 }, 0)];
+    expect(walkReplay({ rows, scans, plan, scale: 1, makeFilter }).map((w) => w.scan)).toEqual(['a', 'b']);
+  });
+
+  it('gives the gap, the true step on foot, the raw error and the filtered error', () => {
+    const rows = [row('a', { x: -9, y: 7.9, confidence: 1 }, 0), row('b', { x: 6, y: 7.9, confidence: 1 }, 0)];
+    const [a, b] = walkReplay({ rows, scans, plan, scale: 1, makeFilter });
+    expect(a).toMatchObject({ gapS: null, truthStep: null, status: 'tracking' });
+    near(a.filtered, 0);
+    near(b.gapS, 35);
+    near(b.truthStep, 15);
+    expect(b.status).toBe('tracking');
+    expect(b.filtered).toBeLessThan(15); // moved toward the restroom
+  });
+
+  it('judges the filtered position, not the raw estimate: a bad estimate it rejects costs nothing', () => {
+    const rows = [
+      row('a', { x: -9, y: 7.9, confidence: 1 }, 0),
+      row('b', { x: 6, y: 7.9, confidence: 1 }, 0),
+      row('c', { x: 11, y: 0, confidence: 1 }, 40), // the labs, 40 m on foot from the restroom: rejected
+    ];
+    const w = walkReplay({ rows, scans, plan, scale: 1, makeFilter });
+    expect(w[2].status).toBe('rejected');
+    expect(w[2].raw).toBe(40);
+    expect(w[2].filtered).toBeLessThan(10);
+  });
+
+  it('holds the last position through a scan with no estimate', () => {
+    const rows = [row('a', { x: -9, y: 7.9, confidence: 1 }, 0), row('b', null, null)];
+    const w = walkReplay({ rows, scans, plan, scale: 1, makeFilter });
+    expect(w[1]).toMatchObject({ status: 'no estimate', raw: null });
+    expect(w[1].filtered).toBeGreaterThan(0);
+  });
+
+  it('works in real metres: truth is the plan spot times the scale', () => {
+    const doubled = buildPlan(planDoc, 2);
+    const rows = [row('a', { x: -18, y: 15.8, confidence: 1 }, 0)];
+    const w = walkReplay({ rows, scans, plan: doubled, scale: 2, makeFilter: () => createPositionFilter({ staleMs: 70_000, plan: doubled }) });
+    near(w[0].filtered, 0);
+  });
+
+  it('summarises raw against filtered over the scans that have both, and counts rejects, restarts and misses', () => {
+    const walk = [
+      { raw: 10, filtered: 4, status: 'tracking' },
+      { raw: 3, filtered: 3.2, status: 'tracking' },
+      { raw: 2, filtered: 5, status: 'rejected' },
+      { raw: 8, filtered: 8, status: 'reacquiring' },
+      { raw: null, filtered: 8, status: 'no estimate' },
+    ];
+    const c = compareWalk(walk);
+    expect(c).toMatchObject({ scans: 5, compared: 4, rejected: 1, reacquired: 1, noEstimate: 1, better: 1, worse: 1 });
+    expect(c.raw).toMatchObject({ mean: 5.75, max: 10 });
+    expect(c.filtered.mean).toBeCloseTo(5.05, 6);
+  });
+});
+
 describe('the access point table the replay and the app share', () => {
   const radios = [{ radio: 'aa:aa:aa:aa:aa', x: 10, y: 4, bssids: [{ bssid: 'AA:AA:AA:AA:AA:01', ssid: 'SRMIST' }, { bssid: 'aa:aa:aa:aa:aa:02', ssid: '' }] }];
 
@@ -165,8 +236,44 @@ describe('the report script, end to end', () => {
     expect(report).toContain('spots unseen in training');
   });
 
+  it('says leave-one-out is optimistic (near-duplicate scans) and quotes the cross-session rows as the realistic ones', () => {
+    expect(report).toContain('## How to read these numbers');
+    expect(report).toContain('Leave-one-scan-out (sections 1 and 2) is optimistic');
+    expect(report).toContain('near-duplicates');
+    expect(report).toContain('The cross-session rows (section 3) are the realistic ones');
+    expect(report).toContain('(the realistic numbers)');
+    expect(report).toContain('## 1. Leave one scan out (best case)');
+  });
+
+  it('compares with and without the weak-radio cut, and keeps the setting that the code has', () => {
+    expect(report).toContain('## 4. Radios weaker than -80 dBm: with and without');
+    expect(report).toMatch(/without the cut \(38 radios\)/);
+    expect(report).toMatch(/with the cut \(31 radios\)/);
+    expect(report).toContain('Mean walking error, leave one out');
+    const kept = report.match(/\*\*Kept: (WITH|WITHOUT) the cut\*\*/)[1];
+    expect(kept === 'WITH').toBe(ANCHOR_CUT_ENABLED);
+    expect(report).toContain('`ANCHOR_CUT_ENABLED` in scripts/lib/floor7Anchors.mjs is ' + ANCHOR_CUT_ENABLED);
+  });
+
+  it('replays the 76 afternoon scans as a walk: raw against filtered, per scan', () => {
+    expect(report).toContain('## 5. The afternoon as a walk, raw against filtered');
+    const table = report.slice(report.indexOf('| time | spot | gap |'));
+    const rows = table.split('\n').slice(2).filter((l) => /^\| \d\d:\d\d:\d\d /.test(l));
+    expect(rows).toHaveLength(76);
+    expect(rows.map((r) => r.split('|')[1].trim())).toEqual([...rows.map((r) => r.split('|')[1].trim())].sort()); // in time order
+    expect(report).toMatch(/\| raw \| [\d.]+ m \|/);
+    expect(report).toMatch(/\| filtered \| [\d.]+ m \|/);
+    expect(rows.every((r) => /(tracking|rejected|reacquiring|no estimate) \|$/.test(r))).toBe(true);
+  });
+
+  it('uses the same staleness as the app: 70 s, the WiFi estimate age', () => {
+    expect(WIFI_ESTIMATE_MAX_AGE_MS).toBe(70_000);
+    expect(readFileSync(join(process.cwd(), 'scripts', 'floor7-leave-one-out.mjs'), 'utf8')).toContain('const STALE_MS = 70_000;');
+  });
+
   it('marks which anchors rest on a guess item, and prints the caveats', () => {
     expect(report).toContain('19 of 38 anchors rest on a guess item');
+    expect(report).toContain('Quote the cross-session rows (section 3) as the realistic ones');
     expect(report).toContain('Room 702 position is a guess');
     expect(report).toContain('Room 704 position is a mirror guess');
     expect(report).toContain('## Caveats');
