@@ -20,11 +20,17 @@ describe('FLOOR7_TEST.md', () => {
     expect(pkg.scripts['sidetest:install']).toBeTruthy();
   });
 
-  it('tells the owner to look for the button the overlay really has', () => {
-    const overlay = readFileSync(join(root, 'src', 'components', 'Floor7DebugOverlay.jsx'), 'utf8');
-    expect(overlay).toContain('F7 {open');
-    expect(doc).toContain('**F7 debug**');
-    expect(overlay).toContain('left-2 bottom-24'); // bottom left, above the bar
+  it('tells the admin to look for the Settings row, badge and buttons the app really has', () => {
+    const read = (f) => readFileSync(join(root, 'src', 'components', f), 'utf8');
+    expect(read('devmode/DeveloperModeRow.jsx')).toContain('label="Developer mode"');
+    expect(read('devmode/DeveloperBadge.jsx')).toContain('Developer mode on');
+    expect(read('Floor7DebugOverlay.jsx')).toContain('Hide the plan');
+    expect(read('devmode/ReadyCheck.jsx')).toContain('Start recording');
+    expect(read('devmode/ResultsScreen.jsx')).toContain('Share files');
+    expect(read('devmode/AdvancedSection.jsx')).toContain('Advanced details');
+    for (const text of ['Developer mode', 'Developer mode on', 'Floor 7 map overlay', 'Hide the plan', 'Floor 7 walk test', 'Start recording', 'Share files', 'Previous recordings', 'Advanced details']) {
+      expect(doc, text).toContain(text);
+    }
   });
 
   it('reads the log the app prints with the tag and marker the app uses', () => {

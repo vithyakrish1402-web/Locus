@@ -51,22 +51,20 @@ another branch is checked out there.)
 
 ### Seeing the overlay
 
-10. At the **bottom left**, just above the bottom bar, there is a small round button that says
-    **F7 debug**. It is only there for the owner, and only in LOCUS Test. Tap it.
-11. You see the team's floor drawing with:
+10. Open **Settings** (the sliders icon at the top) and switch on **Developer mode**. The row is
+    only there for the admin account (signed in with Google, online), and only in LOCUS Test.
+    It is off after sign-out. A badge **Developer mode on** appears under the top bar; tap it
+    to come back to the Developer mode screen.
+11. To see the floor drawing on the main map screen, open the card **Floor 7 map overlay** and
+    switch it on (it is off by default). You see the team's floor drawing with:
     - the blue dotted lines: the corridors the position is allowed to be on;
-    - the **diamonds**: all 38 access points, each named by its last two bytes (for example
-      `8d:8a`). Where several share a spot they are fanned out around it with a thin line back
-      to the true spot. Purple = placed at its strongest spot, light purple = between two
-      spots, amber = heard at one spot only, orange dashed edge = rests on a guess (Room 702,
-      Room 704, a restroom or the east wing). The list under the picture names every one and
-      says what to check;
-    - the **track**: a white-ringed circle is each raw estimate, the blue dot is that estimate
-      moved onto the nearest corridor, and the green line and big dot is the position the app
-      is showing. While the app is still waiting for a second estimate that agrees there is no
-      green dot (only the raw circles), and the line under the picture says so; amber means
-      it just rejected an estimate; orange means it restarted the track.
-12. Tap the button again to hide it.
+    - the **track**: a white-ringed circle is each raw estimate ("Wi-Fi guess"), the blue dot is
+      that estimate moved onto the nearest corridor ("Guess moved onto corridor"), and the
+      green line and big dot is the position the app is showing ("Position shown"). While the
+      app is still waiting for a second estimate that agrees there is no green dot.
+    The access points (all 38, with what to check about each) are under **Advanced details**
+    in the walk test results.
+12. Tap **Hide the plan** to hide it.
 
 ## 2. The phone walk: error in metres per door
 
@@ -106,26 +104,31 @@ Save `doors.csv`, `phone.log` and the result somewhere (not in `floor7-inputs/`)
 
 ## 2a. The phone walk without a PC: the in-app recorder
 
-LOCUS Test can do the whole walk itself (it needs the APK from `npm run sidetest:install`,
-because the recorder has a small native part). Open **F7 debug**, then:
+LOCUS Test does the whole walk itself, as a guided flow (it needs the APK from
+`npm run sidetest:install`, because the recorder has a small native part). Open **Developer
+mode** (see "Seeing the overlay" above), then the card **Floor 7 walk test**:
 
-1. **Start recording.** Nothing is stored before this. The screen stays on while it runs, and a
-   red **Recording** label shows the time and how many estimates were logged.
-2. **At each door,** search the place (Room 706A, TP706A, lift...), pick it and tap **I'm here**.
-   Stand still for the 75 s countdown, or tap **Done / next door** to end it early. **Undo mark**
-   takes back a wrong tap. For a walk without stopping, use **Start of walk** and **End of walk**.
-3. **Stop recording.** The phone works out the error per door (the same code as the script
-   below) and shows it in plain words: walking error, the raw estimate's error, doors that never
-   showed a position, and for a continuous walk how far behind the dot was and how long it took
-   to catch up.
-4. **Share** sends the files through the Android share sheet (WhatsApp, Drive, email), or **Save
-   to Downloads** puts them in `Downloads/LOCUS`. Earlier walks are under *Previous recordings*.
+1. **Ready check.** Ticks for: signed in as admin, in a group, Location on, Wi-Fi permission,
+   Wi-Fi on, and a first position (up to 70 seconds). **Start recording** stays grey until all
+   are ticked and says what is still needed. Under it is your route: the shortest walk
+   through the doors starting at Room 701. Move a door with Up and Down, or Skip it.
+2. **Walking.** The plan is on top, with your position. The card below always says what to do
+   next ("Next: Room 701. Walk to the corridor in front of the door and stand still."). Tap
+   **I'm here**, stand still for the countdown (or tap **Done, next door**). **Skip this door**
+   and **Undo last** are under it. After the last door, walk the middle passage without
+   stopping: **Start of walk**, then **End of walk**. A red **Recording** label and the time
+   are always on screen. **Stop** asks first. The screen stays on while it records.
+3. **Results.** A plain summary on top, then each door with a green (within 5 m), amber (5 to
+   10 m), red (over 10 m) or grey (no position) chip, its walking error and the raw error.
+   **Share files** sends the files through the Android share sheet; **Save to Downloads** copies
+   them to `Downloads/LOCUS`. **Previous recordings** lists earlier walks to see, share, delete or
+   recover one the app was closed in. **Advanced details** (closed) holds the technical names,
+   access points, constants and per-estimate details.
 
 The files are `<id>_estimates.csv`, `_scans.csv`, `_doors.csv`, `_events.csv` and `_summary.txt`.
 They hold the Wi-Fi names and hardware addresses of campus access points; there is no account
-data in them and nothing is uploaded. If the app leaves the screen, or the screen turns off, the
-recording notes it and warns you on return: Android slows Wi-Fi scans then. If the app is
-closed in the middle, it offers to recover the walk the next time it opens.
+data in them and nothing is uploaded. If the app leaves the screen, or the screen turns off,
+the recording notes it and warns you on return: Android slows Wi-Fi scans then.
 
 On a PC, from the shared files (this does not need the phone, and the old `doors.csv` plus log
 way below still works):

@@ -94,6 +94,7 @@ import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { useWifiFusion } from './hooks/useWifiFusion';
 import { useIndoorView } from './hooks/useIndoorView';
 import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD, FLOOR7_DEMO } from './utils/positionSource';
+import { useDeveloperMode } from './hooks/useDeveloperMode';
 import { buildingAt, isOnOtherFloor, memberFloorTag } from './utils/indoorView';
 import { ConfidenceHalo, FloorTag } from './components/IndoorMarkers';
 import FloorPicker from './components/FloorPicker';
@@ -114,6 +115,13 @@ import { PrecognitionFilter } from './utils/precognition';
 const TacticalLeafletMap = React.lazy(() => import('./components/TacticalLeafletMap'));
 // Floor 7 alignment overlay: the test build only (FLOOR7_DEMO is false, and this import gone, elsewhere).
 const Floor7DebugOverlay = FLOOR7_DEMO ? React.lazy(() => import('./components/Floor7DebugOverlay')) : null;
+// Developer mode (admin accounts, test build only): the Settings row, the header badge and the
+// screen are separate chunks, requested only once the admin check has passed and it is on.
+const DeveloperModeRow = FLOOR7_DEMO ? React.lazy(() => import('./components/devmode/DeveloperModeRow')) : null;
+const DeveloperBadge = FLOOR7_DEMO ? React.lazy(() => import('./components/devmode/DeveloperBadge')) : null;
+const DeveloperScreen = FLOOR7_DEMO ? React.lazy(() => import('./components/devmode/DeveloperScreen')) : null;
+// A constant, so in every other build the hook (and its code) is left out. Hooks keep their order.
+const useDeveloper = FLOOR7_DEMO ? useDeveloperMode : () => ({ status: 'denied', on: false, setOn: () => {} });
 // --- ADDED: FIREBASE AUTH ---
 import { auth, googleProvider } from './firebase';
 import {
@@ -548,6 +556,10 @@ const App = () => {
   // --- ADMIN PATH RECORDER STATE ---
   const ADMIN_EMAIL = "vithyakrish1402@gmail.com"; //  REPLACE WITH YOUR EXACT GOOGLE LOGIN EMAIL
   const isAdmin = user?.email === ADMIN_EMAIL;
+  const developer = useDeveloper({ authLoading, user, adminEmail: ADMIN_EMAIL, enabled: FLOOR7_DEMO });
+  const [developerScreenOpen, setDeveloperScreenOpen] = useState(false);
+  const [developerScreenOpened, setDeveloperScreenOpened] = useState(false);
+  const [floor7MapOverlay, setFloor7MapOverlay] = useState(false);
 
   // --- GREEN LIGHT PROTOCOL: Map readiness gate ---
   const [isMapReady, setIsMapReady] = useState(false);
@@ -2866,7 +2878,23 @@ const App = () => {
       {WIFI_POSITIONING_ENABLED && indoorView && <FloorPicker view={indoorView} />}
       {/* Owner-only field-test readout: every scan cycle's numbers, for judging the estimates. */}
       {WIFI_POSITIONING_ENABLED && isAdmin && <WifiReadout lastCycle={lastCycle} active={wifiActive} />}
-      {FLOOR7_DEMO && isAdmin && <Suspense fallback={null}><Floor7DebugOverlay /></Suspense>}
+      {/* Developer mode (components/devmode): admin accounts in the test build, once switched on. */}
+      {FLOOR7_DEMO && developer.on && (
+        <Suspense fallback={null}>
+          <DeveloperBadge onOpen={() => { setDeveloperScreenOpened(true); setDeveloperScreenOpen(true); }} />
+          {floor7MapOverlay && <Floor7DebugOverlay onClose={() => setFloor7MapOverlay(false)} />}
+          {developerScreenOpened && (
+            <DeveloperScreen
+              open={developerScreenOpen}
+              onClose={() => setDeveloperScreenOpen(false)}
+              overlayOn={floor7MapOverlay}
+              onOverlay={setFloor7MapOverlay}
+              inGroup={wifiActive}
+              lastCycle={lastCycle}
+            />
+          )}
+        </Suspense>
+      )}
 
       {/* Right-hand map controls (components/map/MapControls.jsx) */}
       <MapControls
@@ -2983,6 +3011,17 @@ const App = () => {
                   onCheck: () => appUpdate.check({ manual: true }),
                 }}
                 onOpenGuide={() => setGuideOpen(true)}
+                developerSlot={FLOOR7_DEMO && developer.status === 'admin' ? (
+                  <Suspense fallback={null}>
+                    <DeveloperModeRow
+                      checked={developer.on}
+                      onChange={(on) => {
+                        developer.setOn(on);
+                        if (on) { setShowSettingsModal(false); setDeveloperScreenOpened(true); setDeveloperScreenOpen(true); }
+                      }}
+                    />
+                  </Suspense>
+                ) : null}
               />
             </motion.div>
           </motion.div>
