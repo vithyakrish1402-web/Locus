@@ -21,8 +21,14 @@
 //      on the map but ~40 m on foot) from being "jumped" into from the labs.
 //   4. Correct: move toward the estimate by the Kalman gain, along the walking route.
 // A rejected estimate leaves the position where it was and the uncertainty grows (coasting).
-// REACQUIRE_AFTER_REJECTS rejections in a row mean the filter is lost, not the person: it
-// restarts from the newest estimate.
+// REACQUIRE_AFTER_REJECTS rejections in a row mean the filter may be lost, not the person, but
+// only if the rejected estimates AGREE with each other (within CONFIRM_WITHIN_M on foot) is the
+// track restarted at them: two estimates that disagree are two stray readings, not a new place.
+//
+// Start-up confirmation: with no position (the first estimate, or after a gap longer than
+// staleMs) nothing is shown until two estimates, close in time, agree within CONFIRM_WITHIN_M
+// walking distance. One lone estimate, however confident, never starts a track: the first
+// reading after a gap is the one most likely to be a stray from a neighbouring room.
 //
 // Measurement noise: sigma = MEASUREMENT_NOISE_BASE_M / max(confidence, MIN_CONFIDENCE),
 // so a full-confidence estimate is trusted at the 4 m base error, 0.5 confidence at 8 m, and
@@ -36,6 +42,12 @@ export const MEASUREMENT_NOISE_BASE_M = 4;
 /** ~5 m of drift per 35 s step: sqrt(0.7 * 35) = 4.9. A guess; tune on the walk test. */
 export const PROCESS_NOISE_M2_PER_S = 0.7;
 export const MIN_CONFIDENCE = 0.2;
+/**
+ * Two estimates agree when they are this close on foot (metres): the bar for starting a track
+ * and for restarting it after rejections. Walking, not straight-line: the back-path restrooms
+ * are a few metres from the labs on the map and ~40 m from them on foot.
+ */
+export const CONFIRM_WITHIN_M = 12;
 
 /**
  * UNUSED, kept so the number is written down: a GPS fix less accurate than this (metres)
@@ -53,8 +65,14 @@ const measurementSigma = (confidence) => MEASUREMENT_NOISE_BASE_M / Math.max(con
  *   module deliberately has no second one.
  * @param {object} options.plan the corridor graph (floor7Plan.js): snapToCorridor,
  *   walkingDistance, pointAlongWalk
+ * @param {{confirmStart?: boolean, reacquireOnAgreement?: boolean}} [options.rules] both on by
+ *   default; off gives the earlier behaviour (a first estimate is taken as is, and two
+ *   rejections restart the track at the newest estimate whether or not they agree), which the
+ *   replay report uses to show what the two rules change
  */
-export function createPositionFilter({ staleMs, plan }) {
+export function createPositionFilter({ staleMs, plan, rules = {} }) {
+  const confirmStart = rules.confirmStart ?? true;
+  const reacquireOnAgreement = rules.reacquireOnAgreement ?? true;
   let pos = null; // { x, y }, always on a corridor
   let variance = 0;
   let lastT = 0; // last update processed, accepted or not
@@ -62,6 +80,8 @@ export function createPositionFilter({ staleMs, plan }) {
   let rejects = 0;
   let status = 'tracking';
   let lastSnapped = null; // the newest estimate, snapped onto a corridor
+  let pending = null; // an estimate waiting for a second one to agree with it: { snapped, t }
+  let lastRejected = null; // the previous REJECTED estimate: what a second rejection must agree with
 
   const start = (snapped, confidence, t, newStatus) => {
     const sigma = measurementSigma(confidence);
@@ -69,8 +89,11 @@ export function createPositionFilter({ staleMs, plan }) {
     variance = sigma * sigma;
     lastT = lastAcceptedT = t;
     rejects = 0;
+    pending = null;
+    lastRejected = null;
     status = newStatus;
   };
+  const agree = (a, b) => plan.walkingDistance(a, b) <= CONFIRM_WITHIN_M;
 
   return {
     /**
@@ -81,8 +104,20 @@ export function createPositionFilter({ staleMs, plan }) {
       if (!Number.isFinite(estimate?.x) || !Number.isFinite(estimate?.y)) return status; // nothing to learn
       const snapped = plan.snapToCorridor(estimate.x, estimate.y);
       lastSnapped = { x: snapped.x, y: snapped.y };
-      if (!pos || timestamp - lastAcceptedT > staleMs) {
-        start(snapped, estimate.confidence, timestamp, 'tracking'); // first estimate, or after a long gap: taken as is
+      if (pos && timestamp - lastAcceptedT > staleMs) {
+        pos = null; // too long since the last accepted estimate: forget it, confirm afresh
+        rejects = 0;
+        lastRejected = null;
+      }
+      if (!pos) {
+        if (!confirmStart) {
+          start(snapped, estimate.confidence, timestamp, 'tracking');
+        } else if (pending && timestamp - pending.t <= staleMs && agree(pending.snapped, snapped)) {
+          start(snapped, estimate.confidence, timestamp, 'tracking'); // two that agree: the track begins at the newer
+        } else {
+          pending = { snapped: { x: snapped.x, y: snapped.y }, t: timestamp };
+          status = 'confirming';
+        }
         return status;
       }
 
@@ -96,8 +131,13 @@ export function createPositionFilter({ staleMs, plan }) {
 
       if (plan.walkingDistance(pos, snapped) > limit) {
         rejects += 1;
-        if (rejects >= REACQUIRE_AFTER_REJECTS) start(snapped, estimate.confidence, timestamp, 'reacquiring');
-        else status = 'rejected';
+        const agreesWithLast = lastRejected && agree(lastRejected, snapped);
+        if (rejects >= REACQUIRE_AFTER_REJECTS && (!reacquireOnAgreement || agreesWithLast)) {
+          start(snapped, estimate.confidence, timestamp, 'reacquiring');
+        } else {
+          lastRejected = { x: snapped.x, y: snapped.y };
+          status = 'rejected';
+        }
         return status;
       }
 
@@ -111,10 +151,12 @@ export function createPositionFilter({ staleMs, plan }) {
     },
     reset() {
       pos = null;
+      pending = null;
+      lastRejected = null;
       rejects = 0;
       status = 'tracking';
     },
-    /** { x, y } in metres on a corridor, or null before the first estimate. */
+    /** { x, y } in metres on a corridor, or null while there is no confirmed position. */
     get position() {
       return pos && { ...pos };
     },
@@ -122,7 +164,7 @@ export function createPositionFilter({ staleMs, plan }) {
     get uncertaintyM() {
       return pos ? Math.sqrt(variance) : 0;
     },
-    /** 'tracking' | 'rejected' | 'reacquiring' */
+    /** 'tracking' | 'rejected' | 'reacquiring' | 'confirming' (no position yet: waiting for a second estimate) */
     get status() {
       return status;
     },

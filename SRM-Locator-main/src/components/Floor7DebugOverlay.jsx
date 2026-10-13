@@ -27,7 +27,7 @@ export function Floor7DebugView({ plan = floor7Plan, radios = floor7Aps.radios, 
   const px = (p) => plan.toSvg(p.x, p.y);
   const pxPerM = PLAN_SVG.pxPerM / plan.scale;
   const last = trail[trail.length - 1];
-  const lastAt = last && px(last.filtered);
+  const lastAt = last?.filtered ? px(last.filtered) : null;
   const color = STATUS_COLOR[last?.status] ?? STATUS_COLOR.tracking;
 
   return (
@@ -73,8 +73,8 @@ export function Floor7DebugView({ plan = floor7Plan, radios = floor7Aps.radios, 
           </g>
         );
       })}
-      {trail.length > 1 && (
-        <polyline data-track="filtered" points={trail.map((t) => `${px(t.filtered).x},${px(t.filtered).y}`).join(' ')} fill="none" stroke={STATUS_COLOR.tracking} strokeWidth="4" />
+      {trail.filter((t) => t.filtered).length > 1 && (
+        <polyline data-track="filtered" points={trail.filter((t) => t.filtered).map((t) => `${px(t.filtered).x},${px(t.filtered).y}`).join(' ')} fill="none" stroke={STATUS_COLOR.tracking} strokeWidth="4" />
       )}
       {trail.map((t, i) => {
         const opacity = 0.25 + (0.75 * (i + 1)) / trail.length;
@@ -88,7 +88,7 @@ export function Floor7DebugView({ plan = floor7Plan, radios = floor7Aps.radios, 
           </g>
         );
       })}
-      {last && (
+      {lastAt && (
         <>
           <circle data-dot="uncertainty" cx={lastAt.x} cy={lastAt.y} r={Math.max(last.uncertaintyM * pxPerM, 10)} fill={`${color}22`} stroke={color} strokeWidth="2" />
           <circle data-dot="current" cx={lastAt.x} cy={lastAt.y} r="9" fill={color} stroke="#FFFFFF" strokeWidth="2" />
@@ -119,7 +119,9 @@ export default function Floor7DebugOverlay() {
           <Floor7DebugView trail={trail} />
           <p className="mt-1">
             {last
-              ? `${last.status} · ±${last.uncertaintyM.toFixed(1)} m · ${trail.length} steps`
+              ? last.filtered
+                ? `${last.status} · ±${last.uncertaintyM.toFixed(1)} m · ${trail.length} steps`
+                : `${last.status}: waiting for a second estimate that agrees · ${trail.length} steps`
               : 'No Floor 7 estimate yet'}
             <span className="text-amber-300"> · scale ESTIMATED ×{PLAN_SCALE}</span>
           </p>

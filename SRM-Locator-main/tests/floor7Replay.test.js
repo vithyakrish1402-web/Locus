@@ -122,7 +122,8 @@ describe('walkReplay: scans in time order through the position filter', () => {
     ['d', { scan: 'd', time: 1_000_000 + 105_000, x: 6, y: 7.9 }],
   ]);
   const row = (scan, est, walk) => ({ scan, place: scan, est, walk });
-  const makeFilter = () => createPositionFilter({ staleMs: WIFI_ESTIMATE_MAX_AGE_MS, plan });
+  // The two newest rules off: a first estimate is shown at once. The confirming test below turns them on.
+  const makeFilter = () => createPositionFilter({ staleMs: WIFI_ESTIMATE_MAX_AGE_MS, plan, rules: { confirmStart: false, reacquireOnAgreement: false } });
   const near = (v, e) => expect(v).toBeCloseTo(e, 6);
 
   it('replays by time, whatever order the rows come in', () => {
@@ -160,10 +161,20 @@ describe('walkReplay: scans in time order through the position filter', () => {
     expect(w[1].filtered).toBeGreaterThan(0);
   });
 
+  it('shows nothing for a scan the filter is still confirming, and counts it apart', () => {
+    const rows = [row('a', { x: -9, y: 7.9, confidence: 1 }, 5), row('b', { x: -9, y: 7.9, confidence: 1 }, 5)];
+    const confirming = () => createPositionFilter({ staleMs: WIFI_ESTIMATE_MAX_AGE_MS, plan });
+    const w = walkReplay({ rows, scans, plan, scale: 1, makeFilter: confirming });
+    expect(w[0]).toMatchObject({ status: 'confirming', filtered: null, raw: 5 });
+    expect(w[1]).toMatchObject({ status: 'tracking' });
+    near(w[1].filtered, 15); // at (-9, 7.9); the scan was really taken at (6, 7.9)
+    expect(compareWalk(w)).toMatchObject({ scans: 2, compared: 1, notShown: 1 });
+  });
+
   it('works in real metres: truth is the plan spot times the scale', () => {
     const doubled = buildPlan(planDoc, 2);
     const rows = [row('a', { x: -18, y: 15.8, confidence: 1 }, 0)];
-    const w = walkReplay({ rows, scans, plan: doubled, scale: 2, makeFilter: () => createPositionFilter({ staleMs: 70_000, plan: doubled }) });
+    const w = walkReplay({ rows, scans, plan: doubled, scale: 2, makeFilter: () => createPositionFilter({ staleMs: 70_000, plan: doubled, rules: { confirmStart: false } }) });
     near(w[0].filtered, 0);
   });
 
@@ -257,13 +268,26 @@ describe('the report script, end to end', () => {
 
   it('replays the 76 afternoon scans as a walk: raw against filtered, per scan', () => {
     expect(report).toContain('## 5. The afternoon as a walk, raw against filtered');
-    const table = report.slice(report.indexOf('| time | spot | gap |'));
+    const table = report.slice(report.indexOf('| time | spot | gap |'), report.indexOf('## 6.'));
     const rows = table.split('\n').slice(2).filter((l) => /^\| \d\d:\d\d:\d\d /.test(l));
     expect(rows).toHaveLength(76);
     expect(rows.map((r) => r.split('|')[1].trim())).toEqual([...rows.map((r) => r.split('|')[1].trim())].sort()); // in time order
-    expect(report).toMatch(/\| raw \| [\d.]+ m \|/);
-    expect(report).toMatch(/\| filtered \| [\d.]+ m \|/);
-    expect(rows.every((r) => /(tracking|rejected|reacquiring|no estimate) \|$/.test(r))).toBe(true);
+    expect(report).toMatch(/\| raw \(same scans as the next row\) \| [\d.]+ m \|/);
+    expect(report).toMatch(/\| filtered, before the two rules \| [\d.]+ m \|/);
+    expect(report).toMatch(/\| filtered, now \| [\d.]+ m \|/);
+    expect(report).toContain('a start needs two estimates within 12 m on foot of each other');
+    expect(rows.every((r) => /(tracking|rejected|reacquiring|confirming|no estimate) \|$/.test(r))).toBe(true);
+  });
+
+  it('shows the new ladies restroom on its own, before and after the two rules: the first lab estimate is no longer shown', () => {
+    const section = report.slice(report.indexOf('## 6.'), report.indexOf('## Where the error is'));
+    const rows = section.split('\n').filter((l) => /^\| \d\d:\d\d:\d\d \|/.test(l));
+    expect(rows.filter((r) => r.includes("New ladies restroom ('W')"))).toHaveLength(4);
+    expect(rows.length).toBe(6); // one scan before, the four, one after
+    const firstW = rows.find((r) => r.includes("New ladies restroom ('W')"));
+    expect(firstW).toContain('not shown');
+    expect(firstW).toContain('confirming');
+    expect(section).toContain('the two new rules change little here');
   });
 
   it('uses the same staleness as the app: 70 s, the WiFi estimate age', () => {

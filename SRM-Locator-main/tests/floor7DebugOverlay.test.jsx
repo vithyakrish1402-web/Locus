@@ -54,6 +54,22 @@ describe('the Floor 7 debug view', () => {
     expect([+snapped.getAttribute('cx'), +snapped.getAttribute('cy')]).toEqual([a.x, a.y]);
   });
 
+  it('draws the raw estimate but no green position or ring while the start is still being confirmed', () => {
+    const waiting = { at: 1, raw: { x: 3, y: 2 }, snapped: { x: 3, y: 0 }, filtered: null, status: 'confirming', uncertaintyM: 0 };
+    const { container } = render(<Floor7DebugView trail={[waiting, { ...waiting, at: 2 }]} />);
+    expect(container.querySelectorAll('[data-dot="raw"]')).toHaveLength(2);
+    expect(container.querySelector('[data-dot="current"]')).toBeNull();
+    expect(container.querySelector('[data-dot="uncertainty"]')).toBeNull();
+    expect(container.querySelector('[data-track]')).toBeNull();
+  });
+
+  it('draws the track from the steps that have a position, skipping the waiting ones', () => {
+    const waiting = { at: 1, raw: { x: 3, y: 2 }, snapped: { x: 3, y: 0 }, filtered: null, status: 'confirming', uncertaintyM: 0 };
+    const { container } = render(<Floor7DebugView trail={[waiting, step(0, 4), step(0, 5)]} />);
+    expect(container.querySelector('[data-track]').getAttribute('points')).toBe(`${px(0, 4).x},${px(0, 4).y} ${px(0, 5).x},${px(0, 5).y}`);
+    expect(container.querySelectorAll('[data-dot="current"]')).toHaveLength(1);
+  });
+
   it('copes with a step that has no snapped point', () => {
     const { container } = render(<Floor7DebugView trail={[{ ...step(0, 0), snapped: undefined }]} />);
     expect(container.querySelectorAll('[data-dot="raw"]')).toHaveLength(1);

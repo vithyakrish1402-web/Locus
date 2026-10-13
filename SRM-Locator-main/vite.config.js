@@ -23,5 +23,13 @@ export default defineConfig(({ mode }) => ({
   ],
   // Tests assume the keyless (Leaflet) build whatever the developer's .env holds, and a
   // phone where location was allowed before (tests/setup/locationAllowed.js).
-  test: { env: { VITE_GOOGLE_MAPS_API_KEY: '' }, setupFiles: ['./tests/setup/locationAllowed.js'] },
+  test: {
+    env: { VITE_GOOGLE_MAPS_API_KEY: '' },
+    setupFiles: ['./tests/setup/locationAllowed.js'],
+    // The tests that render the whole App take 1 to 10 s each when the machine is quiet and
+    // more than the 5 s default when the suite runs in parallel on a busy one. A test that
+    // really hangs still fails, only later.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
+  },
 }))

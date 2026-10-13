@@ -8,7 +8,7 @@ import { startWifiFusion } from '../src/utils/wifiFusion.js';
 import floor7Aps from '../src/data/floor7Aps.json';
 import { __resetAccessPointCache, loadAccessPoints } from '../src/utils/wifiPositioning.js';
 import {
-  DEMO_BUILDING, DEMO_FLOOR, HALO_FULL_UNCERTAINTY_M, confidenceFromUncertainty, createFloor7Tracker,
+  DEMO_BUILDING, DEMO_FLOOR, FIX_LOG_MARKER, HALO_FULL_UNCERTAINTY_M, confidenceFromUncertainty, createFloor7Tracker,
   floor7AccessPointTable, floor7FusionOptions, floor7Spots, getTrail, subscribeTrail,
 } from '../src/utils/floor7Demo.js';
 
@@ -19,6 +19,11 @@ const STEP = 35_000;
 const T0 = 1_700_000_000_000;
 const SPOTS = floor7Spots;
 const atSpot = (name) => toGeo(SPOTS[name].x, SPOTS[name].y);
+/** Two agreeing estimates at a spot, a second apart (the start-up confirmation), the second at `at`. */
+const confirmAt = (tracker, name, at = T0, confidence = 0.9) => {
+  tracker.apply(estimateAt(name, confidence), at - 1_000);
+  return tracker.apply(estimateAt(name, confidence), at);
+};
 const estimateAt = (name, confidence = 0.9, extra = {}) => ({
   ...atSpot(name), building: DEMO_BUILDING, floor: DEMO_FLOOR, confidence, matchedApCount: 5, totalApsSeen: 8, ...extra,
 });
@@ -86,7 +91,7 @@ describe('starting the demo', () => {
     const options = floor7FusionOptions();
     expect((await loadAccessPoints()).size).toBe(floor7AccessPointTable().size);
     expect(typeof options.tracker.apply).toBe('function');
-    expect(options.tracker.apply(estimateAt('Room 706'), T0).filterStatus).toBe('tracking');
+    expect(confirmAt(options.tracker, 'Room 706').filterStatus).toBe('tracking');
   });
 });
 
@@ -107,15 +112,22 @@ describe('the Floor 7 tracker', () => {
     expect(getTrail()).toHaveLength(0);
   });
 
-  it('takes the first estimate as is and reports the filter state with it', () => {
+  it('shows no position for the first estimate: no latitude, confidence 0, status "confirming"', () => {
+    const out = tracker.apply(estimateAt('Room 706'), T0);
+    expect(out).toMatchObject({ lat: null, lng: null, confidence: 0, filterStatus: 'confirming', rawConfidence: 0.9, uncertaintyM: 0 });
+    expect(out.building).toBe('TECH PARK');
+  });
+
+  it('starts at the second of two agreeing estimates and reports the filter state with it', () => {
+    tracker.apply(estimateAt('Room 706'), T0 - STEP);
     const out = tracker.apply(estimateAt('Room 706'), T0);
     expect(out.lat).toBeCloseTo(estimateAt('Room 706').lat, 9);
     expect(out.filterStatus).toBe('tracking');
     expect(out.rawConfidence).toBe(0.9);
   });
 
-  it('rejects an estimate 30 m away on the very next scan, and keeps the old position', () => {
-    const first = tracker.apply(estimateAt('Room 706'), T0);
+  it('rejects an estimate 46 m away on the very next scan, and keeps the old position', () => {
+    const first = confirmAt(tracker, 'Room 706');
     const out = tracker.apply(estimateAt('Room 703'), T0 + STEP); // 46 m across the floor
     expect(out.filterStatus).toBe('rejected');
     expect(out.lat).toBeCloseTo(first.lat, 9);
@@ -123,7 +135,7 @@ describe('the Floor 7 tracker', () => {
   });
 
   it('never lets confidence fall below the WiFi threshold while it holds a position, so GPS cannot take over', () => {
-    const out = tracker.apply(estimateAt('Room 706', 0.2), T0);
+    const out = confirmAt(tracker, 'Room 706', T0, 0.2);
     expect(out.confidence).toBeGreaterThanOrEqual(WIFI_CONFIDENCE_THRESHOLD);
   });
 
@@ -144,10 +156,11 @@ describe('the Floor 7 tracker', () => {
     expect(seen).toHaveBeenCalledTimes(2);
     const trail = getTrail();
     expect(trail).toHaveLength(3);
-    expect(trail[0]).toMatchObject({ status: 'tracking' });
+    expect(trail[0]).toMatchObject({ status: 'confirming', filtered: null }); // nothing shown yet
+    expect(trail[1]).toMatchObject({ status: 'tracking' });
+    expect(trail[1].filtered).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }));
     expect(trail[0].raw.x).toBeCloseTo(SPOTS['Room 706'].x, 6);
     expect(trail[0].snapped.x).toBeCloseTo(SPOTS['Room 706'].x, 6); // already on a centreline: snapping moves nothing
-    expect(trail[0].filtered).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }));
   });
 
   it('records where the raw estimate snaps to on the corridor, for the overlay', () => {
@@ -165,12 +178,31 @@ describe('the Floor 7 tracker', () => {
     expect(getTrail().at(-1).at).toBe(T0 + 99 * STEP);
   });
 
+  it('writes one console line per estimate for the phone walk: when, what was shown, and why', () => {
+    const lines = [];
+    const spy = vi.spyOn(console, 'info').mockImplementation((...a) => lines.push(a));
+    confirmAt(tracker, 'Room 706');
+    spy.mockRestore();
+    expect(lines).toHaveLength(2);
+    expect(lines[0][0]).toBe(FIX_LOG_MARKER);
+    expect(FIX_LOG_MARKER).toBe('[F7]');
+    const first = JSON.parse(lines[0][1]);
+    expect(first).toMatchObject({ at: T0 - 1_000, status: 'confirming', x: null, y: null });
+    const second = JSON.parse(lines[1][1]);
+    expect(second).toMatchObject({ at: T0, status: 'tracking' });
+    expect(second.x).toBeCloseTo(SPOTS['Room 706'].x, 1);
+    expect(second.y).toBeCloseTo(SPOTS['Room 706'].y, 1);
+    expect(second.rawX).toBeCloseTo(SPOTS['Room 706'].x, 1);
+    expect(Object.keys(second).sort()).toEqual(['at', 'rawX', 'rawY', 'snapX', 'snapY', 'status', 'unc', 'x', 'y']);
+  });
+
   it('reset() clears the trail and the filter', () => {
-    tracker.apply(estimateAt('Room 706'), T0);
+    confirmAt(tracker, 'Room 706');
     tracker.reset();
     expect(getTrail()).toHaveLength(0);
-    const out = tracker.apply(estimateAt('Room 703'), T0 + STEP); // taken as is, not rejected
-    expect(out.filterStatus).toBe('tracking');
+    // a different spot 46 m away is not rejected: the old track is gone, it is a new start
+    expect(tracker.apply(estimateAt('Room 703'), T0 + STEP).filterStatus).toBe('confirming');
+    expect(tracker.apply(estimateAt('Room 703'), T0 + 2 * STEP).filterStatus).toBe('tracking');
   });
 });
 
@@ -186,7 +218,7 @@ describe('the tracker inside the fusion loop', () => {
   it('shows the filtered position, and keeps WiFi in charge when the raw confidence is low', async () => {
     const tracker = createFloor7Tracker();
     tracker.reset();
-    const estimates = [estimateAt('Room 706', 0.9), estimateAt('Room 706', 0.2)];
+    const estimates = [estimateAt('Room 706', 0.9), estimateAt('Room 706', 0.9), estimateAt('Room 706', 0.2)];
     const fusion = startWifiFusion({
       isAvailable: () => true,
       scan: async () => ({ outcome: 'fresh', accepted: true, aps: [AP] }),
@@ -195,9 +227,13 @@ describe('the tracker inside the fusion loop', () => {
       tracker,
     });
     await vi.advanceTimersByTimeAsync(0);
-    expect(fusion.resolve({ lat: 1, lng: 2 }).positionSource).toBe('wifi');
+    // The first estimate is not confirmed yet, so nothing is shown: GPS keeps the map.
+    expect(fusion.resolve({ lat: 1, lng: 2 }).positionSource).toBe('gps');
+    expect(fusion.indoor()).toBeNull();
     await vi.advanceTimersByTimeAsync(35_000);
-    // The second raw estimate is only 0.2 confident: without the tracker GPS would win here.
+    expect(fusion.resolve({ lat: 1, lng: 2 }).positionSource).toBe('wifi'); // the second one agrees
+    await vi.advanceTimersByTimeAsync(35_000);
+    // The third raw estimate is only 0.2 confident: without the tracker GPS would win here.
     const out = fusion.resolve({ lat: 1, lng: 2 });
     expect(out.positionSource).toBe('wifi');
     expect(out.lat).toBeCloseTo(atSpot('Room 706').lat, 5);
