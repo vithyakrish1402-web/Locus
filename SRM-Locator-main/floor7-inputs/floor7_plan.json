@@ -1,0 +1,5728 @@
+{
+ "meta": {
+  "title": "TECH PARK Floor 7 - draft plan for Wi-Fi radio map",
+  "units": "metres",
+  "origin": "centre of lift lobby A (the two-lift lobby with the Department of Computing Technologies sign and the 7th FLOOR plan)",
+  "axes": "x increases east (right), y increases north (up)",
+  "north": "ASSUMED. The user says the south ends of the two vertical wings (703A and 706A) face the front of the Tech Park; north is taken as the opposite end.",
+  "scale_status": "ESTIMATED. No measured distances exist. Corridor width 2.4 m, passage width 3.0 m, door 0.9 m and all room sizes are assumed. Spine-to-spine length of the lab passage (46 m) is a guess built from the user's survey notes (35 to 40 m) and symmetry; it may be too long.",
+  "shape": "Two symmetrical vertical wings (west spine x=-9, east spine x=+37, mirror line x=14) joined by one horizontal lab passage at y=0. Each wing has four rooms, a lift lobby and stairs at the join.",
+  "confidence_levels": {
+   "measured": "taken from a tape or a real survey",
+   "estimated": "supported by photos or survey order, size or distance assumed",
+   "guess": "position, side or size not supported by photos; marked with ? on the drawing"
+  },
+  "measured_count": 0,
+  "photos_used": "34 of 37 (8, 20 and 35 set aside as blurred or duplicate)"
+ },
+ "walkable": [
+  {
+   "id": "west_spine",
+   "type": "corridor",
+   "polygon": [
+    [
+     -10.2,
+     -12.0
+    ],
+    [
+     -7.8,
+     -12.0
+    ],
+    [
+     -7.8,
+     15.0
+    ],
+    [
+     -10.2,
+     15.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "passage",
+   "type": "corridor",
+   "polygon": [
+    [
+     -7.8,
+     -1.5
+    ],
+    [
+     35.8,
+     -1.5
+    ],
+    [
+     35.8,
+     1.5
+    ],
+    [
+     -7.8,
+     1.5
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "east_spine",
+   "type": "corridor",
+   "polygon": [
+    [
+     35.8,
+     -12.0
+    ],
+    [
+     38.2,
+     -12.0
+    ],
+    [
+     38.2,
+     15.0
+    ],
+    [
+     35.8,
+     15.0
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "west_back",
+   "type": "corridor",
+   "polygon": [
+    [
+     -7.8,
+     6.8
+    ],
+    [
+     8.0,
+     6.8
+    ],
+    [
+     8.0,
+     9.0
+    ],
+    [
+     -7.8,
+     9.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "east_back",
+   "type": "corridor",
+   "polygon": [
+    [
+     20.0,
+     6.8
+    ],
+    [
+     35.8,
+     6.8
+    ],
+    [
+     35.8,
+     9.0
+    ],
+    [
+     20.0,
+     9.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "lobbyA",
+   "type": "lift_lobby",
+   "polygon": [
+    [
+     -4.0,
+     -4.0
+    ],
+    [
+     4.0,
+     -4.0
+    ],
+    [
+     4.0,
+     4.0
+    ],
+    [
+     -4.0,
+     4.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "lobbyB",
+   "type": "lift_lobby",
+   "polygon": [
+    [
+     24.0,
+     -4.0
+    ],
+    [
+     32.0,
+     -4.0
+    ],
+    [
+     32.0,
+     4.0
+    ],
+    [
+     24.0,
+     4.0
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "r701",
+   "type": "room",
+   "polygon": [
+    [
+     -18.2,
+     8.5
+    ],
+    [
+     -10.2,
+     8.5
+    ],
+    [
+     -10.2,
+     15.0
+    ],
+    [
+     -18.2,
+     15.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "r702",
+   "type": "room",
+   "polygon": [
+    [
+     -18.2,
+     2.0
+    ],
+    [
+     -10.2,
+     2.0
+    ],
+    [
+     -10.2,
+     8.5
+    ],
+    [
+     -18.2,
+     8.5
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "r703",
+   "type": "room",
+   "polygon": [
+    [
+     -18.2,
+     -4.5
+    ],
+    [
+     -10.2,
+     -4.5
+    ],
+    [
+     -10.2,
+     2.0
+    ],
+    [
+     -18.2,
+     2.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "r703A",
+   "type": "room",
+   "polygon": [
+    [
+     -18.2,
+     -11.0
+    ],
+    [
+     -10.2,
+     -11.0
+    ],
+    [
+     -10.2,
+     -4.5
+    ],
+    [
+     -18.2,
+     -4.5
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "s_w701",
+   "type": "stairs",
+   "polygon": [
+    [
+     -10.8,
+     15.0
+    ],
+    [
+     -7.2,
+     15.0
+    ],
+    [
+     -7.2,
+     20.0
+    ],
+    [
+     -10.8,
+     20.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "s_S1",
+   "type": "stairs",
+   "polygon": [
+    [
+     4.0,
+     -6.0
+    ],
+    [
+     8.0,
+     -6.0
+    ],
+    [
+     8.0,
+     -1.5
+    ],
+    [
+     4.0,
+     -1.5
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "s_S1b",
+   "type": "stairs",
+   "polygon": [
+    [
+     4.0,
+     -9.5
+    ],
+    [
+     8.0,
+     -9.5
+    ],
+    [
+     8.0,
+     -6.0
+    ],
+    [
+     4.0,
+     -6.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "s_W1",
+   "type": "stairs",
+   "polygon": [
+    [
+     -7.8,
+     -7.1
+    ],
+    [
+     -4.0,
+     -7.1
+    ],
+    [
+     -4.0,
+     -1.5
+    ],
+    [
+     -7.8,
+     -1.5
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "s_W2",
+   "type": "stairs",
+   "polygon": [
+    [
+     -5.0,
+     -9.5
+    ],
+    [
+     -4.0,
+     -9.5
+    ],
+    [
+     -4.0,
+     -7.1
+    ],
+    [
+     -5.0,
+     -7.1
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "s_fA",
+   "type": "stairs",
+   "polygon": [
+    [
+     -4.0,
+     -9.5
+    ],
+    [
+     4.0,
+     -9.5
+    ],
+    [
+     4.0,
+     -4.0
+    ],
+    [
+     -4.0,
+     -4.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "s_fBL",
+   "type": "stairs",
+   "polygon": [
+    [
+     24.0,
+     -9.5
+    ],
+    [
+     26.8,
+     -9.5
+    ],
+    [
+     26.8,
+     -4.0
+    ],
+    [
+     24.0,
+     -4.0
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "s_fBR",
+   "type": "stairs",
+   "polygon": [
+    [
+     29.2,
+     -9.5
+    ],
+    [
+     32.0,
+     -9.5
+    ],
+    [
+     32.0,
+     -4.0
+    ],
+    [
+     29.2,
+     -4.0
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "s_fBM",
+   "type": "stairs",
+   "polygon": [
+    [
+     26.8,
+     -9.5
+    ],
+    [
+     29.2,
+     -9.5
+    ],
+    [
+     29.2,
+     -6.8
+    ],
+    [
+     26.8,
+     -6.8
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "s_E706b",
+   "type": "stairs",
+   "polygon": [
+    [
+     20.0,
+     -9.5
+    ],
+    [
+     24.0,
+     -9.5
+    ],
+    [
+     24.0,
+     -6.0
+    ],
+    [
+     20.0,
+     -6.0
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "s_W1e",
+   "type": "stairs",
+   "polygon": [
+    [
+     32.0,
+     -7.1
+    ],
+    [
+     35.8,
+     -7.1
+    ],
+    [
+     35.8,
+     -1.5
+    ],
+    [
+     32.0,
+     -1.5
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "s_W2e",
+   "type": "stairs",
+   "polygon": [
+    [
+     32.0,
+     -9.5
+    ],
+    [
+     33.0,
+     -9.5
+    ],
+    [
+     33.0,
+     -7.1
+    ],
+    [
+     32.0,
+     -7.1
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "rW",
+   "type": "room",
+   "polygon": [
+    [
+     4.0,
+     9.0
+    ],
+    [
+     8.0,
+     9.0
+    ],
+    [
+     8.0,
+     15.0
+    ],
+    [
+     4.0,
+     15.0
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "rNew",
+   "type": "room",
+   "polygon": [
+    [
+     -7.8,
+     9.0
+    ],
+    [
+     -3.8,
+     9.0
+    ],
+    [
+     -3.8,
+     15.0
+    ],
+    [
+     -7.8,
+     15.0
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "rM",
+   "type": "room",
+   "polygon": [
+    [
+     20.0,
+     9.0
+    ],
+    [
+     24.0,
+     9.0
+    ],
+    [
+     24.0,
+     15.0
+    ],
+    [
+     20.0,
+     15.0
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "rL",
+   "type": "room",
+   "polygon": [
+    [
+     31.8,
+     9.0
+    ],
+    [
+     35.8,
+     9.0
+    ],
+    [
+     35.8,
+     15.0
+    ],
+    [
+     31.8,
+     15.0
+    ]
+   ],
+   "confidence": "guess"
+  },
+  {
+   "id": "labD",
+   "type": "room",
+   "polygon": [
+    [
+     8.0,
+     1.5
+    ],
+    [
+     14.0,
+     1.5
+    ],
+    [
+     14.0,
+     9.5
+    ],
+    [
+     8.0,
+     9.5
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "labC",
+   "type": "room",
+   "polygon": [
+    [
+     14.0,
+     1.5
+    ],
+    [
+     20.0,
+     1.5
+    ],
+    [
+     20.0,
+     9.5
+    ],
+    [
+     14.0,
+     9.5
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "labE",
+   "type": "room",
+   "polygon": [
+    [
+     8.0,
+     -9.5
+    ],
+    [
+     14.0,
+     -9.5
+    ],
+    [
+     14.0,
+     -1.5
+    ],
+    [
+     8.0,
+     -1.5
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "labF",
+   "type": "room",
+   "polygon": [
+    [
+     14.0,
+     -9.5
+    ],
+    [
+     20.0,
+     -9.5
+    ],
+    [
+     20.0,
+     -1.5
+    ],
+    [
+     14.0,
+     -1.5
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "r704",
+   "type": "room",
+   "polygon": [
+    [
+     38.2,
+     8.5
+    ],
+    [
+     46.2,
+     8.5
+    ],
+    [
+     46.2,
+     15.0
+    ],
+    [
+     38.2,
+     15.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "r705",
+   "type": "room",
+   "polygon": [
+    [
+     38.2,
+     2.0
+    ],
+    [
+     46.2,
+     2.0
+    ],
+    [
+     46.2,
+     8.5
+    ],
+    [
+     38.2,
+     8.5
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "r706",
+   "type": "room",
+   "polygon": [
+    [
+     38.2,
+     -4.5
+    ],
+    [
+     46.2,
+     -4.5
+    ],
+    [
+     46.2,
+     2.0
+    ],
+    [
+     38.2,
+     2.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "r706A",
+   "type": "room",
+   "polygon": [
+    [
+     38.2,
+     -11.0
+    ],
+    [
+     46.2,
+     -11.0
+    ],
+    [
+     46.2,
+     -4.5
+    ],
+    [
+     38.2,
+     -4.5
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "s_E704",
+   "type": "stairs",
+   "polygon": [
+    [
+     35.2,
+     15.0
+    ],
+    [
+     38.8,
+     15.0
+    ],
+    [
+     38.8,
+     20.0
+    ],
+    [
+     35.2,
+     20.0
+    ]
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "id": "s_E706",
+   "type": "stairs",
+   "polygon": [
+    [
+     20.0,
+     -6.0
+    ],
+    [
+     24.0,
+     -6.0
+    ],
+    [
+     24.0,
+     -1.5
+    ],
+    [
+     20.0,
+     -1.5
+    ]
+   ],
+   "confidence": "guess"
+  }
+ ],
+ "walls": [
+  {
+   "id": "w001",
+   "p1": [
+    -18.2,
+    8.5
+   ],
+   "p2": [
+    -18.2,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w002",
+   "p1": [
+    -18.2,
+    8.5
+   ],
+   "p2": [
+    -10.2,
+    8.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w003",
+   "p1": [
+    -18.2,
+    15.0
+   ],
+   "p2": [
+    -10.2,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w004",
+   "p1": [
+    -10.2,
+    8.5
+   ],
+   "p2": [
+    -10.2,
+    11.3
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w005",
+   "p1": [
+    -10.2,
+    12.2
+   ],
+   "p2": [
+    -10.2,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w006",
+   "p1": [
+    -18.2,
+    2.0
+   ],
+   "p2": [
+    -18.2,
+    8.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w007",
+   "p1": [
+    -18.2,
+    2.0
+   ],
+   "p2": [
+    -10.2,
+    2.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w008",
+   "p1": [
+    -18.2,
+    8.5
+   ],
+   "p2": [
+    -10.2,
+    8.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w009",
+   "p1": [
+    -10.2,
+    2.0
+   ],
+   "p2": [
+    -10.2,
+    4.8
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w010",
+   "p1": [
+    -10.2,
+    5.7
+   ],
+   "p2": [
+    -10.2,
+    8.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w011",
+   "p1": [
+    -18.2,
+    -4.5
+   ],
+   "p2": [
+    -18.2,
+    2.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w012",
+   "p1": [
+    -18.2,
+    -4.5
+   ],
+   "p2": [
+    -10.2,
+    -4.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w013",
+   "p1": [
+    -18.2,
+    2.0
+   ],
+   "p2": [
+    -10.2,
+    2.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w014",
+   "p1": [
+    -10.2,
+    -4.5
+   ],
+   "p2": [
+    -10.2,
+    -1.7
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w015",
+   "p1": [
+    -10.2,
+    -0.8
+   ],
+   "p2": [
+    -10.2,
+    2.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w016",
+   "p1": [
+    -18.2,
+    -11.0
+   ],
+   "p2": [
+    -18.2,
+    -4.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w017",
+   "p1": [
+    -18.2,
+    -11.0
+   ],
+   "p2": [
+    -10.2,
+    -11.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w018",
+   "p1": [
+    -18.2,
+    -4.5
+   ],
+   "p2": [
+    -10.2,
+    -4.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w019",
+   "p1": [
+    -10.2,
+    -11.0
+   ],
+   "p2": [
+    -10.2,
+    -8.2
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w020",
+   "p1": [
+    -10.2,
+    -7.3
+   ],
+   "p2": [
+    -10.2,
+    -4.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w021",
+   "p1": [
+    -10.8,
+    15.0
+   ],
+   "p2": [
+    -10.8,
+    20.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w022",
+   "p1": [
+    -7.2,
+    15.0
+   ],
+   "p2": [
+    -7.2,
+    20.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w023",
+   "p1": [
+    -10.8,
+    20.0
+   ],
+   "p2": [
+    -7.2,
+    20.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w024",
+   "p1": [
+    -10.8,
+    15.0
+   ],
+   "p2": [
+    -9.9,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w025",
+   "p1": [
+    -8.1,
+    15.0
+   ],
+   "p2": [
+    -7.2,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w026",
+   "p1": [
+    -5.0,
+    -9.5
+   ],
+   "p2": [
+    -5.0,
+    -7.1
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w027",
+   "p1": [
+    -7.8,
+    -9.5
+   ],
+   "p2": [
+    -5.0,
+    -9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w028",
+   "p1": [
+    -7.8,
+    -7.1
+   ],
+   "p2": [
+    -5.0,
+    -7.1
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w029",
+   "p1": [
+    -7.8,
+    -9.5
+   ],
+   "p2": [
+    -7.8,
+    -9.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w030",
+   "p1": [
+    -7.8,
+    -7.6000000000000005
+   ],
+   "p2": [
+    -7.8,
+    -7.1
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w031",
+   "p1": [
+    -2.4,
+    4.0
+   ],
+   "p2": [
+    -2.4,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w032",
+   "p1": [
+    0.0,
+    4.0
+   ],
+   "p2": [
+    0.0,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w033",
+   "p1": [
+    -2.4,
+    6.8
+   ],
+   "p2": [
+    0.0,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w034",
+   "p1": [
+    -2.4,
+    4.0
+   ],
+   "p2": [
+    -1.9,
+    4.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w035",
+   "p1": [
+    -0.5,
+    4.0
+   ],
+   "p2": [
+    0.0,
+    4.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w036",
+   "p1": [
+    0.0,
+    4.0
+   ],
+   "p2": [
+    0.0,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w037",
+   "p1": [
+    2.4,
+    4.0
+   ],
+   "p2": [
+    2.4,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w038",
+   "p1": [
+    0.0,
+    6.8
+   ],
+   "p2": [
+    2.4,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w039",
+   "p1": [
+    0.0,
+    4.0
+   ],
+   "p2": [
+    0.5,
+    4.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w040",
+   "p1": [
+    1.9,
+    4.0
+   ],
+   "p2": [
+    2.4,
+    4.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w041",
+   "p1": [
+    4.0,
+    -1.5
+   ],
+   "p2": [
+    5.1,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w042",
+   "p1": [
+    6.9,
+    -1.5
+   ],
+   "p2": [
+    8.0,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w043",
+   "p1": [
+    4.0,
+    -9.5
+   ],
+   "p2": [
+    8.0,
+    -9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w044",
+   "p1": [
+    -7.8,
+    -7.1
+   ],
+   "p2": [
+    -7.8,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w045",
+   "p1": [
+    -7.8,
+    -1.5
+   ],
+   "p2": [
+    -6.800000000000001,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w046",
+   "p1": [
+    -5.0,
+    -1.5
+   ],
+   "p2": [
+    -4.0,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w047",
+   "p1": [
+    -5.0,
+    -9.5
+   ],
+   "p2": [
+    -4.0,
+    -9.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w048",
+   "p1": [
+    -4.0,
+    -9.5
+   ],
+   "p2": [
+    4.0,
+    -9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w049",
+   "p1": [
+    -4.0,
+    -4.0
+   ],
+   "p2": [
+    -2.0,
+    -4.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w050",
+   "p1": [
+    2.0,
+    -4.0
+   ],
+   "p2": [
+    4.0,
+    -4.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w051",
+   "p1": [
+    24.0,
+    -9.5
+   ],
+   "p2": [
+    26.8,
+    -9.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w052",
+   "p1": [
+    24.0,
+    -4.0
+   ],
+   "p2": [
+    24.5,
+    -4.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w053",
+   "p1": [
+    26.299999999999997,
+    -4.0
+   ],
+   "p2": [
+    26.8,
+    -4.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w054",
+   "p1": [
+    29.2,
+    -9.5
+   ],
+   "p2": [
+    32.0,
+    -9.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w055",
+   "p1": [
+    29.2,
+    -4.0
+   ],
+   "p2": [
+    29.700000000000003,
+    -4.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w056",
+   "p1": [
+    31.5,
+    -4.0
+   ],
+   "p2": [
+    32.0,
+    -4.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w057",
+   "p1": [
+    26.8,
+    -9.5
+   ],
+   "p2": [
+    29.2,
+    -9.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w058",
+   "p1": [
+    20.0,
+    -9.5
+   ],
+   "p2": [
+    24.0,
+    -9.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w059",
+   "p1": [
+    35.8,
+    -7.1
+   ],
+   "p2": [
+    35.8,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w060",
+   "p1": [
+    32.0,
+    -1.5
+   ],
+   "p2": [
+    33.0,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w061",
+   "p1": [
+    34.8,
+    -1.5
+   ],
+   "p2": [
+    35.8,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w062",
+   "p1": [
+    32.0,
+    -9.5
+   ],
+   "p2": [
+    33.0,
+    -9.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w063",
+   "p1": [
+    4.0,
+    9.0
+   ],
+   "p2": [
+    4.0,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w064",
+   "p1": [
+    8.0,
+    9.0
+   ],
+   "p2": [
+    8.0,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w065",
+   "p1": [
+    4.0,
+    15.0
+   ],
+   "p2": [
+    8.0,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w066",
+   "p1": [
+    4.0,
+    9.0
+   ],
+   "p2": [
+    5.55,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w067",
+   "p1": [
+    6.45,
+    9.0
+   ],
+   "p2": [
+    8.0,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w068",
+   "p1": [
+    -7.8,
+    9.0
+   ],
+   "p2": [
+    -7.8,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w069",
+   "p1": [
+    -3.8,
+    9.0
+   ],
+   "p2": [
+    -3.8,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w070",
+   "p1": [
+    -7.8,
+    15.0
+   ],
+   "p2": [
+    -3.8,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w071",
+   "p1": [
+    -7.8,
+    9.0
+   ],
+   "p2": [
+    -6.25,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w072",
+   "p1": [
+    -5.35,
+    9.0
+   ],
+   "p2": [
+    -3.8,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w073",
+   "p1": [
+    20.0,
+    9.0
+   ],
+   "p2": [
+    20.0,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w074",
+   "p1": [
+    24.0,
+    9.0
+   ],
+   "p2": [
+    24.0,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w075",
+   "p1": [
+    20.0,
+    15.0
+   ],
+   "p2": [
+    24.0,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w076",
+   "p1": [
+    20.0,
+    9.0
+   ],
+   "p2": [
+    21.55,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w077",
+   "p1": [
+    22.45,
+    9.0
+   ],
+   "p2": [
+    24.0,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w078",
+   "p1": [
+    31.8,
+    9.0
+   ],
+   "p2": [
+    31.8,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w079",
+   "p1": [
+    35.8,
+    9.0
+   ],
+   "p2": [
+    35.8,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w080",
+   "p1": [
+    31.8,
+    15.0
+   ],
+   "p2": [
+    35.8,
+    15.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w081",
+   "p1": [
+    31.8,
+    9.0
+   ],
+   "p2": [
+    33.349999999999994,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w082",
+   "p1": [
+    34.25,
+    9.0
+   ],
+   "p2": [
+    35.8,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w083",
+   "p1": [
+    8.0,
+    1.5
+   ],
+   "p2": [
+    8.0,
+    9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w084",
+   "p1": [
+    14.0,
+    1.5
+   ],
+   "p2": [
+    14.0,
+    9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w085",
+   "p1": [
+    8.0,
+    9.5
+   ],
+   "p2": [
+    14.0,
+    9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w086",
+   "p1": [
+    8.0,
+    1.5
+   ],
+   "p2": [
+    10.45,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w087",
+   "p1": [
+    11.55,
+    1.5
+   ],
+   "p2": [
+    14.0,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w088",
+   "p1": [
+    14.0,
+    1.5
+   ],
+   "p2": [
+    14.0,
+    9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w089",
+   "p1": [
+    20.0,
+    1.5
+   ],
+   "p2": [
+    20.0,
+    9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w090",
+   "p1": [
+    14.0,
+    9.5
+   ],
+   "p2": [
+    20.0,
+    9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w091",
+   "p1": [
+    14.0,
+    1.5
+   ],
+   "p2": [
+    16.45,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w092",
+   "p1": [
+    17.55,
+    1.5
+   ],
+   "p2": [
+    20.0,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w093",
+   "p1": [
+    8.0,
+    -9.5
+   ],
+   "p2": [
+    8.0,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w094",
+   "p1": [
+    14.0,
+    -9.5
+   ],
+   "p2": [
+    14.0,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w095",
+   "p1": [
+    8.0,
+    -9.5
+   ],
+   "p2": [
+    14.0,
+    -9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w096",
+   "p1": [
+    8.0,
+    -1.5
+   ],
+   "p2": [
+    10.45,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w097",
+   "p1": [
+    11.55,
+    -1.5
+   ],
+   "p2": [
+    14.0,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w098",
+   "p1": [
+    14.0,
+    -9.5
+   ],
+   "p2": [
+    14.0,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w099",
+   "p1": [
+    20.0,
+    -9.5
+   ],
+   "p2": [
+    20.0,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w100",
+   "p1": [
+    14.0,
+    -9.5
+   ],
+   "p2": [
+    20.0,
+    -9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w101",
+   "p1": [
+    14.0,
+    -1.5
+   ],
+   "p2": [
+    16.45,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w102",
+   "p1": [
+    17.55,
+    -1.5
+   ],
+   "p2": [
+    20.0,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w103",
+   "p1": [
+    46.2,
+    8.5
+   ],
+   "p2": [
+    46.2,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w104",
+   "p1": [
+    38.2,
+    8.5
+   ],
+   "p2": [
+    46.2,
+    8.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w105",
+   "p1": [
+    38.2,
+    15.0
+   ],
+   "p2": [
+    46.2,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w106",
+   "p1": [
+    38.2,
+    8.5
+   ],
+   "p2": [
+    38.2,
+    11.3
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w107",
+   "p1": [
+    38.2,
+    12.2
+   ],
+   "p2": [
+    38.2,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w108",
+   "p1": [
+    46.2,
+    2.0
+   ],
+   "p2": [
+    46.2,
+    8.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w109",
+   "p1": [
+    38.2,
+    2.0
+   ],
+   "p2": [
+    46.2,
+    2.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w110",
+   "p1": [
+    38.2,
+    8.5
+   ],
+   "p2": [
+    46.2,
+    8.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w111",
+   "p1": [
+    38.2,
+    2.0
+   ],
+   "p2": [
+    38.2,
+    4.8
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w112",
+   "p1": [
+    38.2,
+    5.7
+   ],
+   "p2": [
+    38.2,
+    8.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w113",
+   "p1": [
+    46.2,
+    -4.5
+   ],
+   "p2": [
+    46.2,
+    2.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w114",
+   "p1": [
+    38.2,
+    -4.5
+   ],
+   "p2": [
+    46.2,
+    -4.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w115",
+   "p1": [
+    38.2,
+    2.0
+   ],
+   "p2": [
+    46.2,
+    2.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w116",
+   "p1": [
+    38.2,
+    -4.5
+   ],
+   "p2": [
+    38.2,
+    -1.7
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w117",
+   "p1": [
+    38.2,
+    -0.8
+   ],
+   "p2": [
+    38.2,
+    2.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w118",
+   "p1": [
+    46.2,
+    -11.0
+   ],
+   "p2": [
+    46.2,
+    -4.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w119",
+   "p1": [
+    38.2,
+    -11.0
+   ],
+   "p2": [
+    46.2,
+    -11.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w120",
+   "p1": [
+    38.2,
+    -4.5
+   ],
+   "p2": [
+    46.2,
+    -4.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w121",
+   "p1": [
+    38.2,
+    -11.0
+   ],
+   "p2": [
+    38.2,
+    -8.2
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w122",
+   "p1": [
+    38.2,
+    -7.3
+   ],
+   "p2": [
+    38.2,
+    -4.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w123",
+   "p1": [
+    35.2,
+    15.0
+   ],
+   "p2": [
+    35.2,
+    20.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w124",
+   "p1": [
+    38.8,
+    15.0
+   ],
+   "p2": [
+    38.8,
+    20.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w125",
+   "p1": [
+    35.2,
+    20.0
+   ],
+   "p2": [
+    38.8,
+    20.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w126",
+   "p1": [
+    35.2,
+    15.0
+   ],
+   "p2": [
+    36.1,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w127",
+   "p1": [
+    37.9,
+    15.0
+   ],
+   "p2": [
+    38.8,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w128",
+   "p1": [
+    33.0,
+    -9.5
+   ],
+   "p2": [
+    33.0,
+    -7.1
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w129",
+   "p1": [
+    33.0,
+    -9.5
+   ],
+   "p2": [
+    35.8,
+    -9.5
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w130",
+   "p1": [
+    33.0,
+    -7.1
+   ],
+   "p2": [
+    35.8,
+    -7.1
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w131",
+   "p1": [
+    35.8,
+    -9.5
+   ],
+   "p2": [
+    35.8,
+    -9.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w132",
+   "p1": [
+    35.8,
+    -7.6000000000000005
+   ],
+   "p2": [
+    35.8,
+    -7.1
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w133",
+   "p1": [
+    25.6,
+    4.0
+   ],
+   "p2": [
+    25.6,
+    6.8
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w134",
+   "p1": [
+    28.0,
+    4.0
+   ],
+   "p2": [
+    28.0,
+    6.8
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w135",
+   "p1": [
+    25.6,
+    6.8
+   ],
+   "p2": [
+    28.0,
+    6.8
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w136",
+   "p1": [
+    25.6,
+    4.0
+   ],
+   "p2": [
+    26.1,
+    4.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w137",
+   "p1": [
+    27.5,
+    4.0
+   ],
+   "p2": [
+    28.0,
+    4.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w138",
+   "p1": [
+    28.0,
+    4.0
+   ],
+   "p2": [
+    28.0,
+    6.8
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w139",
+   "p1": [
+    30.4,
+    4.0
+   ],
+   "p2": [
+    30.4,
+    6.8
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w140",
+   "p1": [
+    28.0,
+    6.8
+   ],
+   "p2": [
+    30.4,
+    6.8
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w141",
+   "p1": [
+    28.0,
+    4.0
+   ],
+   "p2": [
+    28.5,
+    4.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w142",
+   "p1": [
+    29.9,
+    4.0
+   ],
+   "p2": [
+    30.4,
+    4.0
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w143",
+   "p1": [
+    26.8,
+    -6.8
+   ],
+   "p2": [
+    26.8,
+    -4.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w144",
+   "p1": [
+    29.2,
+    -6.8
+   ],
+   "p2": [
+    29.2,
+    -4.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w145",
+   "p1": [
+    26.8,
+    -6.8
+   ],
+   "p2": [
+    29.2,
+    -6.8
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w146",
+   "p1": [
+    26.8,
+    -4.0
+   ],
+   "p2": [
+    27.3,
+    -4.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w147",
+   "p1": [
+    28.7,
+    -4.0
+   ],
+   "p2": [
+    29.2,
+    -4.0
+   ],
+   "confidence": "estimated",
+   "kind": "room"
+  },
+  {
+   "id": "w148",
+   "p1": [
+    20.0,
+    -1.5
+   ],
+   "p2": [
+    21.1,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w149",
+   "p1": [
+    22.9,
+    -1.5
+   ],
+   "p2": [
+    24.0,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "room"
+  },
+  {
+   "id": "w150",
+   "p1": [
+    -10.2,
+    -12
+   ],
+   "p2": [
+    -10.2,
+    -11
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w151",
+   "p1": [
+    38.2,
+    -12
+   ],
+   "p2": [
+    38.2,
+    -11
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w152",
+   "p1": [
+    -7.8,
+    -12
+   ],
+   "p2": [
+    -7.8,
+    -9.5
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w153",
+   "p1": [
+    35.8,
+    -12
+   ],
+   "p2": [
+    35.8,
+    -9.5
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w154",
+   "p1": [
+    -7.8,
+    1.5
+   ],
+   "p2": [
+    -7.8,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w155",
+   "p1": [
+    35.8,
+    1.5
+   ],
+   "p2": [
+    35.8,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w156",
+   "p1": [
+    -7.8,
+    9.0
+   ],
+   "p2": [
+    -7.8,
+    15
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w157",
+   "p1": [
+    35.8,
+    9.0
+   ],
+   "p2": [
+    35.8,
+    15
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w158",
+   "p1": [
+    -10.2,
+    -12
+   ],
+   "p2": [
+    -7.8,
+    -12
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w159",
+   "p1": [
+    38.2,
+    -12
+   ],
+   "p2": [
+    35.8,
+    -12
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w160",
+   "p1": [
+    -7.8,
+    1.5
+   ],
+   "p2": [
+    -4,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w161",
+   "p1": [
+    35.8,
+    1.5
+   ],
+   "p2": [
+    32.0,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w162",
+   "p1": [
+    -4,
+    4
+   ],
+   "p2": [
+    -2.4,
+    4
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w163",
+   "p1": [
+    32.0,
+    4
+   ],
+   "p2": [
+    30.4,
+    4
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w164",
+   "p1": [
+    2.4,
+    4
+   ],
+   "p2": [
+    4,
+    4
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w165",
+   "p1": [
+    25.6,
+    4
+   ],
+   "p2": [
+    24.0,
+    4
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w166",
+   "p1": [
+    -7.8,
+    6.8
+   ],
+   "p2": [
+    -2.4,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w167",
+   "p1": [
+    35.8,
+    6.8
+   ],
+   "p2": [
+    30.4,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w168",
+   "p1": [
+    2.4,
+    6.8
+   ],
+   "p2": [
+    8.0,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w169",
+   "p1": [
+    25.6,
+    6.8
+   ],
+   "p2": [
+    20.0,
+    6.8
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w170",
+   "p1": [
+    -3.8,
+    9.0
+   ],
+   "p2": [
+    4.0,
+    9.0
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w171",
+   "p1": [
+    31.8,
+    9.0
+   ],
+   "p2": [
+    24.0,
+    9.0
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w172",
+   "p1": [
+    4,
+    1.5
+   ],
+   "p2": [
+    8,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w173",
+   "p1": [
+    24.0,
+    1.5
+   ],
+   "p2": [
+    20.0,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w174",
+   "p1": [
+    4,
+    1.5
+   ],
+   "p2": [
+    4,
+    4
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w175",
+   "p1": [
+    24.0,
+    1.5
+   ],
+   "p2": [
+    24.0,
+    4
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w176",
+   "p1": [
+    -4,
+    1.5
+   ],
+   "p2": [
+    -4,
+    4
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  },
+  {
+   "id": "w177",
+   "p1": [
+    32.0,
+    1.5
+   ],
+   "p2": [
+    32.0,
+    4
+   ],
+   "confidence": "estimated",
+   "kind": "corridor"
+  }
+ ],
+ "doors": [
+  {
+   "id": "d_r701",
+   "name": "Room 701",
+   "p1": [
+    -10.2,
+    11.3
+   ],
+   "p2": [
+    -10.2,
+    12.2
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_r702",
+   "name": "Room 702",
+   "p1": [
+    -10.2,
+    4.8
+   ],
+   "p2": [
+    -10.2,
+    5.7
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_r703",
+   "name": "Room 703",
+   "p1": [
+    -10.2,
+    -1.7
+   ],
+   "p2": [
+    -10.2,
+    -0.8
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_r703A",
+   "name": "Room 703A (staff room)",
+   "p1": [
+    -10.2,
+    -8.2
+   ],
+   "p2": [
+    -10.2,
+    -7.3
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_s_w701",
+   "name": "Stairs near Room 701",
+   "p1": [
+    -9.9,
+    15.0
+   ],
+   "p2": [
+    -8.1,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_lift_A3",
+   "name": "Lift A3 (in front of Room 703A)",
+   "p1": [
+    -7.8,
+    -9.0
+   ],
+   "p2": [
+    -7.8,
+    -7.6000000000000005
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_lift_A1",
+   "name": "Lift A1",
+   "p1": [
+    -1.9,
+    4.0
+   ],
+   "p2": [
+    -0.5,
+    4.0
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_lift_A2",
+   "name": "Lift A2",
+   "p1": [
+    0.5,
+    4.0
+   ],
+   "p2": [
+    1.9,
+    4.0
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_s_S1",
+   "name": "Stairs S1 (beside lobby A)",
+   "p1": [
+    5.1,
+    -1.5
+   ],
+   "p2": [
+    6.9,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_s_W1",
+   "name": "Stairs west of lobby A",
+   "p1": [
+    -6.800000000000001,
+    -1.5
+   ],
+   "p2": [
+    -5.0,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_s_fA",
+   "name": "Stairs in front of lobby A",
+   "p1": [
+    -2.0,
+    -4.0
+   ],
+   "p2": [
+    2.0,
+    -4.0
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_s_fBL",
+   "name": "Stairs in front of lobby B (west part)",
+   "p1": [
+    24.5,
+    -4.0
+   ],
+   "p2": [
+    26.299999999999997,
+    -4.0
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_s_fBR",
+   "name": "Stairs in front of lobby B (east part)",
+   "p1": [
+    29.700000000000003,
+    -4.0
+   ],
+   "p2": [
+    31.5,
+    -4.0
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_s_W1e",
+   "name": "Stairs east of lobby B",
+   "p1": [
+    33.0,
+    -1.5
+   ],
+   "p2": [
+    34.8,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_rW",
+   "name": "New ladies restroom ('W')",
+   "p1": [
+    5.55,
+    9.0
+   ],
+   "p2": [
+    6.45,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_rNew",
+   "name": "New restroom (disabled)",
+   "p1": [
+    -6.25,
+    9.0
+   ],
+   "p2": [
+    -5.35,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_rM",
+   "name": "Restroom M (old gents)",
+   "p1": [
+    21.55,
+    9.0
+   ],
+   "p2": [
+    22.45,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_rL",
+   "name": "Restroom L (old ladies)",
+   "p1": [
+    33.349999999999994,
+    9.0
+   ],
+   "p2": [
+    34.25,
+    9.0
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_labD",
+   "name": "Computing Lab D",
+   "p1": [
+    10.45,
+    1.5
+   ],
+   "p2": [
+    11.55,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_labC",
+   "name": "Computing Lab C",
+   "p1": [
+    16.45,
+    1.5
+   ],
+   "p2": [
+    17.55,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_labE",
+   "name": "Computing Lab E",
+   "p1": [
+    10.45,
+    -1.5
+   ],
+   "p2": [
+    11.55,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_labF",
+   "name": "Computing Lab F",
+   "p1": [
+    16.45,
+    -1.5
+   ],
+   "p2": [
+    17.55,
+    -1.5
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_r704",
+   "name": "Room 704",
+   "p1": [
+    38.2,
+    11.3
+   ],
+   "p2": [
+    38.2,
+    12.2
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_r705",
+   "name": "Room 705",
+   "p1": [
+    38.2,
+    4.8
+   ],
+   "p2": [
+    38.2,
+    5.7
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_r706",
+   "name": "Room 706",
+   "p1": [
+    38.2,
+    -1.7
+   ],
+   "p2": [
+    38.2,
+    -0.8
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_r706A",
+   "name": "Room 706A (staff room)",
+   "p1": [
+    38.2,
+    -8.2
+   ],
+   "p2": [
+    38.2,
+    -7.3
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_s_E704",
+   "name": "Stairs near Room 704",
+   "p1": [
+    36.1,
+    15.0
+   ],
+   "p2": [
+    37.9,
+    15.0
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_lift_B4",
+   "name": "Lift B4 (in front of Room 706A)",
+   "p1": [
+    35.8,
+    -9.0
+   ],
+   "p2": [
+    35.8,
+    -7.6000000000000005
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_lift_B1",
+   "name": "Lift B1",
+   "p1": [
+    26.1,
+    4.0
+   ],
+   "p2": [
+    27.5,
+    4.0
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_lift_B2",
+   "name": "Lift B2",
+   "p1": [
+    28.5,
+    4.0
+   ],
+   "p2": [
+    29.9,
+    4.0
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_lift_B3",
+   "name": "Lift B3 (facing B1/B2)",
+   "p1": [
+    27.3,
+    -4.0
+   ],
+   "p2": [
+    28.7,
+    -4.0
+   ],
+   "confidence": "estimated",
+   "kind": "door"
+  },
+  {
+   "id": "d_s_E706",
+   "name": "Stairs near Room 706 (beside lobby B)",
+   "p1": [
+    21.1,
+    -1.5
+   ],
+   "p2": [
+    22.9,
+    -1.5
+   ],
+   "confidence": "guess",
+   "kind": "door"
+  },
+  {
+   "id": "d_dept2",
+   "name": "Other Department entrance (near new restroom)",
+   "p1": [
+    8.0,
+    -1.5
+   ],
+   "p2": [
+    8.0,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "passage_door"
+  },
+  {
+   "id": "d_dept1",
+   "name": "Department of Computing Technologies entrance",
+   "p1": [
+    20.0,
+    -1.5
+   ],
+   "p2": [
+    20.0,
+    1.5
+   ],
+   "confidence": "estimated",
+   "kind": "passage_door"
+  }
+ ],
+ "corridor_centerline": [
+  {
+   "id": "west_spine",
+   "polyline": [
+    [
+     -9.0,
+     -12.0
+    ],
+    [
+     -9.0,
+     15.0
+    ]
+   ],
+   "length_m": 27.0,
+   "width_m": 2.4,
+   "confidence": "estimated",
+   "stations": [
+    {
+     "name": "Lift A3 (in front of Room 703A)",
+     "type": "lift",
+     "distance_m": 3.7,
+     "point": [
+      -9.0,
+      -8.3
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Room 703A (staff room)",
+     "type": "door",
+     "distance_m": 4.25,
+     "point": [
+      -9.0,
+      -7.75
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Room 703",
+     "type": "door",
+     "distance_m": 10.75,
+     "point": [
+      -9.0,
+      -1.25
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Junction: west spine / lab passage",
+     "type": "junction",
+     "distance_m": 12.0,
+     "point": [
+      -9.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Room 702",
+     "type": "door",
+     "distance_m": 17.25,
+     "point": [
+      -9.0,
+      5.25
+     ],
+     "confidence": "guess"
+    },
+    {
+     "name": "Junction: west spine / back path",
+     "type": "junction",
+     "distance_m": 19.9,
+     "point": [
+      -9.0,
+      7.9
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Room 701",
+     "type": "door",
+     "distance_m": 23.75,
+     "point": [
+      -9.0,
+      11.75
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Stairs near Room 701",
+     "type": "stairs",
+     "distance_m": 27.0,
+     "point": [
+      -9.0,
+      15.0
+     ],
+     "confidence": "estimated"
+    }
+   ]
+  },
+  {
+   "id": "passage",
+   "polyline": [
+    [
+     -9.0,
+     0.0
+    ],
+    [
+     37.0,
+     0.0
+    ]
+   ],
+   "length_m": 46.0,
+   "width_m": 3.0,
+   "confidence": "estimated",
+   "stations": [
+    {
+     "name": "Junction: lab passage / west spine",
+     "type": "junction",
+     "distance_m": 0.0,
+     "point": [
+      -9.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Lift A1",
+     "type": "lift",
+     "distance_m": 7.8,
+     "point": [
+      -1.2,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Stairs in front of lobby A",
+     "type": "stairs",
+     "distance_m": 9.0,
+     "point": [
+      0.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Lift lobby A (centre)",
+     "type": "lift_lobby",
+     "distance_m": 9.0,
+     "point": [
+      0.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Lift A2",
+     "type": "lift",
+     "distance_m": 10.2,
+     "point": [
+      1.2,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Stairs S1 (beside lobby A)",
+     "type": "stairs",
+     "distance_m": 15.0,
+     "point": [
+      6.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Other Department entrance (Dept door 2)",
+     "type": "door",
+     "distance_m": 17.0,
+     "point": [
+      8.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Computing Lab D",
+     "type": "door",
+     "distance_m": 20.0,
+     "point": [
+      11.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Computing Lab E",
+     "type": "door",
+     "distance_m": 20.0,
+     "point": [
+      11.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Computing Lab C",
+     "type": "door",
+     "distance_m": 26.0,
+     "point": [
+      17.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Computing Lab F",
+     "type": "door",
+     "distance_m": 26.0,
+     "point": [
+      17.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Department entrance (Dept door 1)",
+     "type": "door",
+     "distance_m": 29.0,
+     "point": [
+      20.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Stairs near Room 706 (beside lobby B)",
+     "type": "stairs",
+     "distance_m": 31.0,
+     "point": [
+      22.0,
+      0.0
+     ],
+     "confidence": "guess"
+    },
+    {
+     "name": "Stairs in front of lobby B (west part)",
+     "type": "stairs",
+     "distance_m": 34.4,
+     "point": [
+      25.4,
+      0.0
+     ],
+     "confidence": "guess"
+    },
+    {
+     "name": "Lift B1",
+     "type": "lift",
+     "distance_m": 35.8,
+     "point": [
+      26.8,
+      0.0
+     ],
+     "confidence": "guess"
+    },
+    {
+     "name": "Lift B3 (facing B1/B2)",
+     "type": "lift",
+     "distance_m": 37.0,
+     "point": [
+      28.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Lift lobby B (centre)",
+     "type": "lift_lobby",
+     "distance_m": 37.0,
+     "point": [
+      28.0,
+      0.0
+     ],
+     "confidence": "guess"
+    },
+    {
+     "name": "Lift B2",
+     "type": "lift",
+     "distance_m": 38.2,
+     "point": [
+      29.2,
+      0.0
+     ],
+     "confidence": "guess"
+    },
+    {
+     "name": "Stairs in front of lobby B (east part)",
+     "type": "stairs",
+     "distance_m": 39.6,
+     "point": [
+      30.6,
+      0.0
+     ],
+     "confidence": "guess"
+    },
+    {
+     "name": "Junction: lab passage / east spine",
+     "type": "junction",
+     "distance_m": 46.0,
+     "point": [
+      37.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    }
+   ]
+  },
+  {
+   "id": "east_spine",
+   "polyline": [
+    [
+     37.0,
+     -12.0
+    ],
+    [
+     37.0,
+     15.0
+    ]
+   ],
+   "length_m": 27.0,
+   "width_m": 2.4,
+   "confidence": "estimated",
+   "stations": [
+    {
+     "name": "Lift B4 (in front of Room 706A)",
+     "type": "lift",
+     "distance_m": 3.7,
+     "point": [
+      37.0,
+      -8.3
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Room 706A (staff room)",
+     "type": "door",
+     "distance_m": 4.25,
+     "point": [
+      37.0,
+      -7.75
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Room 706",
+     "type": "door",
+     "distance_m": 10.75,
+     "point": [
+      37.0,
+      -1.25
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Junction: east spine / lab passage",
+     "type": "junction",
+     "distance_m": 12.0,
+     "point": [
+      37.0,
+      0.0
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Room 705",
+     "type": "door",
+     "distance_m": 17.25,
+     "point": [
+      37.0,
+      5.25
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Junction: east spine / back path",
+     "type": "junction",
+     "distance_m": 19.9,
+     "point": [
+      37.0,
+      7.9
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Room 704",
+     "type": "door",
+     "distance_m": 23.75,
+     "point": [
+      37.0,
+      11.75
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Stairs near Room 704",
+     "type": "stairs",
+     "distance_m": 27.0,
+     "point": [
+      37.0,
+      15.0
+     ],
+     "confidence": "estimated"
+    }
+   ]
+  },
+  {
+   "id": "west_back",
+   "polyline": [
+    [
+     -9.0,
+     7.9
+    ],
+    [
+     8.0,
+     7.9
+    ]
+   ],
+   "length_m": 17.0,
+   "width_m": 2.2,
+   "confidence": "estimated",
+   "stations": [
+    {
+     "name": "Junction: west spine / back path",
+     "type": "junction",
+     "distance_m": 0.0,
+     "point": [
+      -9.0,
+      7.9
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "New restroom (disabled)",
+     "type": "door",
+     "distance_m": 3.2,
+     "point": [
+      -5.8,
+      7.9
+     ],
+     "confidence": "guess"
+    },
+    {
+     "name": "New ladies restroom ('W')",
+     "type": "door",
+     "distance_m": 15.0,
+     "point": [
+      6.0,
+      7.9
+     ],
+     "confidence": "guess"
+    }
+   ]
+  },
+  {
+   "id": "east_back",
+   "polyline": [
+    [
+     37.0,
+     7.9
+    ],
+    [
+     20.0,
+     7.9
+    ]
+   ],
+   "length_m": 17.0,
+   "width_m": 2.2,
+   "confidence": "estimated",
+   "stations": [
+    {
+     "name": "Junction: east spine / back path",
+     "type": "junction",
+     "distance_m": 0.0,
+     "point": [
+      37.0,
+      7.9
+     ],
+     "confidence": "estimated"
+    },
+    {
+     "name": "Restroom L (old ladies)",
+     "type": "door",
+     "distance_m": 3.2,
+     "point": [
+      33.8,
+      7.9
+     ],
+     "confidence": "guess"
+    },
+    {
+     "name": "Restroom M (old gents)",
+     "type": "door",
+     "distance_m": 15.0,
+     "point": [
+      22.0,
+      7.9
+     ],
+     "confidence": "guess"
+    }
+   ]
+  }
+ ],
+ "places": [
+  {
+   "id": "r701",
+   "name": "Room 701",
+   "aliases": [
+    "TP701",
+    "701"
+   ],
+   "type": "room",
+   "position": [
+    -14.2,
+    11.75
+   ],
+   "polygon": [
+    [
+     -18.2,
+     8.5
+    ],
+    [
+     -10.2,
+     8.5
+    ],
+    [
+     -10.2,
+     15.0
+    ],
+    [
+     -18.2,
+     15.0
+    ]
+   ],
+   "corridor": "west_spine",
+   "distance_m": 23.75,
+   "front_point": [
+    -9.0,
+    11.75
+   ],
+   "confidence": "estimated",
+   "notes": "Door seen in photos 10, 11. North end of the west spine."
+  },
+  {
+   "id": "r702",
+   "name": "Room 702",
+   "aliases": [
+    "TP702",
+    "702"
+   ],
+   "type": "room",
+   "position": [
+    -14.2,
+    5.25
+   ],
+   "polygon": [
+    [
+     -18.2,
+     2.0
+    ],
+    [
+     -10.2,
+     2.0
+    ],
+    [
+     -10.2,
+     8.5
+    ],
+    [
+     -18.2,
+     8.5
+    ]
+   ],
+   "corridor": "west_spine",
+   "distance_m": 17.25,
+   "front_point": [
+    -9.0,
+    5.25
+   ],
+   "confidence": "guess",
+   "notes": "Exists per user. No photo; placed between 701 and 703 by number."
+  },
+  {
+   "id": "r703",
+   "name": "Room 703",
+   "aliases": [
+    "TP703",
+    "703"
+   ],
+   "type": "lecture_hall",
+   "position": [
+    -14.2,
+    -1.25
+   ],
+   "polygon": [
+    [
+     -18.2,
+     -4.5
+    ],
+    [
+     -10.2,
+     -4.5
+    ],
+    [
+     -10.2,
+     2.0
+    ],
+    [
+     -18.2,
+     2.0
+    ]
+   ],
+   "corridor": "west_spine",
+   "distance_m": 10.75,
+   "front_point": [
+    -9.0,
+    -1.25
+   ],
+   "confidence": "estimated",
+   "notes": "Lecture hall, photo 7."
+  },
+  {
+   "id": "r703A",
+   "name": "Room 703A (staff room)",
+   "aliases": [
+    "TP703A",
+    "703A",
+    "staff room 703A"
+   ],
+   "type": "staff_room",
+   "position": [
+    -14.2,
+    -7.75
+   ],
+   "polygon": [
+    [
+     -18.2,
+     -11.0
+    ],
+    [
+     -10.2,
+     -11.0
+    ],
+    [
+     -10.2,
+     -4.5
+    ],
+    [
+     -18.2,
+     -4.5
+    ]
+   ],
+   "corridor": "west_spine",
+   "distance_m": 4.25,
+   "front_point": [
+    -9.0,
+    -7.75
+   ],
+   "confidence": "estimated",
+   "notes": "Staff room at the south end, faces the front. Photo 5 (digit blurred; user says 703A)."
+  },
+  {
+   "id": "s_w701",
+   "name": "Stairs near Room 701",
+   "aliases": [
+    "stairs near 701"
+   ],
+   "type": "stairs",
+   "position": [
+    -9.0,
+    17.5
+   ],
+   "polygon": [
+    [
+     -10.8,
+     15.0
+    ],
+    [
+     -7.2,
+     15.0
+    ],
+    [
+     -7.2,
+     20.0
+    ],
+    [
+     -10.8,
+     20.0
+    ]
+   ],
+   "corridor": "west_spine",
+   "distance_m": 27.0,
+   "front_point": [
+    -9.0,
+    15.0
+   ],
+   "confidence": "estimated",
+   "notes": "At the north end of the west spine, after Room 701 (user)."
+  },
+  {
+   "id": "lift_A3",
+   "name": "Lift A3 (in front of Room 703A)",
+   "aliases": [
+    "lift in front of 703A",
+    "lift area near Room 703"
+   ],
+   "type": "lift",
+   "position": [
+    -6.4,
+    -8.3
+   ],
+   "polygon": [
+    [
+     -7.8,
+     -9.5
+    ],
+    [
+     -5.0,
+     -9.5
+    ],
+    [
+     -5.0,
+     -7.1
+    ],
+    [
+     -7.8,
+     -7.1
+    ]
+   ],
+   "corridor": "west_spine",
+   "distance_m": 3.7,
+   "front_point": [
+    -9.0,
+    -8.3
+   ],
+   "confidence": "estimated",
+   "notes": "Across the corridor from 703A (user). Shaft about 6.7 sq m (assumed)."
+  },
+  {
+   "id": "lift_A1",
+   "name": "Lift A1",
+   "aliases": [
+    "lift area near Room 703"
+   ],
+   "type": "lift",
+   "position": [
+    -1.2,
+    5.4
+   ],
+   "polygon": [
+    [
+     -2.4,
+     4.0
+    ],
+    [
+     0.0,
+     4.0
+    ],
+    [
+     0.0,
+     6.8
+    ],
+    [
+     -2.4,
+     6.8
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 7.8,
+   "front_point": [
+    -1.2,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "Two lifts in lobby A (photos 3, 19, 29). Shaft about 2.4 x 2.8 m = 6.7 sq m each (assumed)."
+  },
+  {
+   "id": "lift_A2",
+   "name": "Lift A2",
+   "aliases": [
+    "lift area near Room 703"
+   ],
+   "type": "lift",
+   "position": [
+    1.2,
+    5.4
+   ],
+   "polygon": [
+    [
+     0.0,
+     4.0
+    ],
+    [
+     2.4,
+     4.0
+    ],
+    [
+     2.4,
+     6.8
+    ],
+    [
+     0.0,
+     6.8
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 10.2,
+   "front_point": [
+    1.2,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "Two lifts in lobby A (photos 3, 19, 29). Shaft about 2.4 x 2.8 m = 6.7 sq m each (assumed)."
+  },
+  {
+   "id": "s_S1",
+   "name": "Stairs S1 (beside lobby A)",
+   "aliases": [
+    "S1",
+    "stairs next to lift area"
+   ],
+   "type": "stairs",
+   "position": [
+    6.0,
+    -3.75
+   ],
+   "polygon": [
+    [
+     4.0,
+     -6.0
+    ],
+    [
+     8.0,
+     -6.0
+    ],
+    [
+     8.0,
+     -1.5
+    ],
+    [
+     4.0,
+     -1.5
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 15.0,
+   "front_point": [
+    6.0,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "Sign S1 and '7' in photos 2, 3, 18. Joined to the stairs in front of lobby A."
+  },
+  {
+   "id": "s_fA",
+   "name": "Stairs in front of lobby A",
+   "aliases": [
+    "stairs in front of lift lobby A"
+   ],
+   "type": "stairs",
+   "position": [
+    0.0,
+    -6.75
+   ],
+   "polygon": [
+    [
+     -4.0,
+     -9.5
+    ],
+    [
+     4.0,
+     -9.5
+    ],
+    [
+     4.0,
+     -4.0
+    ],
+    [
+     -4.0,
+     -4.0
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 9.0,
+   "front_point": [
+    0.0,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "Stair flights fill the space in front of lobby A and join the stairs around it (user). Photos 3, 19: a flight runs beside the lifts."
+  },
+  {
+   "id": "s_fBL",
+   "name": "Stairs in front of lobby B (west part)",
+   "aliases": [
+    "stairs in front of lift lobby B"
+   ],
+   "type": "stairs",
+   "position": [
+    25.4,
+    -6.75
+   ],
+   "polygon": [
+    [
+     24.0,
+     -9.5
+    ],
+    [
+     26.8,
+     -9.5
+    ],
+    [
+     26.8,
+     -4.0
+    ],
+    [
+     24.0,
+     -4.0
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 34.4,
+   "front_point": [
+    25.4,
+    0.0
+   ],
+   "confidence": "guess",
+   "notes": "Mirror of the stairs in front of lobby A, split around lift B3."
+  },
+  {
+   "id": "s_fBR",
+   "name": "Stairs in front of lobby B (east part)",
+   "aliases": [
+    "stairs in front of lift lobby B"
+   ],
+   "type": "stairs",
+   "position": [
+    30.6,
+    -6.75
+   ],
+   "polygon": [
+    [
+     29.2,
+     -9.5
+    ],
+    [
+     32.0,
+     -9.5
+    ],
+    [
+     32.0,
+     -4.0
+    ],
+    [
+     29.2,
+     -4.0
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 39.6,
+   "front_point": [
+    30.6,
+    0.0
+   ],
+   "confidence": "guess",
+   "notes": "Mirror of the stairs in front of lobby A, split around lift B3."
+  },
+  {
+   "id": "rW",
+   "name": "New ladies restroom ('W')",
+   "aliases": [
+    "W",
+    "new ladies restroom"
+   ],
+   "type": "restroom",
+   "position": [
+    6.0,
+    12.0
+   ],
+   "polygon": [
+    [
+     4.0,
+     9.0
+    ],
+    [
+     8.0,
+     9.0
+    ],
+    [
+     8.0,
+     15.0
+    ],
+    [
+     4.0,
+     15.0
+    ]
+   ],
+   "corridor": "west_back",
+   "distance_m": 15.0,
+   "front_point": [
+    6.0,
+    7.9
+   ],
+   "confidence": "guess",
+   "notes": "Black door marked W, photo 1."
+  },
+  {
+   "id": "rNew",
+   "name": "New restroom (disabled)",
+   "aliases": [
+    "new restroom",
+    "disabled restroom"
+   ],
+   "type": "restroom",
+   "position": [
+    -5.8,
+    12.0
+   ],
+   "polygon": [
+    [
+     -7.8,
+     9.0
+    ],
+    [
+     -3.8,
+     9.0
+    ],
+    [
+     -3.8,
+     15.0
+    ],
+    [
+     -7.8,
+     15.0
+    ]
+   ],
+   "corridor": "west_back",
+   "distance_m": 3.2,
+   "front_point": [
+    -5.8,
+    7.9
+   ],
+   "confidence": "guess",
+   "notes": "Photos 34, 35."
+  },
+  {
+   "id": "rM",
+   "name": "Restroom M (old gents)",
+   "aliases": [
+    "Restroom M",
+    "gents toilet"
+   ],
+   "type": "restroom",
+   "position": [
+    22.0,
+    12.0
+   ],
+   "polygon": [
+    [
+     20.0,
+     9.0
+    ],
+    [
+     24.0,
+     9.0
+    ],
+    [
+     24.0,
+     15.0
+    ],
+    [
+     20.0,
+     15.0
+    ]
+   ],
+   "corridor": "east_back",
+   "distance_m": 15.0,
+   "front_point": [
+    22.0,
+    7.9
+   ],
+   "confidence": "guess",
+   "notes": "Photo 21. User: M = men's, old."
+  },
+  {
+   "id": "rL",
+   "name": "Restroom L (old ladies)",
+   "aliases": [
+    "Restroom L",
+    "ladies toilet"
+   ],
+   "type": "restroom",
+   "position": [
+    33.8,
+    12.0
+   ],
+   "polygon": [
+    [
+     31.8,
+     9.0
+    ],
+    [
+     35.8,
+     9.0
+    ],
+    [
+     35.8,
+     15.0
+    ],
+    [
+     31.8,
+     15.0
+    ]
+   ],
+   "corridor": "east_back",
+   "distance_m": 3.2,
+   "front_point": [
+    33.8,
+    7.9
+   ],
+   "confidence": "guess",
+   "notes": "Photo 25. User: L = ladies, old."
+  },
+  {
+   "id": "labD",
+   "name": "Computing Lab D",
+   "aliases": [
+    "Computing Lab (D)",
+    "TP710",
+    "Lab D"
+   ],
+   "type": "lab",
+   "position": [
+    11.0,
+    5.5
+   ],
+   "polygon": [
+    [
+     8.0,
+     1.5
+    ],
+    [
+     14.0,
+     1.5
+    ],
+    [
+     14.0,
+     9.5
+    ],
+    [
+     8.0,
+     9.5
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 20.0,
+   "front_point": [
+    11.0,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "TP710, photo 13. Side of the passage (north) is a guess."
+  },
+  {
+   "id": "labC",
+   "name": "Computing Lab C",
+   "aliases": [
+    "Computing Lab (C)",
+    "TP709",
+    "Lab C"
+   ],
+   "type": "lab",
+   "position": [
+    17.0,
+    5.5
+   ],
+   "polygon": [
+    [
+     14.0,
+     1.5
+    ],
+    [
+     20.0,
+     1.5
+    ],
+    [
+     20.0,
+     9.5
+    ],
+    [
+     14.0,
+     9.5
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 26.0,
+   "front_point": [
+    17.0,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "TP709, photo 16. Faces F (user)."
+  },
+  {
+   "id": "labE",
+   "name": "Computing Lab E",
+   "aliases": [
+    "Computing Lab (E)",
+    "TP713",
+    "Lab E"
+   ],
+   "type": "lab",
+   "position": [
+    11.0,
+    -5.5
+   ],
+   "polygon": [
+    [
+     8.0,
+     -9.5
+    ],
+    [
+     14.0,
+     -9.5
+    ],
+    [
+     14.0,
+     -1.5
+    ],
+    [
+     8.0,
+     -1.5
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 20.0,
+   "front_point": [
+    11.0,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "TP713, photo 14. Faces D."
+  },
+  {
+   "id": "labF",
+   "name": "Computing Lab F",
+   "aliases": [
+    "Computing Lab (F)",
+    "Lab F"
+   ],
+   "type": "lab",
+   "position": [
+    17.0,
+    -5.5
+   ],
+   "polygon": [
+    [
+     14.0,
+     -9.5
+    ],
+    [
+     20.0,
+     -9.5
+    ],
+    [
+     20.0,
+     -1.5
+    ],
+    [
+     14.0,
+     -1.5
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 26.0,
+   "front_point": [
+    17.0,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "Room number not visible. Faces C (user)."
+  },
+  {
+   "id": "r704",
+   "name": "Room 704",
+   "aliases": [
+    "TP704",
+    "704"
+   ],
+   "type": "lecture_hall",
+   "position": [
+    42.2,
+    11.75
+   ],
+   "polygon": [
+    [
+     38.2,
+     8.5
+    ],
+    [
+     46.2,
+     8.5
+    ],
+    [
+     46.2,
+     15.0
+    ],
+    [
+     38.2,
+     15.0
+    ]
+   ],
+   "corridor": "east_spine",
+   "distance_m": 23.75,
+   "front_point": [
+    37.0,
+    11.75
+   ],
+   "confidence": "estimated",
+   "notes": "Lecture hall, photos 23, 24. Placed as the mirror of 701 (user: both sides symmetrical)."
+  },
+  {
+   "id": "r705",
+   "name": "Room 705",
+   "aliases": [
+    "TP705",
+    "705"
+   ],
+   "type": "lecture_hall",
+   "position": [
+    42.2,
+    5.25
+   ],
+   "polygon": [
+    [
+     38.2,
+     2.0
+    ],
+    [
+     46.2,
+     2.0
+    ],
+    [
+     46.2,
+     8.5
+    ],
+    [
+     38.2,
+     8.5
+    ]
+   ],
+   "corridor": "east_spine",
+   "distance_m": 17.25,
+   "front_point": [
+    37.0,
+    5.25
+   ],
+   "confidence": "estimated",
+   "notes": "Photo 27. Mirror of 702."
+  },
+  {
+   "id": "r706",
+   "name": "Room 706",
+   "aliases": [
+    "TP706",
+    "706"
+   ],
+   "type": "lecture_hall",
+   "position": [
+    42.2,
+    -1.25
+   ],
+   "polygon": [
+    [
+     38.2,
+     -4.5
+    ],
+    [
+     46.2,
+     -4.5
+    ],
+    [
+     46.2,
+     2.0
+    ],
+    [
+     38.2,
+     2.0
+    ]
+   ],
+   "corridor": "east_spine",
+   "distance_m": 10.75,
+   "front_point": [
+    37.0,
+    -1.25
+   ],
+   "confidence": "estimated",
+   "notes": "Photo 28. Mirror of 703; next to lift lobby B."
+  },
+  {
+   "id": "r706A",
+   "name": "Room 706A (staff room)",
+   "aliases": [
+    "TP706A",
+    "706A",
+    "staff room 706A"
+   ],
+   "type": "staff_room",
+   "position": [
+    42.2,
+    -7.75
+   ],
+   "polygon": [
+    [
+     38.2,
+     -11.0
+    ],
+    [
+     46.2,
+     -11.0
+    ],
+    [
+     46.2,
+     -4.5
+    ],
+    [
+     38.2,
+     -4.5
+    ]
+   ],
+   "corridor": "east_spine",
+   "distance_m": 4.25,
+   "front_point": [
+    37.0,
+    -7.75
+   ],
+   "confidence": "estimated",
+   "notes": "Staff room at the south end, faces the front. Photos 30, 32, 33. Mirror of 703A."
+  },
+  {
+   "id": "s_E704",
+   "name": "Stairs near Room 704",
+   "aliases": [
+    "stairs near 704"
+   ],
+   "type": "stairs",
+   "position": [
+    37.0,
+    17.5
+   ],
+   "polygon": [
+    [
+     35.2,
+     15.0
+    ],
+    [
+     38.8,
+     15.0
+    ],
+    [
+     38.8,
+     20.0
+    ],
+    [
+     35.2,
+     20.0
+    ]
+   ],
+   "corridor": "east_spine",
+   "distance_m": 27.0,
+   "front_point": [
+    37.0,
+    15.0
+   ],
+   "confidence": "estimated",
+   "notes": "At the north end of the east spine, after Room 704 (user). Mirror of the west stairs."
+  },
+  {
+   "id": "lift_B4",
+   "name": "Lift B4 (in front of Room 706A)",
+   "aliases": [
+    "lift in front of 706A",
+    "lift area near Room 706"
+   ],
+   "type": "lift",
+   "position": [
+    34.4,
+    -8.3
+   ],
+   "polygon": [
+    [
+     33.0,
+     -9.5
+    ],
+    [
+     35.8,
+     -9.5
+    ],
+    [
+     35.8,
+     -7.1
+    ],
+    [
+     33.0,
+     -7.1
+    ]
+   ],
+   "corridor": "east_spine",
+   "distance_m": 3.7,
+   "front_point": [
+    37.0,
+    -8.3
+   ],
+   "confidence": "estimated",
+   "notes": "Across the corridor from 706A (photos 36, 37). Shaft about 6.7 sq m (assumed)."
+  },
+  {
+   "id": "lift_B1",
+   "name": "Lift B1",
+   "aliases": [
+    "lift area near Room 706"
+   ],
+   "type": "lift",
+   "position": [
+    26.8,
+    5.4
+   ],
+   "polygon": [
+    [
+     25.6,
+     4.0
+    ],
+    [
+     28.0,
+     4.0
+    ],
+    [
+     28.0,
+     6.8
+    ],
+    [
+     25.6,
+     6.8
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 35.8,
+   "front_point": [
+    26.8,
+    0.0
+   ],
+   "confidence": "guess",
+   "notes": "Two lifts side by side on the north wall of lobby B (mirror of lobby A). Shaft about 6.7 sq m (assumed)."
+  },
+  {
+   "id": "lift_B2",
+   "name": "Lift B2",
+   "aliases": [
+    "lift area near Room 706"
+   ],
+   "type": "lift",
+   "position": [
+    29.2,
+    5.4
+   ],
+   "polygon": [
+    [
+     28.0,
+     4.0
+    ],
+    [
+     30.4,
+     4.0
+    ],
+    [
+     30.4,
+     6.8
+    ],
+    [
+     28.0,
+     6.8
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 38.2,
+   "front_point": [
+    29.2,
+    0.0
+   ],
+   "confidence": "guess",
+   "notes": "Two lifts side by side on the north wall of lobby B (mirror of lobby A). Shaft about 6.7 sq m (assumed)."
+  },
+  {
+   "id": "lift_B3",
+   "name": "Lift B3 (facing B1/B2)",
+   "aliases": [
+    "lift area near Room 706"
+   ],
+   "type": "lift",
+   "position": [
+    28.0,
+    -5.4
+   ],
+   "polygon": [
+    [
+     26.8,
+     -6.8
+    ],
+    [
+     29.2,
+     -6.8
+    ],
+    [
+     29.2,
+     -4.0
+    ],
+    [
+     26.8,
+     -4.0
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 37.0,
+   "front_point": [
+    28.0,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "Third lift in lobby B, on the opposite (south) wall facing B1 and B2 (user). Lobby A has no such lift. Shaft about 6.7 sq m (assumed)."
+  },
+  {
+   "id": "s_E706",
+   "name": "Stairs near Room 706 (beside lobby B)",
+   "aliases": [
+    "stairs near 706",
+    "stairs next to east lift area"
+   ],
+   "type": "stairs",
+   "position": [
+    22.0,
+    -3.75
+   ],
+   "polygon": [
+    [
+     20.0,
+     -6.0
+    ],
+    [
+     24.0,
+     -6.0
+    ],
+    [
+     24.0,
+     -1.5
+    ],
+    [
+     20.0,
+     -1.5
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 31.0,
+   "front_point": [
+    22.0,
+    0.0
+   ],
+   "confidence": "guess",
+   "notes": "Mirror of S1. Not photographed. Joined to the stairs in front of lobby B."
+  },
+  {
+   "id": "dept1",
+   "name": "Entrance to the Department of Computing Technologies",
+   "aliases": [
+    "Department entrance"
+   ],
+   "type": "entrance",
+   "position": [
+    20.0,
+    0.0
+   ],
+   "polygon": null,
+   "corridor": "passage",
+   "distance_m": 29.0,
+   "front_point": [
+    20.0,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "Main Department door, next to the old restrooms L and M (survey order)."
+  },
+  {
+   "id": "dept2",
+   "name": "Other Department entrance (near the new restroom)",
+   "aliases": [
+    "other entrance near new restroom"
+   ],
+   "type": "entrance",
+   "position": [
+    8.0,
+    0.0
+   ],
+   "polygon": null,
+   "corridor": "passage",
+   "distance_m": 17.0,
+   "front_point": [
+    8.0,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "Photos 1, 22. Next to the new restrooms."
+  },
+  {
+   "id": "lobbyA",
+   "name": "Lift lobby A",
+   "aliases": [
+    "main lift lobby",
+    "lift area near Room 703"
+   ],
+   "type": "lift_lobby",
+   "position": [
+    0.0,
+    0.0
+   ],
+   "polygon": [
+    [
+     -4,
+     -4
+    ],
+    [
+     4,
+     -4
+    ],
+    [
+     4,
+     4
+    ],
+    [
+     -4,
+     4
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 9.0,
+   "front_point": [
+    0.0,
+    0.0
+   ],
+   "confidence": "estimated",
+   "notes": "Origin of this plan."
+  },
+  {
+   "id": "lobbyB",
+   "name": "Lift lobby B",
+   "aliases": [
+    "lift area near Room 706"
+   ],
+   "type": "lift_lobby",
+   "position": [
+    28.0,
+    0.0
+   ],
+   "polygon": [
+    [
+     24,
+     -4
+    ],
+    [
+     32,
+     -4
+    ],
+    [
+     32,
+     4
+    ],
+    [
+     24,
+     4
+    ]
+   ],
+   "corridor": "passage",
+   "distance_m": 37.0,
+   "front_point": [
+    28.0,
+    0.0
+   ],
+   "confidence": "guess",
+   "notes": "Mirror of lobby A (user: both sides symmetrical)."
+  }
+ ],
+ "survey_spots": [
+  {
+   "order": 1,
+   "name": "Room 706A",
+   "place_id": "r706A",
+   "corridor": "east_spine",
+   "distance_m": 4.25,
+   "point": [
+    37.0,
+    -7.75
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 2,
+   "name": "Room 706",
+   "place_id": "r706",
+   "corridor": "east_spine",
+   "distance_m": 10.75,
+   "point": [
+    37.0,
+    -1.25
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 3,
+   "name": "Room 705",
+   "place_id": "r705",
+   "corridor": "east_spine",
+   "distance_m": 17.25,
+   "point": [
+    37.0,
+    5.25
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 4,
+   "name": "Restroom L",
+   "place_id": "rL",
+   "corridor": "east_back",
+   "distance_m": 3.2,
+   "point": [
+    33.8,
+    7.9
+   ],
+   "confidence": "guess"
+  },
+  {
+   "order": 5,
+   "name": "Restroom M",
+   "place_id": "rM",
+   "corridor": "east_back",
+   "distance_m": 15.0,
+   "point": [
+    22.0,
+    7.9
+   ],
+   "confidence": "guess"
+  },
+  {
+   "order": 6,
+   "name": "Department entrance",
+   "place_id": "dept1",
+   "corridor": "passage",
+   "distance_m": 29.0,
+   "point": [
+    20.0,
+    0.0
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 7,
+   "name": "Labs C/F",
+   "place_id": "labC",
+   "corridor": "passage",
+   "distance_m": 26.0,
+   "point": [
+    17.0,
+    0.0
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 8,
+   "name": "Labs D/E",
+   "place_id": "labD",
+   "corridor": "passage",
+   "distance_m": 20.0,
+   "point": [
+    11.0,
+    0.0
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 9,
+   "name": "Other Department entrance",
+   "place_id": "dept2",
+   "corridor": "passage",
+   "distance_m": 17.0,
+   "point": [
+    8.0,
+    0.0
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 10,
+   "name": "New restroom",
+   "place_id": "rNew",
+   "corridor": "west_back",
+   "distance_m": 3.2,
+   "point": [
+    -5.8,
+    7.9
+   ],
+   "confidence": "guess"
+  },
+  {
+   "order": 11,
+   "name": "Room 701",
+   "place_id": "r701",
+   "corridor": "west_spine",
+   "distance_m": 23.75,
+   "point": [
+    -9.0,
+    11.75
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 12,
+   "name": "Room 702",
+   "place_id": "r702",
+   "corridor": "west_spine",
+   "distance_m": 17.25,
+   "point": [
+    -9.0,
+    5.25
+   ],
+   "confidence": "guess"
+  },
+  {
+   "order": 13,
+   "name": "Room 703",
+   "place_id": "r703",
+   "corridor": "west_spine",
+   "distance_m": 10.75,
+   "point": [
+    -9.0,
+    -1.25
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 14,
+   "name": "Room 703A",
+   "place_id": "r703A",
+   "corridor": "west_spine",
+   "distance_m": 4.25,
+   "point": [
+    -9.0,
+    -7.75
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 15,
+   "name": "Lift/stairs area near 703 (west)",
+   "place_id": "lobbyA",
+   "corridor": "passage",
+   "distance_m": 9.0,
+   "point": [
+    0.0,
+    0.0
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 16,
+   "name": "Stairs near 701",
+   "place_id": "s_w701",
+   "corridor": "west_spine",
+   "distance_m": 27.0,
+   "point": [
+    -9.0,
+    15.0
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 17,
+   "name": "Lift lobby B near 706",
+   "place_id": "lobbyB",
+   "corridor": "passage",
+   "distance_m": 37.0,
+   "point": [
+    28.0,
+    0.0
+   ],
+   "confidence": "guess"
+  },
+  {
+   "order": 18,
+   "name": "Stairs near 706",
+   "place_id": "s_E706",
+   "corridor": "passage",
+   "distance_m": 31.0,
+   "point": [
+    22.0,
+    0.0
+   ],
+   "confidence": "guess"
+  },
+  {
+   "order": 19,
+   "name": "Room 704 (TP704)",
+   "place_id": "r704",
+   "corridor": "east_spine",
+   "distance_m": 23.75,
+   "point": [
+    37.0,
+    11.75
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 20,
+   "name": "Lift in front of 706A",
+   "place_id": "lift_B4",
+   "corridor": "east_spine",
+   "distance_m": 3.7,
+   "point": [
+    37.0,
+    -8.3
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 21,
+   "name": "Lift B3 (facing B1/B2)",
+   "place_id": "lift_B3",
+   "corridor": "passage",
+   "distance_m": 37.0,
+   "point": [
+    28.0,
+    0.0
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 22,
+   "name": "Lift in front of 703A",
+   "place_id": "lift_A3",
+   "corridor": "west_spine",
+   "distance_m": 3.7,
+   "point": [
+    -9.0,
+    -8.3
+   ],
+   "confidence": "estimated"
+  },
+  {
+   "order": 23,
+   "name": "Stairs after 704",
+   "place_id": "s_E704",
+   "corridor": "east_spine",
+   "distance_m": 27.0,
+   "point": [
+    37.0,
+    15.0
+   ],
+   "confidence": "estimated"
+  }
+ ]
+}

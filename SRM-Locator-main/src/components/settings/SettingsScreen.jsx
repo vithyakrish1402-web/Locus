@@ -37,11 +37,12 @@ const THEME_ICONS = { system: Smartphone, light: Sun, dark: Moon };
  *   mapStatus: { engine: 'google'|'backup', reason: string },
  *   arFeatureOverrides: Record<string, string>, onArFeatureOverride: (feature: string, value: string) => void,
  *   update: { installedVersion: string|null, supported: boolean, status: string, onCheck: () => void },
- *   onOpenGuide: () => void }} props
+ *   onOpenGuide: () => void, developerSlot?: React.ReactNode }} props
  */
 export default function SettingsScreen({
   onClose, polling, onPolling, arFidelity, onArFidelity, alertSounds, onAlertSounds,
   isSatellite, onSatellite, mapStatus, arFeatureOverrides, onArFeatureOverride, update, onOpenGuide,
+  developerSlot = null, // the Developer mode row: given to admin accounts in the test build only
 }) {
   const titleId = useId();
   const headingRef = useRef(null);
@@ -196,6 +197,8 @@ export default function SettingsScreen({
             />
           </Card>
         </section>
+
+        {developerSlot}
 
         {/* 7. Collapsible Advanced & Sharing Controls */}
         <section className="mb-6">
