@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import floor7Aps from '../src/data/floor7Aps.json';
 import Floor7DebugOverlay, { Floor7DebugView } from '../src/components/Floor7DebugOverlay.jsx';
@@ -182,20 +182,25 @@ describe('every access point can be reviewed by eye', () => {
   });
 });
 
-describe('the overlay panel', () => {
-  it('is closed until the owner opens it, then lists every access point with what to check', () => {
-    render(<Floor7DebugOverlay />);
-    expect(screen.queryByTestId('floor7-debug')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /F7 debug/ }));
+describe('the plan panel on the main map (Developer mode > Floor 7 map overlay)', () => {
+  it('has no pill of its own and none of the access point wall: just the plan, a sentence and a way to hide it', () => {
+    const onClose = vi.fn();
+    render(<Floor7DebugOverlay onClose={onClose} />);
     expect(screen.getByTestId('floor7-debug')).toBeTruthy();
-    expect(screen.getByTestId('floor7-radio-count').textContent).toBe('38 access points');
-    const items = screen.getByTestId('floor7-radio-list').querySelectorAll('li');
-    expect(items).toHaveLength(38);
-    const guess = floor7Aps.radios.find((r) => r.guess.length);
-    const item = [...items].find((li) => li.textContent.startsWith(radioLabel(guess.radio)));
-    expect(item.textContent).toContain('rests on a guess');
-    expect(screen.getByText(/scale ESTIMATED/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /F7 hide/ }));
-    expect(screen.queryByTestId('floor7-debug')).toBeNull();
+    expect(screen.queryByRole('button', { name: /F7/ })).toBeNull();
+    expect(screen.queryByTestId('floor7-radio-list')).toBeNull();
+    expect(screen.getByTestId('floor7-debug').querySelectorAll('rect')).toHaveLength(0);
+    expect(screen.getByText('No Floor 7 reading yet.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the plan' }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('can leave the access points out of the plan, and ring the next door', () => {
+    const { container } = render(<Floor7DebugView showRadios={false} target={{ x: -9, y: 11.75 }} />);
+    expect(container.querySelectorAll('rect')).toHaveLength(0);
+    expect(container.querySelector('[data-dot="target"]')).toBeTruthy();
+    const withAps = render(<Floor7DebugView />);
+    expect(withAps.container.querySelectorAll('rect')).toHaveLength(floor7Aps.radios.length);
+    expect(withAps.container.querySelector('[data-dot="target"]')).toBeNull();
   });
 });

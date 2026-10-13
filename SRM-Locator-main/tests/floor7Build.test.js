@@ -14,11 +14,11 @@ import { build } from 'vite';
 //   reacquiring      the position filter's status
 //   floor7-debug     the alignment overlay
 //   Junction: lab   a station name inside the Floor 7 plan data (floor7-inputs/floor7_plan.json)
-//   floor7-recorder, recovered_after_app_closed, Nothing is stored until you press Start
-//                    the walk recorder (its panel, its recovery event, its Start line)
+//   recovered_after_app_closed, locus.developerMode, Developer mode on, Floor 7 walk test, Stop and see results
+//                    the walk recorder and Developer mode (its recovery event, its storage key, the badge, the card, the Stop screen)
 const MARKERS = [
   'wifi_aps', 'floor7-aps-v2', 'reacquiring', 'floor7-debug', 'Junction: lab passage / east spine',
-  'floor7-recorder', 'recovered_after_app_closed', 'Nothing is stored until you press Start',
+  'recovered_after_app_closed', 'locus.developerMode', 'Developer mode on', 'Floor 7 walk test', 'Stop and see results',
 ];
 
 // The survey CSVs, name table and notes live in floor7-inputs/, outside src/ and public/, so
