@@ -9,12 +9,12 @@
 
 import { buildAnchors, guessReasons, radioOf } from './floor7Anchors.mjs';
 
-/** Scan id -> { scan, file, phone, part, session, place, x, y, readings:[{bssid, rssi}] }. */
+/** Scan id -> { scan, file, point, time, phone, part, session, place, x, y, readings:[{bssid, rssi}] }. */
 export function scansOf(placed) {
   const scans = new Map();
   for (const r of placed) {
     if (!scans.has(r.scan)) {
-      scans.set(r.scan, { scan: r.scan, file: r.file, point: r.point, phone: r.phone, part: r.part, session: r.session, place: r.place, x: r.x, y: r.y, readings: [] });
+      scans.set(r.scan, { scan: r.scan, file: r.file, point: r.point, time: r.time, phone: r.phone, part: r.part, session: r.session, place: r.place, x: r.x, y: r.y, readings: [] });
     }
     scans.get(r.scan).readings.push({ bssid: r.bssid, rssi: r.rssi });
   }
@@ -31,17 +31,18 @@ export function scansOf(placed) {
  *   the estimate in plan metres (real metres, after PLAN_SCALE), or null for none
  * @param {object} options.plan floor7Plan (snapToCorridor, walkingDistance)
  * @param {number} options.scale PLAN_SCALE
+ * @param {object} [options.anchorOptions] more for buildAnchors: `midpoint`, `minBestDbm`
  * @param {object} [options.planDoc] and `mapping`: to mark anchors that rest on a guess
  * @returns {object[]} one row per test scan
  */
-export function evaluate({ tests, campus, trainFor, estimate, plan, scale, planDoc = null, mapping = null }) {
+export function evaluate({ tests, campus, trainFor, estimate, plan, scale, planDoc = null, mapping = null, anchorOptions = {} }) {
   const guessOf = new Map();
   const isGuess = (place) => {
     if (!guessOf.has(place)) guessOf.set(place, planDoc ? guessReasons(place, planDoc, mapping).length > 0 : false);
     return guessOf.get(place);
   };
   return tests.map((scan) => {
-    const radios = buildAnchors(campus, { use: trainFor(scan), planDoc, mapping });
+    const radios = buildAnchors(campus, { ...anchorOptions, use: trainFor(scan), planDoc, mapping });
     const est = estimate(scan, radios);
     const truth = { x: scan.x * scale, y: scan.y * scale };
     const heard = new Set(scan.readings.map((r) => radioOf(r.bssid)));
@@ -112,4 +113,58 @@ export function blindGuessWalk(scans, plan, scale) {
   const d = [];
   for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) d.push(plan.walkingDistance(pts[i], pts[j]));
   return { spots: pts.length, mean: mean(d), median: median(d) };
+}
+
+/**
+ * Replays scans in the order they were taken, as a walk: each estimate goes through the
+ * position filter, and the filtered position is judged against where the scan really was.
+ *
+ * @param {object[]} rows evaluate() rows for the scans, with `est` ({x, y, confidence}|null)
+ * @param {Map} scans scan id -> scan record (see scansOf), for the time and the true spot
+ * @param {object} options
+ * @param {object} options.plan floor7Plan
+ * @param {number} options.scale PLAN_SCALE
+ * @param {() => object} options.makeFilter a fresh position filter
+ * @returns {object[]} one row per scan, in time order: { scan, place, time, gapS, truthStep,
+ *   raw (walk error of the snapped raw estimate, or null), filtered (walk error of the filter's
+ *   position), status ('no estimate' when there was none) }
+ */
+export function walkReplay({ rows, scans, plan, scale, makeFilter }) {
+  const filter = makeFilter();
+  const ordered = [...rows].sort((a, b) => scans.get(a.scan).time - scans.get(b.scan).time);
+  let prev = null;
+  return ordered.map((row) => {
+    const scan = scans.get(row.scan);
+    const truth = { x: scan.x * scale, y: scan.y * scale };
+    const status = row.est ? filter.update({ x: row.est.x, y: row.est.y, confidence: row.est.confidence }, scan.time) : 'no estimate';
+    const held = filter.position;
+    const out = {
+      scan: row.scan, place: row.place, time: scan.time,
+      gapS: prev ? (scan.time - prev.time) / 1000 : null,
+      truthStep: prev ? plan.walkingDistance(prev.truth, truth) : null,
+      raw: row.walk,
+      filtered: held ? plan.walkingDistance(held, truth) : null,
+      status,
+    };
+    prev = { time: scan.time, truth };
+    return out;
+  });
+}
+
+/** Summary of a walk replay: raw against filtered over the scans that have both. */
+export function compareWalk(walk) {
+  const both = walk.filter((w) => w.raw !== null && w.filtered !== null);
+  const raw = both.map((w) => w.raw);
+  const filtered = both.map((w) => w.filtered);
+  return {
+    scans: walk.length,
+    compared: both.length,
+    rejected: walk.filter((w) => w.status === 'rejected').length,
+    reacquired: walk.filter((w) => w.status === 'reacquiring').length,
+    noEstimate: walk.filter((w) => w.status === 'no estimate').length,
+    raw: both.length ? { median: median(raw), mean: mean(raw), p90: percentile(raw, 90), max: Math.max(...raw) } : null,
+    filtered: both.length ? { median: median(filtered), mean: mean(filtered), p90: percentile(filtered, 90), max: Math.max(...filtered) } : null,
+    better: both.filter((w) => w.filtered < w.raw - 0.5).length,
+    worse: both.filter((w) => w.filtered > w.raw + 0.5).length,
+  };
 }

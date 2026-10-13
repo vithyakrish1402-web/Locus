@@ -17,7 +17,9 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assignSessions, buildAnchors, campusOnly, placeReadings, readMapping, readSurvey, shortScan } from './lib/floor7Anchors.mjs';
+import { MIN_ANCHOR_BEST_DBM, assignSessions, buildAnchors, campusOnly, placeReadings, readMapping, readSurvey, shortScan } from './lib/floor7Anchors.mjs';
+
+import { walkingMidpoint } from './lib/floor7DrawnPlan.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const INPUTS = join(root, 'floor7-inputs');
@@ -39,7 +41,9 @@ const overrides = existsSync(OVERRIDES) ? JSON.parse(readFileSync(OVERRIDES, 'ut
 const raw = assignSessions(files.flatMap((f) => readSurvey(readFileSync(f, 'utf8'), basename(f))));
 const { placed, dropped, held } = placeReadings(raw, mapping);
 const campus = campusOnly(placed);
-const radios = buildAnchors(campus, { overrides, planDoc, mapping });
+// Positions in the file are plan metres as drawn, so the walk is measured at scale 1.
+const midpoint = walkingMidpoint(planDoc);
+const radios = buildAnchors(campus, { overrides, planDoc, mapping, midpoint });
 
 const doc = {
   kind: 'floor7-aps-v2',
@@ -50,8 +54,10 @@ const doc = {
 };
 writeFileSync(OUT, `${JSON.stringify(doc, null, 1)}\n`);
 
+const leftOut = buildAnchors(campus, { overrides, planDoc, mapping, midpoint, minBestDbm: -Infinity }).length - radios.length;
 const count = (pred) => radios.filter(pred).length;
 console.log(`${raw.length} readings in ${files.length} files, ${placed.length} placed, ${campus.length} campus, ${radios.length} radios, ${radios.reduce((n, r) => n + r.bssids.length, 0)} BSSIDs`);
 console.log(`scans used: ${doc.scans.used}; dropped: ${doc.scans.dropped.join(', ') || 'none'}; held back: ${doc.scans.held.join(', ') || 'none'}`);
 console.log(`placed: ${count((r) => r.basis === 'best')} at their best spot, ${count((r) => r.basis === 'tie')} between two spots, ${count((r) => r.basis === 'override')} by hand`);
+console.log(`radios left out for never being heard stronger than ${MIN_ANCHOR_BEST_DBM} dBm: ${leftOut}`);
 console.log(`${count((r) => r.single_spot)} heard at one spot only; ${count((r) => r.guess.length > 0)} rest on a guessed spot`);

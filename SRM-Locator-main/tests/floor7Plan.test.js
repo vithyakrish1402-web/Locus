@@ -225,6 +225,63 @@ describe('walkingDistance', () => {
   });
 });
 
+describe('route and pointAlongWalk', () => {
+  const lengthOf = (pts) => pts.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - pts[i].x, p.y - pts[i].y), 0);
+
+  it('gives the shortest walk as a polyline from the snapped start to the snapped end, as long as walkingDistance says', () => {
+    const a = xy(place('rW'));
+    const b = xy(spot('dept2'));
+    const r = plan.route(a, b);
+    near(r.distance, plan.walkingDistance(a, b));
+    near(lengthOf(r.points), r.distance);
+    expect(r.points[0]).toEqual({ x: 6, y: 7.9 });
+    expect(r.points.at(-1)).toEqual({ x: 8, y: 0 });
+    // out along the back path, down the spine by way of its two junctions, then along the
+    // passage: the corners in that order, with the stations on the way between them
+    const names = r.points.map((p) => `${p.x},${p.y}`);
+    expect(new Set(names).size).toBe(names.length); // no point twice
+    const corners = ['6,7.9', '-9,7.9', '-9,0', '8,0'].map((c) => names.indexOf(c));
+    expect(corners).not.toContain(-1);
+    expect([...corners].sort((x, y) => x - y)).toEqual(corners);
+    expect(names.slice(corners[2]).every((n) => n.endsWith(',0'))).toBe(true);
+  });
+
+  it('is the straight stretch between two points on one corridor', () => {
+    const r = plan.route({ x: 12, y: 0 }, { x: 15, y: 0 });
+    near(r.distance, 3);
+    expect(r.points).toEqual([{ x: 12, y: 0 }, { x: 15, y: 0 }]);
+  });
+
+  it('puts the walking midpoint ON a corridor even when the straight-line midpoint is not', () => {
+    // Room 706A (east spine) and the stairs beside lobby B (passage): 7.75 + 15 = 22.75 m apart on foot.
+    const a = xy(spot('r706A'));
+    const b = xy(spot('s_E706'));
+    const walkMid = plan.pointAlongWalk(a, b, 0.5);
+    near(walkMid.x, 37 - 11.375 + 7.75, 6); // up the spine 7.75 m, then 3.625 m west along the passage
+    near(walkMid.x, 33.375);
+    near(walkMid.y, 0);
+    expect(plan.snapToCorridor(walkMid.x, walkMid.y).distanceMoved).toBeLessThan(1e-9);
+    const straightMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    expect(plan.snapToCorridor(straightMid.x, straightMid.y).distanceMoved).toBeGreaterThan(3);
+  });
+
+  it('is the plain midpoint on one straight corridor, and the ends at 0 and 1', () => {
+    const a = xy(spot('r701'));
+    const b = xy(spot('r703A'));
+    near(plan.pointAlongWalk(a, b, 0.5).y, (11.75 + -7.75) / 2);
+    expect(plan.pointAlongWalk(a, b, 0)).toEqual(a);
+    near(plan.pointAlongWalk(a, b, 1).y, -7.75);
+    expect(plan.pointAlongWalk(a, b, -5)).toEqual(a); // clamped
+    near(plan.pointAlongWalk(a, b, 7).y, -7.75);
+  });
+
+  it('follows the route round a corner: a quarter of the way along the new ladies restroom to the Department door', () => {
+    const p = plan.pointAlongWalk(xy(place('rW')), xy(spot('dept2')), 0.25); // 39.9 m: 9.975 m in = still on the back path
+    near(p.y, 7.9);
+    near(p.x, 6 - 9.975);
+  });
+});
+
 describe('PLAN_SCALE', () => {
   const doubled = buildPlan(planDoc, 2);
 
