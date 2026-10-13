@@ -54,7 +54,7 @@ export default function SegmentedControl({ label, value, onChange, options, clas
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(option.value)}
             onKeyDown={(event) => onKeyDown(event, index)}
-            className={`relative flex-1 min-h-[var(--size-touch)] px-3 rounded-full text-label focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent select-none cursor-pointer transition-colors duration-200 ${
+            className={`relative flex-1 min-h-[var(--size-touch)] px-3 rounded-full text-label focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent select-none cursor-pointer duration-200 ${
               selected ? 'text-text font-semibold' : 'text-text-secondary hover:text-text'
             }`}
             data-no-press

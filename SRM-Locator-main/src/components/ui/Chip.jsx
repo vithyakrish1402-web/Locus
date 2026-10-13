@@ -15,7 +15,7 @@ const CHIP_TONES = {
 export default function Chip({ tone = 'accent', icon: Icon = null, className = '', children, ...props }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 min-h-8 px-3.5 rounded-full font-ui text-secondary font-semibold transition-all ${CHIP_TONES[tone]} ${className}`}
+      className={`inline-flex items-center gap-1.5 min-h-8 px-3.5 rounded-full font-ui text-secondary font-semibold transition-[transform,opacity] ${CHIP_TONES[tone]} ${className}`}
       {...props}
     >
       {Icon && <Icon size={15} aria-hidden="true" />}

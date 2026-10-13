@@ -51,7 +51,7 @@ export default function CampusBuildingImage({
           decoding="async"
           onLoad={() => setLoaded(true)}
           onError={handleError}
-          className={`w-full h-full object-cover transition-all duration-300 ${
+          className={`w-full h-full object-cover transition-[transform,opacity] duration-300 ${
             loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
           } ${className}`}
         />

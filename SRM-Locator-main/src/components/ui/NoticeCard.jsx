@@ -29,7 +29,7 @@ export default function NoticeCard({ tone = 'info', title, children, icon, onDis
   return (
     <div
       role={role}
-      className={`backdrop-blur-2xl bg-[var(--glass-bg)] border border-[var(--glass-border)] text-text font-ui rounded-[20px] p-4 transition-all duration-200 ${className}`}
+      className={`backdrop-blur-2xl bg-[var(--glass-bg)] border border-[var(--glass-border)] text-text font-ui rounded-[20px] p-4 transition-[transform,opacity] duration-200 ${className}`}
       style={{
         boxShadow: 'var(--glass-shadow), var(--glass-specular)',
         ...props.style,

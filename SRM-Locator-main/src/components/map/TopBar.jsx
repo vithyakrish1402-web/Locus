@@ -15,7 +15,7 @@ export function TopBar({ isSatellite, onSignOut, onSettings, isAdmin = false, on
     <nav
       aria-label="Top bar"
       data-testid="top-bar"
-      className="absolute left-3 z-[1000] flex items-center gap-2 rounded-full glass-floating text-text font-ui px-2.5 py-1.5 pointer-events-auto transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[var(--glass-border)]"
+      className="absolute left-3 z-[1000] flex items-center gap-2 rounded-full glass-floating text-text font-ui px-2.5 py-1.5 pointer-events-auto transition-[transform,opacity] duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[var(--glass-border)]"
       style={{ top: TOP_BAR_TOP, minHeight: '44px' }}
     >
       <div className="flex items-center gap-2 pl-0.5 pr-1.5 select-none">
@@ -32,7 +32,7 @@ export function TopBar({ isSatellite, onSignOut, onSettings, isAdmin = false, on
             icon={ShieldAlert}
             size={16}
             onClick={onAdmin}
-            className="!min-w-[32px] !min-h-[32px] text-text-secondary hover:text-text hover:bg-black/5 dark:hover:bg-white/10"
+            className="!min-w-[44px] !min-h-[44px] text-text-secondary hover:text-text hover:bg-sunken"
           />
         )}
         <IconButton
@@ -40,14 +40,14 @@ export function TopBar({ isSatellite, onSignOut, onSettings, isAdmin = false, on
           icon={Sliders}
           size={16}
           onClick={onSettings}
-          className="!min-w-[32px] !min-h-[32px] text-text-secondary hover:text-text hover:bg-black/5 dark:hover:bg-white/10"
+          className="!min-w-[44px] !min-h-[44px] text-text-secondary hover:text-text hover:bg-sunken"
         />
         <IconButton
           label={TOP_BAR.signOut}
           icon={LogOut}
           size={16}
           onClick={onSignOut}
-          className="!min-w-[32px] !min-h-[32px] text-text-secondary hover:text-text hover:bg-black/5 dark:hover:bg-white/10"
+          className="!min-w-[44px] !min-h-[44px] text-text-secondary hover:text-text hover:bg-sunken"
         />
       </div>
     </nav>
@@ -105,7 +105,7 @@ export function SharingChip({ mode, waiting = false, pausedNoSpot = false }) {
             ? { duration: 0 }
             : { type: 'spring', stiffness: 380, damping: 30 }
         }
-        className={`group relative inline-flex items-center gap-2.5 min-h-11 rounded-[1.375rem] glass-pill font-ui shadow-sm transition-colors duration-200 cursor-pointer select-none ${
+        className={`group relative inline-flex items-center gap-2.5 min-h-11 rounded-[1.375rem] glass-pill font-ui shadow-sm duration-200 cursor-pointer select-none ${
           collapsed ? 'px-3.5 py-2.5' : 'px-4 py-2'
         }`}
       >

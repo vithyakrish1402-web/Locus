@@ -24,7 +24,7 @@ const BuildingMarker = ({ onClick, highlighted = false }) => (
       />
     )}
     <div
-      className={`rounded-full border-[3px] border-[var(--color-map-casing)] shadow-[var(--shadow-1)] group-hover:scale-125 transition-all duration-200 ease-out ${
+      className={`rounded-full border-[3px] border-[var(--color-map-casing)] shadow-[var(--shadow-1)] group-hover:scale-125 transition-[transform,opacity] duration-200 ease-out ${
         highlighted ? 'w-[18px] h-[18px] bg-accent scale-110 shadow-[0_0_12px_var(--color-accent-halo)]' : 'w-3.5 h-3.5 bg-[var(--color-map-building)]'
       }`}
     />

@@ -103,6 +103,8 @@ const openSettings = () => {
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
   fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
 };
+// The per-part overrides sit behind the folded "More".
+const openMore = () => fireEvent.click(within(screen.getByTestId('settings')).getByRole('button', { name: SETTINGS.more }));
 const group = (name) => within(screen.getByRole('radiogroup', { name }));
 const choice = (groupName, label) => group(groupName).getByRole('radio', { name: label });
 const chosen = (groupName) => group(groupName).getAllByRole('radio').filter((r) => r.getAttribute('aria-checked') === 'true').map((r) => r.textContent);
@@ -147,6 +149,7 @@ describe('AR Scan parts', () => {
 
   it('sit after AR Scan quality, one row per part, each with only its own options', () => {
     openSettings();
+    openMore();
     const quality = screen.getByRole('radiogroup', { name: Q });
     const parts = screen.getByText(SETTINGS.arParts);
     expect(quality.compareDocumentPosition(parts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -157,11 +160,13 @@ describe('AR Scan parts', () => {
 
   it('start with every part on Auto', () => {
     openSettings();
+    openMore();
     for (const part of ['tags', 'roadLine', 'arrow']) expect(chosen(PART[part])).toEqual([PO.auto]);
   });
 
   it('set one part at a time, leaving the others and the main dial alone', () => {
     openSettings();
+    openMore();
     fireEvent.click(choice(PART.roadLine, PO.off));
     expect(chosen(PART.roadLine)).toEqual([PO.off]);
     expect(chosen(PART.tags)).toEqual([PO.auto]);
@@ -179,6 +184,7 @@ describe('AR Scan parts', () => {
 
   it('reach AR Scan: an arrow override beats the main dial', async () => {
     openSettings();
+    openMore();
     fireEvent.click(choice(Q, QO.realistic));
     fireEvent.click(choice(PART.arrow, PO.efficient));
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Scan' }));

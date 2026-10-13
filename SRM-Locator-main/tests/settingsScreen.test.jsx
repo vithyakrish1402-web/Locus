@@ -110,6 +110,8 @@ const openSettings = () => {
   fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
   return screen.getByTestId('settings');
 };
+// "More" starts folded; the old settings it keeps are behind it.
+const expandMore = (settings) => fireEvent.click(within(settings).getByRole('button', { name: SETTINGS.more }));
 const radio = (group, name) => within(screen.getByRole('radiogroup', { name: group })).getByRole('radio', { name });
 const alertSounds = () => screen.getByRole('switch', { name: new RegExp(`^${SETTINGS.alertSounds}`) });
 
@@ -146,7 +148,7 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByTestId('settings')).toBeNull());
   });
 
-  it('has the design order: Appearance, refresh rate, AR Scan quality, Notifications, About, then More', () => {
+  it('has the design order: Appearance, refresh rate, AR Scan quality, Notifications, About, then More (folded)', () => {
     const settings = openSettings();
     const order = [SETTINGS.appearance, SETTINGS.refresh, SETTINGS.arQuality, SETTINGS.notifications, SETTINGS.about, SETTINGS.more]
       .map((label) => within(settings).getAllByText(label)[0]);
@@ -182,10 +184,11 @@ describe('Settings', () => {
     expect(log).toHaveBeenCalledWith('[SYS_CONFIG] Telemetry polling initialized at 1000ms');
   });
 
-  it('keeps every old setting under More: map view, the map status line, AR Scan parts and Send LOCUS', () => {
+  it('keeps every old setting: map view and its status line, and under More (folded at first) AR Scan parts and Send LOCUS', () => {
     const settings = openSettings();
-    expect(screen.getByRole('radiogroup', { name: SETTINGS.mapView })).toBeTruthy();
+    expect(screen.getByRole('radiogroup', { name: SETTINGS.mapView })).toBeTruthy(); // the map view has its own section
     expect(screen.getByTestId('map-engine-status')).toBeTruthy();
+    expandMore(settings);
     for (const part of Object.values(SETTINGS.arPartNames)) expect(screen.getByRole('radiogroup', { name: part })).toBeTruthy();
     expect(within(settings).getByTestId('send-app')).toBeTruthy();
   });

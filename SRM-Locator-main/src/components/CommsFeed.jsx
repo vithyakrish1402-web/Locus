@@ -109,7 +109,7 @@ function Notice({ item, reduceMotion, coveredBy }) {
       <div className="flex items-start gap-3 py-2.5 pl-3.5 pr-2 min-h-[52px]">
         {/* Subtle, restrained icon disc */}
         <span
-          className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 mt-0.5 ${look.disc} transition-colors`}
+          className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 mt-0.5 ${look.disc}`}
           aria-hidden="true"
         >
           <Icon size={16} strokeWidth={2.2} />
@@ -158,7 +158,7 @@ function Notice({ item, reduceMotion, coveredBy }) {
             icon={X}
             size={15}
             onClick={() => dismiss(item.id)}
-            className="!min-w-[36px] !min-h-[36px] text-text-secondary/70 hover:text-text hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all"
+            className="!min-w-[44px] !min-h-[44px] text-text-secondary/70 hover:text-text hover:bg-sunken"
           />
         </div>
       </div>

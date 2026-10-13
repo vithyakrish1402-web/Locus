@@ -2421,7 +2421,7 @@ const App = () => {
                     key={cat.id}
                     type="button"
                     onClick={() => setBuildingCategoryFilter(cat.id)}
-                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium font-ui transition-all duration-150 flex items-center gap-1.5 cursor-pointer border ${
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium font-ui transition-[transform,opacity] duration-150 flex items-center gap-1.5 cursor-pointer border ${
                       isSelected
                         ? 'bg-accent text-accent-on border-accent shadow-sm'
                         : 'glass-pill text-text-secondary hover:text-text'
@@ -2540,7 +2540,7 @@ const App = () => {
                     key={`ghost-row-${ghost.id}`}
                     data-testid="lost-member-row"
                     onClick={() => handleFocus(ghost.position, null)}
-                    className="flex items-center gap-3 p-3 rounded-2xl glass-panel font-ui text-text cursor-pointer hover:bg-surface/90 transition-all duration-150"
+                    className="flex items-center gap-3 p-3 rounded-2xl glass-panel font-ui text-text cursor-pointer hover:bg-surface/90 transition-[transform,opacity] duration-150"
                   >
                     <Avatar name={ghost.name || '?'} dashed className="opacity-70" />
                     <div className="flex-1 min-w-0">
@@ -2951,37 +2951,37 @@ const App = () => {
         onClose={() => setShowTelemetryModal(false)}
       />
 
-      {/* --- SETTINGS (components/settings/SettingsScreen.jsx) --- */}
+      {/* --- SETTINGS (components/settings/SettingsScreen.jsx) ---
+          The outer layer is opaque and above the bars from its first frame to its last; only
+          the screen inside it fades. A fading element is its own stacking context, so when the
+          fade sat on an unlayered wrapper, Settings' z-index counted only inside it and the top
+          and bottom bars drew over Settings until the fade finished. */}
       <AnimatePresence>
         {showSettingsModal && (
-          <motion.div
-            key="settings"
-            initial={{ opacity: 0, scale: 0.98, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.98, y: 12 }}
-            transition={reduceMotion ? { duration: 0.15 } : { type: 'spring', stiffness: 420, damping: 36, mass: 0.8 }}
-          >
-            <SettingsScreen
-              onClose={() => setShowSettingsModal(false)}
-              polling={sysConfig.polling}
-              onPolling={(v) => toggleConfig('polling', v)}
-              arFidelity={sysConfig.arFidelity}
-              onArFidelity={(v) => toggleConfig('arFidelity', v)}
-              alertSounds={sysConfig.audio}
-              onAlertSounds={(on) => toggleConfig('audio', on)}
-              isSatellite={isSatellite}
-              onSatellite={setIsSatellite}
-              mapStatus={mapStatus}
-              arFeatureOverrides={sysConfig.arFeatureOverrides}
-              onArFeatureOverride={(feature, v) => toggleConfig(`arFeatureOverrides.${feature}`, v)}
-              update={{
-                installedVersion: appUpdate.installedVersion,
-                supported: appUpdate.supported,
-                status: appUpdate.status,
-                onCheck: () => appUpdate.check({ manual: true }),
-              }}
-              onOpenGuide={() => setGuideOpen(true)}
-            />
+          <motion.div key="settings" data-testid="settings-layer" className="fixed inset-0 bg-bg" style={{ zIndex: SETTINGS_Z }}>
+            <motion.div {...fade()}>
+              <SettingsScreen
+                onClose={() => setShowSettingsModal(false)}
+                polling={sysConfig.polling}
+                onPolling={(v) => toggleConfig('polling', v)}
+                arFidelity={sysConfig.arFidelity}
+                onArFidelity={(v) => toggleConfig('arFidelity', v)}
+                alertSounds={sysConfig.audio}
+                onAlertSounds={(on) => toggleConfig('audio', on)}
+                isSatellite={isSatellite}
+                onSatellite={setIsSatellite}
+                mapStatus={mapStatus}
+                arFeatureOverrides={sysConfig.arFeatureOverrides}
+                onArFeatureOverride={(feature, v) => toggleConfig(`arFeatureOverrides.${feature}`, v)}
+                update={{
+                  installedVersion: appUpdate.installedVersion,
+                  supported: appUpdate.supported,
+                  status: appUpdate.status,
+                  onCheck: () => appUpdate.check({ manual: true }),
+                }}
+                onOpenGuide={() => setGuideOpen(true)}
+              />
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
