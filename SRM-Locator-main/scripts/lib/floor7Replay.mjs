@@ -162,6 +162,8 @@ export function compareWalk(walk) {
     rejected: walk.filter((w) => w.status === 'rejected').length,
     reacquired: walk.filter((w) => w.status === 'reacquiring').length,
     noEstimate: walk.filter((w) => w.status === 'no estimate').length,
+    // scans that had an estimate but showed no position: a start still waiting to be confirmed
+    notShown: walk.filter((w) => w.raw !== null && w.filtered === null).length,
     raw: both.length ? { median: median(raw), mean: mean(raw), p90: percentile(raw, 90), max: Math.max(...raw) } : null,
     filtered: both.length ? { median: median(filtered), mean: mean(filtered), p90: percentile(filtered, 90), max: Math.max(...filtered) } : null,
     better: both.filter((w) => w.filtered < w.raw - 0.5).length,

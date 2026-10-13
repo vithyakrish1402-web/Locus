@@ -35,6 +35,8 @@ export const floor7Spots = floor7Plan.spots;
 /** floor7Aps.json -> the table wifiPositioning.js expects (see floor7ApTable.js). */
 export const floor7AccessPointTable = (doc = floor7Aps, scale = PLAN_SCALE) => accessPointTable(doc.radios, scale);
 
+const round2 = (v) => Math.round(v * 100) / 100;
+
 /** Filter uncertainty -> 0..1 for the existing confidence halo (smaller circle = more sure). */
 export const confidenceFromUncertainty = (uncertaintyM) =>
   Math.max(0, Math.min(1, 1 - uncertaintyM / HALO_FULL_UNCERTAINTY_M));
@@ -44,9 +46,12 @@ export const confidenceFromUncertainty = (uncertaintyM) =>
 let trail = [];
 const listeners = new Set();
 
+/** Prefixes the one console line per estimate that scripts/floor7-phone-walk.mjs reads from adb logcat. */
+export const FIX_LOG_MARKER = '[F7]';
+
 /**
- * What the overlay draws: newest last. Each: { at, raw:{x,y}, snapped:{x,y}, filtered:{x,y},
- * status, uncertaintyM }. `snapped` is the raw estimate moved onto the nearest corridor
+ * What the overlay draws: newest last. Each: { at, raw:{x,y}, snapped:{x,y}, filtered:{x,y}|null,
+ * status, uncertaintyM }. `filtered` is null while the filter is still confirming a start. `snapped` is the raw estimate moved onto the nearest corridor
  * centreline: shown for checking, the filter does not use it yet.
  */
 export const getTrail = () => trail;
@@ -70,7 +75,9 @@ export function createFloor7Tracker({ staleMs = WIFI_ESTIMATE_MAX_AGE_MS } = {})
      * A Floor 7 estimate with its position replaced by the filtered one. The confidence is
      * rebuilt from the filter's uncertainty (so the halo shows how sure the filter is) and is
      * never below the WiFi threshold: while the filter holds a Floor 7 position, GPS cannot
-     * take over from it indoors. Anything that is not a Floor 7 estimate is returned as is.
+     * take over from it indoors. While the filter has no confirmed position yet (a start
+     * waiting for a second estimate) the estimate carries no position and confidence 0.
+     * Anything that is not a Floor 7 estimate is returned as is.
      */
     apply(estimate, atMs) {
       if (estimate?.building !== DEMO_BUILDING || estimate.floor !== DEMO_FLOOR) return estimate;
@@ -82,6 +89,17 @@ export function createFloor7Tracker({ staleMs = WIFI_ESTIMATE_MAX_AGE_MS } = {})
       const uncertaintyM = filter.uncertaintyM;
       trail = [...trail, { at: atMs, raw, snapped, filtered, status, uncertaintyM }].slice(-TRAIL_LENGTH);
       listeners.forEach((l) => l());
+      // One line per estimate, for the phone walk (adb logcat -s Capacitor/Console): what was
+      // shown, in plan metres, and why. Test build only: nothing else imports this file.
+      console.info(FIX_LOG_MARKER, JSON.stringify({
+        at: atMs, status, x: filtered && round2(filtered.x), y: filtered && round2(filtered.y),
+        rawX: round2(raw.x), rawY: round2(raw.y), snapX: round2(snapped.x), snapY: round2(snapped.y), unc: round2(uncertaintyM),
+      }));
+      if (!filtered) {
+        // No confirmed position yet (a start waiting for a second estimate that agrees): show
+        // nothing, so the map stays on GPS rather than on one stray reading.
+        return { ...estimate, lat: null, lng: null, confidence: 0, rawConfidence: estimate.confidence, filterStatus: status, uncertaintyM: 0 };
+      }
       const geo = toGeo(filtered.x, filtered.y);
       return {
         ...estimate,

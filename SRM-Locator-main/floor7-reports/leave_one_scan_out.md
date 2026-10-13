@@ -109,96 +109,112 @@ The test scans are NOT in the training set at all. "Spots unseen in training" ha
 
 ## 5. The afternoon as a walk, raw against filtered
 
-The 76 scans of the third phone's afternoon, in the order they were taken, each estimated from anchors built without it (leave one out), snapped onto the corridor, then run through the position filter (gate on walking distance, MAX_JUMP_M = 25, 2 rejects to reacquire). "Raw" is the snapped estimate on its own; "filtered" is the filter's position. Error = walking distance to where the scan was really taken. Times are IST.
+The 76 scans of the third phone's afternoon, in the order they were taken, each estimated from anchors built without it (leave one out), snapped onto the corridor, then run through the position filter (gate on walking distance, MAX_JUMP_M = 25). "Raw" is the snapped estimate on its own. "Before the two rules": 2 rejects always restart the track and a first estimate is shown at once. "Now": a start needs two estimates within 12 m on foot of each other, and two rejects restart the track only if they agree within 12 m. Error = walking distance to where the scan was really taken. Times are IST.
 
 | | median | mean | 90th pct | worst |
 |---|---|---|---|---|
-| raw | 3.5 m | 6.7 m | 16.6 m | 43.5 m |
-| filtered | 3.2 m | 6.7 m | 17.5 m | 43.5 m |
+| raw (same scans as the next row) | 3.5 m | 6.5 m | 16.4 m | 40.9 m |
+| filtered, before the two rules | 3.2 m | 6.7 m | 17.5 m | 43.5 m |
+| filtered, now | 3.1 m | 6.7 m | 17.1 m | 40.0 m |
 
-- Filtered was more than 0.5 m better than raw on 23 scans and more than 0.5 m worse on 10 (of 76).
-- The filter rejected 1 estimates and restarted 1 times.
-- 3 of the 76 scans were taken more than 25 m on foot from the previous one: the surveyor really did move farther than the gate allows, so the filter cannot be right about those by design, and the long gaps between them (11 gaps over 70 s) make it start afresh.
+- Now, the filter showed no position for 13 of the 76 scans (a start still waiting for a second estimate, or a track forgotten after a gap of more than 70 s); before the rules it showed one for every scan. Those scans are left out of the filtered row, so compare the rows with that in mind.
+- Filtered (now) was more than 0.5 m better than raw on 17 scans and more than 0.5 m worse on 7 (of 63 that show a position). It rejected 1 estimates and restarted 1 times. Before the two rules: 1 rejected, 1 restarts.
+- 3 of the 76 scans were taken more than 25 m on foot from the previous one: the surveyor really did move farther than the gate allows, so the filter cannot be right about those by design, and 11 gaps over 70 s make it start afresh.
 - The survey is spot to spot, not a continuous walk: the surveyor stood still for each scan and moved between them. A real walk is smoother than this, so the filter should do at least as well on the phone walk.
 
-| time | spot | gap | true step | raw | filtered | filter |
-|---|---|---|---|---|---|---|
-| 16:06:46 | Room 706A (staff room) | - | - | 1.4 m | 1.4 m | tracking |
-| 16:07:13 | Room 706A (staff room) | 27 s | 0.0 m | 1.9 m | 1.7 m | tracking |
-| 16:07:39 | Room 706A (staff room) | 26 s | 0.0 m | 1.7 m | 1.7 m | tracking |
-| 16:08:02 | Room 706A (staff room) | 23 s | 0.0 m | 3.9 m | 3.1 m | tracking |
-| 16:11:20 | Room 706A (staff room) | 198 s | 0.0 m | 5.5 m | 5.5 m | tracking |
-| 16:11:53 | Room 706A (staff room) | 33 s | 0.0 m | 12.2 m | 10.3 m | tracking |
-| 16:12:28 | Stairs near Room 706 (beside lobby B) | 35 s | 22.8 m | 19.7 m | 17.5 m | tracking |
-| 16:13:19 | Lift lobby B | 51 s | 6.0 m | 3.0 m | 0.7 m | tracking |
-| 16:13:47 | Room 706 | 28 s | 10.3 m | 3.3 m | 5.4 m | tracking |
-| 16:14:45 | Room 706 | 58 s | 0.0 m | 5.6 m | 5.5 m | tracking |
-| 16:15:08 | Room 706 | 23 s | 0.0 m | 4.0 m | 4.6 m | tracking |
-| 16:15:34 | Room 706 | 25 s | 0.0 m | 5.6 m | 5.3 m | tracking |
-| 16:16:14 | Room 705 | 41 s | 6.5 m | 6.9 m | 2.1 m | tracking |
-| 16:17:20 | Room 705 | 66 s | 0.0 m | 1.4 m | 0.6 m | tracking |
-| 16:18:41 | Room 705 | 81 s | 0.0 m | 7.6 m | 7.6 m | tracking |
-| 16:19:05 | Room 705 | 24 s | 0.0 m | 16.6 m | 8.7 m | tracking |
-| 16:19:46 | Restroom L (old ladies) | 41 s | 5.9 m | 16.4 m | 15.9 m | tracking |
-| 16:20:14 | Restroom L (old ladies) | 28 s | 0.0 m | 25.7 m | 22.3 m | tracking |
-| 16:21:01 | Restroom M (old gents) | 47 s | 11.8 m | 39.8 m | 38.3 m | tracking |
-| 16:21:30 | Restroom M (old gents) | 29 s | 0.0 m | 40.9 m | 40.0 m | tracking |
-| 16:22:52 | Entrance to the Department of Computing Technologies | 82 s | 39.9 m | 5.0 m | 5.0 m | tracking |
-| 16:23:51 | Entrance to the Department of Computing Technologies | 59 s | 0.0 m | 4.8 m | 2.7 m | tracking |
-| 16:24:25 | Lift lobby B | 34 s | 8.0 m | 1.4 m | 2.6 m | tracking |
-| 16:25:28 | Stairs near Room 706 (beside lobby B) | 63 s | 6.0 m | 7.6 m | 6.7 m | tracking |
-| 16:27:19 | Lift B4 (in front of Room 706A) | 111 s | 23.3 m | 3.2 m | 3.2 m | tracking |
-| 16:27:52 | Lift B4 (in front of Room 706A) | 33 s | 0.0 m | 5.0 m | 4.5 m | tracking |
-| 16:28:46 | Room 706A (staff room) | 54 s | 0.6 m | 3.7 m | 3.7 m | tracking |
-| 16:31:40 | Computing Lab C | 174 s | 27.8 m | 1.0 m | 1.0 m | tracking |
-| 16:32:08 | Computing Lab C | 28 s | 0.0 m | 0.6 m | 0.8 m | tracking |
-| 16:32:35 | Computing Lab C | 27 s | 0.0 m | 1.1 m | 1.0 m | tracking |
-| 16:33:00 | Computing Lab C | 25 s | 0.0 m | 0.5 m | 0.7 m | tracking |
-| 16:34:29 | Computing Lab C | 90 s | 0.0 m | 0.6 m | 0.6 m | tracking |
-| 16:34:59 | Computing Lab C | 30 s | 0.0 m | 2.0 m | 1.6 m | tracking |
-| 16:35:31 | Computing Lab C | 32 s | 0.0 m | 1.7 m | 1.6 m | tracking |
-| 16:35:56 | Computing Lab C | 25 s | 0.0 m | 1.1 m | 1.3 m | tracking |
-| 16:36:31 | Computing Lab C | 34 s | 0.0 m | 1.2 m | 1.2 m | tracking |
-| 16:37:45 | Computing Lab D | 74 s | 6.0 m | 2.2 m | 2.2 m | tracking |
-| 16:38:16 | Computing Lab D | 31 s | 0.0 m | 2.1 m | 2.2 m | tracking |
-| 16:38:52 | Computing Lab D | 36 s | 0.0 m | 1.9 m | 2.0 m | tracking |
-| 16:39:16 | Computing Lab D | 24 s | 0.0 m | 1.1 m | 1.4 m | tracking |
-| 16:39:58 | Computing Lab D | 43 s | 0.0 m | 1.7 m | 1.6 m | tracking |
-| 16:40:31 | Computing Lab D | 33 s | 0.0 m | 1.6 m | 1.6 m | tracking |
-| 16:41:02 | Computing Lab D | 31 s | 0.0 m | 0.9 m | 1.1 m | tracking |
-| 16:41:47 | Computing Lab D | 45 s | 0.0 m | 1.1 m | 1.1 m | tracking |
-| 16:42:52 | Other Department entrance (near the new restroom) | 65 s | 3.0 m | 3.8 m | 3.8 m | tracking |
-| 16:44:07 | New ladies restroom ('W') | 75 s | 39.9 m | 43.5 m | 43.5 m | tracking |
-| 16:44:39 | New ladies restroom ('W') | 32 s | 0.0 m | 38.9 m | 40.3 m | tracking |
-| 16:45:25 | New ladies restroom ('W') | 46 s | 0.0 m | 39.8 m | 39.9 m | tracking |
-| 16:45:55 | New ladies restroom ('W') | 31 s | 0.0 m | 8.4 m | 39.9 m | rejected |
-| 16:46:23 | New restroom (disabled) | 28 s | 11.8 m | 3.4 m | 3.4 m | reacquiring |
-| 16:47:52 | Room 701 | 88 s | 7.1 m | 3.5 m | 3.5 m | tracking |
-| 16:48:38 | Room 701 | 46 s | 0.0 m | 5.7 m | 5.1 m | tracking |
-| 16:49:01 | Room 701 | 22 s | 0.0 m | 5.0 m | 4.1 m | tracking |
-| 16:49:57 | Room 701 | 57 s | 0.0 m | 5.2 m | 4.9 m | tracking |
-| 16:50:30 | between Room 701 and Room 702 | 33 s | 3.3 m | 6.8 m | 5.2 m | tracking |
-| 16:50:57 | Room 702 | 27 s | 3.2 m | 2.9 m | 0.7 m | tracking |
-| 16:51:23 | Room 702 | 26 s | 0.0 m | 0.5 m | 0.1 m | tracking |
-| 16:52:06 | Room 702 | 43 s | 0.0 m | 1.7 m | 1.2 m | tracking |
-| 16:52:46 | Room 703 | 40 s | 6.5 m | 2.1 m | 3.0 m | tracking |
-| 16:53:14 | Room 703 | 28 s | 0.0 m | 2.3 m | 1.4 m | tracking |
-| 16:53:41 | Room 703 | 27 s | 0.0 m | 1.5 m | 0.5 m | tracking |
-| 16:54:25 | Room 703 | 44 s | 0.0 m | 0.8 m | 0.7 m | tracking |
-| 16:55:01 | between Room 703 and Room 703A (staff room) | 36 s | 3.3 m | 3.5 m | 3.2 m | tracking |
-| 16:55:39 | between Room 703 and Room 703A (staff room) | 39 s | 0.0 m | 5.6 m | 4.9 m | tracking |
-| 16:56:10 | Room 703A (staff room) | 31 s | 3.3 m | 3.7 m | 5.1 m | tracking |
-| 16:56:39 | Lift A3 (in front of Room 703A) | 29 s | 0.6 m | 4.3 m | 4.8 m | tracking |
-| 16:57:04 | Room 703A (staff room) | 24 s | 0.6 m | 2.2 m | 2.9 m | tracking |
-| 16:57:41 | Room 703A (staff room) | 37 s | 0.0 m | 4.9 m | 4.3 m | tracking |
-| 16:58:16 | Lift A3 (in front of Room 703A) | 36 s | 0.6 m | 4.2 m | 4.4 m | tracking |
-| 16:59:45 | Lift lobby A | 88 s | 17.3 m | 4.3 m | 4.3 m | tracking |
-| 17:00:50 | Lift lobby A | 65 s | 0.0 m | 1.3 m | 1.9 m | tracking |
-| 17:01:48 | Lift lobby A | 59 s | 0.0 m | 0.4 m | 0.8 m | tracking |
-| 17:02:43 | Lift lobby A | 55 s | 0.0 m | 3.5 m | 2.9 m | tracking |
-| 17:03:58 | Room 701 | 75 s | 20.8 m | 5.6 m | 5.6 m | tracking |
-| 17:04:26 | Stairs near Room 701 | 28 s | 3.3 m | 6.0 m | 6.9 m | tracking |
-| 17:04:50 | Stairs near Room 701 | 24 s | 0.0 m | 7.1 m | 7.0 m | tracking |
+| time | spot | gap | true step | raw | filtered, before the two rules | filtered, now | filter now |
+|---|---|---|---|---|---|---|---|
+| 16:06:46 | Room 706A (staff room) | - | - | 1.4 m | 1.4 m | not shown | confirming |
+| 16:07:13 | Room 706A (staff room) | 27 s | 0.0 m | 1.9 m | 1.7 m | 1.9 m | tracking |
+| 16:07:39 | Room 706A (staff room) | 26 s | 0.0 m | 1.7 m | 1.7 m | 1.8 m | tracking |
+| 16:08:02 | Room 706A (staff room) | 23 s | 0.0 m | 3.9 m | 3.1 m | 3.1 m | tracking |
+| 16:11:20 | Room 706A (staff room) | 198 s | 0.0 m | 5.5 m | 5.5 m | not shown | confirming |
+| 16:11:53 | Room 706A (staff room) | 33 s | 0.0 m | 12.2 m | 10.3 m | 12.2 m | tracking |
+| 16:12:28 | Stairs near Room 706 (beside lobby B) | 35 s | 22.8 m | 19.7 m | 17.5 m | 17.1 m | tracking |
+| 16:13:19 | Lift lobby B | 51 s | 6.0 m | 3.0 m | 0.7 m | 0.5 m | tracking |
+| 16:13:47 | Room 706 | 28 s | 10.3 m | 3.3 m | 5.4 m | 5.5 m | tracking |
+| 16:14:45 | Room 706 | 58 s | 0.0 m | 5.6 m | 5.5 m | 5.6 m | tracking |
+| 16:15:08 | Room 706 | 23 s | 0.0 m | 4.0 m | 4.6 m | 4.6 m | tracking |
+| 16:15:34 | Room 706 | 25 s | 0.0 m | 5.6 m | 5.3 m | 5.3 m | tracking |
+| 16:16:14 | Room 705 | 41 s | 6.5 m | 6.9 m | 2.1 m | 2.1 m | tracking |
+| 16:17:20 | Room 705 | 66 s | 0.0 m | 1.4 m | 0.6 m | 0.6 m | tracking |
+| 16:18:41 | Room 705 | 81 s | 0.0 m | 7.6 m | 7.6 m | not shown | confirming |
+| 16:19:05 | Room 705 | 24 s | 0.0 m | 16.6 m | 8.7 m | not shown | confirming |
+| 16:19:46 | Restroom L (old ladies) | 41 s | 5.9 m | 16.4 m | 15.9 m | 16.4 m | tracking |
+| 16:20:14 | Restroom L (old ladies) | 28 s | 0.0 m | 25.7 m | 22.3 m | 22.8 m | tracking |
+| 16:21:01 | Restroom M (old gents) | 47 s | 11.8 m | 39.8 m | 38.3 m | 38.4 m | tracking |
+| 16:21:30 | Restroom M (old gents) | 29 s | 0.0 m | 40.9 m | 40.0 m | 40.0 m | tracking |
+| 16:22:52 | Entrance to the Department of Computing Technologies | 82 s | 39.9 m | 5.0 m | 5.0 m | not shown | confirming |
+| 16:23:51 | Entrance to the Department of Computing Technologies | 59 s | 0.0 m | 4.8 m | 2.7 m | 4.8 m | tracking |
+| 16:24:25 | Lift lobby B | 34 s | 8.0 m | 1.4 m | 2.6 m | 1.9 m | tracking |
+| 16:25:28 | Stairs near Room 706 (beside lobby B) | 63 s | 6.0 m | 7.6 m | 6.7 m | 6.8 m | tracking |
+| 16:27:19 | Lift B4 (in front of Room 706A) | 111 s | 23.3 m | 3.2 m | 3.2 m | not shown | confirming |
+| 16:27:52 | Lift B4 (in front of Room 706A) | 33 s | 0.0 m | 5.0 m | 4.5 m | 5.0 m | tracking |
+| 16:28:46 | Room 706A (staff room) | 54 s | 0.6 m | 3.7 m | 3.7 m | 3.8 m | tracking |
+| 16:31:40 | Computing Lab C | 174 s | 27.8 m | 1.0 m | 1.0 m | not shown | confirming |
+| 16:32:08 | Computing Lab C | 28 s | 0.0 m | 0.6 m | 0.8 m | 0.6 m | tracking |
+| 16:32:35 | Computing Lab C | 27 s | 0.0 m | 1.1 m | 1.0 m | 0.9 m | tracking |
+| 16:33:00 | Computing Lab C | 25 s | 0.0 m | 0.5 m | 0.7 m | 0.7 m | tracking |
+| 16:34:29 | Computing Lab C | 90 s | 0.0 m | 0.6 m | 0.6 m | not shown | confirming |
+| 16:34:59 | Computing Lab C | 30 s | 0.0 m | 2.0 m | 1.6 m | 2.0 m | tracking |
+| 16:35:31 | Computing Lab C | 32 s | 0.0 m | 1.7 m | 1.6 m | 1.8 m | tracking |
+| 16:35:56 | Computing Lab C | 25 s | 0.0 m | 1.1 m | 1.3 m | 1.4 m | tracking |
+| 16:36:31 | Computing Lab C | 34 s | 0.0 m | 1.2 m | 1.2 m | 1.3 m | tracking |
+| 16:37:45 | Computing Lab D | 74 s | 6.0 m | 2.2 m | 2.2 m | not shown | confirming |
+| 16:38:16 | Computing Lab D | 31 s | 0.0 m | 2.1 m | 2.2 m | 2.1 m | tracking |
+| 16:38:52 | Computing Lab D | 36 s | 0.0 m | 1.9 m | 2.0 m | 2.0 m | tracking |
+| 16:39:16 | Computing Lab D | 24 s | 0.0 m | 1.1 m | 1.4 m | 1.4 m | tracking |
+| 16:39:58 | Computing Lab D | 43 s | 0.0 m | 1.7 m | 1.6 m | 1.6 m | tracking |
+| 16:40:31 | Computing Lab D | 33 s | 0.0 m | 1.6 m | 1.6 m | 1.6 m | tracking |
+| 16:41:02 | Computing Lab D | 31 s | 0.0 m | 0.9 m | 1.1 m | 1.1 m | tracking |
+| 16:41:47 | Computing Lab D | 45 s | 0.0 m | 1.1 m | 1.1 m | 1.1 m | tracking |
+| 16:42:52 | Other Department entrance (near the new restroom) | 65 s | 3.0 m | 3.8 m | 3.8 m | 3.8 m | tracking |
+| 16:44:07 | New ladies restroom ('W') | 75 s | 39.9 m | 43.5 m | 43.5 m | not shown | confirming |
+| 16:44:39 | New ladies restroom ('W') | 32 s | 0.0 m | 38.9 m | 40.3 m | 38.9 m | tracking |
+| 16:45:25 | New ladies restroom ('W') | 46 s | 0.0 m | 39.8 m | 39.9 m | 39.6 m | tracking |
+| 16:45:55 | New ladies restroom ('W') | 31 s | 0.0 m | 8.4 m | 39.9 m | 39.6 m | rejected |
+| 16:46:23 | New restroom (disabled) | 28 s | 11.8 m | 3.4 m | 3.4 m | 3.4 m | reacquiring |
+| 16:47:52 | Room 701 | 88 s | 7.1 m | 3.5 m | 3.5 m | not shown | confirming |
+| 16:48:38 | Room 701 | 46 s | 0.0 m | 5.7 m | 5.1 m | 5.7 m | tracking |
+| 16:49:01 | Room 701 | 22 s | 0.0 m | 5.0 m | 4.1 m | 4.0 m | tracking |
+| 16:49:57 | Room 701 | 57 s | 0.0 m | 5.2 m | 4.9 m | 4.9 m | tracking |
+| 16:50:30 | between Room 701 and Room 702 | 33 s | 3.3 m | 6.8 m | 5.2 m | 5.2 m | tracking |
+| 16:50:57 | Room 702 | 27 s | 3.2 m | 2.9 m | 0.7 m | 0.7 m | tracking |
+| 16:51:23 | Room 702 | 26 s | 0.0 m | 0.5 m | 0.1 m | 0.1 m | tracking |
+| 16:52:06 | Room 702 | 43 s | 0.0 m | 1.7 m | 1.2 m | 1.2 m | tracking |
+| 16:52:46 | Room 703 | 40 s | 6.5 m | 2.1 m | 3.0 m | 3.0 m | tracking |
+| 16:53:14 | Room 703 | 28 s | 0.0 m | 2.3 m | 1.4 m | 1.4 m | tracking |
+| 16:53:41 | Room 703 | 27 s | 0.0 m | 1.5 m | 0.5 m | 0.5 m | tracking |
+| 16:54:25 | Room 703 | 44 s | 0.0 m | 0.8 m | 0.7 m | 0.7 m | tracking |
+| 16:55:01 | between Room 703 and Room 703A (staff room) | 36 s | 3.3 m | 3.5 m | 3.2 m | 3.2 m | tracking |
+| 16:55:39 | between Room 703 and Room 703A (staff room) | 39 s | 0.0 m | 5.6 m | 4.9 m | 4.9 m | tracking |
+| 16:56:10 | Room 703A (staff room) | 31 s | 3.3 m | 3.7 m | 5.1 m | 5.1 m | tracking |
+| 16:56:39 | Lift A3 (in front of Room 703A) | 29 s | 0.6 m | 4.3 m | 4.8 m | 4.8 m | tracking |
+| 16:57:04 | Room 703A (staff room) | 24 s | 0.6 m | 2.2 m | 2.9 m | 2.9 m | tracking |
+| 16:57:41 | Room 703A (staff room) | 37 s | 0.0 m | 4.9 m | 4.3 m | 4.3 m | tracking |
+| 16:58:16 | Lift A3 (in front of Room 703A) | 36 s | 0.6 m | 4.2 m | 4.4 m | 4.4 m | tracking |
+| 16:59:45 | Lift lobby A | 88 s | 17.3 m | 4.3 m | 4.3 m | not shown | confirming |
+| 17:00:50 | Lift lobby A | 65 s | 0.0 m | 1.3 m | 1.9 m | 1.3 m | tracking |
+| 17:01:48 | Lift lobby A | 59 s | 0.0 m | 0.4 m | 0.8 m | 0.6 m | tracking |
+| 17:02:43 | Lift lobby A | 55 s | 0.0 m | 3.5 m | 2.9 m | 2.8 m | tracking |
+| 17:03:58 | Room 701 | 75 s | 20.8 m | 5.6 m | 5.6 m | not shown | confirming |
+| 17:04:26 | Stairs near Room 701 | 28 s | 3.3 m | 6.0 m | 6.9 m | 6.0 m | tracking |
+| 17:04:50 | Stairs near Room 701 | 24 s | 0.0 m | 7.1 m | 7.0 m | 6.7 m | tracking |
+
+## 6. The new ladies restroom (W): estimates first in the labs, then good ones
+
+The four scans at the new ladies restroom, with the scan before and after. The first three estimates came out in the labs, about 40 m away on foot (a restroom on a back path hears the labs better than anything near it). This is the replay of section 5 for those scans only: the same filter, the same anchors, before and after the two newest rules.
+
+| time | spot | gap | true step | raw | filtered, before the two rules | filtered, now | filter now |
+|---|---|---|---|---|---|---|---|
+| 16:42:52 | Other Department entrance (near the new restroom) | 65 s | 3.0 m | 3.8 m | 3.8 m | 3.8 m | tracking |
+| 16:44:07 | New ladies restroom ('W') | 75 s | 39.9 m | 43.5 m | 43.5 m | not shown | confirming |
+| 16:44:39 | New ladies restroom ('W') | 32 s | 0.0 m | 38.9 m | 40.3 m | 38.9 m | tracking |
+| 16:45:25 | New ladies restroom ('W') | 46 s | 0.0 m | 39.8 m | 39.9 m | 39.6 m | tracking |
+| 16:45:55 | New ladies restroom ('W') | 31 s | 0.0 m | 8.4 m | 39.9 m | 39.6 m | rejected |
+| 16:46:23 | New restroom (disabled) | 28 s | 11.8 m | 3.4 m | 3.4 m | 3.4 m | reacquiring |
+
+- On this data the two new rules change little here. The first lab estimate is no longer shown (it was 43.5 m off), but the second and third labs estimates agree with each other, so the labs are confirmed and still wrongly shown for two scans. The first good estimate is still rejected, and the track returns to the restroom area when the next estimate agrees with it. What the rules buy is protection from a lone stray estimate at a start and from a restart on two estimates that disagree: see the scenarios in tests/positionFilter.test.js (the new ladies restroom scenario). The phone walk is the real test of how long recovery takes.
 
 ## Where the error is: by spot (leave one scan out)
 

@@ -10,7 +10,9 @@
 //   2. the same, split by session (the phones read signal strength differently);
 //   3. anchors built from one session, tested on another (the realistic numbers);
 //   4. with and without the radios weaker than MIN_ANCHOR_BEST_DBM, and which setting is kept;
-//   5. the afternoon scans replayed in time order as a walk through the position filter.
+//   5. the afternoon scans replayed in time order as a walk through the position filter, before
+//      and after its two newest rules (start-up confirmation, reacquire on agreement);
+//   6. the new ladies restroom, where the estimates first came out in the labs.
 
 import './lib/registerShims.mjs';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -24,7 +26,7 @@ const { estimatePosition } = await import('../src/utils/wifiPositioning.js');
 const { PLAN_SCALE, floor7Plan: plan } = await import('../src/utils/floor7Plan.js');
 const { accessPointTable } = await import('../src/utils/floor7ApTable.js');
 const { toLocal } = await import('../src/utils/floor7Frame.js');
-const { createPositionFilter } = await import('../src/utils/positionFilter.js');
+const { CONFIRM_WITHIN_M, createPositionFilter } = await import('../src/utils/positionFilter.js');
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const INPUTS = join(root, 'floor7-inputs');
@@ -135,11 +137,14 @@ const blind = blindGuessWalk(scans, plan, PLAN_SCALE);
 // ------------------------------------------------------------ 5. the afternoon as a walk
 
 const afternoon = loo.filter((r) => r.part === 'afternoon' && r.phone === '170507');
-const walk = walkReplay({
+const replayWith = (rules) => walkReplay({
   rows: afternoon, scans, plan, scale: PLAN_SCALE,
-  makeFilter: () => createPositionFilter({ staleMs: STALE_MS, plan }),
+  makeFilter: () => createPositionFilter({ staleMs: STALE_MS, plan, rules }),
 });
+const walk = replayWith({}); // both rules on: what the app does
+const walkBefore = replayWith({ confirmStart: false, reacquireOnAgreement: false });
 const walkSummary = compareWalk(walk);
+const walkBeforeSummary = compareWalk(walkBefore);
 
 // ------------------------------------------------------------ the report
 
@@ -202,20 +207,31 @@ w(`- Mean walking error, leave one out: ${looMean(WITHOUT).toFixed(2)} m without
   `- **Kept: ${KEEP_FILTER ? 'WITH the cut' : 'WITHOUT the cut'}**${KEEP_FILTER ? '' : ' (the cut did not lower the leave-one-out error, and it costs Room 704 its only anchors)'}. \`ANCHOR_CUT_ENABLED\` in scripts/lib/floor7Anchors.mjs is ${KEEP_FILTER ? 'true' : 'false'}.`, '');
 
 const t = (ms) => new Date(ms + 5.5 * 3600_000).toISOString().slice(11, 19);
+const statsLine = (label, c, which) => `| ${label} | ${m(c[which].median)} | ${m(c[which].mean)} | ${m(c[which].p90)} | ${m(c[which].max)} |`;
+const walkRow = (x, i) => `| ${t(x.time)} | ${placeName(x.place)} | ${x.gapS === null ? '-' : `${Math.round(x.gapS)} s`} | ${x.truthStep === null ? '-' : m(x.truthStep)} | ${m(x.raw)} | ${walkBefore[i].filtered === null ? 'not shown' : m(walkBefore[i].filtered)} | ${x.filtered === null ? 'not shown' : m(x.filtered)} | ${x.status} |`;
+const WALK_HEAD = '| time | spot | gap | true step | raw | filtered, before the two rules | filtered, now | filter now |\n|---|---|---|---|---|---|---|---|';
 w('## 5. The afternoon as a walk, raw against filtered', '',
-  `The ${walk.length} scans of the third phone's afternoon, in the order they were taken, each estimated from anchors built without it (leave one out), snapped onto the corridor, then run through the position filter (gate on walking distance, MAX_JUMP_M = 25, 2 rejects to reacquire). "Raw" is the snapped estimate on its own; "filtered" is the filter's position. Error = walking distance to where the scan was really taken. Times are IST.`, '',
+  `The ${walk.length} scans of the third phone's afternoon, in the order they were taken, each estimated from anchors built without it (leave one out), snapped onto the corridor, then run through the position filter (gate on walking distance, MAX_JUMP_M = 25). "Raw" is the snapped estimate on its own. "Before the two rules": 2 rejects always restart the track and a first estimate is shown at once. "Now": a start needs two estimates within ${CONFIRM_WITHIN_M} m on foot of each other, and two rejects restart the track only if they agree within ${CONFIRM_WITHIN_M} m. Error = walking distance to where the scan was really taken. Times are IST.`, '',
   '| | median | mean | 90th pct | worst |', '|---|---|---|---|---|',
-  `| raw | ${m(walkSummary.raw.median)} | ${m(walkSummary.raw.mean)} | ${m(walkSummary.raw.p90)} | ${m(walkSummary.raw.max)} |`,
-  `| filtered | ${m(walkSummary.filtered.median)} | ${m(walkSummary.filtered.mean)} | ${m(walkSummary.filtered.p90)} | ${m(walkSummary.filtered.max)} |`, '',
-  `- Filtered was more than 0.5 m better than raw on ${walkSummary.better} scans and more than 0.5 m worse on ${walkSummary.worse} (of ${walkSummary.compared}).`,
-  `- The filter rejected ${walkSummary.rejected} estimates and restarted ${walkSummary.reacquired} times.`,
-  `- ${walk.filter((x) => x.truthStep !== null && x.truthStep > 25).length} of the ${walk.length} scans were taken more than 25 m on foot from the previous one: the surveyor really did move farther than the gate allows, so the filter cannot be right about those by design, and the long gaps between them (${walk.filter((x) => x.gapS > 70).length} gaps over 70 s) make it start afresh.`,
+  statsLine('raw (same scans as the next row)', walkSummary, 'raw'),
+  statsLine('filtered, before the two rules', walkBeforeSummary, 'filtered'),
+  statsLine('filtered, now', walkSummary, 'filtered'), '',
+  `- Now, the filter showed no position for ${walkSummary.notShown} of the ${walk.length} scans (a start still waiting for a second estimate, or a track forgotten after a gap of more than ${STALE_MS / 1000} s); before the rules it showed one for every scan. Those scans are left out of the filtered row, so compare the rows with that in mind.`,
+  `- Filtered (now) was more than 0.5 m better than raw on ${walkSummary.better} scans and more than 0.5 m worse on ${walkSummary.worse} (of ${walkSummary.compared} that show a position). It rejected ${walkSummary.rejected} estimates and restarted ${walkSummary.reacquired} times. Before the two rules: ${walkBeforeSummary.rejected} rejected, ${walkBeforeSummary.reacquired} restarts.`,
+  `- ${walk.filter((x) => x.truthStep !== null && x.truthStep > 25).length} of the ${walk.length} scans were taken more than 25 m on foot from the previous one: the surveyor really did move farther than the gate allows, so the filter cannot be right about those by design, and ${walk.filter((x) => x.gapS > STALE_MS / 1000).length} gaps over ${STALE_MS / 1000} s make it start afresh.`,
   '- The survey is spot to spot, not a continuous walk: the surveyor stood still for each scan and moved between them. A real walk is smoother than this, so the filter should do at least as well on the phone walk.', '',
-  '| time | spot | gap | true step | raw | filtered | filter |', '|---|---|---|---|---|---|---|');
-for (const x of walk) {
-  w(`| ${t(x.time)} | ${placeName(x.place)} | ${x.gapS === null ? '-' : `${Math.round(x.gapS)} s`} | ${x.truthStep === null ? '-' : m(x.truthStep)} | ${m(x.raw)} | ${m(x.filtered)} | ${x.status} |`);
-}
+  WALK_HEAD);
+walk.forEach((x, i) => w(walkRow(x, i)));
 w('');
+
+const wIdx = walk.map((x, i) => (x.place === 'rW' ? i : -1)).filter((i) => i >= 0);
+const first = Math.max(0, wIdx[0] - 1);
+const last = Math.min(walk.length - 1, wIdx.at(-1) + 1);
+w('## 6. The new ladies restroom (W): estimates first in the labs, then good ones', '',
+  'The four scans at the new ladies restroom, with the scan before and after. The first three estimates came out in the labs, about 40 m away on foot (a restroom on a back path hears the labs better than anything near it). This is the replay of section 5 for those scans only: the same filter, the same anchors, before and after the two newest rules.', '',
+  WALK_HEAD);
+for (let i = first; i <= last; i++) w(walkRow(walk[i], i));
+w('', '- On this data the two new rules change little here. The first lab estimate is no longer shown (it was 43.5 m off), but the second and third labs estimates agree with each other, so the labs are confirmed and still wrongly shown for two scans. The first good estimate is still rejected, and the track returns to the restroom area when the next estimate agrees with it. What the rules buy is protection from a lone stray estimate at a start and from a restart on two estimates that disagree: see the scenarios in tests/positionFilter.test.js (the new ladies restroom scenario). The phone walk is the real test of how long recovery takes.', '');
 
 w('## Where the error is: by spot (leave one scan out)', '', '| spot | scans | median | worst | spot is a guess? | share of matched radios resting on a guess |', '|---|---|---|---|---|---|');
 for (const [place, rows] of [...perPlace].sort((a, b) => placeName(a[0]).localeCompare(placeName(b[0])))) {
