@@ -104,6 +104,36 @@ another branch is checked out there.)
 
 Save `doors.csv`, `phone.log` and the result somewhere (not in `floor7-inputs/`).
 
+## 2a. The phone walk without a PC: the in-app recorder
+
+LOCUS Test can do the whole walk itself (it needs the APK from `npm run sidetest:install`,
+because the recorder has a small native part). Open **F7 debug**, then:
+
+1. **Start recording.** Nothing is stored before this. The screen stays on while it runs, and a
+   red **Recording** label shows the time and how many estimates were logged.
+2. **At each door,** search the place (Room 706A, TP706A, lift...), pick it and tap **I'm here**.
+   Stand still for the 75 s countdown, or tap **Done / next door** to end it early. **Undo mark**
+   takes back a wrong tap. For a walk without stopping, use **Start of walk** and **End of walk**.
+3. **Stop recording.** The phone works out the error per door (the same code as the script
+   below) and shows it in plain words: walking error, the raw estimate's error, doors that never
+   showed a position, and for a continuous walk how far behind the dot was and how long it took
+   to catch up.
+4. **Share** sends the files through the Android share sheet (WhatsApp, Drive, email), or **Save
+   to Downloads** puts them in `Downloads/LOCUS`. Earlier walks are under *Previous recordings*.
+
+The files are `<id>_estimates.csv`, `_scans.csv`, `_doors.csv`, `_events.csv` and `_summary.txt`.
+They hold the Wi-Fi names and hardware addresses of campus access points; there is no account
+data in them and nothing is uploaded. If the app leaves the screen, or the screen turns off, the
+recording notes it and warns you on return: Android slows Wi-Fi scans then. If the app is
+closed in the middle, it offers to recover the walk the next time it opens.
+
+On a PC, from the shared files (this does not need the phone, and the old `doors.csv` plus log
+way below still works):
+
+```
+node scripts/floor7-phone-walk.mjs floor7_20261014_164710_estimates.csv
+```
+
 ## How fast the dot appears, and how fast you can walk
 
 **Timing.** The app takes a Wi-Fi reading about every 35 seconds. The first one comes straight

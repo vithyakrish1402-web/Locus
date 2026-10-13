@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- LOCUS Test only: lets the share sheet read the walk recordings. A second provider,
+             so the main one (updates) is untouched. -->
+        <provider
+            android:name="com.locus.app.RecorderFileProvider"
+            android:authorities="${applicationId}.recordings"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/recorder_paths" />
+        </provider>
+    </application>
+</manifest>

@@ -120,10 +120,21 @@ export const clockToEpoch = (year, month, day, clockS) =>
  * @param {(name: string) => {name:string, x:number, y:number}} options.resolve
  */
 export function scoreDoors({ doors, fixes, day, plan, scale, resolve }) {
-  return doors.map(({ door, clockS, dwellS }) => {
-    const from = clockToEpoch(...day, clockS);
-    const to = from + dwellS * 1000;
-    const spot = resolve(door);
+  return scoreWindows({
+    windows: doors.map(({ door, clockS, dwellS }) => ({ label: door, key: door, from: clockToEpoch(...day, clockS), to: clockToEpoch(...day, clockS) + dwellS * 1000 })),
+    fixes, plan, scale, resolve,
+  });
+}
+
+/**
+ * The scoring itself, on exact times (epoch ms): scoreDoors turns wall-clock rows into these,
+ * and the in-app recorder, which knows the exact moment of each tap, passes them directly.
+ * @param {{label:string, key:string, from:number, to:number}[]} options.windows `key` is what
+ *   `resolve` looks the place up by (a plan place id from the app, a typed name from the file)
+ */
+export function scoreWindows({ windows, fixes, plan, scale, resolve }) {
+  return windows.map(({ label: door, key, from, to }) => {
+    const spot = resolve(key);
     const truth = { x: spot.x * scale, y: spot.y * scale };
     const inWindow = fixes.filter((f) => f.at >= from && f.at <= to);
     const shown = inWindow.filter((f) => f.x !== null && f.x !== undefined);
@@ -146,10 +157,58 @@ export function scoreDoors({ doors, fixes, day, plan, scale, resolve }) {
   });
 }
 
+/** Within this many metres on foot the dot counts as having caught up with the walker. */
+export const CATCH_UP_M = 5;
+
+/**
+ * The continuous walk: the person walks from one place to another without stopping, marking
+ * the start and the end. At the end the dot is usually behind, because each estimate averages
+ * the last few scans. `lagM`: how far (on foot) the last position shown at or before the end
+ * was from the end place. `catchUpS`: how long after the end the dot first came within
+ * CATCH_UP_M of it (0 if it already was), or null if no later estimate did.
+ * @param {{start:{label:string,key:string,at:number}, end:{label:string,key:string,at:number}}} options.walk
+ */
+export function scoreWalk({ walk, fixes, plan, scale, resolve }) {
+  const { start, end } = walk;
+  const to = resolve(end.key);
+  const truth = { x: to.x * scale, y: to.y * scale };
+  const err = (f) => plan.walkingDistance({ x: f.x, y: f.y }, truth);
+  const shown = fixes.filter((f) => f.x !== null && f.x !== undefined);
+  const before = shown.filter((f) => f.at >= start.at && f.at <= end.at);
+  const last = before.at(-1) ?? null;
+  const base = { from: start.label, to: end.label, place: to.name, startAt: start.at, endAt: end.at, seconds: (end.at - start.at) / 1000 };
+  if (!last) return { ...base, shown: false };
+  const lagM = err(last);
+  const caught = lagM <= CATCH_UP_M ? null : shown.find((f) => f.at > end.at && err(f) <= CATCH_UP_M);
+  return {
+    ...base,
+    shown: true,
+    lagM,
+    catchUpS: lagM <= CATCH_UP_M ? 0 : caught ? (caught.at - end.at) / 1000 : null,
+    lastShownAt: last.at,
+  };
+}
+
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
   return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
 };
+
+/** The numbers under the table: for the doors that showed a position, null when none did. */
+export function summariseWalk(rows) {
+  const shown = rows.filter((r) => r.shown);
+  if (!shown.length) return null;
+  const errs = shown.map((r) => r.walkM);
+  const raws = shown.map((r) => r.rawWalkM);
+  const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  return {
+    shown: shown.length, total: rows.length,
+    medianM: median(errs), meanM: mean(errs), worstM: Math.max(...errs),
+    within5: errs.filter((e) => e <= 5).length, within10: errs.filter((e) => e <= 10).length,
+    rawMedianM: median(raws), rawMeanM: mean(raws), rawWorstM: Math.max(...raws),
+    noPosition: rows.filter((r) => !r.shown).map((r) => r.door),
+  };
+}
 
 /** The printable table and summary for scoreDoors() rows. */
 export function formatWalk(rows) {
@@ -163,14 +222,12 @@ export function formatWalk(rows) {
       lines.push(`${name} ${String(r.fixesInWindow).padStart(5)}  +${String(Math.round(r.secondsIn)).padStart(3)} s    ${String(r.status).padEnd(12)} ${m(r.walkM).padStart(18)}  ${m(r.straightM).padStart(8)}  ${m(r.rawWalkM).padStart(18)}`);
     }
   }
-  const shown = rows.filter((r) => r.shown);
+  const sum = summariseWalk(rows);
   lines.push('-'.repeat(104));
-  if (shown.length) {
-    const errs = shown.map((r) => r.walkM);
-    const raws = shown.map((r) => r.rawWalkM);
-    lines.push(`${shown.length} of ${rows.length} doors showed a position.`);
-    lines.push(`shown error (walk):  median ${m(median(errs))}, mean ${m(errs.reduce((a, b) => a + b, 0) / errs.length)}, worst ${m(Math.max(...errs))}, within 5 m: ${errs.filter((e) => e <= 5).length}, within 10 m: ${errs.filter((e) => e <= 10).length}`);
-    lines.push(`raw estimate (walk): median ${m(median(raws))}, mean ${m(raws.reduce((a, b) => a + b, 0) / raws.length)}, worst ${m(Math.max(...raws))}`);
+  if (sum) {
+    lines.push(`${sum.shown} of ${sum.total} doors showed a position.`);
+    lines.push(`shown error (walk):  median ${m(sum.medianM)}, mean ${m(sum.meanM)}, worst ${m(sum.worstM)}, within 5 m: ${sum.within5}, within 10 m: ${sum.within10}`);
+    lines.push(`raw estimate (walk): median ${m(sum.rawMedianM)}, mean ${m(sum.rawMeanM)}, worst ${m(sum.rawWorstM)}`);
   } else {
     lines.push('No door showed a position. Check the times in the doors file against the phone clock, and that the log has [F7] lines.');
   }
