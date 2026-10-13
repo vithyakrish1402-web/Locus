@@ -10,11 +10,11 @@ import { build } from 'vite';
 //
 // The markers are strings that survive minification and exist in exactly one place:
 //   wifi_aps         the Firestore collection name, in wifiPositioning.js (the WiFi code itself)
-//   floor7-aps-v1    the bundled Floor 7 access point file
+//   floor7-aps-v2    the bundled Floor 7 access point file
 //   reacquiring      the position filter's status
 //   floor7-debug     the alignment overlay
 //   Junction: lab   a station name inside the Floor 7 plan data (floor7-inputs/floor7_plan.json)
-const MARKERS = ['wifi_aps', 'floor7-aps-v1', 'reacquiring', 'floor7-debug', 'Junction: lab passage / east spine'];
+const MARKERS = ['wifi_aps', 'floor7-aps-v2', 'reacquiring', 'floor7-debug', 'Junction: lab passage / east spine'];
 
 // The survey CSVs, name table and notes live in floor7-inputs/, outside src/ and public/, so
 // no build copies them. These are bytes that appear only in them.

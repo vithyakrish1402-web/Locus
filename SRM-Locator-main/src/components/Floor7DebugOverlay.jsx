@@ -3,6 +3,7 @@ import floor7Aps from '../data/floor7Aps.json';
 import planDrawingSvg from '../../floor7-inputs/floor7_plan_v3.svg?raw';
 import { getTrail, subscribeTrail } from '../utils/floor7Demo.js';
 import { PLAN_SCALE, PLAN_SVG, floor7Plan } from '../utils/floor7Plan.js';
+import { layoutRadios, radioFlags, radioLabel } from '../utils/floor7RadioLayout.js';
 
 // Floor 7 alignment check, for the test build only (rendered under FLOOR7_DEMO, owner only):
 // the team's drawing of the floor with the corridor centrelines, where each access point was
@@ -14,6 +15,9 @@ const STATUS_COLOR = { tracking: '#10B981', rejected: '#F59E0B', reacquiring: '#
 const RAW = '#1B2630';
 const SNAPPED = '#0EA5E9';
 const CENTRELINE = '#2E5E8A';
+const RADIO_FILL = { best: '#A78BFA', tie: '#C4B5FD', override: '#38BDF8' };
+const SINGLE_SPOT = '#F59E0B';
+const GUESS_RING = '#F97316';
 // Read as text and inlined, not imported as a file: a file import is emitted into every
 // build's output even where this code is left out, which the build check (floor7Build.test.js) forbids.
 const PLAN_DRAWING = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(planDrawingSvg)}`;
@@ -46,10 +50,27 @@ export function Floor7DebugView({ plan = floor7Plan, radios = floor7Aps.radios, 
           opacity="0.8"
         />
       ))}
-      {radios.map((r) => {
-        const p = px(r);
+      {layoutRadios(radios, plan).map((m) => {
+        const r = radios.find((x) => x.radio === m.radio);
         return (
-          <rect key={r.radio} x={p.x - 5} y={p.y - 5} width="10" height="10" fill={r.basis === 'single-spot' ? '#F59E0B' : '#A78BFA'} opacity="0.9" transform={`rotate(45 ${p.x} ${p.y})`} />
+          <g key={m.radio} data-radio={m.radio}>
+            {m.fanned && <line x1={m.ax} y1={m.ay} x2={m.x} y2={m.y} stroke="#6B7782" strokeWidth="1" />}
+            {m.fanned && <circle cx={m.ax} cy={m.ay} r="2" fill="#6B7782" />}
+            <rect
+              x={m.x - 6}
+              y={m.y - 6}
+              width="12"
+              height="12"
+              fill={r.single_spot ? SINGLE_SPOT : RADIO_FILL[r.basis] ?? RADIO_FILL.best}
+              stroke={r.guess?.length ? GUESS_RING : '#1B2630'}
+              strokeWidth={r.guess?.length ? 3 : 1}
+              strokeDasharray={r.guess?.length ? '3 2' : undefined}
+              transform={`rotate(45 ${m.x} ${m.y})`}
+            >
+              <title>{`${r.radio} · ${r.place ?? r.tie?.join(' + ') ?? 'by hand'} · ${r.bssids.length} BSSIDs${radioFlags(r).length ? ` · ${radioFlags(r).join(', ')}` : ''}`}</title>
+            </rect>
+            <text x={m.x} y={m.y - 11} fontSize="11" textAnchor="middle" fill="#1B2630" stroke="#FFFFFF" strokeWidth="3" paintOrder="stroke">{m.label}</text>
+          </g>
         );
       })}
       {trail.length > 1 && (
@@ -103,8 +124,19 @@ export default function Floor7DebugOverlay() {
             <span className="text-amber-300"> · scale ESTIMATED ×{PLAN_SCALE}</span>
           </p>
           <p className="opacity-70">
-            circle = raw, blue dot = snapped to the corridor, green = filtered, purple/amber diamond = access point (amber: heard at one spot only)
+            circle = raw, blue dot = snapped to the corridor, green = filtered. Diamonds are access points, named by their last two bytes
+            (purple: best spot, light purple: between two spots, amber: heard at one spot only, orange dashed edge: rests on a guess).
+            Radios that share a spot are fanned out around it.
           </p>
+          <p className="mt-1" data-testid="floor7-radio-count">{floor7Aps.radios.length} access points</p>
+          <ul className="max-h-40 overflow-y-auto" data-testid="floor7-radio-list">
+            {floor7Aps.radios.map((r) => (
+              <li key={r.radio}>
+                <span className="text-violet-300">{radioLabel(r.radio)}</span> {r.place ?? r.tie?.join(' + ') ?? 'by hand'}
+                {radioFlags(r).length > 0 && <span className="text-amber-300"> · {radioFlags(r).join(' · ')}</span>}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

@@ -12,7 +12,8 @@
 // Floor 7 is fixed for the demo: the bundled table only holds Floor 7 access points, so the
 // floor vote can only say Floor 7. Estimates for anything else pass through untouched.
 
-import { floor7Plan } from './floor7Plan.js';
+import { DEMO_BUILDING, DEMO_FLOOR, accessPointTable } from './floor7ApTable.js';
+import { PLAN_SCALE, floor7Plan } from './floor7Plan.js';
 import floor7Aps from '../data/floor7Aps.json';
 import { toGeo, toLocal } from './floor7Frame.js';
 import { createPositionFilter } from './positionFilter.js';
@@ -20,8 +21,7 @@ import { WIFI_CONFIDENCE_THRESHOLD } from './positionSource.js';
 import { setLocalAccessPoints } from './wifiPositioning.js';
 import { WIFI_ESTIMATE_MAX_AGE_MS } from './wifiFusion.js';
 
-export const DEMO_BUILDING = 'TECH PARK';
-export const DEMO_FLOOR = 7;
+export { DEMO_BUILDING, DEMO_FLOOR };
 
 /** Uncertainty (m, one sigma) at which the halo has shrunk to nothing, i.e. confidence 0. */
 export const HALO_FULL_UNCERTAINTY_M = 20;
@@ -40,17 +40,8 @@ export const floor7Geometry = {
   spots: floor7Plan.spots,
 };
 
-/** floor7Aps.json -> the table wifiPositioning.js expects, keyed by lowercase BSSID. */
-export function floor7AccessPointTable(doc = floor7Aps) {
-  const table = new Map();
-  for (const radio of doc.radios) {
-    const { lat, lng } = toGeo(radio.x, radio.y);
-    for (const { bssid } of radio.bssids) {
-      table.set(bssid.toLowerCase(), { lat, lng, building: DEMO_BUILDING, floor: DEMO_FLOOR, ambiguousFloor: false });
-    }
-  }
-  return table;
-}
+/** floor7Aps.json -> the table wifiPositioning.js expects (see floor7ApTable.js). */
+export const floor7AccessPointTable = (doc = floor7Aps, scale = PLAN_SCALE) => accessPointTable(doc.radios, scale);
 
 /** Filter uncertainty -> 0..1 for the existing confidence halo (smaller circle = more sure). */
 export const confidenceFromUncertainty = (uncertaintyM) =>
