@@ -351,7 +351,7 @@ const SosTrigger = ({
         //   desktop - the squad sidebar is fixed left-6 w-80 (ends ~344px in), so
         //             left-4 overlapped it; left-[23rem] sits just clear of its edge.
         // LAYER.emergencyButton keeps it above every screen but an incoming alert.
-        className={`fixed bottom-20 left-4 md:bottom-6 md:left-[23rem] w-20 h-20 rounded-full select-none touch-none pointer-events-auto flex items-center justify-center text-center font-ui border-4 shadow-[var(--shadow-2)] active:scale-95 transition-colors duration-200 ${PHASE_LOOK[phase]} ${className}`}
+        className={`fixed bottom-20 left-4 md:bottom-6 md:left-[23rem] w-20 h-20 rounded-full select-none touch-none pointer-events-auto flex items-center justify-center text-center font-ui border-4 shadow-[var(--shadow-2)] active:scale-95 duration-200 ${PHASE_LOOK[phase]} ${className}`}
         style={{
           marginBottom: 'env(safe-area-inset-bottom)',
           transform: isDocked ? 'translateX(var(--sos-dock-x, -70px))' : 'translateX(0)',

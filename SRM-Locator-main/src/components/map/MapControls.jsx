@@ -12,7 +12,7 @@ import { MAP_CONTROLS } from '../../copy/map';
 // And the meeting point button at the bottom right on a phone: tap, then tap the map to place
 // the group's meeting point; tap again (X) to cancel.
 
-const ROUND = 'relative inline-flex items-center justify-center w-11 h-11 rounded-full transition-all duration-150 hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+const ROUND = 'relative inline-flex items-center justify-center w-11 h-11 rounded-full transition-[transform,opacity] duration-150 hover:bg-sunken active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 /**
  * @param {{ onCampus: () => void, onLocate?: (() => void) | null, isSatellite: boolean,

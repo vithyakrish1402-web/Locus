@@ -15,7 +15,7 @@ export default function Card(allProps) {
 
   return (
     <Tag
-      className={`shrink-0 text-text font-ui rounded-[20px] transition-all duration-200 ${glassClasses} ${padded ? 'p-4' : 'overflow-hidden'} ${className}`}
+      className={`shrink-0 text-text font-ui rounded-[20px] transition-[transform,opacity] duration-200 ${glassClasses} ${padded ? 'p-4' : 'overflow-hidden'} ${className}`}
       style={{
         boxShadow: glass ? 'var(--glass-shadow), var(--glass-specular)' : undefined,
         ...props.style,

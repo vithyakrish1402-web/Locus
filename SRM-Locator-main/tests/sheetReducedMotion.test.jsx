@@ -88,7 +88,7 @@ describe('letting go of a sheet', () => {
     const { y, transition } = settles()[0];
     expect(y).toBe(0);
     expect(transition.duration).toBe(0.15);
-    expect(transition.ease).toEqual([0.2, 0, 0, 1]);
+    expect(transition.ease).toEqual([0.22, 1, 0.36, 1]);
     expect(transition.type).toBeUndefined();
     expect(transition).not.toHaveProperty('bounce');
   });

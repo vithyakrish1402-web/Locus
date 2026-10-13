@@ -53,9 +53,10 @@ describe('shouldDismissSheet', () => {
 });
 
 describe('modalCard', () => {
-  it('enters and leaves along the same path', () => {
+  it('leaves a little shorter than it came in, back along the same line', () => {
     const card = modalCard(false);
-    expect(card.exit).toEqual(card.initial);
+    expect(card.initial).toEqual({ opacity: 0, y: 20, scale: 0.97 });
+    expect(card.exit).toEqual({ opacity: 0, y: 16, scale: 0.98 });
   });
 
   it('only cross-fades under reduced motion', () => {
@@ -84,12 +85,12 @@ describe('motion presets move only transform and opacity', () => {
 });
 
 describe('screenTransition', () => {
-  it('slides 24 px: forward from the right, back from the left, leaving the other way', () => {
-    expect(screenTransition('forward', false).initial.x).toBe(24);
-    expect(screenTransition('forward', false).exit.x).toBe(-24);
-    expect(screenTransition('back', false).initial.x).toBe(-24);
-    expect(screenTransition('back', false).exit.x).toBe(24);
-    expect(screenTransition('forward', false).animate.transition.duration).toBe(0.24);
+  it('slides 20 px: forward from the right, back from the left, leaving the other way', () => {
+    expect(screenTransition('forward', false).initial.x).toBe(20);
+    expect(screenTransition('forward', false).exit.x).toBe(-20);
+    expect(screenTransition('back', false).initial.x).toBe(-20);
+    expect(screenTransition('back', false).exit.x).toBe(20);
+    expect(screenTransition('forward', false).animate.transition.duration).toBe(0.26);
   });
 
   it('is a 150 ms fade under reduced motion', () => {
@@ -101,10 +102,10 @@ describe('screenTransition', () => {
 });
 
 describe('listItem', () => {
-  it('staggers the first five by 40 ms, and the rest arrive with the fifth', () => {
+  it('staggers the first six by 35 ms, and the rest arrive with the sixth', () => {
     const delay = (i) => listItem(i, false).animate.transition.delay;
-    expect([0, 1, 2, 3, 4].map(delay)).toEqual([0, 0.04, 0.08, 0.12, 0.16]);
-    expect(delay(9)).toBe(0.16);
+    [0, 1, 2, 3, 4, 5].forEach((i) => expect(delay(i)).toBeCloseTo(i * 0.035, 10));
+    expect(delay(9)).toBeCloseTo(5 * 0.035, 10);
   });
 
   it('has no stagger under reduced motion', () => {

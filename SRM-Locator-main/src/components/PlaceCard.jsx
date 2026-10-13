@@ -110,7 +110,7 @@ export default function PlaceCard({
               type="button"
               onClick={() => setIsBookmarked(!isBookmarked)}
               aria-label="Bookmark"
-              className={`w-9 h-9 rounded-full glass-pill flex items-center justify-center shadow-md transition-all active:scale-95 ${
+              className={`w-9 h-9 rounded-full glass-pill flex items-center justify-center shadow-md transition-[transform,opacity] active:scale-95 ${
                 isBookmarked
                   ? '!bg-accent !text-accent-on !border-accent'
                   : 'text-text hover:scale-105'
@@ -204,7 +204,7 @@ export default function PlaceCard({
           <button
             type="button"
             onClick={onArScan}
-            className="flex items-center gap-2.5 p-2.5 rounded-2xl glass-panel hover:bg-surface/80 transition-colors text-left"
+            className="flex items-center gap-2.5 p-2.5 rounded-2xl glass-panel hover:bg-surface/80 text-left"
           >
             <span className="w-8 h-8 rounded-xl bg-accent-soft text-accent flex items-center justify-center shrink-0">
               <ScanLine size={16} />
@@ -260,7 +260,7 @@ export default function PlaceCard({
                   type="button"
                   key={photoUrl}
                   onClick={() => setActivePhotoIdx(idx)}
-                  className={`relative w-20 h-16 rounded-xl overflow-hidden shrink-0 transition-all border-2 ${
+                  className={`relative w-20 h-16 rounded-xl overflow-hidden shrink-0 transition-[transform,opacity] border-2 ${
                     activePhotoIdx === idx
                       ? 'border-accent scale-105 shadow-md'
                       : 'border-transparent opacity-75 hover:opacity-100'
@@ -323,7 +323,7 @@ export default function PlaceCard({
             variant="plain"
             onClick={onToggleExpanded}
             aria-expanded={expanded}
-            className="!text-[11.5px] font-medium !min-h-6 !py-0 px-2 text-text-secondary hover:text-text transition-colors"
+            className="!text-[11.5px] font-medium !min-h-6 !py-0 px-2 text-text-secondary hover:text-text"
           >
             {expanded ? PLACE.less : PLACE.more}
           </Button>
@@ -332,7 +332,7 @@ export default function PlaceCard({
               variant="plain"
               icon={MapPin}
               onClick={onShowOnMap}
-              className="!text-[11.5px] font-medium !min-h-6 !py-0 px-2 text-text-secondary hover:text-text transition-colors"
+              className="!text-[11.5px] font-medium !min-h-6 !py-0 px-2 text-text-secondary hover:text-text"
             >
               {PLACE.showOnMap}
             </Button>

@@ -9,7 +9,7 @@ import { LEAD_TOOLS, REFRESH_FAILED } from '../../copy/group';
 // didn't work says why in an amber notice with Retry. Remove meeting point stays a quiet
 // button while one is set.
 
-const TILE = 'relative flex-1 min-w-0 min-h-[5.5rem] px-2 py-3 rounded-2xl glass-panel text-accent font-ui text-label flex flex-col items-center justify-center gap-1.5 text-center transition-all duration-150 hover:bg-surface/80 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50';
+const TILE = 'relative flex-1 min-w-0 min-h-[5.5rem] px-2 py-3 rounded-2xl glass-panel text-accent font-ui text-label flex flex-col items-center justify-center gap-1.5 text-center transition-[transform,opacity] duration-150 hover:bg-surface/80 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50';
 
 /**
  * @param {{ requests: number, onRequests: () => void, refresh: { status: string, message: string|null },

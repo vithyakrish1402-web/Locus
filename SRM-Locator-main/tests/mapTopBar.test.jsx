@@ -125,10 +125,11 @@ describe('the top bar', () => {
     expect(auth.signOut).toHaveBeenCalled();
   });
 
-  it('keeps the gear in the map controls as Settings on a phone (no new top-bar button there)', () => {
+  it('has Settings in the top bar on every screen size, next to Sign out, and the gear stays in the map controls', () => {
     onTheMap();
     const inBar = bar().getByRole('button', { name: SETTINGS.open });
-    expect(inBar.parentElement.className).toMatch(/(^| )hidden md:flex/);
+    expect(inBar.parentElement.className).not.toMatch(/(^| )hidden( |$)/);
+    expect(inBar.nextElementSibling).toBe(bar().getByRole('button', { name: TOP_BAR.signOut }));
     expect(screen.getAllByRole('button', { name: SETTINGS.open }).length).toBe(2);
   });
 });

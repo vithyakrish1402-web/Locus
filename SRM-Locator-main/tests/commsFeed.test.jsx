@@ -15,7 +15,7 @@ beforeEach(() => { __resetNotifications(); });
 afterEach(() => { cleanup(); __resetNotifications(); });
 
 const card = (text) => screen.getByText(text).closest('[data-severity]');
-const disc = (text) => card(text).querySelector('[aria-hidden="true"]');
+const disc = (text) => card(text).querySelector('span.rounded-full[aria-hidden="true"]');
 
 describe('notifications', () => {
   it.each([

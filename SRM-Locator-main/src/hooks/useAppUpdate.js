@@ -3,17 +3,14 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { LocusUpdater, isUpdaterAvailable } from '../utils/locusUpdater';
 import { APK_ASSET_NAME, isUpdateAvailable, selectLatestApkRelease } from '../utils/updateManifest';
 import { UPDATES_OFF } from '../utils/buildMode';
+import { getReleases } from '../utils/releasesLookup';
 
-// GitHub repo the updater reads releases from. Overridable at build time so a fork or a
-// test repo can be pointed at without touching source.
-const REPO = import.meta.env?.VITE_UPDATE_REPO || 'vithyakrish1402-web/Locus';
-// Listing rather than /releases/latest, for the same reason Phase 2 does it: "latest" is
-// whichever release is newest overall, and the v* and js-* series share a repo — so a JS
-// bundle release would hand this check a tag it cannot parse and hide every APK update
-// behind it. selectLatestApkRelease filters to v* and drops drafts/prereleases, which
-// /releases/latest used to exclude server-side.
-const RELEASES_API = `https://api.github.com/repos/${REPO}/releases?per_page=30`;
-const CHECK_TIMEOUT_MS = 15000;
+// The releases list comes from utils/releasesLookup.js, shared with the live-update check
+// and Send LOCUS (the repo is overridable there with VITE_UPDATE_REPO). It is the listing
+// rather than /releases/latest: "latest" is whichever release is newest overall, and the v*
+// and js-* series share a repo — so a JS bundle release would hand this check a tag it
+// cannot parse and hide every APK update behind it. selectLatestApkRelease filters to v*
+// and drops drafts/prereleases, which /releases/latest used to exclude server-side.
 
 // Assumed values for the APK download (owner's brief, 2026-10-10):
 // - APK_DOWNLOAD_STALL_TIMEOUT_MS: no progress for this long counts as stuck. The download
@@ -164,38 +161,23 @@ export function useAppUpdate({
           setInstalledVersion(current);
         }
 
-        // AbortController rather than relying on the platform timeout: a stalled check
-        // would otherwise leave the manual button spinning forever.
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
-        let response;
+        // This launch's shared answer, or a fresh one when the person asked
+        // (utils/releasesLookup.js). Its errors carry a code: RATE_LIMITED, HTTP_<status>.
+        let releases;
         try {
-          response = await fetch(RELEASES_API, {
-            headers: { Accept: 'application/vnd.github+json' },
-            signal: controller.signal,
-            cache: 'no-store',
-          });
-        } finally {
-          clearTimeout(timer);
+          releases = await getReleases({ fresh: manual });
+        } catch (e) {
+          if (e?.status === 404) {
+            // No repo/releases visible - not an error state for the user. The listing
+            // endpoint answers 200 with [] rather than 404 for a repo with no releases,
+            // which the empty-manifest branch below handles.
+            setStatus(manual ? UpdateStatus.UP_TO_DATE : UpdateStatus.IDLE);
+            return null;
+          }
+          throw e;
         }
 
-        if (response.status === 404) {
-          // No repo/releases visible - not an error state for the user. The listing
-          // endpoint answers 200 with [] rather than 404 for a repo with no releases,
-          // which the empty-manifest branch below handles.
-          setStatus(manual ? UpdateStatus.UP_TO_DATE : UpdateStatus.IDLE);
-          return null;
-        }
-        if (response.status === 403 || response.status === 429) {
-          throw Object.assign(new Error(describe('RATE_LIMITED')), { code: 'RATE_LIMITED' });
-        }
-        if (!response.ok) {
-          throw Object.assign(new Error(`GitHub returned HTTP ${response.status}`), {
-            code: `HTTP_${response.status}`,
-          });
-        }
-
-        const manifest = selectLatestApkRelease(await response.json());
+        const manifest = selectLatestApkRelease(releases);
         if (!manifest) {
           // No usable v* release in the listing: none published yet, or every candidate
           // was a draft, a prerelease, or malformed. Fail closed — offer nothing — the

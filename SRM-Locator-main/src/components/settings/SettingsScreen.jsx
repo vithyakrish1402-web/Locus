@@ -59,7 +59,7 @@ export default function SettingsScreen({
       role="dialog"
       aria-labelledby={titleId}
       data-testid="settings"
-      className="fixed inset-0 overflow-y-auto glass-floating !rounded-none bg-bg/85 backdrop-blur-2xl text-text font-ui pointer-events-auto"
+      className="fixed inset-0 overflow-y-auto bg-bg text-text font-ui pointer-events-auto"
       style={{ zIndex: SETTINGS_Z, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(var(--emergency-clearance) + 1rem)' }}
     >
       <div className="max-w-xl mx-auto px-4 pb-8">
@@ -173,12 +173,12 @@ export default function SettingsScreen({
               </div>
               <div className="flex flex-col">
                 <p className="text-body font-semibold tracking-wide">LOCUS</p>
-                <p className="text-caption text-text-secondary">Tactical Campus Navigation & Locator</p>
+                <p className="text-caption text-text-secondary">Find your group on campus</p>
               </div>
             </div>
             <div className="flex items-center justify-between gap-4 px-4 py-3 min-h-12">
               <span className="text-body font-medium">{SETTINGS.version}</span>
-              <span className="text-body text-text-secondary font-mono text-sm" data-testid="settings-version">
+              <span className="text-body text-text-secondary tabular-nums" data-testid="settings-version">
                 {update.installedVersion ?? SETTINGS.versionUnknown}
               </span>
             </div>
@@ -203,12 +203,12 @@ export default function SettingsScreen({
             <button
               type="button"
               onClick={() => setMoreExpanded(!moreExpanded)}
-              className="w-full flex items-center justify-between px-4 py-3.5 text-left transition-colors duration-150 hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+              className="w-full flex items-center justify-between px-4 py-3.5 text-left duration-150 hover:bg-sunken"
               aria-expanded={moreExpanded}
             >
               <div className="flex items-center gap-2.5">
                 <Sliders size={16} className="text-text-secondary" />
-                <span className="text-body font-medium">{SETTINGS.more} (Advanced & Share)</span>
+                <span className="text-body font-medium">{SETTINGS.more}</span>
               </div>
               <ChevronDown
                 size={18}

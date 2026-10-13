@@ -26,7 +26,7 @@
    transform and opacity move (the redesign's motion rule): colour, shadow and filter
    changes on a control are instant, never animated. */
 button, [role="button"], a[href], summary, label[for] {
-  transition-property: scale, transform, translate, opacity, background-color, border-color, box-shadow;
+  transition-property: scale, transform, translate, opacity;
   transition-duration: var(--duration-press-out);
   transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   touch-action: manipulation; /* no 300 ms double-tap-zoom wait */
@@ -257,7 +257,6 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border-subtle);
-  transition: all 180ms var(--ease-standard);
 }
 
 .glass-input:focus, .glass-input:focus-within {
