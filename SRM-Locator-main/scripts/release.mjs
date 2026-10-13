@@ -20,6 +20,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { releaseVersionConflict } from '../src/utils/liveUpdateManifest.js';
 import { webBuildProblem } from './lib/webBuild.mjs';
+import { publishUpdateIndex, reportUpdateIndex } from './lib/updateIndex.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
@@ -267,3 +268,10 @@ if (isBaseline) {
   console.log(`\n  Published v${version}. Existing installs will be offered it on their next cold start.`);
   console.log(`  Verify it first:  npm run release:verify\n`);
 }
+
+// ---------------------------------------------------------------- update index
+
+// Last, and only once the release exists: phones read this file at launch
+// (src/utils/updateIndex.js). Rebuilt in the repo the release went to. A failure is reported
+// loudly but never undoes the release.
+reportUpdateIndex(publishUpdateIndex({ dir: join(STAGING_DIR, 'update-index'), repo: repoArg }), { repo: repoArg });
