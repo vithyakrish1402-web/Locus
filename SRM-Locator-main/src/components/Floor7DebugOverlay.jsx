@@ -1,59 +1,76 @@
 import { useEffect, useState } from 'react';
 import floor7Aps from '../data/floor7Aps.json';
-import { floor7Geometry, getTrail, subscribeTrail } from '../utils/floor7Demo.js';
+import planDrawingSvg from '../../floor7-inputs/floor7_plan_v3.svg?raw';
+import { getTrail, subscribeTrail } from '../utils/floor7Demo.js';
+import { PLAN_SCALE, PLAN_SVG, floor7Plan } from '../utils/floor7Plan.js';
 
 // Floor 7 alignment check, for the test build only (rendered under FLOOR7_DEMO, owner only):
-// draws the plan (walkable areas, walls, the 14 spots), where each access point was placed,
-// the raw WiFi estimates and the filtered track, so the team can see by eye in minutes whether
-// the plan lines up with where people really stood. Nothing here reaches a squad or a user.
+// the team's drawing of the floor with the corridor centrelines, where each access point was
+// placed, and the track: the raw WiFi estimate, the same estimate snapped onto the nearest
+// corridor, and the filtered position. Lets the team see by eye whether the plan lines up with
+// where people really stood. Nothing here reaches a squad or a user.
 
 const STATUS_COLOR = { tracking: '#10B981', rejected: '#F59E0B', reacquiring: '#F97316' };
-const PAD = 3;
-
-const flip = (p) => `${p.x},${-p.y}`; // plan y points up, the screen's points down
+const RAW = '#1B2630';
+const SNAPPED = '#0EA5E9';
+const CENTRELINE = '#2E5E8A';
+// Read as text and inlined, not imported as a file: a file import is emitted into every
+// build's output even where this code is left out, which the build check (floor7Build.test.js) forbids.
+const PLAN_DRAWING = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(planDrawingSvg)}`;
 
 /** Pure drawing, so it can be rendered and checked without the live trail. */
-export function Floor7DebugView({ geometry = floor7Geometry, radios = floor7Aps.radios, trail = [] }) {
-  const all = geometry.walkable.flat();
-  const minX = Math.min(...all.map((p) => p.x)) - PAD;
-  const maxX = Math.max(...all.map((p) => p.x)) + PAD;
-  const minY = Math.min(...all.map((p) => p.y)) - PAD;
-  const maxY = Math.max(...all.map((p) => p.y)) + PAD;
+export function Floor7DebugView({ plan = floor7Plan, radios = floor7Aps.radios, trail = [] }) {
+  const px = (p) => plan.toSvg(p.x, p.y);
+  const pxPerM = PLAN_SVG.pxPerM / plan.scale;
   const last = trail[trail.length - 1];
+  const lastAt = last && px(last.filtered);
+  const color = STATUS_COLOR[last?.status] ?? STATUS_COLOR.tracking;
 
   return (
     <svg
       data-testid="floor7-debug"
-      viewBox={`${minX} ${-maxY} ${maxX - minX} ${maxY - minY}`}
-      className="w-full h-auto bg-black/80 rounded-lg"
+      viewBox={`0 0 ${PLAN_SVG.width} ${PLAN_SVG.height}`}
+      className="w-full h-auto rounded-lg"
       role="img"
-      aria-label="Floor 7 plan with the raw and filtered position"
+      aria-label="Floor 7 plan with the raw, snapped and filtered position"
     >
-      {geometry.walkable.map((poly, i) => (
-        <polygon key={i} points={poly.map(flip).join(' ')} fill="#10B98122" stroke="none" />
+      <image href={PLAN_DRAWING} x="0" y="0" width={PLAN_SVG.width} height={PLAN_SVG.height} />
+      {plan.centrelines.map((c) => (
+        <polyline
+          key={c.id}
+          data-centreline={c.id}
+          points={c.points.map((p) => `${px(p).x},${px(p).y}`).join(' ')}
+          fill="none"
+          stroke={CENTRELINE}
+          strokeWidth="3"
+          opacity="0.8"
+        />
       ))}
-      {geometry.walls.map((w, i) => (
-        <line key={i} x1={w.a.x} y1={-w.a.y} x2={w.b.x} y2={-w.b.y} stroke="#E5E7EB" strokeWidth="0.25" strokeLinecap="round" />
-      ))}
-      {Object.entries(geometry.spots).map(([name, p]) => (
-        <g key={name}>
-          <circle cx={p.x} cy={-p.y} r="0.5" fill="#60A5FA" />
-          <text x={p.x} y={-p.y - 0.9} fontSize="1.4" textAnchor="middle" fill="#93C5FD">{name}</text>
-        </g>
-      ))}
-      {radios.map((r) => (
-        <rect key={r.radio} x={r.x - 0.35} y={-r.y - 0.35} width="0.7" height="0.7" fill={r.basis === 'single-spot' ? '#F59E0B' : '#A78BFA'} opacity="0.9" transform={`rotate(45 ${r.x} ${-r.y})`} />
-      ))}
+      {radios.map((r) => {
+        const p = px(r);
+        return (
+          <rect key={r.radio} x={p.x - 5} y={p.y - 5} width="10" height="10" fill={r.basis === 'single-spot' ? '#F59E0B' : '#A78BFA'} opacity="0.9" transform={`rotate(45 ${p.x} ${p.y})`} />
+        );
+      })}
       {trail.length > 1 && (
-        <polyline points={trail.map((t) => flip(t.filtered)).join(' ')} fill="none" stroke="#10B981" strokeWidth="0.3" />
+        <polyline data-track="filtered" points={trail.map((t) => `${px(t.filtered).x},${px(t.filtered).y}`).join(' ')} fill="none" stroke={STATUS_COLOR.tracking} strokeWidth="4" />
       )}
-      {trail.map((t, i) =>
-        t.raw ? <circle key={`raw${i}`} cx={t.raw.x} cy={-t.raw.y} r="0.35" fill="#FFFFFF" opacity={0.25 + (0.75 * (i + 1)) / trail.length} /> : null
-      )}
+      {trail.map((t, i) => {
+        const opacity = 0.25 + (0.75 * (i + 1)) / trail.length;
+        const raw = px(t.raw);
+        const snapped = t.snapped && px(t.snapped);
+        return (
+          <g key={i} opacity={opacity}>
+            {snapped && <line data-snap-link x1={raw.x} y1={raw.y} x2={snapped.x} y2={snapped.y} stroke={SNAPPED} strokeWidth="1.5" strokeDasharray="3 3" />}
+            <circle data-dot="raw" cx={raw.x} cy={raw.y} r="5" fill="none" stroke={RAW} strokeWidth="2" />
+            {snapped && <circle data-dot="snapped" cx={snapped.x} cy={snapped.y} r="5" fill={SNAPPED} />}
+          </g>
+        );
+      })}
       {last && (
         <>
-          <circle cx={last.filtered.x} cy={-last.filtered.y} r={Math.max(last.uncertaintyM, 0.5)} fill={`${STATUS_COLOR[last.status] ?? '#10B981'}22`} stroke={STATUS_COLOR[last.status] ?? '#10B981'} strokeWidth="0.2" />
-          <circle cx={last.filtered.x} cy={-last.filtered.y} r="0.7" fill={STATUS_COLOR[last.status] ?? '#10B981'} />
+          <circle data-dot="uncertainty" cx={lastAt.x} cy={lastAt.y} r={Math.max(last.uncertaintyM * pxPerM, 10)} fill={`${color}22`} stroke={color} strokeWidth="2" />
+          <circle data-dot="current" cx={lastAt.x} cy={lastAt.y} r="9" fill={color} stroke="#FFFFFF" strokeWidth="2" />
         </>
       )}
     </svg>
@@ -83,9 +100,11 @@ export default function Floor7DebugOverlay() {
             {last
               ? `${last.status} · ±${last.uncertaintyM.toFixed(1)} m · ${trail.length} steps`
               : 'No Floor 7 estimate yet'}
-            {floor7Geometry.placeholder && <span className="text-amber-300"> · PLACEHOLDER PLAN</span>}
+            <span className="text-amber-300"> · scale ESTIMATED ×{PLAN_SCALE}</span>
           </p>
-          <p className="opacity-70">white = raw, green = filtered, purple/amber diamond = access point (amber: heard at one spot only)</p>
+          <p className="opacity-70">
+            circle = raw, blue dot = snapped to the corridor, green = filtered, purple/amber diamond = access point (amber: heard at one spot only)
+          </p>
         </div>
       )}
     </div>

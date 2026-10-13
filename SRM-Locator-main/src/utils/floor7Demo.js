@@ -4,14 +4,15 @@
 //
 // It does two things:
 //   - swaps the live wifi_aps table for the Floor 7 one bundled in src/data/floor7Aps.json
-//     (hand-placed at the spots in floor7Map.json), so the Firestore table is never read;
+//     (placed at the survey spots of the Floor 7 plan, floor7Plan.js), so the Firestore table
+//     is never read;
 //   - gives startWifiFusion a tracker that runs every Floor 7 estimate through the position
 //     filter (positionFilter.js) before the map and `update-location` see it.
 //
 // Floor 7 is fixed for the demo: the bundled table only holds Floor 7 access points, so the
 // floor vote can only say Floor 7. Estimates for anything else pass through untouched.
 
-import floor7Map from '../data/floor7Map.json';
+import { floor7Plan } from './floor7Plan.js';
 import floor7Aps from '../data/floor7Aps.json';
 import { toGeo, toLocal } from './floor7Frame.js';
 import { createPositionFilter } from './positionFilter.js';
@@ -28,14 +29,15 @@ export const HALO_FULL_UNCERTAINTY_M = 20;
 /** How many steps the debug overlay remembers. */
 export const TRAIL_LENGTH = 60;
 
-const point = ([x, y]) => ({ x, y });
-
-/** The plan as the filter and the overlay use it: { walkable: {x,y}[][], walls: {a,b}[], spots }. */
+/**
+ * The plan as the filter and the overlay use it: { walkable: {x,y}[][], walls: {a,b}[], spots }.
+ * Walkable space is the corridors and lift lobbies only, so a point inside a room is snapped
+ * out to the corridor in front of it. Straight from floor7Plan.js: one plan, one scale.
+ */
 export const floor7Geometry = {
-  placeholder: floor7Map.placeholder === true,
-  walkable: floor7Map.walkable.map((poly) => poly.map(point)),
-  walls: floor7Map.walls.map(([a, b]) => ({ a: point(a), b: point(b) })),
-  spots: Object.fromEntries(Object.entries(floor7Map.spots).map(([name, xy]) => [name, point(xy)])),
+  walkable: floor7Plan.walkable,
+  walls: floor7Plan.walls,
+  spots: floor7Plan.spots,
 };
 
 /** floor7Aps.json -> the table wifiPositioning.js expects, keyed by lowercase BSSID. */
@@ -59,7 +61,11 @@ export const confidenceFromUncertainty = (uncertaintyM) =>
 let trail = [];
 const listeners = new Set();
 
-/** What the overlay draws: newest last. Each: { at, raw:{x,y}|null, filtered:{x,y}, status, uncertaintyM }. */
+/**
+ * What the overlay draws: newest last. Each: { at, raw:{x,y}, snapped:{x,y}, filtered:{x,y},
+ * status, uncertaintyM }. `snapped` is the raw estimate moved onto the nearest corridor
+ * centreline: shown for checking, the filter does not use it yet.
+ */
 export const getTrail = () => trail;
 export function subscribeTrail(listener) {
   listeners.add(listener);
@@ -87,10 +93,11 @@ export function createFloor7Tracker({ staleMs = WIFI_ESTIMATE_MAX_AGE_MS } = {})
       if (estimate?.building !== DEMO_BUILDING || estimate.floor !== DEMO_FLOOR) return estimate;
       if (!Number.isFinite(estimate.lat) || !Number.isFinite(estimate.lng)) return estimate;
       const raw = toLocal(estimate.lat, estimate.lng);
+      const { x: sx, y: sy } = floor7Plan.snapToCorridor(raw.x, raw.y);
       const status = filter.update({ ...raw, confidence: estimate.confidence }, atMs);
       const filtered = filter.position;
       const uncertaintyM = filter.uncertaintyM;
-      trail = [...trail, { at: atMs, raw, filtered, status, uncertaintyM }].slice(-TRAIL_LENGTH);
+      trail = [...trail, { at: atMs, raw, snapped: { x: sx, y: sy }, filtered, status, uncertaintyM }].slice(-TRAIL_LENGTH);
       listeners.forEach((l) => l());
       const geo = toGeo(filtered.x, filtered.y);
       return {

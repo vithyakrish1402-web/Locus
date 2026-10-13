@@ -23,16 +23,22 @@ const estimateAt = (name, confidence = 0.9, extra = {}) => ({
 });
 
 describe('the Floor 7 plan data', () => {
-  it('has the 14 surveyed spots, every one in walkable space', () => {
-    expect(Object.keys(SPOTS)).toHaveLength(14);
+  it('has the 23 surveyed spots of the plan, every one in walkable space', () => {
+    expect(Object.keys(SPOTS)).toHaveLength(23);
     for (const [name, p] of Object.entries(SPOTS)) expect(inWalkable(p, floor7Geometry.walkable), name).toBe(true);
   });
 
-  it('lets someone walk from any spot to the lift lobby only by way of the corridor', () => {
-    // A room's own wall is between it and the next room: straight lines between neighbouring rooms cross a wall.
-    expect(pathCrossesWall(SPOTS['Room 701'], SPOTS['Room 702'], floor7Geometry.walls)).toBe(true);
-    // ...but the corridor is open end to end.
-    expect(pathCrossesWall({ x: -29, y: 0 }, { x: 29, y: 0 }, floor7Geometry.walls)).toBe(false);
+  it('has walls between a room and the corridor, with the doorway left open', () => {
+    // Room 702's own wall lies between its middle and the west spine...
+    expect(pathCrossesWall({ x: -14.2, y: 3 }, { x: -9, y: 3 }, floor7Geometry.walls)).toBe(true);
+    // ...but its doorway (y 4.8 to 5.7) is a gap, and the passage is open end to end.
+    expect(pathCrossesWall({ x: -14.2, y: 5.25 }, { x: -9, y: 5.25 }, floor7Geometry.walls)).toBe(false);
+    expect(pathCrossesWall({ x: -9, y: 0 }, { x: 37, y: 0 }, floor7Geometry.walls)).toBe(false);
+  });
+
+  it('counts only corridors and lift lobbies as walkable: a room is not', () => {
+    expect(inWalkable({ x: -14.2, y: 3 }, floor7Geometry.walkable)).toBe(false);
+    expect(inWalkable({ x: -9, y: 3 }, floor7Geometry.walkable)).toBe(true);
   });
 });
 
@@ -71,7 +77,7 @@ describe('starting the demo', () => {
     const options = floor7FusionOptions();
     expect((await loadAccessPoints()).size).toBe(floor7AccessPointTable().size);
     expect(typeof options.tracker.apply).toBe('function');
-    expect(options.tracker.apply(estimateAt('TP706'), T0).filterStatus).toBe('tracking');
+    expect(options.tracker.apply(estimateAt('Room 706'), T0).filterStatus).toBe('tracking');
   });
 });
 
@@ -83,9 +89,9 @@ describe('the Floor 7 tracker', () => {
   });
 
   it('leaves an estimate for another building or floor, or without a position, alone', () => {
-    const other = { ...estimateAt('TP706'), floor: 3 };
+    const other = { ...estimateAt('Room 706'), floor: 3 };
     expect(tracker.apply(other, T0)).toBe(other);
-    const elsewhere = { ...estimateAt('TP706'), building: 'MAIN BLOCK' };
+    const elsewhere = { ...estimateAt('Room 706'), building: 'MAIN BLOCK' };
     expect(tracker.apply(elsewhere, T0)).toBe(elsewhere);
     const none = { lat: null, lng: null, building: 'TECH PARK', floor: 7, confidence: 0 };
     expect(tracker.apply(none, T0)).toBe(none);
@@ -93,22 +99,22 @@ describe('the Floor 7 tracker', () => {
   });
 
   it('takes the first estimate as is and reports the filter state with it', () => {
-    const out = tracker.apply(estimateAt('TP706'), T0);
-    expect(out.lat).toBeCloseTo(estimateAt('TP706').lat, 9);
+    const out = tracker.apply(estimateAt('Room 706'), T0);
+    expect(out.lat).toBeCloseTo(estimateAt('Room 706').lat, 9);
     expect(out.filterStatus).toBe('tracking');
     expect(out.rawConfidence).toBe(0.9);
   });
 
   it('rejects an estimate 30 m away on the very next scan, and keeps the old position', () => {
-    const first = tracker.apply(estimateAt('TP706'), T0);
-    const out = tracker.apply(estimateAt('Computing Lab E'), T0 + STEP); // ~48 m across the floor
+    const first = tracker.apply(estimateAt('Room 706'), T0);
+    const out = tracker.apply(estimateAt('Room 703'), T0 + STEP); // 46 m across the floor
     expect(out.filterStatus).toBe('rejected');
     expect(out.lat).toBeCloseTo(first.lat, 9);
     expect(out.lng).toBeCloseTo(first.lng, 9);
   });
 
   it('never lets confidence fall below the WiFi threshold while it holds a position, so GPS cannot take over', () => {
-    const out = tracker.apply(estimateAt('TP706', 0.2), T0);
+    const out = tracker.apply(estimateAt('Room 706', 0.2), T0);
     expect(out.confidence).toBeGreaterThanOrEqual(WIFI_CONFIDENCE_THRESHOLD);
   });
 
@@ -122,29 +128,39 @@ describe('the Floor 7 tracker', () => {
   it('records a trail of raw and filtered positions for the overlay, and tells subscribers', () => {
     const seen = vi.fn();
     const off = subscribeTrail(seen);
-    tracker.apply(estimateAt('TP706'), T0);
-    tracker.apply(estimateAt('TP706'), T0 + STEP);
+    tracker.apply(estimateAt('Room 706'), T0);
+    tracker.apply(estimateAt('Room 706'), T0 + STEP);
     off();
-    tracker.apply(estimateAt('TP706'), T0 + 2 * STEP);
+    tracker.apply(estimateAt('Room 706'), T0 + 2 * STEP);
     expect(seen).toHaveBeenCalledTimes(2);
     const trail = getTrail();
     expect(trail).toHaveLength(3);
     expect(trail[0]).toMatchObject({ status: 'tracking' });
-    expect(trail[0].raw.x).toBeCloseTo(SPOTS.TP706.x, 6);
+    expect(trail[0].raw.x).toBeCloseTo(SPOTS['Room 706'].x, 6);
+    expect(trail[0].snapped.x).toBeCloseTo(SPOTS['Room 706'].x, 6); // already on a centreline: snapping moves nothing
     expect(trail[0].filtered).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }));
   });
 
+  it('records where the raw estimate snaps to on the corridor, for the overlay', () => {
+    const inRoom = toGeo(-14.2, 11.75); // the middle of Room 701
+    tracker.apply({ ...estimateAt('Room 706'), ...inRoom }, T0);
+    const { raw, snapped } = getTrail()[0];
+    expect(raw.x).toBeCloseTo(-14.2, 6);
+    expect(snapped.x).toBeCloseTo(-9, 6);
+    expect(snapped.y).toBeCloseTo(11.75, 6);
+  });
+
   it('keeps only the most recent steps', () => {
-    for (let i = 0; i < 100; i++) tracker.apply(estimateAt('TP706'), T0 + i * STEP);
+    for (let i = 0; i < 100; i++) tracker.apply(estimateAt('Room 706'), T0 + i * STEP);
     expect(getTrail().length).toBeLessThanOrEqual(60);
     expect(getTrail().at(-1).at).toBe(T0 + 99 * STEP);
   });
 
   it('reset() clears the trail and the filter', () => {
-    tracker.apply(estimateAt('TP706'), T0);
+    tracker.apply(estimateAt('Room 706'), T0);
     tracker.reset();
     expect(getTrail()).toHaveLength(0);
-    const out = tracker.apply(estimateAt('Computing Lab E'), T0 + STEP); // taken as is, not rejected
+    const out = tracker.apply(estimateAt('Room 703'), T0 + STEP); // taken as is, not rejected
     expect(out.filterStatus).toBe('tracking');
   });
 });
@@ -161,7 +177,7 @@ describe('the tracker inside the fusion loop', () => {
   it('shows the filtered position, and keeps WiFi in charge when the raw confidence is low', async () => {
     const tracker = createFloor7Tracker();
     tracker.reset();
-    const estimates = [estimateAt('TP706', 0.9), estimateAt('TP706', 0.2)];
+    const estimates = [estimateAt('Room 706', 0.9), estimateAt('Room 706', 0.2)];
     const fusion = startWifiFusion({
       isAvailable: () => true,
       scan: async () => ({ outcome: 'fresh', accepted: true, aps: [AP] }),
@@ -175,7 +191,7 @@ describe('the tracker inside the fusion loop', () => {
     // The second raw estimate is only 0.2 confident: without the tracker GPS would win here.
     const out = fusion.resolve({ lat: 1, lng: 2 });
     expect(out.positionSource).toBe('wifi');
-    expect(out.lat).toBeCloseTo(atSpot('TP706').lat, 5);
+    expect(out.lat).toBeCloseTo(atSpot('Room 706').lat, 5);
     expect(fusion.indoor()).toMatchObject({ building: 'TECH PARK', floor: 7 });
     fusion.stop();
   });
@@ -184,7 +200,7 @@ describe('the tracker inside the fusion loop', () => {
     const fusion = startWifiFusion({
       isAvailable: () => true,
       scan: async () => ({ outcome: 'fresh', accepted: true, aps: [AP] }),
-      estimate: async () => estimateAt('TP706', 0.2),
+      estimate: async () => estimateAt('Room 706', 0.2),
       floorsFor: async () => [7],
     });
     await vi.advanceTimersByTimeAsync(0);

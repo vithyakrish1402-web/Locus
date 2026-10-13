@@ -1,14 +1,16 @@
 // The local metres frame for TECH PARK Floor 7. All the indoor filter and wall maths happens
 // here, in metres, never in degrees: x runs along the floor plan's x axis, y along its y axis.
 //
-// The origin and rotation are the ONLY place the frame is defined. Both are placeholders until
-// the real floor plan is traced (see floor7Map README): move the origin to a plan corner and
-// set the rotation, and nothing else changes.
+// The origin and rotation are the ONLY place the frame is defined. The plan (floor7Plan.js) is
+// in its own metres with its origin at the centre of lift lobby A; this frame only says which
+// latitude/longitude that origin is shown at. Access points are placed in plan metres and
+// converted with the same two numbers, so the position code never depends on them being right.
+// They would matter only to put the plan on a real map, which is not done yet.
 //
 // Flat-earth approximation: over the ~100 m of a floor it differs from true geodesic distance
 // by far less than a centimetre, and toGeo(toLocal(p)) returns p to floating-point precision.
 
-/** Placeholder origin: roughly the centre of the Floor 7 survey points. */
+/** Reference point for the plan's (0, 0): roughly the middle of the Floor 7 survey points. */
 export const FLOOR7_ORIGIN = { lat: 12.82497, lng: 80.04523 };
 
 /**
