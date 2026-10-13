@@ -3,15 +3,16 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { CapacitorUpdater, isLiveUpdaterAvailable, notifyAppReady } from '../utils/liveUpdater';
 import { BUNDLE_TAG_PREFIX, selectLatestBundleRelease, shouldApplyBundle } from '../utils/liveUpdateManifest';
 import { UPDATES_OFF } from '../utils/buildMode';
-import { getReleases } from '../utils/releasesLookup';
 
 // Phase 2: JS-only live updates. Sits on top of Phase 1 and is deliberately separable —
 // delete this hook, LiveUpdateToast, liveUpdater.js, liveUpdateManifest.js,
 // scripts/release-bundle.mjs and the @capgo dependency and Phase 1 still works untouched.
 
-// The releases list comes from utils/releasesLookup.js, shared with the APK update check and
-// Send LOCUS. It is the listing rather than /releases/latest: "latest" is whichever release
-// is newest overall, which will usually be a native v* one. We need the newest js-* specifically.
+const REPO = import.meta.env?.VITE_UPDATE_REPO || 'vithyakrish1402-web/Locus';
+// Listing rather than /releases/latest: "latest" is whichever release is newest overall,
+// which will usually be a native v* one. We need the newest js-* specifically.
+const RELEASES_API = `https://api.github.com/repos/${REPO}/releases?per_page=30`;
+const CHECK_TIMEOUT_MS = 15000;
 
 /** Once per cold start, same rationale as the Phase 1 throttle. */
 let coldStartCheckDone = false;
@@ -80,8 +81,21 @@ export function useLiveUpdate() {
       const nativeVersion = info?.version ?? null;
       const currentBundleVersion = current?.bundle?.version ?? null;
 
-      // This launch's shared answer (utils/releasesLookup.js); the APK check usually asked first.
-      const latest = selectLatestBundleRelease(await getReleases());
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch(RELEASES_API, {
+          headers: { Accept: 'application/vnd.github+json' },
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}`);
+
+      const latest = selectLatestBundleRelease(await response.json());
       const decision = shouldApplyBundle({ nativeVersion, currentBundleVersion, manifest: latest });
 
       if (!decision.apply) {

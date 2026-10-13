@@ -98,18 +98,41 @@
   --radius-sheet: 24px; /* handoff xl: sheets, dialogs. Buttons, chips, toggles: rounded-full */
 
   /* ---- motion ---- */
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-enter: cubic-bezier(0, 0, 0, 1);
-  --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
 }
 
 /* Values that are not Tailwind utilities: read with var(), in CSS or from code. */
 :root {
+  --color-bg: #F4F6F8;
+  --color-surface: #FFFFFF;
+  --color-raised: #FFFFFF;
+  --color-sunken: #EDF0F3;
+  --color-border: #DCE1E7;
+  --color-border-control: #808A99;
+  --color-text: #14181F;
+  --color-text-secondary: #566070;
+  --color-accent: #1F4FB8;
+  --color-accent-soft: #E8EEFA;
+
   /* Shadows differ per theme, and Tailwind's shadow utilities copy their value in at build
      time, so these stay plain variables: shadow-[var(--shadow-1)]. */
   --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 2px 8px rgba(16, 24, 40, 0.06);
   --shadow-2: 0 2px 4px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.12);
   --shadow-3: 0 -4px 12px rgba(16, 24, 40, 0.06), 0 -12px 40px rgba(16, 24, 40, 0.12);
+
+  /* Apple Liquid Glass tokens (Light) */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-surface: rgba(255, 255, 255, 0.80);
+  --glass-sunken: rgba(237, 240, 243, 0.60);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --glass-border-subtle: rgba(220, 225, 231, 0.45);
+  --glass-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 8px 32px -4px rgba(16, 24, 40, 0.08), 0 2px 8px -1px rgba(16, 24, 40, 0.04);
+  --glass-shadow-floating: 0 16px 40px -8px rgba(16, 24, 40, 0.12), 0 4px 12px -2px rgba(16, 24, 40, 0.06);
+  --glass-blur: blur(24px);
+  --webkit-glass-blur: blur(24px);
 
   /* Spacing, numbered as the handoff numbers them (by multiples of 4 px). Tailwind's own
      p-1 ... p-12 are the same sizes. Screen margin 16 px, map overlays 12 px. */
@@ -143,12 +166,12 @@
   --size-map-casing-ring: 3px;
 
   /* Durations (the handoff's motion table; springs stay in src/utils/motion.js). */
-  --duration-press-in: 70ms;
-  --duration-press-out: 220ms;
+  --duration-press-in: 75ms;
+  --duration-press-out: 200ms;
   --press-scale: 0.97;
-  --duration-fade: 200ms;
-  --duration-screen: 240ms;
-  --distance-screen: 24px;
+  --duration-fade: 220ms;
+  --duration-screen: 260ms;
+  --distance-screen: 20px;
   --duration-exit: 180ms;
   --duration-list: 240ms;
   --stagger-list: 40ms;
@@ -203,6 +226,18 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.5);
   --shadow-3: 0 -12px 40px rgba(0, 0, 0, 0.55);
+
+  /* Apple Liquid Glass tokens (Dark) */
+  --glass-bg: rgba(22, 26, 33, 0.70);
+  --glass-surface: rgba(30, 36, 46, 0.72);
+  --glass-sunken: rgba(18, 22, 28, 0.60);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-subtle: rgba(255, 255, 255, 0.06);
+  --glass-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.45), 0 2px 8px 0 rgba(0, 0, 0, 0.25);
+  --glass-shadow-floating: 0 20px 48px -8px rgba(0, 0, 0, 0.6), 0 4px 16px 0 rgba(0, 0, 0, 0.35);
+  --glass-blur: blur(24px);
+  --webkit-glass-blur: blur(24px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -249,5 +284,16 @@
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.5);
     --shadow-3: 0 -12px 40px rgba(0, 0, 0, 0.55);
+
+    --glass-bg: rgba(22, 26, 33, 0.70);
+    --glass-surface: rgba(30, 36, 46, 0.72);
+    --glass-sunken: rgba(18, 22, 28, 0.60);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-border-subtle: rgba(255, 255, 255, 0.06);
+    --glass-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+    --glass-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.45), 0 2px 8px 0 rgba(0, 0, 0, 0.25);
+    --glass-shadow-floating: 0 20px 48px -8px rgba(0, 0, 0, 0.6), 0 4px 16px 0 rgba(0, 0, 0, 0.35);
+    --glass-blur: blur(24px);
+    --webkit-glass-blur: blur(24px);
   }
 }

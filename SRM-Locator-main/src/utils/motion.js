@@ -5,14 +5,14 @@
 // that is interrupted mid-flight (a sheet grabbed while closing) never jumps. Framer
 // Motion's `visualDuration` + `bounce` map onto Apple's response + damping.
 
-/** Sheets and drawers: a little give, because they are thrown by a finger. */
-export const SHEET_SPRING = { type: 'spring', visualDuration: 0.34, bounce: 0.14 };
+/** Sheets and drawers: smooth and natural with minimal overshoot */
+export const SHEET_SPRING = { type: 'spring', stiffness: 380, damping: 32, mass: 0.9 };
 
-/** Panels and modals that appear on a tap: settle without overshoot. */
-export const PANEL_SPRING = { type: 'spring', visualDuration: 0.3, bounce: 0 };
+/** Panels and modals that appear on a tap: fluid and crisp, settling without oscillation. */
+export const PANEL_SPRING = { type: 'spring', stiffness: 420, damping: 36, mass: 0.8 };
 
-/** Small indicators (the tab highlight): quick, and just enough bounce to feel alive. */
-export const INDICATOR_SPRING = { type: 'spring', visualDuration: 0.28, bounce: 0.22 };
+/** Small indicators (the tab highlight, segment thumb): quick, fluid, and responsive. */
+export const INDICATOR_SPRING = { type: 'spring', stiffness: 500, damping: 38, mass: 0.7 };
 
 /**
  * How far a release at `velocity` (px/s) would travel before coming to rest, using the
@@ -29,50 +29,49 @@ export function projectMomentum(velocity, decelerationRate = 0.998) {
 }
 
 /**
- * Every modal's dimmed backdrop: a quick fade, never a spring (it has no position).
+ * Every modal's dimmed backdrop: a quick, fluid fade.
  * Spread onto the backdrop's motion.div.
  */
 export const modalBackdrop = () => ({
   initial: { opacity: 0 },
   animate: { opacity: 1 },
   exit: { opacity: 0 },
-  transition: { duration: 0.2, ease: 'easeOut' },
+  transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] },
 });
 
 /**
- * Every modal's card rises a little and settles on one spring, then leaves along the same
- * path it came in by. Transform and opacity only: it used to sharpen out of a blur too, and
- * a blur is a filter, which is repainted every frame. With reduced motion it only fades.
+ * Modal card entrance: rises smoothly with fluid scale and settles naturally.
+ * With reduced motion it only fades.
  * @param {boolean} reduceMotion
  */
 export const modalCard = (reduceMotion) =>
   reduceMotion
     ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: REDUCED_MOTION_S } }
     : {
-        initial: { opacity: 0, y: 24, scale: 0.96 },
+        initial: { opacity: 0, y: 20, scale: 0.97 },
         animate: { opacity: 1, y: 0, scale: 1 },
-        exit: { opacity: 0, y: 24, scale: 0.96 },
+        exit: { opacity: 0, y: 16, scale: 0.98 },
         transition: PANEL_SPRING,
       };
 
-// The redesign's timings (docs/redesign/handoff.md, "Motion"), in seconds as framer-motion
-// takes them. The same values are CSS variables in src/theme/tokens.css (--duration-*).
-// Everything here moves only transform and opacity.
+// Fluid timings in seconds as framer-motion takes them.
+// Optimized for fluid, immediate response without delay or layout jumps.
 
-/** Curves: standard for things that move on screen, enter for arrivals, exit for leaving. */
+/** Fluid curves: standard for micro-interactions, enter for arrivals, exit for dismissals. */
 export const EASE = {
-  standard: [0.2, 0, 0, 1],
-  enter: [0, 0, 0, 1],
-  exit: [0.3, 0, 1, 1],
+  fluid: [0.22, 1, 0.36, 1],
+  standard: [0.22, 1, 0.36, 1],
+  enter: [0.16, 1, 0.3, 1],
+  exit: [0.3, 0, 0.8, 0.15],
 };
 
-const FADE_S = 0.2;
-const SCREEN_S = 0.24;
-const SCREEN_SLIDE_PX = 24;
+const FADE_S = 0.22;
+const SCREEN_S = 0.26;
+const SCREEN_SLIDE_PX = 20;
 const EXIT_S = 0.18;
 const LIST_S = 0.24;
-const LIST_STAGGER_S = 0.04;
-const LIST_STAGGERED_ITEMS = 5;
+const LIST_STAGGER_S = 0.035;
+const LIST_STAGGERED_ITEMS = 6;
 /** Reduced motion: slides become fades this long, and sheets settle this fast. */
 export const REDUCED_MOTION_S = 0.15;
 

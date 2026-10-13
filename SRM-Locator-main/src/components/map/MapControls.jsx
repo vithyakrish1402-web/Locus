@@ -12,7 +12,7 @@ import { MAP_CONTROLS } from '../../copy/map';
 // And the meeting point button at the bottom right on a phone: tap, then tap the map to place
 // the group's meeting point; tap again (X) to cancel.
 
-const ROUND = 'relative inline-flex items-center justify-center w-12 h-12 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+const ROUND = 'relative inline-flex items-center justify-center w-11 h-11 rounded-full transition-all duration-150 hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 /**
  * @param {{ onCampus: () => void, onLocate?: (() => void) | null, isSatellite: boolean,
@@ -23,24 +23,24 @@ export function MapControls({ onCampus, onLocate = null, isSatellite, onToggleSa
   return (
     <div
       data-testid="map-controls"
-      className="absolute right-3 top-1/3 z-40 flex flex-col items-center rounded-full bg-raised text-text shadow-[var(--shadow-2)] p-1 gap-1 pointer-events-auto"
+      className="absolute right-3 top-1/3 z-40 flex flex-col items-center rounded-full glass-floating text-text p-1 gap-1 pointer-events-auto"
     >
       <button type="button" className={`${ROUND} ${isSatellite ? 'bg-accent-soft text-accent' : ''}`} onClick={onToggleSatellite} aria-pressed={isSatellite} aria-label={MAP_CONTROLS.satellite} title={MAP_CONTROLS.satellite}>
-        <Layers size={22} aria-hidden="true" />
+        <Layers size={21} aria-hidden="true" />
       </button>
       {onLocate && (
         <button type="button" className={`${ROUND} text-accent`} onClick={onLocate} aria-label={MAP_CONTROLS.locate} title={MAP_CONTROLS.locate}>
           {/* One soft ring breathes out now and then, like a beacon. */}
           <span className="absolute inset-1 rounded-full border border-accent locus-soft-ring" aria-hidden="true" />
-          <LocateFixed size={22} aria-hidden="true" />
+          <LocateFixed size={21} aria-hidden="true" />
         </button>
       )}
       <button type="button" className={ROUND} onClick={onCampus} aria-label={MAP_CONTROLS.campus} title={MAP_CONTROLS.campus}>
-        <MapPin size={22} aria-hidden="true" />
+        <MapPin size={21} aria-hidden="true" />
       </button>
-      <span className="w-6 h-px bg-border" aria-hidden="true" />
+      <span className="w-6 h-px bg-[var(--glass-border-subtle)]" aria-hidden="true" />
       <button type="button" className={ROUND} onClick={onSettings} aria-label={MAP_CONTROLS.settings} title={MAP_CONTROLS.settings}>
-        <Settings size={22} aria-hidden="true" />
+        <Settings size={21} aria-hidden="true" />
       </button>
     </div>
   );

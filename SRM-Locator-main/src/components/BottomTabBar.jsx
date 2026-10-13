@@ -63,7 +63,7 @@ export default function BottomTabBar({ tabs, activeId, onSelect }) {
   return (
     <nav
       aria-label="Main"
-      className="md:hidden fixed bottom-0 w-full bg-surface border-t border-border flex items-stretch px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto"
+      className="md:hidden fixed bottom-0 w-full glass-panel !rounded-none !border-x-0 !border-b-0 border-t border-[var(--glass-border)] flex items-stretch px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto"
     >
       {tabs.map((tab) => (
         <Tab key={tab.id} tab={tab} active={tab.id === activeId} onSelect={onSelect} reduceMotion={reduceMotion} />

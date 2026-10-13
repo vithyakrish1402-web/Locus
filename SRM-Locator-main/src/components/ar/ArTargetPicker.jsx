@@ -89,7 +89,7 @@ export default function ArTargetPicker({ open, onClose, me, target, members, bui
             placeholder={AR_PICKER.search}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full min-h-12 rounded-input border border-border-control bg-surface pl-11 pr-4 font-ui text-body text-text placeholder:text-text-secondary focus:outline-2 focus:outline-offset-2 focus:outline-accent"
+            className="w-full min-h-11 h-11 rounded-full glass-input pl-11 pr-4 font-ui text-body text-text placeholder:text-text-secondary shadow-sm"
           />
         </label>
         {people.length > 0 && (

@@ -9,7 +9,6 @@ import { copyText } from '../utils/clipboard';
 import { canShareInstaller } from '../utils/locusUpdater';
 import { ShareStatus, useShareInstaller } from '../hooks/useShareInstaller';
 import { UpdateStatus, displayPercent } from '../hooks/useAppUpdate';
-import { getReleases } from '../utils/releasesLookup';
 
 // Settings -> More -> Send LOCUS to someone: hand LOCUS to someone else. Finds the installer for the version
 // on this phone (see selectInstallerRelease), then either sends the file itself or copies
@@ -24,28 +23,29 @@ const DAMAGED = new Set(['CHECKSUM_MISMATCH', 'SIZE_MISMATCH']);
 const failureText = (code) =>
   DAMAGED.has(code) ? SEND_APP.failed.damaged : code === 'SHARE_FAILED' ? SEND_APP.failed.noShare : SEND_APP.failed.didntFinish;
 
+const REPO = import.meta.env?.VITE_UPDATE_REPO || 'vithyakrish1402-web/Locus';
+const RELEASES_API = `https://api.github.com/repos/${REPO}/releases?per_page=30`;
+const LOOKUP_TIMEOUT_MS = 15000;
+
 const formatSize = (bytes) => (Number.isFinite(bytes) ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : null);
 
-// The installer for this phone's version never changes within a launch, so this launch's
-// shared releases list (utils/releasesLookup.js) always does; only a failed lookup asks again.
 async function findInstaller() {
   const installed = Capacitor.isNativePlatform() ? (await CapacitorApp.getInfo().catch(() => null))?.version ?? null : null;
-  const installer = selectInstallerRelease(await getReleases(), installed);
-  if (!installer) throw new Error('No installer has been published');
-  return installer;
-}
-
-// GitHub's hourly limit refills within the hour; a later time means the phone's clock is off.
-const BUSY_TIME_SHOWN_WITHIN_MS = 60 * 60 * 1000;
-
-/** The sentence for a failed lookup. */
-function lookupFailure(e, now = Date.now()) {
-  if (e?.code === 'RATE_LIMITED') {
-    // A refill time already past (or far off, from a wrong clock) says nothing useful.
-    const at = e.resetAt instanceof Date && e.resetAt.getTime() > now && e.resetAt.getTime() - now <= BUSY_TIME_SHOWN_WITHIN_MS ? e.resetAt : null;
-    return SEND_APP.busy(at ? at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
+  try {
+    const response = await fetch(RELEASES_API, {
+      headers: { Accept: 'application/vnd.github+json' },
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}`);
+    const installer = selectInstallerRelease(await response.json(), installed);
+    if (!installer) throw new Error('No installer has been published');
+    return installer;
+  } finally {
+    clearTimeout(timer);
   }
-  return SEND_APP.error(e?.name === 'AbortError' ? 'GitHub took too long to answer' : e?.message || 'Lookup failed');
 }
 
 /**
@@ -61,7 +61,7 @@ export default function SendApp({ openUrl = (url) => window.location.assign(url)
     setState({ status: 'loading', installer: null, error: null });
     findInstaller()
       .then((installer) => setState({ status: 'ready', installer, error: null }))
-      .catch((e) => setState({ status: 'error', installer: null, error: lookupFailure(e) }));
+      .catch((e) => setState({ status: 'error', installer: null, error: e?.name === 'AbortError' ? 'GitHub took too long to answer' : e?.message || 'Lookup failed' }));
   }, []);
 
   useEffect(() => {
@@ -92,7 +92,7 @@ export default function SendApp({ openUrl = (url) => window.location.assign(url)
       <p className="text-secondary text-text-secondary">
         {status === 'loading' && SEND_APP.loading}
         {status === 'ready' && (shareable ? SEND_APP.readyShare : SEND_APP.ready)(installer.version, formatSize(installer.apkSize))}
-        {status === 'error' && <span className="text-warning">{error}</span>}
+        {status === 'error' && <span className="text-warning">{SEND_APP.error(error)}</span>}
       </p>
 
       {shareable && (sending || share.status === ShareStatus.READY) && (

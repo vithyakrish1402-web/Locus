@@ -66,7 +66,7 @@ export default function SquadMemberCard({ member, me, heading, headingLive, onOp
   const name = member.name || '?';
 
   return (
-    <div data-testid="member-row" className="flex items-center gap-3 py-3 border-b border-border font-ui text-text">
+    <div data-testid="member-row" className="flex items-center gap-3 p-3 rounded-2xl glass-panel font-ui text-text hover:bg-surface/90 transition-all duration-150">
       <Avatar name={name} dashed={member.status === 'FROZEN' || !member.hasFix} />
       <div className="flex-1 min-w-0">
         <h4 className="text-heading break-words">

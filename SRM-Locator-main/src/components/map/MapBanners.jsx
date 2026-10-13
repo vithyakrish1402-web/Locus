@@ -13,7 +13,7 @@ export function MeetingPointBanner({ onCancel }) {
     <div
       data-testid="meeting-point-banner"
       role="status"
-      className="flex items-center gap-3 rounded-card bg-accent-soft text-text border-2 border-accent font-ui py-2 pl-3 pr-1 shadow-[var(--shadow-2)]"
+      className="flex items-center gap-3 rounded-card glass-panel text-text border border-accent font-ui py-2 pl-3 pr-1 shadow-md"
     >
       <Flag size={22} className="text-accent shrink-0" aria-hidden="true" />
       <p className="flex-1 min-w-0 text-label">{MAP_BANNERS.placeMeetingPoint}</p>
@@ -35,7 +35,7 @@ export function LocationProblemCard({ kind, onDismiss, onTurnOn = null }) {
       data-testid="location-problem"
       data-kind={kind}
       role="alert"
-      className="rounded-card bg-raised text-text font-ui shadow-[var(--shadow-2)] border border-border p-3 flex flex-col gap-3"
+      className="rounded-card glass-panel text-text font-ui p-3 flex flex-col gap-3 shadow-md"
     >
       <div className="flex items-start gap-3">
         <span className="flex items-center justify-center w-10 h-10 rounded-full bg-warning-soft text-warning shrink-0" aria-hidden="true">
@@ -50,7 +50,7 @@ export function LocationProblemCard({ kind, onDismiss, onTurnOn = null }) {
           onClick={onDismiss}
           title={MAP_BANNERS.dismiss}
           aria-label={MAP_BANNERS.dismiss}
-          className="shrink-0 -mt-1 -mr-1 inline-flex items-center justify-center w-11 h-11 rounded-full text-text-secondary pointer-events-auto"
+          className="shrink-0 -mt-1 -mr-1 inline-flex items-center justify-center w-11 h-11 rounded-full text-text-secondary hover:text-text pointer-events-auto"
         >
           <X size={18} aria-hidden="true" />
         </button>
@@ -69,7 +69,7 @@ export function FindingLocation() {
       <p
         data-testid="finding-location"
         role="status"
-        className="inline-flex items-center gap-3 rounded-full bg-raised text-text font-ui text-label px-5 min-h-14 shadow-[var(--shadow-2)]"
+        className="inline-flex items-center gap-3 rounded-full glass-pill text-text font-ui text-label px-5 min-h-14 shadow-md"
       >
         <Loader2 size={20} className="text-accent animate-spin motion-reduce:animate-none" aria-hidden="true" />
         {MAP_BANNERS.finding}

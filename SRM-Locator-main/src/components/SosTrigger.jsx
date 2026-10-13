@@ -106,11 +106,14 @@ const SosTrigger = ({
 }) => {
   const [phase, setPhase] = useState('idle');
   const [early, setEarly] = useState(false);
+  const [docked, setDocked] = useState(true);
 
   const holdTimeoutRef = useRef(null);
   const armWindowTimeoutRef = useRef(null);
   const firedTimeoutRef = useRef(null);
   const earlyTimeoutRef = useRef(null);
+  const autoDockTimeoutRef = useRef(null);
+  const pointerStartRef = useRef(null);
 
   const clearAllTimers = () => {
     clearTimeout(holdTimeoutRef.current);
@@ -127,9 +130,26 @@ const SosTrigger = ({
     setEarly(false);
   };
 
+  const resetAutoDockTimer = () => {
+    clearTimeout(autoDockTimeoutRef.current);
+    if (phase === 'idle') {
+      autoDockTimeoutRef.current = setTimeout(() => {
+        setDocked(true);
+      }, 5000);
+    }
+  };
+
+  useEffect(() => {
+    if (!docked && phase === 'idle') {
+      resetAutoDockTimer();
+    }
+    return () => clearTimeout(autoDockTimeoutRef.current);
+  }, [docked, phase]);
+
   useEffect(() => () => {
     clearAllTimers();
     clearTimeout(earlyTimeoutRef.current);
+    clearTimeout(autoDockTimeoutRef.current);
   }, []);
 
   // While the button is on screen, every screen keeps its bottom content clear of it
@@ -206,12 +226,28 @@ const SosTrigger = ({
 
   const handlePointerDown = (e) => {
     if (e.button !== undefined && e.button !== 0) return;
+    pointerStartRef.current = { x: e.clientX, y: e.clientY };
+    clearTimeout(autoDockTimeoutRef.current);
+    if (docked) {
+      setDocked(false);
+    }
     e.preventDefault();
     if (phase === 'idle') startHold('arming');
     else if (phase === 'armed') startHold('confirming');
   };
 
+  const handlePointerMove = (e) => {
+    if (!pointerStartRef.current) return;
+    const deltaX = e.clientX - pointerStartRef.current.x;
+    if (deltaX < -20 && phase === 'idle' && !docked) {
+      clearAllTimers();
+      setDocked(true);
+      pointerStartRef.current = null;
+    }
+  };
+
   const cancelHold = () => {
+    pointerStartRef.current = null;
     if (phase === 'arming' || phase === 'confirming') {
       clearAllTimers();
       setPhase('idle');
@@ -219,6 +255,9 @@ const SosTrigger = ({
       clearTimeout(earlyTimeoutRef.current);
       setEarly(true);
       earlyTimeoutRef.current = setTimeout(() => setEarly(false), EARLY_DISPLAY_MS);
+    }
+    if (!docked && phase === 'idle') {
+      resetAutoDockTimer();
     }
   };
 
@@ -235,6 +274,8 @@ const SosTrigger = ({
   const holding = HOLDING.includes(phase);
   const card = holding ? SOS_HOLD[phase] : null;
   const locationNote = holding && phase !== 'arming' && (sharingMode === 'FROZEN' || sharingMode === 'GHOST');
+  const isDocked = docked && phase === 'idle';
+
   // One layer, over every screen but an incoming alert (LAYER.emergencyButton). The scrim and
   // the card share it, drawn before the button so the button stays on top.
   const layerStyle = { zIndex: LAYER.emergencyButton };
@@ -296,6 +337,7 @@ const SosTrigger = ({
         data-phase={phase}
         data-view={view}
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
         onPointerUp={cancelHold}
         onPointerLeave={cancelHold}
         onPointerCancel={cancelHold}
@@ -312,9 +354,32 @@ const SosTrigger = ({
         className={`fixed bottom-20 left-4 md:bottom-6 md:left-[23rem] w-20 h-20 rounded-full select-none touch-none pointer-events-auto flex items-center justify-center text-center font-ui border-4 shadow-[var(--shadow-2)] active:scale-95 transition-colors duration-200 ${PHASE_LOOK[phase]} ${className}`}
         style={{
           marginBottom: 'env(safe-area-inset-bottom)',
+          transform: isDocked ? 'translateX(var(--sos-dock-x, -70px))' : 'translateX(0)',
+          transition: 'transform 360ms cubic-bezier(0.16, 1, 0.3, 1), background-color 200ms ease',
           ...layerStyle,
         }}
       >
+        {isDocked && (
+          <svg className="absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white pointer-events-none select-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        )}
+        {!isDocked && phase === 'idle' && (
+          <span
+            role="presentation"
+            tabIndex={-1}
+            onClick={(e) => {
+              e.stopPropagation();
+              setDocked(true);
+            }}
+            title="Tuck to side"
+            className="absolute -right-2 top-1/2 -translate-y-1/2 w-5 h-7 rounded-r-full bg-surface text-text-secondary border border-border shadow-[var(--shadow-1)] flex items-center justify-center cursor-pointer active:scale-95 select-none z-20"
+          >
+            <svg className="w-3 h-3 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </span>
+        )}
         <svg className="absolute left-1/2 top-1/2 w-24 h-24 -translate-x-1/2 -translate-y-1/2 -rotate-90 pointer-events-none overflow-visible" viewBox={`0 0 ${GRID} ${GRID}`} aria-hidden="true">
           {/* The track, while there is something to fill or drain. */}
           <circle

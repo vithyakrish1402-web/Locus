@@ -15,12 +15,17 @@ const BuildingMarker = ({ onClick, highlighted = false }) => (
     onClick={onClick}
     data-testid="building-marker"
     data-highlighted={highlighted || undefined}
-    className="relative flex items-center justify-center cursor-pointer z-40 group -ml-3 -mt-3 w-6 h-6 pointer-events-auto"
+    className="relative flex items-center justify-center cursor-pointer z-40 group -ml-3 -mt-3 w-6 h-6 pointer-events-auto select-none"
   >
-    {highlighted && <div className="absolute w-8 h-8 rounded-full bg-accent-halo pointer-events-none" />}
+    {highlighted && (
+      <div
+        className="absolute w-8 h-8 rounded-full bg-accent-halo locus-soft-ring pointer-events-none"
+        aria-hidden="true"
+      />
+    )}
     <div
-      className={`rounded-full border-[3px] border-[var(--color-map-casing)] shadow-[var(--shadow-1)] group-hover:scale-125 transition-transform duration-200 ${
-        highlighted ? 'w-[18px] h-[18px] bg-accent' : 'w-3.5 h-3.5 bg-[var(--color-map-building)]'
+      className={`rounded-full border-[3px] border-[var(--color-map-casing)] shadow-[var(--shadow-1)] group-hover:scale-125 transition-all duration-200 ease-out ${
+        highlighted ? 'w-[18px] h-[18px] bg-accent scale-110 shadow-[0_0_12px_var(--color-accent-halo)]' : 'w-3.5 h-3.5 bg-[var(--color-map-building)]'
       }`}
     />
   </div>

@@ -18,12 +18,14 @@ const WaypointMarker = ({ name, onClick, onClear, canClear, onTrack }) => {
     <div
       onClick={onClick}
       data-testid="meeting-point-marker"
-      className="w-12 h-12 -ml-6 -mt-6 flex items-center justify-center cursor-pointer relative z-[60] font-ui"
+      className="w-12 h-12 -ml-6 -mt-6 flex items-center justify-center cursor-pointer relative z-[60] font-ui select-none pointer-events-auto"
     >
-      <div className="absolute inset-1.5 rounded-full bg-[var(--color-map-meeting)] text-bg border-[3px] border-[var(--color-map-casing)] shadow-[var(--shadow-2)] flex items-center justify-center">
+      {/* Gentle idle breathing halo for the Rally Point, strictly anchored at coordinate center */}
+      <div className="absolute -inset-1 rounded-full bg-accent-halo locus-soft-ring pointer-events-none" aria-hidden="true" />
+      <div className="absolute inset-1.5 rounded-full bg-[var(--color-map-meeting)] text-bg border-[3px] border-[var(--color-map-casing)] shadow-[var(--shadow-2)] flex items-center justify-center transition-transform duration-200 active:scale-95">
         <Flag size={18} aria-hidden="true" />
       </div>
-      <div ref={plateRef} data-testid="meeting-point-plate" className="absolute top-full mt-1 whitespace-nowrap rounded-full bg-[var(--color-map-plate)] px-2 py-0.5 text-caption font-semibold text-text shadow-[var(--shadow-1)] pointer-events-none">
+      <div ref={plateRef} data-testid="meeting-point-plate" className="absolute top-full mt-1 whitespace-nowrap rounded-full bg-[var(--color-map-plate)] px-2.5 py-0.5 text-caption font-semibold text-text shadow-[var(--shadow-1)] pointer-events-none transition-opacity duration-200">
         {MARKERS.meetingPointPlate(name)}
       </div>
       {/* Find with AR Scan: every member (not just whoever set it) gets a bearing to it. */}

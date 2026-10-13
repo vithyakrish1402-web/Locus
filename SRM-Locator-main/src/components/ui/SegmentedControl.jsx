@@ -36,7 +36,11 @@ export default function SegmentedControl({ label, value, onChange, options, clas
   };
 
   return (
-    <div role="radiogroup" aria-label={label} className={`flex p-1 rounded-full bg-sunken font-ui ${className}`}>
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={`flex p-1 rounded-full bg-[var(--glass-sunken)] backdrop-blur-xl border border-[var(--glass-border-subtle)] font-ui shadow-inner ${className}`}
+    >
       {options.map((option, index) => {
         const selected = option.value === value;
         const Icon = option.icon;
@@ -50,19 +54,29 @@ export default function SegmentedControl({ label, value, onChange, options, clas
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(option.value)}
             onKeyDown={(event) => onKeyDown(event, index)}
-            className={`relative flex-1 min-h-[var(--size-touch)] px-3 rounded-full text-label focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? 'text-text' : 'text-text-secondary'}`}
+            className={`relative flex-1 min-h-[var(--size-touch)] px-3 rounded-full text-label focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent select-none cursor-pointer transition-colors duration-200 ${
+              selected ? 'text-text font-semibold' : 'text-text-secondary hover:text-text'
+            }`}
+            data-no-press
           >
             {selected && (
               <motion.span
                 layoutId={`segment-thumb-${thumbId}`}
-                transition={reduceMotion ? { duration: 0 } : INDICATOR_SPRING}
-                className="absolute inset-0 rounded-full bg-raised shadow-[var(--shadow-1)]"
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { type: 'spring', stiffness: 450, damping: 35, mass: 0.8 }
+                }
+                className="absolute inset-0 rounded-full bg-[var(--color-surface)] border border-[var(--glass-border)]"
+                style={{
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.1), var(--glass-specular)',
+                }}
                 aria-hidden="true"
               />
             )}
-            <span className="relative inline-flex items-center justify-center gap-2">
+            <span className="relative z-10 inline-flex items-center justify-center gap-2 transition-transform duration-150">
               {option.leading}
-              {Icon && <Icon size={18} aria-hidden="true" />}
+              {Icon && <Icon size={18} aria-hidden="true" className="transition-transform duration-200" />}
               {option.label}
             </span>
           </button>

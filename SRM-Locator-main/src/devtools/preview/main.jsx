@@ -14,7 +14,8 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../index.css';
 import { MotionGlobalConfig } from 'framer-motion';
-import { Ban, Map, MapPinOff, Navigation, Radio, Scan, ScanLine, Share2, ShieldCheck, Users, X } from 'lucide-react';
+import { Ban, Map, MapPinOff, Navigation, Radio, Scan, ScanLine, Share2, ShieldCheck, Users, X, Search, Sliders } from 'lucide-react';
+import BuildingRow from '../../components/map/BuildingRow';
 import {
   Avatar, Badge, Button, Card, Chip, IconButton, ListRow, NoticeCard, RadioList, SectionLabel,
   SegmentedControl, Sheet, Skeleton, StatusDot, Switch, TextField,
@@ -46,10 +47,9 @@ import { AR_TAGS, ME, MEMBERS, NOTICES, SOS, appUpdate, liveUpdate } from './sam
 
 const params = new URLSearchParams(window.location.search);
 
-// Frames show every screen at rest: framer-motion animations jump to their end. A screenshot
-// tool that only paints on capture (the browser pane does) would otherwise catch a sheet or a
-// notice part-way in. ?motion=1 plays them.
-if (params.get('frame') === '1' && params.get('motion') !== '1') MotionGlobalConfig.skipAnimations = true;
+// Frames show every screen at rest: framer-motion animations jump to their end if motion=0.
+// ?motion=0 disables animations for static screenshot tests; default allows interactive preview animations.
+if (params.get('frame') === '1' && params.get('motion') === '0') MotionGlobalConfig.skipAnimations = true;
 
 // The SOS alarm and vibration start the moment SosOverlay mounts; silence them unless asked.
 if (params.get('sound') !== '1') {
@@ -166,6 +166,7 @@ const SCREENS = {
     label: 'Bottom tab bar',
     render: () => <BottomTabBar tabs={TABS} activeId="grid" onSelect={() => {}} />,
   },
+  'buildings-list': { label: 'Nearby Places (Buildings list)', render: () => <BuildingsListDemo /> },
   'place-card': { label: 'Place card', render: () => <PlaceOnMap place={campusPlace(2)} /> },
   'place-card-more': { label: 'Place card, more about this place', render: () => <PlaceOnMap place={campusPlace(2)} expanded /> },
   'place-card-no-details': { label: 'Place card, no more details', render: () => <PlaceOnMap place={campusPlace(39)} expanded /> },
@@ -297,6 +298,109 @@ function PlaceOnMap({ place, expanded = false, me = ME, choosingDestination = fa
   );
 }
 
+function BuildingsListDemo() {
+  const [selectedCat, setSelectedCat] = useState('ALL');
+  const [query, setQuery] = useState('');
+  const [selectedPlace, setSelectedPlace] = useState(null);
+
+  const filtered = SRM_MASTER_DATABASE.filter(b => {
+    const matchesCat = selectedCat === 'ALL' || b.category === selectedCat;
+    const matchesQ = !query.trim() || b.name.toLowerCase().includes(query.toLowerCase());
+    return matchesCat && matchesQ;
+  });
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: '#F8FAFC', display: 'flex', flexDirection: 'column' }}>
+      {/* Search & Header (Minimalist Android UI) */}
+      <div className="p-4 pb-3 flex flex-col gap-2.5 shrink-0 bg-white border-b border-[#E2E8F0] font-ui">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-[#172B4D] tracking-tight">SRM Campus</h2>
+          <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-[#EFF6FF] text-[#287FE8] border border-[#BFDBFE]">
+            Kattankulathur
+          </span>
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#64748B]" size={17} />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search buildings, places, facilities..."
+            className="w-full h-10 rounded-xl bg-[#F8FAFC] pl-10 pr-10 font-ui text-xs text-[#172B4D] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#287FE8]/20 focus:border-[#287FE8] border border-[#E2E8F0] transition-all"
+          />
+          <Sliders className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={16} />
+        </div>
+
+        {/* Category Filter Chips */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar -mx-1 px-1">
+          {[
+            { id: 'ALL', label: 'All' },
+            { id: 'ACADEMIC', label: 'Academic' },
+            { id: 'ENGINEERING', label: 'Engineering' },
+            { id: 'MEDICAL', label: 'Medical' },
+            { id: 'RESIDENTIAL', label: 'Hostels' },
+            { id: 'LOGISTICS', label: 'Dining & Hubs' },
+          ].map((cat) => {
+            const isSelected = selectedCat === cat.id;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCat(cat.id)}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium font-ui transition-colors flex items-center gap-1 cursor-pointer border ${
+                  isSelected
+                    ? 'bg-[#287FE8] text-white border-[#287FE8] shadow-sm'
+                    : 'bg-white text-[#475569] border-[#E2E8F0] hover:bg-[#F1F5F9] hover:text-[#172B4D]'
+                }`}
+              >
+                {cat.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Buildings List Content */}
+      <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3 font-ui">
+        <div className="flex items-center justify-between pb-0.5">
+          <h3 className="text-sm font-semibold text-[#172B4D] tracking-tight">Nearby Places</h3>
+          <span className="text-xs text-[#64748B] font-normal">{filtered.length} places</span>
+        </div>
+
+        {filtered.map((b) => (
+          <BuildingRow
+            key={b.id}
+            building={b}
+            me={ME}
+            onOpen={() => setSelectedPlace(b)}
+            onArScan={() => {}}
+            onNavigate={() => {}}
+          />
+        ))}
+      </div>
+
+      {/* Place Detail Overlay if selected */}
+      {selectedPlace && (
+        <div className="absolute inset-x-2 bottom-3 z-50 max-h-[85vh] overflow-y-auto shadow-2xl">
+          <PlaceCard
+            place={selectedPlace}
+            me={ME}
+            heading={330}
+            headingLive
+            expanded
+            onToggleExpanded={() => {}}
+            onClose={() => setSelectedPlace(null)}
+            onNavigate={() => {}}
+            onArScan={() => {}}
+            onShowOnMap={() => {}}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // The tokens themselves (src/theme/tokens.css), drawn with var() so each frame shows its
 // own theme's values.
 const SWATCHES = [
@@ -370,95 +474,142 @@ function ComponentSheet() {
   const [mode, setMode] = useState('live');
   const [rate, setRate] = useState('standard');
   const [sounds, setSounds] = useState(true);
-  const modeHelp = { live: 'The group sees you move, updated every 5 seconds.', paused: 'Your group sees where you were when you paused.', hidden: "Other members won't see you on their map." };
+  const modeHelp = {
+    live: 'The squad sees your movement in real time, updated every 5 seconds.',
+    paused: 'Your squad sees your last known anchor before pausing.',
+    hidden: 'You are completely masked from other squad members’ radar.',
+  };
+
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--color-bg)', padding: 16, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <Button block size="large">Sign in</Button>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button icon={Navigation}>Navigate</Button>
-          <Button variant="tonal" icon={ScanLine}>AR Scan</Button>
+    <div className="relative h-full overflow-y-auto font-ui p-4 box-border flex flex-col gap-5 select-none" style={{ background: 'var(--color-bg)' }}>
+      {/* Apple Ambient Light Orbs for Glass Refraction */}
+      <div className="pointer-events-none absolute -top-24 -left-20 w-72 h-72 rounded-full bg-accent/20 blur-3xl opacity-60" aria-hidden="true" />
+      <div className="pointer-events-none absolute top-1/3 -right-20 w-80 h-80 rounded-full bg-emerald-500/10 blur-3xl opacity-50" aria-hidden="true" />
+      <div className="pointer-events-none absolute bottom-10 left-10 w-80 h-80 rounded-full bg-indigo-500/15 blur-3xl opacity-40" aria-hidden="true" />
+
+      {/* Hero Island / Identity Card */}
+      <Card className="relative z-10 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar name="Meera Iyer" />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-ui text-heading font-semibold text-text">Meera Iyer</span>
+                <Badge count={2} label="2 join requests" />
+              </div>
+              <p className="text-secondary text-text-secondary flex items-center gap-1.5 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-success inline-block shadow-[0_0_6px_rgba(30,123,60,0.4)]" />
+                Squad Lead · SRM Campus
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <IconButton label="Share group code" icon={Share2} variant="tonal" size={18} />
+            <IconButton label="Close" icon={X} variant="plain" size={18} />
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Button variant="secondary">Cancel</Button>
-          <Button variant="plain">Forgot password?</Button>
-          <IconButton label="Share group code" icon={Share2} variant="tonal" />
-          <IconButton label="Close" icon={X} />
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Chip icon={ShieldCheck}>Group Lead</Chip>
+          <Chip tone="neutral">Planned Session</Chip>
         </div>
-        <Button variant="danger" block>Remove and block</Button>
+
+        <div className="grid grid-cols-2 gap-2.5 pt-1">
+          <Button icon={Navigation} variant="primary" size="medium">Navigate</Button>
+          <Button icon={ScanLine} variant="tonal" size="medium">AR Scan</Button>
+        </div>
+      </Card>
+
+      {/* Location Privacy */}
+      <div className="relative z-10">
+        <SectionLabel>Location Privacy</SectionLabel>
+        <Card className="flex flex-col gap-3">
+          <SegmentedControl
+            label="Location sharing"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'live', label: 'Live', leading: mode === 'live' ? <StatusDot status="live" /> : null },
+              { value: 'paused', label: 'Paused' },
+              { value: 'hidden', label: 'Hidden' },
+            ]}
+          />
+          <p className="font-ui text-secondary text-text-secondary flex items-center gap-2 px-1">
+            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-accent" />
+            {modeHelp[mode]}
+          </p>
+        </Card>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Chip icon={ShieldCheck}>You&apos;re the Group Lead</Chip>
-        <Chip tone="neutral">Planned</Chip>
-        <Badge count={2} label="2 join requests" />
-      </div>
-
-      <div>
-        <SectionLabel>Your location</SectionLabel>
-        <SegmentedControl
-          label="Location sharing"
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: 'live', label: 'Live', leading: mode === 'live' ? <StatusDot status="live" /> : null },
-            { value: 'paused', label: 'Paused' },
-            { value: 'hidden', label: 'Hidden' },
-          ]}
-        />
-        <p className="font-ui text-secondary text-text-secondary" style={{ margin: '8px 4px 0' }}>{modeHelp[mode]}</p>
-      </div>
-
-      <div>
-        <SectionLabel>Location refresh rate</SectionLabel>
+      {/* Transmission Frequency */}
+      <div className="relative z-10">
+        <SectionLabel>Transmission Frequency</SectionLabel>
         <Card padded={false}>
           <RadioList
             label="Location refresh rate"
             value={rate}
             onChange={setRate}
             options={[
-              { value: 'eco', label: 'Battery saver', description: 'Every 15 seconds' },
-              { value: 'standard', label: 'Standard', description: 'Every 5 seconds' },
-              { value: 'max', label: 'Fast', description: 'Every second · uses more battery' },
+              { value: 'eco', label: 'Battery saver', description: 'Every 15 seconds · High battery life' },
+              { value: 'standard', label: 'Standard', description: 'Every 5 seconds · Recommended' },
+              { value: 'max', label: 'Fast', description: 'Every second · Uses more battery' },
             ]}
           />
         </Card>
       </div>
 
-      <Card padded={false}>
-        <div className="divide-y divide-border">
-          <Switch label="Alert sounds" checked={sounds} onChange={setSounds} />
-          <Switch label="Emergency alerts" description="Always on" checked locked />
-        </div>
-      </Card>
-
-      <TextField label="Email" type="email" defaultValue="meera.iyer@srmist.edu.in" />
-      <TextField label="Group code" defaultValue="K7M2Q" problem="No group uses this code. Check it with your Group Lead." />
-
-      <Card padded={false}>
-        <div className="divide-y divide-border">
-          <ListRow leading={<Avatar name="Meera Iyer" />} title="Meera Iyer" description={<StatusDot status="live">Live now</StatusDot>} trailing={<span className="text-body text-text tabular-nums">120 m</span>} />
-          <ListRow leading={<Avatar name="Rohan Das" dashed />} title="Rohan Das" description={<StatusDot status="paused">Paused · 6 min ago</StatusDot>} trailing={<span className="text-body text-text tabular-nums">520 m</span>} />
-          <ListRow leading={<Avatar name="Ishita Rao" dashed />} title="Ishita Rao" description={<StatusDot status="hidden">Hidden from other members&apos; maps</StatusDot>} />
-        </div>
-      </Card>
-
-      <NoticeCard tone="success" title="Meera joined the group" onDismiss={() => {}}>You approved her request.</NoticeCard>
-      <NoticeCard tone="info" icon={Radio} title="Aarav is pinging you" onDismiss={() => {}}>He is 340 m away, at 2 o&apos;clock.</NoticeCard>
-      <NoticeCard tone="warning" icon={MapPinOff} title="Location is off" action={<Button variant="tonal" block>Turn on location</Button>}>
-        Turn it on so your group can find you and you can see how far away they are.
-      </NoticeCard>
-
-      <Card>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <Skeleton className="w-10 h-10 rounded-full" />
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-3 w-1/3" />
+      {/* Notifications & Sound Controls */}
+      <div className="relative z-10">
+        <SectionLabel>Notifications & Alerts</SectionLabel>
+        <Card padded={false}>
+          <div className="divide-y divide-[var(--glass-border-subtle)]">
+            <Switch label="Alert sounds" description="Audible sonar pings on member proximity" checked={sounds} onChange={setSounds} />
+            <Switch label="Emergency alerts" description="High-priority distress broadcast · Always on" checked locked />
           </div>
+        </Card>
+      </div>
+
+      {/* Squad Telemetry */}
+      <div className="relative z-10">
+        <SectionLabel>Squad Telemetry (3 Active)</SectionLabel>
+        <Card padded={false}>
+          <div className="divide-y divide-[var(--glass-border-subtle)]">
+            <ListRow leading={<Avatar name="Meera Iyer" />} title="Meera Iyer" description={<StatusDot status="live">Live now</StatusDot>} trailing={<span className="text-secondary font-medium text-text tabular-nums px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">120 m</span>} />
+            <ListRow leading={<Avatar name="Rohan Das" dashed />} title="Rohan Das" description={<StatusDot status="paused">Paused · 6m ago</StatusDot>} trailing={<span className="text-secondary font-medium text-text tabular-nums px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">520 m</span>} />
+            <ListRow leading={<Avatar name="Ishita Rao" dashed />} title="Ishita Rao" description={<StatusDot status="hidden">Masked from radar</StatusDot>} />
+          </div>
+        </Card>
+      </div>
+
+      {/* Secure Credentials */}
+      <div className="relative z-10 flex flex-col gap-3">
+        <SectionLabel>Identification</SectionLabel>
+        <TextField label="Campus Email" type="email" defaultValue="meera.iyer@srmist.edu.in" />
+        <TextField label="Group Code" defaultValue="K7M2Q" problem="No group uses this code. Verify with Group Lead." />
+        <div className="flex items-center justify-between pt-1 px-1">
+          <Button variant="plain">Forgot password?</Button>
+          <Button variant="secondary">Cancel</Button>
         </div>
-      </Card>
-      <div style={{ height: 24 }} />
+      </div>
+
+      {/* System Tactical Feed */}
+      <div className="relative z-10 flex flex-col gap-3">
+        <SectionLabel>System Notices</SectionLabel>
+        <NoticeCard tone="success" title="Meera joined the group" onDismiss={() => {}}>You approved her join request.</NoticeCard>
+        <NoticeCard tone="info" icon={Radio} title="Aarav is pinging you" onDismiss={() => {}}>He is 340 m away, bearing 045°.</NoticeCard>
+        <NoticeCard tone="warning" icon={MapPinOff} title="Location is off" action={<Button variant="tonal" block>Turn on location</Button>}>
+          Turn it on so your squad can locate you on campus.
+        </NoticeCard>
+      </div>
+
+      {/* Destructive Governance */}
+      <div className="relative z-10 pb-8">
+        <SectionLabel>Squad Governance</SectionLabel>
+        <Card className="flex flex-col gap-3">
+          <p className="text-secondary text-text-secondary px-0.5">Disavow connection and permanently isolate this member.</p>
+          <Button variant="danger" block>Remove and block member</Button>
+        </Card>
+      </div>
     </div>
   );
 }
