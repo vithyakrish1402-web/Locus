@@ -36,6 +36,10 @@ describe('red is for the Emergency alert and destructive actions only', () => {
     'App.jsx': 'the WiFi floor tag colour',
     'components/IndoorMarkers.jsx': 'the WiFi floor tag colour (positioning is off)',
     'components/TacticalLeafletMap.jsx': 'the WiFi floor tag colour (positioning is off)',
+    // Developer mode's Floor 7 walk test (LOCUS Test, admin only): the red Recording label and the
+    // "far off" result chip (over 10 m), each also said in words.
+    'components/devmode/ui.jsx': 'the "Far off" result chip',
+    'components/devmode/WalkingScreen.jsx': 'the red Recording label',
     'theme/tokens.css': 'the tokens themselves',
   };
 

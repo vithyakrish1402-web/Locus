@@ -1,0 +1,60 @@
+raw_name,place_id,plan_name,corridor,distance_m,plan_x,plan_y,confidence,note
+Room 701,r701,Room 701,west_spine,23.75,-9.0,11.75,estimated,
+Near Room 701,r701,Room 701,west_spine,23.75,-9.0,11.75,estimated,
+Near Toom 701,r701,Room 701,west_spine,23.75,-9.0,11.75,estimated,typo in raw name
+Infront of Room 701,r701,Room 701,west_spine,23.75,-9.0,11.75,estimated,
+Between Room 701 and 702,"between:r701,r702",Between 701 and 702,west_spine,20.5,-9.0,8.5,estimated,midpoint
+Room 702,r702,Room 702,west_spine,17.25,-9.0,5.25,guess,Room 702 position is a guess on the plan
+Room 703,r703,Room 703,west_spine,10.75,-9.0,-1.25,estimated,
+Near Room 703,r703,Room 703,west_spine,10.75,-9.0,-1.25,estimated,
+Infront of Room703,r703,Room 703,west_spine,10.75,-9.0,-1.25,estimated,
+Near Room 703 and Lift,r703,Room 703,west_spine,10.75,-9.0,-1.25,estimated,also near the lobby A lift area; kept at 703
+Between Room 703 and 703A,"between:r703,r703A",Between 703 and 703A,west_spine,7.5,-9.0,-4.5,estimated,midpoint
+In-between Room 703 and 703A,"between:r703,r703A",Between 703 and 703A,west_spine,7.5,-9.0,-4.5,estimated,midpoint
+Room 703A,r703A,Room 703A (staff room),west_spine,4.25,-9.0,-7.75,estimated,
+Lift infront of Room 703 A,lift_A3,Lift A3 (in front of Room 703A),west_spine,3.7,-9.0,-8.3,estimated,
+Lift Infront if Room 703A,lift_A3,Lift A3 (in front of Room 703A),west_spine,3.7,-9.0,-8.3,estimated,typo in raw name
+Staff Room 703A,r703A,Room 703A (staff room),west_spine,4.25,-9.0,-7.75,hold,"HOLD: left out of access point placement until confirmed whether this scan was in the corridor or inside the staff room. If in the corridor, change place_id to r703A / r706A."
+Center of Two Lifts Near Room 703,lobbyA,Lift lobby A,passage,9.0,0.0,0.0,estimated,
+Lift and Stairs Area,lobbyA,Lift lobby A,passage,9.0,0.0,0.0,estimated,
+Near Lift and Stairs Area,lobbyA,Lift lobby A,passage,9.0,0.0,0.0,estimated,
+Near Lift Stairs Area,lobbyA,Lift lobby A,passage,9.0,0.0,0.0,estimated,
+Stairs infron of Room 701,s_w701,Stairs near Room 701,west_spine,27.0,-9.0,15.0,estimated,typo in raw name
+Stairs,s_w701,Stairs near Room 701,west_spine,27.0,-9.0,15.0,estimated,raw label has no number; its GPS and timing fit the stairs by 701
+Room 705,r705,Room 705,east_spine,17.25,37.0,5.25,estimated,
+tp705,r705,Room 705,east_spine,17.25,37.0,5.25,estimated,first-session label
+Room 706,r706,Room 706,east_spine,10.75,37.0,-1.25,estimated,
+Near Room 706,r706,Room 706,east_spine,10.75,37.0,-1.25,estimated,
+tp 706,r706,Room 706,east_spine,10.75,37.0,-1.25,estimated,first-session label
+Center of 3 Lifts Near Room 706,lobbyB,Lift lobby B,passage,37.0,28.0,0.0,guess,
+Infront of 3 lift Area also Near Room 706,lobbyB,Lift lobby B,passage,37.0,28.0,0.0,guess,
+lift near tp 706,lobbyB,Lift lobby B,passage,37.0,28.0,0.0,guess,first-session label
+Near 7th floor Stairs,s_E706,Stairs near Room 706 (beside lobby B),passage,31.0,22.0,0.0,guess,GPS for this scan was poor
+Stairs of 7th Floor,s_E706,Stairs near Room 706 (beside lobby B),passage,31.0,22.0,0.0,guess,
+Room 706A,r706A,Room 706A (staff room),east_spine,4.25,37.0,-7.75,estimated,GPS disagrees with the plan for several 706A scans: check on site
+Room706A,r706A,Room 706A (staff room),east_spine,4.25,37.0,-7.75,estimated,typo in raw name
+Near Room 706 A,r706A,Room 706A (staff room),east_spine,4.25,37.0,-7.75,estimated,
+tp 706 a,r706A,Room 706A (staff room),east_spine,4.25,37.0,-7.75,estimated,first-session label
+Lift Area Infront of Room 706A,lift_B4,Lift B4 (in front of Room 706A),east_spine,3.7,37.0,-8.3,estimated,
+Lift Area Infront of Room706A,lift_B4,Lift B4 (in front of Room 706A),east_spine,3.7,37.0,-8.3,estimated,typo in raw name
+Staff Room TP 706 A,r706A,Room 706A (staff room),east_spine,4.25,37.0,-7.75,hold,"HOLD: left out of access point placement until confirmed whether this scan was in the corridor or inside the staff room. If in the corridor, change place_id to r703A / r706A."
+tp 704,r704,Room 704,east_spine,23.75,37.0,11.75,estimated,first-session label; 704 position on the plan is a mirror guess
+Near Restroom L,rL,Restroom L (old ladies),east_back,3.2,33.8,7.9,guess,
+Near Restroom M,rM,Restroom M (old gents),east_back,15.0,22.0,7.9,guess,
+Entrance of Computing Technologies,dept1,Entrance to the Department of Computing Technologies,passage,29.0,20.0,0.0,estimated,
+Near Lift And Entrance of Computing Technologies Area,dept1,Entrance to the Department of Computing Technologies,passage,29.0,20.0,0.0,estimated,scan was about 6 m east of the door by GPS
+Other Entrance Near The New Restroom Area From Department of Computing Technolog,dept2,Other Department entrance (near the new restroom),passage,17.0,8.0,0.0,estimated,raw name was cut off in the file
+Near The New Restroom L,rW,New ladies restroom ('W'),west_back,15.0,6.0,7.9,guess,new ladies restroom. NOT in the plan survey_spots list; use the places entry
+Near the New Restroom,rNew,New restroom (disabled),west_back,3.2,-5.8,7.9,guess,disabled restroom
+Computing Lab C,labC,Computing Lab C,passage,26.0,17.0,0.0,estimated,"Labs C and F face each other; scans are in the passage, so C and F are one spot"
+COMPUTING LAB C,labC,Computing Lab C,passage,26.0,17.0,0.0,estimated,capital letters from keyboard
+TP709,labC,Computing Lab C,passage,26.0,17.0,0.0,estimated,TP709 is Lab C
+Computing Lab D,labD,Computing Lab D,passage,20.0,11.0,0.0,estimated,"Labs D and E face each other, so D and E are one spot"
+COMPUTING LAB D,labD,Computing Lab D,passage,20.0,11.0,0.0,estimated,
+TP710,labD,Computing Lab D,passage,20.0,11.0,0.0,estimated,TP710 is Lab D
+Computing Lab E,labD,Computing Lab D,passage,20.0,11.0,0.0,estimated,
+COMPUTING LAB E,labD,Computing Lab D,passage,20.0,11.0,0.0,estimated,
+Computing Lab F,labC,Computing Lab C,passage,26.0,17.0,0.0,estimated,"RULE: in file 170507, any ""Lab F"" at point_id 69 or higher was really Lab E, so map those to place_id labD"
+Comouting Lab F,labC,Computing Lab C,passage,26.0,17.0,0.0,estimated,"typo; in file 170507 this is point 70, which was really Lab E, so use labD"
+tp 707,DROP,(no such room),,,,,,"Room 707 does not exist; one scan (first file, point 6). Its signal looked like the east end near 706/706A but the match is weak. Drop it."
+Room703,r703,Room 703,west_spine,10.75,-9.0,-1.25,estimated,typo in raw name (missing space)

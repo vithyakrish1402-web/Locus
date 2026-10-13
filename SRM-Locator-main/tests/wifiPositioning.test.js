@@ -9,6 +9,7 @@ import {
   mergeScans,
   refreshAccessPoints,
   rssiWeight,
+  setLocalAccessPoints,
 } from '../src/utils/wifiPositioning.js';
 
 // Firestore and Auth are mocked: the estimator is pure, and the cache tests only need to
@@ -362,5 +363,33 @@ describe('wifi_aps cache', () => {
     expect([...aps.keys()].sort()).toEqual(['aa:aa:aa:aa:aa:01', 'cc:cc:cc:cc:cc:01']);
     expect(aps.get('aa:aa:aa:aa:aa:01')).toMatchObject({ building: 'TECH PARK', floor: 1, ambiguousFloor: true });
     expect(aps.get('cc:cc:cc:cc:cc:01')).toMatchObject({ building: null, floor: null });
+  });
+});
+
+describe('a local access point table', () => {
+  beforeEach(() => {
+    __resetAccessPointCache();
+    firebase.getDocsFromServer.mockReset();
+    firebase.auth.authStateReady.mockClear();
+  });
+
+  it('replaces the Firestore read entirely: wifi_aps is never touched, not even to wait for sign-in', async () => {
+    const local = table({ 'aa:aa:aa:aa:aa:01': ap(P1, 7) });
+    setLocalAccessPoints(local);
+    expect(await loadAccessPoints()).toBe(local);
+    expect(await loadAccessPoints({ force: true })).toBe(local);
+    expect(await refreshAccessPoints()).toBe(local);
+    const est = await estimateWifiPosition([scan({ 'aa:aa:aa:aa:aa:01': -50 })]);
+    expect(est).toMatchObject({ ...P1, floor: 7 });
+    expect(firebase.getDocsFromServer).not.toHaveBeenCalled();
+    expect(firebase.auth.authStateReady).not.toHaveBeenCalled();
+  });
+
+  it('passing null goes back to reading wifi_aps', async () => {
+    setLocalAccessPoints(table({ 'aa:aa:aa:aa:aa:01': ap(P1, 7) }));
+    setLocalAccessPoints(null);
+    firebase.getDocsFromServer.mockResolvedValue({ docs: [] });
+    await loadAccessPoints();
+    expect(firebase.getDocsFromServer).toHaveBeenCalledTimes(1);
   });
 });

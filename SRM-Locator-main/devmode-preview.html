@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LOCUS Developer mode preview</title>
+  </head>
+  <body>
+    <!--
+      Dev-only: the Developer mode screens with sample data, for checking them at a phone's size
+      and font scale (?screen=ready|ready-ok|walking|standing|passage|results|previous|home|advanced
+      &scale=1|1.3|2). Served by `npm run dev` at /devmode-preview.html. `npm run build` builds
+      index.html alone, so nothing here reaches a release (same as preview.html).
+    -->
+    <div id="preview-root"></div>
+    <script type="module" src="/src/devtools/devmodePreview/main.jsx"></script>
+  </body>
+</html>

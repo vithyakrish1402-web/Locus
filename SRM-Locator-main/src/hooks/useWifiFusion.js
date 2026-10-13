@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  FLOOR7_DEMO,
   SHOW_INDOOR_POSITION_TO_SQUAD,
   WIFI_POSITIONING_ENABLED,
   resolvePosition,
@@ -36,10 +37,11 @@ export function useWifiFusion(active) {
       let cancelled = false;
       let fusion = null;
       let unsubscribe = null;
-      import('../utils/wifiFusion.js')
-        .then(({ startWifiFusion }) => {
+      // The Floor 7 demo (test build only) is a second chunk; null everywhere else.
+      Promise.all([import('../utils/wifiFusion.js'), FLOOR7_DEMO ? import('../utils/floor7Demo.js') : null])
+        .then(([{ startWifiFusion }, demo]) => {
           if (cancelled) return;
-          fusion = startWifiFusion();
+          fusion = startWifiFusion(demo ? demo.floor7FusionOptions() : undefined);
           fusionRef.current = fusion;
           const sync = () => {
             setIndoor(fusion.indoor());

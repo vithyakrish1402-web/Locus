@@ -1,0 +1,453 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1060" width="1400" height="1060" font-family="IBM Plex Sans, Segoe UI, sans-serif">
+<title>TECH PARK Floor 7 - draft plan (scale estimated)</title>
+<rect width="1400" height="1060" fill="#FFFFFF"/>
+<style>.wall-est{stroke:#1B2630;stroke-width:2.5;stroke-linecap:square}.wall-guess{stroke:#8A4B00;stroke-width:2.5;stroke-dasharray:7 4}.door{stroke:#2E7D5B;stroke-width:5;stroke-linecap:butt}.door-guess{stroke:#2E7D5B;stroke-width:5;stroke-dasharray:3 2}.lbl{font-size:12px;fill:#1B2630;text-anchor:middle}.sm{font-size:9px;fill:#1B2630;text-anchor:middle}.note{font-size:11px;fill:#4A5560}</style>
+<g id="rooms">
+<polygon id="walk_west_spine" points="216.0,740.0 264.0,740.0 264.0,200.0 216.0,200.0" fill="#D5E1E6" stroke="none"/>
+<polygon id="walk_passage" points="264.0,530.0 1136.0,530.0 1136.0,470.0 264.0,470.0" fill="#D5E1E6" stroke="none"/>
+<polygon id="walk_east_spine" points="1136.0,740.0 1184.0,740.0 1184.0,200.0 1136.0,200.0" fill="#D5E1E6" stroke="none"/>
+<polygon id="walk_west_back" points="264.0,364.0 580.0,364.0 580.0,320.0 264.0,320.0" fill="#D5E1E6" stroke="none"/>
+<polygon id="walk_east_back" points="820.0,364.0 1136.0,364.0 1136.0,320.0 820.0,320.0" fill="#D5E1E6" stroke="none"/>
+<polygon id="walk_lobbyA" points="340.0,580.0 500.0,580.0 500.0,420.0 340.0,420.0" fill="#C3D4DB" stroke="none"/>
+<polygon id="walk_lobbyB" points="900.0,580.0 1060.0,580.0 1060.0,420.0 900.0,420.0" fill="#C3D4DB" stroke="none"/>
+<polygon id="room_r701" points="56.0,330.0 216.0,330.0 216.0,200.0 56.0,200.0" fill="#F7F3E8"/>
+<polygon id="room_r702" points="56.0,460.0 216.0,460.0 216.0,330.0 56.0,330.0" fill="#F7F3E8"/>
+<polygon id="room_r703" points="56.0,590.0 216.0,590.0 216.0,460.0 56.0,460.0" fill="#F7F3E8"/>
+<polygon id="room_r703A" points="56.0,720.0 216.0,720.0 216.0,590.0 56.0,590.0" fill="#F1ECF6"/>
+<polygon id="room_rW" points="500.0,320.0 580.0,320.0 580.0,200.0 500.0,200.0" fill="#EEF4EC"/>
+<polygon id="room_rNew" points="264.0,320.0 344.0,320.0 344.0,200.0 264.0,200.0" fill="#EEF4EC"/>
+<polygon id="room_rM" points="820.0,320.0 900.0,320.0 900.0,200.0 820.0,200.0" fill="#EEF4EC"/>
+<polygon id="room_rL" points="1056.0,320.0 1136.0,320.0 1136.0,200.0 1056.0,200.0" fill="#EEF4EC"/>
+<polygon id="room_labD" points="580.0,470.0 700.0,470.0 700.0,310.0 580.0,310.0" fill="#EAF1F6"/>
+<polygon id="room_labC" points="700.0,470.0 820.0,470.0 820.0,310.0 700.0,310.0" fill="#EAF1F6"/>
+<polygon id="room_labE" points="580.0,690.0 700.0,690.0 700.0,530.0 580.0,530.0" fill="#EAF1F6"/>
+<polygon id="room_labF" points="700.0,690.0 820.0,690.0 820.0,530.0 700.0,530.0" fill="#EAF1F6"/>
+<polygon id="room_r704" points="1184.0,330.0 1344.0,330.0 1344.0,200.0 1184.0,200.0" fill="#F7F3E8"/>
+<polygon id="room_r705" points="1184.0,460.0 1344.0,460.0 1344.0,330.0 1184.0,330.0" fill="#F7F3E8"/>
+<polygon id="room_r706" points="1184.0,590.0 1344.0,590.0 1344.0,460.0 1184.0,460.0" fill="#F7F3E8"/>
+<polygon id="room_r706A" points="1184.0,720.0 1344.0,720.0 1344.0,590.0 1184.0,590.0" fill="#F1ECF6"/>
+</g>
+<g id="lifts_stairs">
+<polygon id="ls_s_w701" points="204.0,200.0 276.0,200.0 276.0,100.0 204.0,100.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="204.0" y1="183.3" x2="276.0" y2="183.3" stroke="#6B7782" stroke-width="1"/>
+<line x1="204.0" y1="166.7" x2="276.0" y2="166.7" stroke="#6B7782" stroke-width="1"/>
+<line x1="204.0" y1="150.0" x2="276.0" y2="150.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="204.0" y1="133.3" x2="276.0" y2="133.3" stroke="#6B7782" stroke-width="1"/>
+<line x1="204.0" y1="116.7" x2="276.0" y2="116.7" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_lift_A3" points="264.0,690.0 320.0,690.0 320.0,642.0 264.0,642.0" fill="#B8C4CC" stroke="#1B2630" stroke-width="1"/>
+<polygon id="ls_lift_A1" points="372.0,420.0 420.0,420.0 420.0,364.0 372.0,364.0" fill="#B8C4CC" stroke="#1B2630" stroke-width="1"/>
+<polygon id="ls_lift_A2" points="420.0,420.0 468.0,420.0 468.0,364.0 420.0,364.0" fill="#B8C4CC" stroke="#1B2630" stroke-width="1"/>
+<polygon id="ls_s_S1" points="500.0,620.0 580.0,620.0 580.0,530.0 500.0,530.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="500.0" y1="605.0" x2="580.0" y2="605.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="500.0" y1="590.0" x2="580.0" y2="590.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="500.0" y1="575.0" x2="580.0" y2="575.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="500.0" y1="560.0" x2="580.0" y2="560.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="500.0" y1="545.0" x2="580.0" y2="545.0" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_S1b" points="500.0,690.0 580.0,690.0 580.0,620.0 500.0,620.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="513.3" y1="690.0" x2="513.3" y2="620.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="526.7" y1="690.0" x2="526.7" y2="620.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="540.0" y1="690.0" x2="540.0" y2="620.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="553.3" y1="690.0" x2="553.3" y2="620.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="566.7" y1="690.0" x2="566.7" y2="620.0" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_W1" points="264.0,642.0 340.0,642.0 340.0,530.0 264.0,530.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="264.0" y1="623.3" x2="340.0" y2="623.3" stroke="#6B7782" stroke-width="1"/>
+<line x1="264.0" y1="604.7" x2="340.0" y2="604.7" stroke="#6B7782" stroke-width="1"/>
+<line x1="264.0" y1="586.0" x2="340.0" y2="586.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="264.0" y1="567.3" x2="340.0" y2="567.3" stroke="#6B7782" stroke-width="1"/>
+<line x1="264.0" y1="548.7" x2="340.0" y2="548.7" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_W2" points="320.0,690.0 340.0,690.0 340.0,642.0 320.0,642.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="320.0" y1="682.0" x2="340.0" y2="682.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="320.0" y1="674.0" x2="340.0" y2="674.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="320.0" y1="666.0" x2="340.0" y2="666.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="320.0" y1="658.0" x2="340.0" y2="658.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="320.0" y1="650.0" x2="340.0" y2="650.0" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_fA" points="340.0,690.0 500.0,690.0 500.0,580.0 340.0,580.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="366.7" y1="690.0" x2="366.7" y2="580.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="393.3" y1="690.0" x2="393.3" y2="580.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="420.0" y1="690.0" x2="420.0" y2="580.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="446.7" y1="690.0" x2="446.7" y2="580.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="473.3" y1="690.0" x2="473.3" y2="580.0" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_fBL" points="900.0,690.0 956.0,690.0 956.0,580.0 900.0,580.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="900.0" y1="671.7" x2="956.0" y2="671.7" stroke="#6B7782" stroke-width="1"/>
+<line x1="900.0" y1="653.3" x2="956.0" y2="653.3" stroke="#6B7782" stroke-width="1"/>
+<line x1="900.0" y1="635.0" x2="956.0" y2="635.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="900.0" y1="616.7" x2="956.0" y2="616.7" stroke="#6B7782" stroke-width="1"/>
+<line x1="900.0" y1="598.3" x2="956.0" y2="598.3" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_fBR" points="1004.0,690.0 1060.0,690.0 1060.0,580.0 1004.0,580.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="1004.0" y1="671.7" x2="1060.0" y2="671.7" stroke="#6B7782" stroke-width="1"/>
+<line x1="1004.0" y1="653.3" x2="1060.0" y2="653.3" stroke="#6B7782" stroke-width="1"/>
+<line x1="1004.0" y1="635.0" x2="1060.0" y2="635.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="1004.0" y1="616.7" x2="1060.0" y2="616.7" stroke="#6B7782" stroke-width="1"/>
+<line x1="1004.0" y1="598.3" x2="1060.0" y2="598.3" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_fBM" points="956.0,690.0 1004.0,690.0 1004.0,636.0 956.0,636.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="956.0" y1="681.0" x2="1004.0" y2="681.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="956.0" y1="672.0" x2="1004.0" y2="672.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="956.0" y1="663.0" x2="1004.0" y2="663.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="956.0" y1="654.0" x2="1004.0" y2="654.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="956.0" y1="645.0" x2="1004.0" y2="645.0" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_E706b" points="820.0,690.0 900.0,690.0 900.0,620.0 820.0,620.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="833.3" y1="690.0" x2="833.3" y2="620.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="846.7" y1="690.0" x2="846.7" y2="620.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="860.0" y1="690.0" x2="860.0" y2="620.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="873.3" y1="690.0" x2="873.3" y2="620.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="886.7" y1="690.0" x2="886.7" y2="620.0" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_W1e" points="1060.0,642.0 1136.0,642.0 1136.0,530.0 1060.0,530.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="1060.0" y1="623.3" x2="1136.0" y2="623.3" stroke="#6B7782" stroke-width="1"/>
+<line x1="1060.0" y1="604.7" x2="1136.0" y2="604.7" stroke="#6B7782" stroke-width="1"/>
+<line x1="1060.0" y1="586.0" x2="1136.0" y2="586.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="1060.0" y1="567.3" x2="1136.0" y2="567.3" stroke="#6B7782" stroke-width="1"/>
+<line x1="1060.0" y1="548.7" x2="1136.0" y2="548.7" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_W2e" points="1060.0,690.0 1080.0,690.0 1080.0,642.0 1060.0,642.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="1060.0" y1="682.0" x2="1080.0" y2="682.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="1060.0" y1="674.0" x2="1080.0" y2="674.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="1060.0" y1="666.0" x2="1080.0" y2="666.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="1060.0" y1="658.0" x2="1080.0" y2="658.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="1060.0" y1="650.0" x2="1080.0" y2="650.0" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_s_E704" points="1124.0,200.0 1196.0,200.0 1196.0,100.0 1124.0,100.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="1124.0" y1="183.3" x2="1196.0" y2="183.3" stroke="#6B7782" stroke-width="1"/>
+<line x1="1124.0" y1="166.7" x2="1196.0" y2="166.7" stroke="#6B7782" stroke-width="1"/>
+<line x1="1124.0" y1="150.0" x2="1196.0" y2="150.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="1124.0" y1="133.3" x2="1196.0" y2="133.3" stroke="#6B7782" stroke-width="1"/>
+<line x1="1124.0" y1="116.7" x2="1196.0" y2="116.7" stroke="#6B7782" stroke-width="1"/>
+<polygon id="ls_lift_B4" points="1080.0,690.0 1136.0,690.0 1136.0,642.0 1080.0,642.0" fill="#B8C4CC" stroke="#1B2630" stroke-width="1"/>
+<polygon id="ls_lift_B1" points="932.0,420.0 980.0,420.0 980.0,364.0 932.0,364.0" fill="#B8C4CC" stroke="#1B2630" stroke-width="1"/>
+<polygon id="ls_lift_B2" points="980.0,420.0 1028.0,420.0 1028.0,364.0 980.0,364.0" fill="#B8C4CC" stroke="#1B2630" stroke-width="1"/>
+<polygon id="ls_lift_B3" points="956.0,636.0 1004.0,636.0 1004.0,580.0 956.0,580.0" fill="#B8C4CC" stroke="#1B2630" stroke-width="1"/>
+<polygon id="ls_s_E706" points="820.0,620.0 900.0,620.0 900.0,530.0 820.0,530.0" fill="#E7E3D8" stroke="#1B2630" stroke-width="1"/>
+<line x1="820.0" y1="605.0" x2="900.0" y2="605.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="820.0" y1="590.0" x2="900.0" y2="590.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="820.0" y1="575.0" x2="900.0" y2="575.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="820.0" y1="560.0" x2="900.0" y2="560.0" stroke="#6B7782" stroke-width="1"/>
+<line x1="820.0" y1="545.0" x2="900.0" y2="545.0" stroke="#6B7782" stroke-width="1"/>
+</g>
+<g id="walls">
+<line class="wall-est" x1="56.0" y1="330.0" x2="56.0" y2="200.0"/>
+<line class="wall-est" x1="56.0" y1="330.0" x2="216.0" y2="330.0"/>
+<line class="wall-est" x1="56.0" y1="200.0" x2="216.0" y2="200.0"/>
+<line class="wall-est" x1="216.0" y1="330.0" x2="216.0" y2="274.0"/>
+<line class="wall-est" x1="216.0" y1="256.0" x2="216.0" y2="200.0"/>
+<line class="wall-guess" x1="56.0" y1="460.0" x2="56.0" y2="330.0"/>
+<line class="wall-guess" x1="56.0" y1="460.0" x2="216.0" y2="460.0"/>
+<line class="wall-guess" x1="56.0" y1="330.0" x2="216.0" y2="330.0"/>
+<line class="wall-guess" x1="216.0" y1="460.0" x2="216.0" y2="404.0"/>
+<line class="wall-guess" x1="216.0" y1="386.0" x2="216.0" y2="330.0"/>
+<line class="wall-est" x1="56.0" y1="590.0" x2="56.0" y2="460.0"/>
+<line class="wall-est" x1="56.0" y1="590.0" x2="216.0" y2="590.0"/>
+<line class="wall-est" x1="56.0" y1="460.0" x2="216.0" y2="460.0"/>
+<line class="wall-est" x1="216.0" y1="590.0" x2="216.0" y2="534.0"/>
+<line class="wall-est" x1="216.0" y1="516.0" x2="216.0" y2="460.0"/>
+<line class="wall-est" x1="56.0" y1="720.0" x2="56.0" y2="590.0"/>
+<line class="wall-est" x1="56.0" y1="720.0" x2="216.0" y2="720.0"/>
+<line class="wall-est" x1="56.0" y1="590.0" x2="216.0" y2="590.0"/>
+<line class="wall-est" x1="216.0" y1="720.0" x2="216.0" y2="664.0"/>
+<line class="wall-est" x1="216.0" y1="646.0" x2="216.0" y2="590.0"/>
+<line class="wall-est" x1="204.0" y1="200.0" x2="204.0" y2="100.0"/>
+<line class="wall-est" x1="276.0" y1="200.0" x2="276.0" y2="100.0"/>
+<line class="wall-est" x1="204.0" y1="100.0" x2="276.0" y2="100.0"/>
+<line class="wall-est" x1="204.0" y1="200.0" x2="222.0" y2="200.0"/>
+<line class="wall-est" x1="258.0" y1="200.0" x2="276.0" y2="200.0"/>
+<line class="wall-est" x1="320.0" y1="690.0" x2="320.0" y2="642.0"/>
+<line class="wall-est" x1="264.0" y1="690.0" x2="320.0" y2="690.0"/>
+<line class="wall-est" x1="264.0" y1="642.0" x2="320.0" y2="642.0"/>
+<line class="wall-est" x1="264.0" y1="690.0" x2="264.0" y2="680.0"/>
+<line class="wall-est" x1="264.0" y1="652.0" x2="264.0" y2="642.0"/>
+<line class="wall-est" x1="372.0" y1="420.0" x2="372.0" y2="364.0"/>
+<line class="wall-est" x1="420.0" y1="420.0" x2="420.0" y2="364.0"/>
+<line class="wall-est" x1="372.0" y1="364.0" x2="420.0" y2="364.0"/>
+<line class="wall-est" x1="372.0" y1="420.0" x2="382.0" y2="420.0"/>
+<line class="wall-est" x1="410.0" y1="420.0" x2="420.0" y2="420.0"/>
+<line class="wall-est" x1="420.0" y1="420.0" x2="420.0" y2="364.0"/>
+<line class="wall-est" x1="468.0" y1="420.0" x2="468.0" y2="364.0"/>
+<line class="wall-est" x1="420.0" y1="364.0" x2="468.0" y2="364.0"/>
+<line class="wall-est" x1="420.0" y1="420.0" x2="430.0" y2="420.0"/>
+<line class="wall-est" x1="458.0" y1="420.0" x2="468.0" y2="420.0"/>
+<line class="wall-est" x1="500.0" y1="530.0" x2="522.0" y2="530.0"/>
+<line class="wall-est" x1="558.0" y1="530.0" x2="580.0" y2="530.0"/>
+<line class="wall-est" x1="500.0" y1="690.0" x2="580.0" y2="690.0"/>
+<line class="wall-guess" x1="264.0" y1="642.0" x2="264.0" y2="530.0"/>
+<line class="wall-guess" x1="264.0" y1="530.0" x2="284.0" y2="530.0"/>
+<line class="wall-guess" x1="320.0" y1="530.0" x2="340.0" y2="530.0"/>
+<line class="wall-guess" x1="320.0" y1="690.0" x2="340.0" y2="690.0"/>
+<line class="wall-est" x1="340.0" y1="690.0" x2="500.0" y2="690.0"/>
+<line class="wall-est" x1="340.0" y1="580.0" x2="380.0" y2="580.0"/>
+<line class="wall-est" x1="460.0" y1="580.0" x2="500.0" y2="580.0"/>
+<line class="wall-guess" x1="900.0" y1="690.0" x2="956.0" y2="690.0"/>
+<line class="wall-guess" x1="900.0" y1="580.0" x2="910.0" y2="580.0"/>
+<line class="wall-guess" x1="946.0" y1="580.0" x2="956.0" y2="580.0"/>
+<line class="wall-guess" x1="1004.0" y1="690.0" x2="1060.0" y2="690.0"/>
+<line class="wall-guess" x1="1004.0" y1="580.0" x2="1014.0" y2="580.0"/>
+<line class="wall-guess" x1="1050.0" y1="580.0" x2="1060.0" y2="580.0"/>
+<line class="wall-guess" x1="956.0" y1="690.0" x2="1004.0" y2="690.0"/>
+<line class="wall-guess" x1="820.0" y1="690.0" x2="900.0" y2="690.0"/>
+<line class="wall-guess" x1="1136.0" y1="642.0" x2="1136.0" y2="530.0"/>
+<line class="wall-guess" x1="1060.0" y1="530.0" x2="1080.0" y2="530.0"/>
+<line class="wall-guess" x1="1116.0" y1="530.0" x2="1136.0" y2="530.0"/>
+<line class="wall-guess" x1="1060.0" y1="690.0" x2="1080.0" y2="690.0"/>
+<line class="wall-guess" x1="500.0" y1="320.0" x2="500.0" y2="200.0"/>
+<line class="wall-guess" x1="580.0" y1="320.0" x2="580.0" y2="200.0"/>
+<line class="wall-guess" x1="500.0" y1="200.0" x2="580.0" y2="200.0"/>
+<line class="wall-guess" x1="500.0" y1="320.0" x2="531.0" y2="320.0"/>
+<line class="wall-guess" x1="549.0" y1="320.0" x2="580.0" y2="320.0"/>
+<line class="wall-guess" x1="264.0" y1="320.0" x2="264.0" y2="200.0"/>
+<line class="wall-guess" x1="344.0" y1="320.0" x2="344.0" y2="200.0"/>
+<line class="wall-guess" x1="264.0" y1="200.0" x2="344.0" y2="200.0"/>
+<line class="wall-guess" x1="264.0" y1="320.0" x2="295.0" y2="320.0"/>
+<line class="wall-guess" x1="313.0" y1="320.0" x2="344.0" y2="320.0"/>
+<line class="wall-guess" x1="820.0" y1="320.0" x2="820.0" y2="200.0"/>
+<line class="wall-guess" x1="900.0" y1="320.0" x2="900.0" y2="200.0"/>
+<line class="wall-guess" x1="820.0" y1="200.0" x2="900.0" y2="200.0"/>
+<line class="wall-guess" x1="820.0" y1="320.0" x2="851.0" y2="320.0"/>
+<line class="wall-guess" x1="869.0" y1="320.0" x2="900.0" y2="320.0"/>
+<line class="wall-guess" x1="1056.0" y1="320.0" x2="1056.0" y2="200.0"/>
+<line class="wall-guess" x1="1136.0" y1="320.0" x2="1136.0" y2="200.0"/>
+<line class="wall-guess" x1="1056.0" y1="200.0" x2="1136.0" y2="200.0"/>
+<line class="wall-guess" x1="1056.0" y1="320.0" x2="1087.0" y2="320.0"/>
+<line class="wall-guess" x1="1105.0" y1="320.0" x2="1136.0" y2="320.0"/>
+<line class="wall-est" x1="580.0" y1="470.0" x2="580.0" y2="310.0"/>
+<line class="wall-est" x1="700.0" y1="470.0" x2="700.0" y2="310.0"/>
+<line class="wall-est" x1="580.0" y1="310.0" x2="700.0" y2="310.0"/>
+<line class="wall-est" x1="580.0" y1="470.0" x2="629.0" y2="470.0"/>
+<line class="wall-est" x1="651.0" y1="470.0" x2="700.0" y2="470.0"/>
+<line class="wall-est" x1="700.0" y1="470.0" x2="700.0" y2="310.0"/>
+<line class="wall-est" x1="820.0" y1="470.0" x2="820.0" y2="310.0"/>
+<line class="wall-est" x1="700.0" y1="310.0" x2="820.0" y2="310.0"/>
+<line class="wall-est" x1="700.0" y1="470.0" x2="749.0" y2="470.0"/>
+<line class="wall-est" x1="771.0" y1="470.0" x2="820.0" y2="470.0"/>
+<line class="wall-est" x1="580.0" y1="690.0" x2="580.0" y2="530.0"/>
+<line class="wall-est" x1="700.0" y1="690.0" x2="700.0" y2="530.0"/>
+<line class="wall-est" x1="580.0" y1="690.0" x2="700.0" y2="690.0"/>
+<line class="wall-est" x1="580.0" y1="530.0" x2="629.0" y2="530.0"/>
+<line class="wall-est" x1="651.0" y1="530.0" x2="700.0" y2="530.0"/>
+<line class="wall-est" x1="700.0" y1="690.0" x2="700.0" y2="530.0"/>
+<line class="wall-est" x1="820.0" y1="690.0" x2="820.0" y2="530.0"/>
+<line class="wall-est" x1="700.0" y1="690.0" x2="820.0" y2="690.0"/>
+<line class="wall-est" x1="700.0" y1="530.0" x2="749.0" y2="530.0"/>
+<line class="wall-est" x1="771.0" y1="530.0" x2="820.0" y2="530.0"/>
+<line class="wall-est" x1="1344.0" y1="330.0" x2="1344.0" y2="200.0"/>
+<line class="wall-est" x1="1184.0" y1="330.0" x2="1344.0" y2="330.0"/>
+<line class="wall-est" x1="1184.0" y1="200.0" x2="1344.0" y2="200.0"/>
+<line class="wall-est" x1="1184.0" y1="330.0" x2="1184.0" y2="274.0"/>
+<line class="wall-est" x1="1184.0" y1="256.0" x2="1184.0" y2="200.0"/>
+<line class="wall-est" x1="1344.0" y1="460.0" x2="1344.0" y2="330.0"/>
+<line class="wall-est" x1="1184.0" y1="460.0" x2="1344.0" y2="460.0"/>
+<line class="wall-est" x1="1184.0" y1="330.0" x2="1344.0" y2="330.0"/>
+<line class="wall-est" x1="1184.0" y1="460.0" x2="1184.0" y2="404.0"/>
+<line class="wall-est" x1="1184.0" y1="386.0" x2="1184.0" y2="330.0"/>
+<line class="wall-est" x1="1344.0" y1="590.0" x2="1344.0" y2="460.0"/>
+<line class="wall-est" x1="1184.0" y1="590.0" x2="1344.0" y2="590.0"/>
+<line class="wall-est" x1="1184.0" y1="460.0" x2="1344.0" y2="460.0"/>
+<line class="wall-est" x1="1184.0" y1="590.0" x2="1184.0" y2="534.0"/>
+<line class="wall-est" x1="1184.0" y1="516.0" x2="1184.0" y2="460.0"/>
+<line class="wall-est" x1="1344.0" y1="720.0" x2="1344.0" y2="590.0"/>
+<line class="wall-est" x1="1184.0" y1="720.0" x2="1344.0" y2="720.0"/>
+<line class="wall-est" x1="1184.0" y1="590.0" x2="1344.0" y2="590.0"/>
+<line class="wall-est" x1="1184.0" y1="720.0" x2="1184.0" y2="664.0"/>
+<line class="wall-est" x1="1184.0" y1="646.0" x2="1184.0" y2="590.0"/>
+<line class="wall-est" x1="1124.0" y1="200.0" x2="1124.0" y2="100.0"/>
+<line class="wall-est" x1="1196.0" y1="200.0" x2="1196.0" y2="100.0"/>
+<line class="wall-est" x1="1124.0" y1="100.0" x2="1196.0" y2="100.0"/>
+<line class="wall-est" x1="1124.0" y1="200.0" x2="1142.0" y2="200.0"/>
+<line class="wall-est" x1="1178.0" y1="200.0" x2="1196.0" y2="200.0"/>
+<line class="wall-est" x1="1080.0" y1="690.0" x2="1080.0" y2="642.0"/>
+<line class="wall-est" x1="1080.0" y1="690.0" x2="1136.0" y2="690.0"/>
+<line class="wall-est" x1="1080.0" y1="642.0" x2="1136.0" y2="642.0"/>
+<line class="wall-est" x1="1136.0" y1="690.0" x2="1136.0" y2="680.0"/>
+<line class="wall-est" x1="1136.0" y1="652.0" x2="1136.0" y2="642.0"/>
+<line class="wall-guess" x1="932.0" y1="420.0" x2="932.0" y2="364.0"/>
+<line class="wall-guess" x1="980.0" y1="420.0" x2="980.0" y2="364.0"/>
+<line class="wall-guess" x1="932.0" y1="364.0" x2="980.0" y2="364.0"/>
+<line class="wall-guess" x1="932.0" y1="420.0" x2="942.0" y2="420.0"/>
+<line class="wall-guess" x1="970.0" y1="420.0" x2="980.0" y2="420.0"/>
+<line class="wall-guess" x1="980.0" y1="420.0" x2="980.0" y2="364.0"/>
+<line class="wall-guess" x1="1028.0" y1="420.0" x2="1028.0" y2="364.0"/>
+<line class="wall-guess" x1="980.0" y1="364.0" x2="1028.0" y2="364.0"/>
+<line class="wall-guess" x1="980.0" y1="420.0" x2="990.0" y2="420.0"/>
+<line class="wall-guess" x1="1018.0" y1="420.0" x2="1028.0" y2="420.0"/>
+<line class="wall-est" x1="956.0" y1="636.0" x2="956.0" y2="580.0"/>
+<line class="wall-est" x1="1004.0" y1="636.0" x2="1004.0" y2="580.0"/>
+<line class="wall-est" x1="956.0" y1="636.0" x2="1004.0" y2="636.0"/>
+<line class="wall-est" x1="956.0" y1="580.0" x2="966.0" y2="580.0"/>
+<line class="wall-est" x1="994.0" y1="580.0" x2="1004.0" y2="580.0"/>
+<line class="wall-guess" x1="820.0" y1="530.0" x2="842.0" y2="530.0"/>
+<line class="wall-guess" x1="878.0" y1="530.0" x2="900.0" y2="530.0"/>
+<line class="wall-est" x1="216.0" y1="740" x2="216.0" y2="720"/>
+<line class="wall-est" x1="1184.0" y1="740" x2="1184.0" y2="720"/>
+<line class="wall-est" x1="264.0" y1="740" x2="264.0" y2="690.0"/>
+<line class="wall-est" x1="1136.0" y1="740" x2="1136.0" y2="690.0"/>
+<line class="wall-est" x1="264.0" y1="470.0" x2="264.0" y2="364.0"/>
+<line class="wall-est" x1="1136.0" y1="470.0" x2="1136.0" y2="364.0"/>
+<line class="wall-est" x1="264.0" y1="320.0" x2="264.0" y2="200"/>
+<line class="wall-est" x1="1136.0" y1="320.0" x2="1136.0" y2="200"/>
+<line class="wall-est" x1="216.0" y1="740" x2="264.0" y2="740"/>
+<line class="wall-est" x1="1184.0" y1="740" x2="1136.0" y2="740"/>
+<line class="wall-est" x1="264.0" y1="470.0" x2="340" y2="470.0"/>
+<line class="wall-est" x1="1136.0" y1="470.0" x2="1060.0" y2="470.0"/>
+<line class="wall-est" x1="340" y1="420" x2="372.0" y2="420"/>
+<line class="wall-est" x1="1060.0" y1="420" x2="1028.0" y2="420"/>
+<line class="wall-est" x1="468.0" y1="420" x2="500" y2="420"/>
+<line class="wall-est" x1="932.0" y1="420" x2="900.0" y2="420"/>
+<line class="wall-est" x1="264.0" y1="364.0" x2="372.0" y2="364.0"/>
+<line class="wall-est" x1="1136.0" y1="364.0" x2="1028.0" y2="364.0"/>
+<line class="wall-est" x1="468.0" y1="364.0" x2="580.0" y2="364.0"/>
+<line class="wall-est" x1="932.0" y1="364.0" x2="820.0" y2="364.0"/>
+<line class="wall-est" x1="344.0" y1="320.0" x2="500.0" y2="320.0"/>
+<line class="wall-est" x1="1056.0" y1="320.0" x2="900.0" y2="320.0"/>
+<line class="wall-est" x1="500" y1="470.0" x2="580" y2="470.0"/>
+<line class="wall-est" x1="900.0" y1="470.0" x2="820.0" y2="470.0"/>
+<line class="wall-est" x1="500" y1="470.0" x2="500" y2="420"/>
+<line class="wall-est" x1="900.0" y1="470.0" x2="900.0" y2="420"/>
+<line class="wall-est" x1="340" y1="470.0" x2="340" y2="420"/>
+<line class="wall-est" x1="1060.0" y1="470.0" x2="1060.0" y2="420"/>
+</g>
+<g id="doors">
+<line class="door" x1="216.0" y1="274.0" x2="216.0" y2="256.0"/>
+<line class="door-guess" x1="216.0" y1="404.0" x2="216.0" y2="386.0"/>
+<line class="door" x1="216.0" y1="534.0" x2="216.0" y2="516.0"/>
+<line class="door" x1="216.0" y1="664.0" x2="216.0" y2="646.0"/>
+<line class="door" x1="222.0" y1="200.0" x2="258.0" y2="200.0"/>
+<line class="door" x1="264.0" y1="680.0" x2="264.0" y2="652.0"/>
+<line class="door" x1="382.0" y1="420.0" x2="410.0" y2="420.0"/>
+<line class="door" x1="430.0" y1="420.0" x2="458.0" y2="420.0"/>
+<line class="door" x1="522.0" y1="530.0" x2="558.0" y2="530.0"/>
+<line class="door-guess" x1="284.0" y1="530.0" x2="320.0" y2="530.0"/>
+<line class="door" x1="380.0" y1="580.0" x2="460.0" y2="580.0"/>
+<line class="door-guess" x1="910.0" y1="580.0" x2="946.0" y2="580.0"/>
+<line class="door-guess" x1="1014.0" y1="580.0" x2="1050.0" y2="580.0"/>
+<line class="door-guess" x1="1080.0" y1="530.0" x2="1116.0" y2="530.0"/>
+<line class="door-guess" x1="531.0" y1="320.0" x2="549.0" y2="320.0"/>
+<line class="door-guess" x1="295.0" y1="320.0" x2="313.0" y2="320.0"/>
+<line class="door-guess" x1="851.0" y1="320.0" x2="869.0" y2="320.0"/>
+<line class="door-guess" x1="1087.0" y1="320.0" x2="1105.0" y2="320.0"/>
+<line class="door" x1="629.0" y1="470.0" x2="651.0" y2="470.0"/>
+<line class="door" x1="749.0" y1="470.0" x2="771.0" y2="470.0"/>
+<line class="door" x1="629.0" y1="530.0" x2="651.0" y2="530.0"/>
+<line class="door" x1="749.0" y1="530.0" x2="771.0" y2="530.0"/>
+<line class="door" x1="1184.0" y1="274.0" x2="1184.0" y2="256.0"/>
+<line class="door" x1="1184.0" y1="404.0" x2="1184.0" y2="386.0"/>
+<line class="door" x1="1184.0" y1="534.0" x2="1184.0" y2="516.0"/>
+<line class="door" x1="1184.0" y1="664.0" x2="1184.0" y2="646.0"/>
+<line class="door" x1="1142.0" y1="200.0" x2="1178.0" y2="200.0"/>
+<line class="door" x1="1136.0" y1="680.0" x2="1136.0" y2="652.0"/>
+<line class="door-guess" x1="942.0" y1="420.0" x2="970.0" y2="420.0"/>
+<line class="door-guess" x1="990.0" y1="420.0" x2="1018.0" y2="420.0"/>
+<line class="door" x1="966.0" y1="580.0" x2="994.0" y2="580.0"/>
+<line class="door-guess" x1="842.0" y1="530.0" x2="878.0" y2="530.0"/>
+<line class="door" x1="580.0" y1="530.0" x2="580.0" y2="470.0"/>
+<line class="door" x1="820.0" y1="530.0" x2="820.0" y2="470.0"/>
+</g>
+<g id="corridor_centerline">
+<polyline id="cl_west_spine" points="240.0,740.0 240.0,200.0" fill="none" stroke="#2E5E8A" stroke-width="1.5" stroke-dasharray="2 5"/>
+<polyline id="cl_passage" points="240.0,500.0 1160.0,500.0" fill="none" stroke="#2E5E8A" stroke-width="1.5" stroke-dasharray="2 5"/>
+<polyline id="cl_east_spine" points="1160.0,740.0 1160.0,200.0" fill="none" stroke="#2E5E8A" stroke-width="1.5" stroke-dasharray="2 5"/>
+<polyline id="cl_west_back" points="240.0,342.0 580.0,342.0" fill="none" stroke="#2E5E8A" stroke-width="1.5" stroke-dasharray="2 5"/>
+<polyline id="cl_east_back" points="1160.0,342.0 820.0,342.0" fill="none" stroke="#2E5E8A" stroke-width="1.5" stroke-dasharray="2 5"/>
+</g>
+<g id="survey_spots">
+<circle cx="1160.0" cy="655.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>1. Room 706A (4.2 m on east_spine)</title></circle>
+<circle cx="1160.0" cy="525.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>2. Room 706 (10.8 m on east_spine)</title></circle>
+<circle cx="1160.0" cy="395.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>3. Room 705 (17.2 m on east_spine)</title></circle>
+<circle cx="1096.0" cy="342.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>4. Restroom L (3.2 m on east_back)</title></circle>
+<circle cx="860.0" cy="342.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>5. Restroom M (15.0 m on east_back)</title></circle>
+<circle cx="820.0" cy="500.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>6. Department entrance (29.0 m on passage)</title></circle>
+<circle cx="760.0" cy="500.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>7. Labs C/F (26.0 m on passage)</title></circle>
+<circle cx="640.0" cy="500.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>8. Labs D/E (20.0 m on passage)</title></circle>
+<circle cx="580.0" cy="500.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>9. Other Department entrance (17.0 m on passage)</title></circle>
+<circle cx="304.0" cy="342.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>10. New restroom (3.2 m on west_back)</title></circle>
+<circle cx="240.0" cy="265.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>11. Room 701 (23.8 m on west_spine)</title></circle>
+<circle cx="240.0" cy="395.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>12. Room 702 (17.2 m on west_spine)</title></circle>
+<circle cx="240.0" cy="525.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>13. Room 703 (10.8 m on west_spine)</title></circle>
+<circle cx="240.0" cy="655.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>14. Room 703A (4.2 m on west_spine)</title></circle>
+<circle cx="420.0" cy="500.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>15. Lift/stairs area near 703 (west) (9.0 m on passage)</title></circle>
+<circle cx="240.0" cy="200.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>16. Stairs near 701 (27.0 m on west_spine)</title></circle>
+<circle cx="980.0" cy="500.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>17. Lift lobby B near 706 (37.0 m on passage)</title></circle>
+<circle cx="860.0" cy="500.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>18. Stairs near 706 (31.0 m on passage)</title></circle>
+<circle cx="1160.0" cy="265.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>19. Room 704 (TP704) (23.8 m on east_spine)</title></circle>
+<circle cx="1160.0" cy="666.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>20. Lift in front of 706A (3.7 m on east_spine)</title></circle>
+<circle cx="980.0" cy="500.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>21. Lift B3 (facing B1/B2) (37.0 m on passage)</title></circle>
+<circle cx="240.0" cy="666.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>22. Lift in front of 703A (3.7 m on west_spine)</title></circle>
+<circle cx="1160.0" cy="200.0" r="4.5" fill="#C2410C" stroke="#fff" stroke-width="1"><title>23. Stairs after 704 (27.0 m on east_spine)</title></circle>
+</g>
+<g id="labels">
+<text class="lbl" x="136.0" y="268.0">701</text>
+<text class="sm" x="136.0" y="283.0" fill="#4A5560">room</text>
+<text class="lbl" x="136.0" y="398.0">702 ?</text>
+<text class="sm" x="136.0" y="413.0" fill="#4A5560">no photo</text>
+<text class="lbl" x="136.0" y="528.0">703</text>
+<text class="sm" x="136.0" y="543.0" fill="#4A5560">lecture hall</text>
+<text class="lbl" x="136.0" y="658.0">703A</text>
+<text class="sm" x="136.0" y="673.0" fill="#4A5560">staff room</text>
+<text class="lbl" x="240.0" y="153.0">Stairs</text>
+<text class="sm" x="292.0" y="669.0">Lift</text>
+<text class="sm" x="396.0" y="395.0">A1</text>
+<text class="sm" x="444.0" y="395.0">A2</text>
+<text class="lbl" x="540.0" y="578.0">S1</text>
+<text class="lbl" x="540.0" y="658.0">Stairs</text>
+<text class="lbl" x="302.0" y="589.0">Stairs ?</text>
+<text class="sm" x="330.0" y="669.0">Stairs ?</text>
+<text class="lbl" x="420.0" y="638.0">Stairs</text>
+<text class="sm" x="928.0" y="638.0">Stairs ?</text>
+<text class="sm" x="1032.0" y="638.0">Stairs ?</text>
+<text class="sm" x="980.0" y="666.0">Stairs ?</text>
+<text class="lbl" x="860.0" y="658.0">Stairs ?</text>
+<text class="lbl" x="1098.0" y="589.0">Stairs ?</text>
+<text class="sm" x="1070.0" y="669.0">Stairs ?</text>
+<text class="lbl" x="540.0" y="263.0">New W ?</text>
+<text class="lbl" x="304.0" y="263.0">New Dis ?</text>
+<text class="lbl" x="860.0" y="263.0">M gents ?</text>
+<text class="lbl" x="1096.0" y="263.0">L ladies ?</text>
+<text class="lbl" x="640.0" y="393.0">Lab D</text>
+<text class="sm" x="640.0" y="408.0" fill="#4A5560">TP710</text>
+<text class="lbl" x="760.0" y="393.0">Lab C</text>
+<text class="sm" x="760.0" y="408.0" fill="#4A5560">TP709</text>
+<text class="lbl" x="640.0" y="613.0">Lab E</text>
+<text class="sm" x="640.0" y="628.0" fill="#4A5560">TP713</text>
+<text class="lbl" x="760.0" y="613.0">Lab F</text>
+<text class="sm" x="760.0" y="628.0" fill="#4A5560">number unknown</text>
+<text class="lbl" x="1264.0" y="268.0">704</text>
+<text class="sm" x="1264.0" y="283.0" fill="#4A5560">lecture hall</text>
+<text class="lbl" x="1264.0" y="398.0">705</text>
+<text class="sm" x="1264.0" y="413.0" fill="#4A5560">lecture hall</text>
+<text class="lbl" x="1264.0" y="528.0">706</text>
+<text class="sm" x="1264.0" y="543.0" fill="#4A5560">lecture hall</text>
+<text class="lbl" x="1264.0" y="658.0">706A</text>
+<text class="sm" x="1264.0" y="673.0" fill="#4A5560">staff room</text>
+<text class="lbl" x="1160.0" y="153.0">Stairs</text>
+<text class="sm" x="1108.0" y="669.0">Lift</text>
+<text class="sm" x="956.0" y="395.0">B1 ?</text>
+<text class="sm" x="1004.0" y="395.0">B2 ?</text>
+<text class="sm" x="980.0" y="611.0">B3</text>
+<text class="lbl" x="860.0" y="578.0">S? ?</text>
+<text class="lbl" x="420" y="512.0" style="font-weight:600">Lift lobby A</text>
+<text class="sm" x="420" y="525.0">origin (0,0)</text>
+<text class="lbl" x="980" y="512.0" style="font-weight:600">Lift lobby B ?</text>
+<text class="note" x="700" y="148.0" text-anchor="middle" >LAB PASSAGE (tiled floor), about 46 m spine to spine, estimated</text>
+<text class="sm" x="240" y="792.0" text-anchor="middle" >WEST SPINE (N-S)</text>
+<text class="sm" x="1160" y="792.0" text-anchor="middle" >EAST SPINE (N-S)</text>
+<text class="sm" x="240" y="764.0" text-anchor="middle" >south end (window)</text>
+<text class="sm" x="1160" y="764.0" text-anchor="middle" >south end (window?)</text>
+<text class="lbl" x="136.0" y="182.0" text-anchor="middle" style="font-weight:600">WEST WING</text>
+<text class="lbl" x="1260" y="182.0" text-anchor="middle" style="font-weight:600">EAST WING</text>
+<text class="lbl" x="700" y="108.0" text-anchor="middle" style="font-weight:600">CENTRE (labs)</text>
+<text class="sm" x="430.0" y="346.0" text-anchor="middle" >BACK PATH: restrooms to class corridor</text>
+<text class="sm" x="980" y="346.0" text-anchor="middle" >BACK PATH: restrooms to class corridor</text>
+<text class="sm" x="160" y="744.0" text-anchor="middle" >703A faces the front</text>
+<text class="sm" x="1264.0" y="744.0" text-anchor="middle" >706A faces the front</text>
+<text x="40" y="36" font-size="22" font-weight="600" fill="#1B2630">TECH PARK, Floor 7: draft plan</text>
+<text x="40" y="58" font-size="13" fill="#4A5560">Schematic. Scale and every distance are ESTIMATED. Nothing here is measured.</text>
+<g transform="translate(1310,100)"><path d="M0 -26 L10 12 L0 5 L-10 12 Z" fill="none" stroke="#1B2630" stroke-width="1.5"/><text x="0" y="30" text-anchor="middle" font-size="14" font-weight="600" fill="#1B2630">N</text><text x="0" y="44" text-anchor="middle" font-size="10" fill="#4A5560">assumed</text></g>
+<g transform="translate(580,880)"><line x1="0" y1="0" x2="200" y2="0" stroke="#1B2630" stroke-width="2"/><line x1="0" y1="-5" x2="0" y2="5" stroke="#1B2630" stroke-width="2"/><line x1="200" y1="-5" x2="200" y2="5" stroke="#1B2630" stroke-width="2"/><text x="100" y="-9" text-anchor="middle" font-size="11" fill="#1B2630">10 m (scale estimated)</text></g>
+<g transform="translate(40,800)" font-size="12" fill="#1B2630">
+<text x="0" y="0" font-weight="600">Legend</text>
+<line x1="0" y1="18" x2="34" y2="18" class="wall-est"/><text x="44" y="22">Wall, supported by photos or survey</text>
+<line x1="0" y1="40" x2="34" y2="40" class="wall-guess"/><text x="44" y="44">Wall, guessed ("?" on label)</text>
+<line x1="0" y1="62" x2="34" y2="62" class="door"/><text x="44" y="66">Door or entrance (gap in the wall)</text>
+<line x1="0" y1="84" x2="34" y2="84" stroke="#2E5E8A" stroke-width="1.5" stroke-dasharray="2 5"/><text x="44" y="88">Corridor centreline</text>
+<circle cx="17" cy="106" r="4.5" fill="#C2410C"/><text x="44" y="110">Survey spot (corridor, in front of the place)</text>
+<rect x="0" y="120" width="34" height="14" fill="#D5E1E6"/><text x="44" y="132">Walkable corridor or lobby</text>
+<rect x="0" y="142" width="34" height="14" fill="#B8C4CC" stroke="#1B2630"/><text x="44" y="154">Lift</text>
+<rect x="0" y="164" width="34" height="14" fill="#E7E3D8" stroke="#1B2630"/><text x="44" y="176">Stairs</text>
+<text x="0" y="200" fill="#4A5560">Room labels with "?" are guessed in size or side.</text>
+<text x="0" y="216" fill="#4A5560">Room sizes, door positions and wall thickness are assumed.</text>
+</g>
+</g>
+</svg>

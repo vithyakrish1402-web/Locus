@@ -183,11 +183,22 @@ export function surveyedFloors(aps, building) {
  */
 let cachedAps = null;
 let inFlight = null;
+let localAps = null;
+
+/**
+ * Use `table` as the surveyed-AP table instead of reading wifi_aps: no Firestore read is ever
+ * made while it is set. Only the Floor 7 demo (floor7Demo.js) calls this, with a table bundled
+ * into the test build. Pass null to go back to Firestore.
+ */
+export function setLocalAccessPoints(table) {
+  localAps = table;
+}
 
 /** Exported for tests, which need each case to start from an empty cache. */
 export function __resetAccessPointCache() {
   cachedAps = null;
   inFlight = null;
+  localAps = null;
 }
 
 /**
@@ -238,6 +249,7 @@ async function fetchAccessPoints() {
  *   ambiguousFloor:boolean}>>}
  */
 export function loadAccessPoints({ force = false } = {}) {
+  if (localAps) return Promise.resolve(localAps);
   if (cachedAps && !force) return Promise.resolve(cachedAps);
   if (!inFlight) {
     inFlight = fetchAccessPoints()
