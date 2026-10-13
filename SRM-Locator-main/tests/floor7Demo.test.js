@@ -59,6 +59,14 @@ describe('the bundled access points', () => {
     expect(local.y).toBeCloseTo(radio.y, 6);
   });
 
+  it('applies PLAN_SCALE to every position, as the plan itself does', () => {
+    const radio = floor7Aps.radios[0];
+    const doubled = floor7AccessPointTable(floor7Aps, 2).get(radio.bssids[0].bssid);
+    const local = toLocal(doubled.lat, doubled.lng);
+    expect(local.x).toBeCloseTo(2 * radio.x, 6);
+    expect(local.y).toBeCloseTo(2 * radio.y, 6);
+  });
+
   it('feeds the real estimator: hearing only a radio places you at that radio', () => {
     const radio = floor7Aps.radios[0];
     const scans = [radio.bssids.map(({ bssid }) => ({ bssid, rssi: -50 }))];
