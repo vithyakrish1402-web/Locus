@@ -17,7 +17,7 @@ import {
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
 
-// 👇 ADD THIS LINE RIGHT HERE
+//  ADD THIS LINE RIGHT HERE
 import Guide from './components/guide/Guide';
 import { guideSeen, rememberGuideSeen } from './utils/guideSeen';
 import BrandMark from './components/access/BrandMark';
@@ -544,7 +544,7 @@ const App = () => {
   const [authLoading, setAuthLoading] = useState(true);
 
   // --- ADMIN PATH RECORDER STATE ---
-  const ADMIN_EMAIL = "vithyakrish1402@gmail.com"; // 🚨 REPLACE WITH YOUR EXACT GOOGLE LOGIN EMAIL
+  const ADMIN_EMAIL = "vithyakrish1402@gmail.com"; //  REPLACE WITH YOUR EXACT GOOGLE LOGIN EMAIL
   const isAdmin = user?.email === ADMIN_EMAIL;
 
   // --- GREEN LIGHT PROTOCOL: Map readiness gate ---
@@ -625,6 +625,7 @@ const App = () => {
     setTimeout(apply, 400);
   };
   const [selectedItem, setSelectedItem] = useState(null);
+  const [buildingCategoryFilter, setBuildingCategoryFilter] = useState('ALL');
 
   const [users, setUsers] = useState([]);
   // AR Scan aimed at a squad member follows them as they move, instead of pointing at
@@ -823,7 +824,7 @@ const App = () => {
     setHasJoinedSquad(true);
 
     if (squadMode === 'create') {
-      // 🚀 INSTANT CLEARANCE FOR SQUAD CREATORS (0ms delay) — you can't need your
+      //  INSTANT CLEARANCE FOR SQUAD CREATORS (0ms delay) — you can't need your
       // own approval to enter a squad you're creating.
       setAccessStatus('granted');
       setSquadRole('OWNER');
@@ -895,7 +896,7 @@ const App = () => {
     setShowTelemetryModal(false);
   }, [hasJoinedSquad]);
 
-  // --- 📡 NETWORK LATENCY TRACKER ---
+  // ---  NETWORK LATENCY TRACKER ---
   useEffect(() => {
     if (!hasJoinedSquad) return;
 
@@ -915,7 +916,7 @@ const App = () => {
       socket.off('pong-bounce');
     };
   }, [hasJoinedSquad]);
-  // --- 🚨 UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
+  // ---  UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
       const { targetId, uid, name, photo, lastKnownLocation, timeDelta } = emergencyData;
@@ -960,11 +961,11 @@ const App = () => {
       socket.off('member-signal-lost');
     };
   }, []);
-  // --- 📊 ADDITION 3: TELEMETRY DATA RECEIVER ---
+  // ---  ADDITION 3: TELEMETRY DATA RECEIVER ---
   // --- TACTICAL TELEMETRY DATA RECEIVER ---
   useEffect(() => {
     socket.on('telemetry-sync-complete', (data) => {
-      console.log("📊 [SYS_SYNC] Raw Telemetry Matrix Acquired:", data);
+      console.log(" [SYS_SYNC] Raw Telemetry Matrix Acquired:", data);
       // The telemetry settles the sync on its own: a server that predates acknowledgements
       // sends only this, and the timeout that follows must not then report a failure.
       pendingSyncRef.current = null;
@@ -974,7 +975,7 @@ const App = () => {
     });
     return () => socket.off('telemetry-sync-complete');
   }, []);
-  // --- 💀 ADDITION: MUTINY LISTENER ---
+  // ---  ADDITION: MUTINY LISTENER ---
   useEffect(() => {
     socket.on('exiled', ({ reason } = {}) => {
       // 1. Tell them why (a comms-feed notice; this used to be a blocking alert())
@@ -1011,13 +1012,13 @@ const App = () => {
   }, []);
 
 
-  // --- 🔔 SYS_NOTIFY: REQUEST OS PERMISSIONS ---
+  // ---  SYS_NOTIFY: REQUEST OS PERMISSIONS ---
   useEffect(() => {
     if (user && 'Notification' in window) {
       if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission().then(permission => {
           if (permission === 'granted') {
-            console.log("✅ [SYS_NOTIFY] OS Notification link established.");
+            console.log(" [SYS_NOTIFY] OS Notification link established.");
           }
         });
       }
@@ -1030,7 +1031,7 @@ const App = () => {
       // Fires a native notification to the phone/desktop OS
       new Notification(title, {
         body: body,
-        icon: '/vite.svg', // You can replace this with your own LOCUS logo later
+        icon: '/logo_mark.jpg', // Official LOCUS emblem
         vibrate: [200, 100, 200, 100, 200], // SOS vibration pattern for Android
         tag: 'locus-alert',
         requireInteraction: true // Forces the user to click it to dismiss
@@ -1391,7 +1392,7 @@ const App = () => {
     // Not before the location explainer's Continue (or a known permission): see above.
     if (!locationReady) return;
 
-    // --- ⏱️ DYNAMIC POLLING TRANSLATOR ---
+    // --- ️ DYNAMIC POLLING TRANSLATOR ---
     const getPollingMs = () => {
       switch (sysConfig.polling) {
         case 'eco': return 15000;     // 15 seconds
@@ -1404,7 +1405,7 @@ const App = () => {
     const currentPollingRate = getPollingMs();
     console.log(`[SYS_CONFIG] Telemetry polling initialized at ${currentPollingRate}ms`);
 
-    // --- 🚀 FORCE INITIAL GPS LOCK ---
+    // ---  FORCE INITIAL GPS LOCK ---
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
@@ -1432,7 +1433,7 @@ const App = () => {
       { enableHighAccuracy: true }
     );
 
-    // --- 📡 DYNAMIC HEARTBEAT ---
+    // ---  DYNAMIC HEARTBEAT ---
     const heartbeatInterval = setInterval(async () => {
       const currentLoc = liveLocationRef.current;
       if (!currentLoc) return;
@@ -1473,7 +1474,7 @@ const App = () => {
       }
     }, currentPollingRate); // <-- WIRED HERE
 
-    // --- 🟢 LIVE GPS TRACKING ---
+    // ---  LIVE GPS TRACKING ---
     const watchId = navigator.geolocation.watchPosition(
       async (position) => {
         const { latitude, longitude, speed } = position.coords;
@@ -1511,7 +1512,7 @@ const App = () => {
         });
       },
       (error) => {
-        console.error('🚨 [SYS_ERROR] Geolocation lost:', error.message);
+        console.error(' [SYS_ERROR] Geolocation lost:', error.message);
         onGeolocationError(error);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: currentPollingRate } // <-- AND WIRED HERE
@@ -1525,7 +1526,7 @@ const App = () => {
     // to satisfy exhaustive-deps now that it comes from useDeviceHeading rather
     // than a local useRef the lint rule can recognise on its own.
   }, [user, hasJoinedSquad, squadCode, accessStatus, sysConfig.polling, headingRef, positionFor, locationReady, locationRetry]); // <-- CRITICAL: ADDED TO DEPENDENCIES
-  // --- ⚡ INSTANT MODE OVERRIDE ---
+  // ---  INSTANT MODE OVERRIDE ---
   // Fires the moment a telemetry button is clicked so the server gets the new
   // status immediately, without waiting for the next watchPosition tick.
   // Intentionally keyed only on telemetryMode — user/hasJoinedSquad/squadCode are
@@ -1612,7 +1613,7 @@ const App = () => {
   // needs the real thing, not just our own last command.
   const [currentZoom, setCurrentZoom] = useState(mapProps.zoom);
 
-  // --- 🚨 TACTICAL MAP OVERRIDE: FORCE 2D TOP-DOWN ---
+  // ---  TACTICAL MAP OVERRIDE: FORCE 2D TOP-DOWN ---
   // Moved here so mapProps and mapRef are declared before this runs
   useEffect(() => {
     if (mapRef.current) {
@@ -1620,7 +1621,7 @@ const App = () => {
     }
   }, [isSatellite, mapProps.zoom]);
 
-  // --- 🔐 THE MASTER AUTH ENGINE ---
+  // ---  THE MASTER AUTH ENGINE ---
   // Signs in or creates the account. Returns the problem to show on the screen (an
   // AUTH_PROBLEMS sentence), or null; the screen shows it in place, not as a notice.
   const executeAuthDirective = async (method, isRegistering = false) => {
@@ -1628,11 +1629,11 @@ const App = () => {
 
     try {
       if (method === 'google') {
-        // 🌐 OAUTH OVERRIDE
+        //  OAUTH OVERRIDE
         await signInWithPopup(auth, googleProvider);
       }
       else if (method === 'email') {
-        // ✉️ SECURE ENCRYPTED CHANNEL
+        // ️ SECURE ENCRYPTED CHANNEL
         if (!email || !password) {
           setLoginMethod(null);
           return AUTH_PROBLEMS.missingEmailAndPassword;
@@ -1675,7 +1676,7 @@ const App = () => {
     return null;
   };
 
-  // --- 🚨 KILL SWITCH LOGOUT HANDLER ---
+  // ---  KILL SWITCH LOGOUT HANDLER ---
   const handleLogout = () => {
     socket.emit('leave-squad');
     endSquadSession();
@@ -1769,7 +1770,7 @@ const App = () => {
     if (item) setSelectedItem(item);
   };
 
-  // --- 🚨 MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
+  // ---  MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
   const handleMapClick = ({ lat, lng }) => {
     // 0. TARGETING MODE RALLY POINT (Mobile two-step)
     if (isTargetingMode) {
@@ -2042,8 +2043,8 @@ const App = () => {
       <input
         type="search"
         aria-label={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
-        placeholder={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
-        className="w-full min-h-11 rounded-full bg-sunken pl-11 pr-4 font-ui text-body text-text placeholder:text-text-secondary focus:outline-2 focus:outline-offset-2 focus:outline-accent"
+        placeholder={activeTab === 'buildings' ? "Search buildings, places, facilities..." : GROUP_TABS.searchMembers}
+        className="w-full min-h-11 h-11 rounded-full glass-input pl-11 pr-10 font-ui text-[13px] text-text placeholder:text-text-secondary shadow-sm"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         // The panel steps aside, and back, only once the tap that moved focus has finished:
@@ -2051,6 +2052,11 @@ const App = () => {
         onFocus={(e) => { const box = e.currentTarget; afterTap(() => document.activeElement === box, true); }}
         onBlur={(e) => { const box = e.currentTarget; afterTap(() => document.activeElement !== box, false); }}
       />
+      {activeTab === 'buildings' && (
+        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-secondary p-1 rounded-full pointer-events-none" aria-hidden="true">
+          <Sliders size={15} />
+        </span>
+      )}
     </label>
   );
   // The group panel's search, for members as for buildings (it used to filter buildings only).
@@ -2312,8 +2318,8 @@ const App = () => {
         ref={sheetRef}
         className={`${
           isMobile
-            ? 'fixed inset-x-0 bottom-16 z-[900] flex flex-col bg-surface text-text rounded-t-sheet shadow-[var(--shadow-3)] pointer-events-auto'
-            : 'hidden md:flex w-80 bg-surface text-text border border-border rounded-card shadow-[var(--shadow-2)] fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
+            ? 'fixed inset-x-0 bottom-16 z-[900] flex flex-col glass-floating text-text rounded-t-[28px] pointer-events-auto'
+            : 'hidden md:flex w-84 glass-floating text-text rounded-3xl fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
         }`}
         // Starts under the header instead of behind it (it used to start at the very top, so
         // its handle and MATRIX/SQUAD indicator were hidden under the header).
@@ -2351,7 +2357,7 @@ const App = () => {
           }}
           ref={panelHeaderRef}
         >
-          <div className="md:hidden w-9 h-1 rounded-full bg-border mx-auto mb-3" aria-hidden="true" />
+          <div className="md:hidden w-10 h-1 rounded-full bg-[var(--glass-border)] mx-auto mb-3" aria-hidden="true" />
           <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode}>
             {/* The peek height's lines: laid out always on a phone (so peek's height is known
                 at every height), shown only at peek. */}
@@ -2394,6 +2400,55 @@ const App = () => {
           {/* Buildings: the search heads the list. (Members: it sits above the members list,
               under the controls, so a Group Lead's tools come higher at half height.) */}
           {activeTab === 'buildings' && groupSearch}
+
+          {/* Category Filter Pills (Minimalist Apple/Glass Design) */}
+          {activeTab === 'buildings' && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar -mx-1 px-1">
+              {[
+                { id: 'ALL', label: 'All' },
+                { id: 'ACADEMIC', label: 'Academic' },
+                { id: 'ENGINEERING', label: 'Engineering' },
+                { id: 'MEDICAL', label: 'Medical' },
+                { id: 'RESIDENTIAL', label: 'Hostels' },
+                { id: 'LOGISTICS', label: 'Cafes & Hubs' },
+              ].map((cat) => {
+                const isSelected = buildingCategoryFilter === cat.id;
+                const count = cat.id === 'ALL'
+                  ? SRM_MASTER_DATABASE.length
+                  : SRM_MASTER_DATABASE.filter(b => b.category === cat.id).length;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setBuildingCategoryFilter(cat.id)}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium font-ui transition-all duration-150 flex items-center gap-1.5 cursor-pointer border ${
+                      isSelected
+                        ? 'bg-accent text-accent-on border-accent shadow-sm'
+                        : 'glass-pill text-text-secondary hover:text-text'
+                    }`}
+                  >
+                    <span>{cat.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-normal ${isSelected ? 'bg-white/20 text-accent-on' : 'bg-sunken text-text-secondary'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Nearby Places Section Header */}
+          {activeTab === 'buildings' && (
+            <div className="flex items-center justify-between pt-1 pb-0.5">
+              <h3 className="text-sm font-semibold font-ui text-text flex items-center gap-2 tracking-tight">
+                <span>Nearby Places</span>
+                <span className="text-xs font-normal text-text-secondary">
+                  ({SRM_MASTER_DATABASE.filter(b => matchesSearch(b.name) && (buildingCategoryFilter === 'ALL' || b.category === buildingCategoryFilter)).length})
+                </span>
+              </h3>
+            </div>
+          )}
+
           {activeTab === 'buildings' && searchQuery.trim() && !SRM_MASTER_DATABASE.some(b => matchesSearch(b.name)) && (
             <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="buildings-no-match">{GROUP_BUILDINGS_LIST.noMatch(searchQuery.trim())}</p>
           )}
@@ -2439,25 +2494,33 @@ const App = () => {
           {activeTab === 'users' && searchQuery.trim() && !users.some(u => !blockedUserIds.includes(u.id) && matchesSearch(u.name)) && !ghostMembers.some(g => matchesSearch(g.name)) && (users.length > 0 || ghostMembers.length > 0) && (
             <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="members-no-match">{GROUP_MEMBERS_LIST.noMatch(searchQuery.trim())}</p>
           )}
-          <AnimatePresence mode="popLayout">
+          <AnimatePresence mode="popLayout" initial={false}>
             {activeTab === 'buildings' ? (
-              SRM_MASTER_DATABASE.filter(b => matchesSearch(b.name)).map(building => (
-                <motion.div
-                  layout
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  key={building.id}
-                >
-                  <BuildingRow
-                    building={building}
-                    me={liveLocation}
-                    onOpen={() => handleBuildingTap(building)}
-                    onArScan={() => setArTarget({ lat: building.lat, lng: building.lng, name: building.name })}
-                    onNavigate={() => { handleWaypointSelect(building); showBuildingOnMap(building); }}
-                  />
-                </motion.div>
-              ))
+              SRM_MASTER_DATABASE
+                .filter(b => matchesSearch(b.name) && (buildingCategoryFilter === 'ALL' || b.category === buildingCategoryFilter))
+                .map((building, idx) => (
+                  <motion.div
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    transition={{
+                      opacity: { duration: 0.22, ease: [0.22, 1, 0.36, 1] },
+                      y: { duration: 0.24, ease: [0.22, 1, 0.36, 1], delay: Math.min(idx, 5) * 0.03 },
+                      scale: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
+                      layout: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
+                    }}
+                    key={building.id}
+                  >
+                    <BuildingRow
+                      building={building}
+                      me={liveLocation}
+                      onOpen={() => handleBuildingTap(building)}
+                      onArScan={() => setArTarget({ lat: building.lat, lng: building.lng, name: building.name })}
+                      onNavigate={() => { handleWaypointSelect(building); showBuildingOnMap(building); }}
+                    />
+                  </motion.div>
+                ))
             ) : (
               // A flat array, not a <> fragment. AnimatePresence mode="popLayout" wraps
               // each direct child in a ref-bearing element to measure it, and a Fragment
@@ -2477,7 +2540,7 @@ const App = () => {
                     key={`ghost-row-${ghost.id}`}
                     data-testid="lost-member-row"
                     onClick={() => handleFocus(ghost.position, null)}
-                    className="flex items-center gap-3 py-3 border-b border-border font-ui text-text cursor-pointer"
+                    className="flex items-center gap-3 p-3 rounded-2xl glass-panel font-ui text-text cursor-pointer hover:bg-surface/90 transition-all duration-150"
                   >
                     <Avatar name={ghost.name || '?'} dashed className="opacity-70" />
                     <div className="flex-1 min-w-0">
@@ -2568,7 +2631,7 @@ const App = () => {
           </span>
         </StatusScreen>
       )}
-      {/* --- 🌐 TACTICAL GEOFENCE HUD --- */}
+      {/* ---  TACTICAL GEOFENCE HUD --- */}
       {/* The stack under the top bar (redesign Map batch, pieces 1, 6 and 7): the sharing chip,
           or a banner in its place (choosing a meeting point, the location problem), then your
           route. One column, so none of them lands on another. On a phone it sits under the
@@ -2686,7 +2749,7 @@ const App = () => {
                 else { map.setCenter({ lat, lng }); map.setZoom(Math.round(zoom)); }
               },
             });
-            // 🟢 GREEN LIGHT: Map canvas is live — safe to draw saved zones now
+            //  GREEN LIGHT: Map canvas is live — safe to draw saved zones now
             setIsMapReady(true);
           }}
         >
@@ -2817,10 +2880,10 @@ const App = () => {
       <AnimatePresence>
         {selectedItem && activeTab === 'buildings' && (
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
-            transition={reduceMotion ? { duration: 0.15 } : PANEL_SPRING}
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.98 }}
+            transition={reduceMotion ? { duration: 0.15 } : { type: 'spring', stiffness: 400, damping: 34, mass: 0.85 }}
             data-testid="location-card"
             className="absolute inset-x-3 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 z-[600] md:w-96 max-h-[60vh] md:max-h-[80vh] overflow-y-auto rounded-card pointer-events-auto"
           >
@@ -2888,37 +2951,37 @@ const App = () => {
         onClose={() => setShowTelemetryModal(false)}
       />
 
-      {/* --- SETTINGS (components/settings/SettingsScreen.jsx) ---
-          The outer layer is opaque and above the bars from its first frame to its last; only
-          the screen inside it fades. A fading element is its own stacking context, so when the
-          fade sat on an unlayered wrapper, Settings' z-index counted only inside it and the top
-          and bottom bars drew over Settings until the fade finished. */}
+      {/* --- SETTINGS (components/settings/SettingsScreen.jsx) --- */}
       <AnimatePresence>
         {showSettingsModal && (
-          <motion.div key="settings" data-testid="settings-layer" className="fixed inset-0 bg-bg" style={{ zIndex: SETTINGS_Z }}>
-            <motion.div {...fade()}>
-              <SettingsScreen
-                onClose={() => setShowSettingsModal(false)}
-                polling={sysConfig.polling}
-                onPolling={(v) => toggleConfig('polling', v)}
-                arFidelity={sysConfig.arFidelity}
-                onArFidelity={(v) => toggleConfig('arFidelity', v)}
-                alertSounds={sysConfig.audio}
-                onAlertSounds={(on) => toggleConfig('audio', on)}
-                isSatellite={isSatellite}
-                onSatellite={setIsSatellite}
-                mapStatus={mapStatus}
-                arFeatureOverrides={sysConfig.arFeatureOverrides}
-                onArFeatureOverride={(feature, v) => toggleConfig(`arFeatureOverrides.${feature}`, v)}
-                update={{
-                  installedVersion: appUpdate.installedVersion,
-                  supported: appUpdate.supported,
-                  status: appUpdate.status,
-                  onCheck: () => appUpdate.check({ manual: true }),
-                }}
-                onOpenGuide={() => setGuideOpen(true)}
-              />
-            </motion.div>
+          <motion.div
+            key="settings"
+            initial={{ opacity: 0, scale: 0.98, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98, y: 12 }}
+            transition={reduceMotion ? { duration: 0.15 } : { type: 'spring', stiffness: 420, damping: 36, mass: 0.8 }}
+          >
+            <SettingsScreen
+              onClose={() => setShowSettingsModal(false)}
+              polling={sysConfig.polling}
+              onPolling={(v) => toggleConfig('polling', v)}
+              arFidelity={sysConfig.arFidelity}
+              onArFidelity={(v) => toggleConfig('arFidelity', v)}
+              alertSounds={sysConfig.audio}
+              onAlertSounds={(on) => toggleConfig('audio', on)}
+              isSatellite={isSatellite}
+              onSatellite={setIsSatellite}
+              mapStatus={mapStatus}
+              arFeatureOverrides={sysConfig.arFeatureOverrides}
+              onArFeatureOverride={(feature, v) => toggleConfig(`arFeatureOverrides.${feature}`, v)}
+              update={{
+                installedVersion: appUpdate.installedVersion,
+                supported: appUpdate.supported,
+                status: appUpdate.status,
+                onCheck: () => appUpdate.check({ manual: true }),
+              }}
+              onOpenGuide={() => setGuideOpen(true)}
+            />
           </motion.div>
         )}
       </AnimatePresence>

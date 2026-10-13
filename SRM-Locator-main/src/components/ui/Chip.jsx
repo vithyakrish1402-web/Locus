@@ -4,8 +4,8 @@ import React from 'react';
 // ("Live now", "Paused · 6 min ago"), and a count badge (2 join requests).
 
 const CHIP_TONES = {
-  accent: 'bg-accent-soft text-accent',
-  neutral: 'bg-sunken text-text-secondary',
+  accent: 'backdrop-blur-md bg-accent-soft/85 text-accent border border-accent/25 shadow-sm',
+  neutral: 'backdrop-blur-md bg-[var(--glass-sunken)] text-text-secondary border border-[var(--glass-border-subtle)]',
 };
 
 /**
@@ -15,10 +15,10 @@ const CHIP_TONES = {
 export default function Chip({ tone = 'accent', icon: Icon = null, className = '', children, ...props }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 min-h-8 px-3 rounded-full font-ui text-secondary font-semibold ${CHIP_TONES[tone]} ${className}`}
+      className={`inline-flex items-center gap-1.5 min-h-8 px-3.5 rounded-full font-ui text-secondary font-semibold transition-all ${CHIP_TONES[tone]} ${className}`}
       {...props}
     >
-      {Icon && <Icon size={16} aria-hidden="true" />}
+      {Icon && <Icon size={15} aria-hidden="true" />}
       {children}
     </span>
   );
@@ -49,7 +49,7 @@ export function Badge({ count, label, className = '' }) {
   return (
     <span
       aria-label={label}
-      className={`inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-accent text-accent-on font-ui text-caption tabular-nums ${className}`}
+      className={`inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-accent text-accent-on font-ui text-[11px] font-bold tabular-nums shadow-[0_2px_6px_var(--color-accent-halo)] ${className}`}
     >
       {count}
     </span>

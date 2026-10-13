@@ -1,9 +1,8 @@
 // Pure parsing/comparison logic for the in-app updater.
 //
 // The "update manifest" is just GitHub's own release JSON — there is deliberately no
-// separate manifest file to keep in sync (the update index, utils/updateIndex.js, is a copy of
-// the releases list that the release scripts rebuild, read with these same parsers).
-// `GET /repos/:owner/:repo/releases/latest` gives us everything the updater needs:
+// separate manifest file to keep in sync. `GET /repos/:owner/:repo/releases/latest`
+// gives us everything the updater needs:
 //
 //   tag_name -> the version                      (e.g. "v1.2.0")
 //   assets[] -> the APK download URL             (asset named APK_ASSET_NAME)

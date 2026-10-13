@@ -27,7 +27,7 @@ export default function RouteCard({ start, end, data, onEnd }) {
   return (
     <div
       data-testid="route-card"
-      className="flex items-center gap-3 rounded-card bg-raised text-text font-ui shadow-[var(--shadow-2)] border border-border py-3 pl-3 pr-1 pointer-events-auto"
+      className="flex items-center gap-3 rounded-card glass-panel text-text font-ui py-3 pl-3 pr-1 pointer-events-auto shadow-md"
     >
       <span className="flex items-center justify-center w-10 h-10 rounded-full bg-accent-soft text-accent shrink-0" aria-hidden="true">
         <Navigation size={20} />

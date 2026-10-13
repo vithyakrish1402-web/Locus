@@ -20,7 +20,7 @@ export const NOTICES = {
     gone: 'That meeting point has been removed.',
   },
   leadIsBack: 'The Group Lead is back. You are a member again.',
-  removedByLead: 'The Group Lead removed you from this group.',
+  removedByLead: 'You were removed from the group.',
   removedByVote: "The group's members voted to remove you.",
   routePublished: (from, to) => `Route ${from} → ${to} published.`,
 };

@@ -12,11 +12,11 @@ import React from 'react';
 //              Ordinary problems are never red; they use the warning (amber) role.
 
 const VARIANTS = {
-  primary: 'bg-accent text-accent-on active:bg-accent-pressed',
-  tonal: 'bg-accent-soft text-accent',
-  secondary: 'bg-surface text-text border border-border-control',
-  plain: 'bg-transparent text-accent',
-  danger: 'bg-danger text-danger-on active:bg-danger-pressed',
+  primary: 'bg-accent text-accent-on font-semibold shadow-[0_2px_10px_var(--color-accent-halo)] hover:opacity-95 active:scale-[0.98]',
+  tonal: 'bg-accent-soft/80 text-accent font-semibold hover:bg-accent-soft active:scale-[0.98]',
+  secondary: 'bg-sunken text-text font-medium hover:bg-surface active:scale-[0.98]',
+  plain: 'bg-transparent text-text-secondary hover:text-text active:opacity-60',
+  danger: 'bg-danger text-danger-on font-semibold shadow-[0_2px_10px_rgba(198,40,40,0.25)] hover:opacity-95 active:scale-[0.98]',
 };
 
 const SIZES = {

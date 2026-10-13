@@ -109,7 +109,7 @@ export default function Sheet({ open, onClose, title, label, dismissible = true,
               if (release.close) onClose();
               else controls.start({ y: 0, transition: release.transition });
             }}
-            className="absolute inset-x-0 bottom-0 md:mx-auto md:max-w-xl max-h-[90dvh] [@media(max-height:699px)]:max-h-[94dvh] overflow-y-auto rounded-t-sheet bg-surface text-text font-ui shadow-[var(--shadow-3)] outline-none"
+            className="absolute inset-x-0 bottom-0 md:mx-auto md:max-w-xl max-h-[90dvh] [@media(max-height:699px)]:max-h-[94dvh] overflow-y-auto rounded-t-sheet glass-floating text-text font-ui outline-none"
             // Its last buttons end above the Emergency button, which stands over every sheet.
             style={{ paddingBottom: 'var(--emergency-clearance)' }}
           >
@@ -120,7 +120,7 @@ export default function Sheet({ open, onClose, title, label, dismissible = true,
                 data-no-ping
                 aria-hidden="true"
               >
-                <span className="w-9 h-1 rounded-full bg-border" />
+                <span className="w-10 h-1 rounded-full bg-[var(--glass-border)]" />
               </div>
             ) : (
               <div className="pt-4" />

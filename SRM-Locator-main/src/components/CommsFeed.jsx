@@ -53,7 +53,8 @@ function Notice({ item, reduceMotion, coveredBy }) {
   const look = LOOK[item.kind === 'ping' ? 'ping' : item.severity] ?? LOOK.info;
   const { Icon } = look;
   const [exitX, setExitX] = useState(0);
-  // The bold line is the title when there is one; otherwise the message itself.
+
+  // The headline is the title when there is one; otherwise the message itself.
   const headline = item.title || item.message;
   const detail = item.title ? item.message : item.body;
   const more = item.title && item.body ? item.body : null;
@@ -65,47 +66,102 @@ function Notice({ item, reduceMotion, coveredBy }) {
       role={item.severity === 'error' ? 'alert' : 'status'}
       data-severity={item.severity}
       data-reachable={reachable}
-      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -24, scale: 0.96 }}
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
-      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: exitX, y: exitX ? 0 : -16, scale: 0.96, transition: { duration: 0.18 } }}
-      transition={reduceMotion ? { duration: 0.15 } : PANEL_SPRING}
+      exit={
+        reduceMotion
+          ? { opacity: 0, transition: { duration: 0.15 } }
+          : {
+              opacity: 0,
+              x: exitX,
+              y: exitX ? 0 : -12,
+              scale: 0.97,
+              transition: { duration: 0.2, ease: [0.3, 0, 0.8, 0.15] },
+            }
+      }
+      transition={
+        reduceMotion
+          ? { duration: 0.15 }
+          : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }
+      }
+      whileTap={reduceMotion ? undefined : { scale: 0.99, transition: { duration: 0.12 } }}
       drag={reduceMotion ? false : 'x'}
-      dragElastic={0.6}
+      dragElastic={0.5}
       dragConstraints={{ left: 0, right: 0 }}
       onDragEnd={(_e, info) => {
         const projected = info.offset.x + projectMomentum(info.velocity.x);
         if (Math.abs(projected) > SWIPE_DISMISS_PX) {
-          setExitX(projected > 0 ? 420 : -420); // leave the way it was thrown
+          setExitX(projected > 0 ? 380 : -380); // leave cleanly the way it was thrown
           dismiss(item.id);
         }
       }}
-      className={`${reachable ? 'pointer-events-auto' : 'pointer-events-none'} relative overflow-hidden rounded-card bg-raised text-text font-ui shadow-[var(--shadow-2)] border border-border touch-pan-y cursor-grab active:cursor-grabbing`}
+      className={`${
+        reachable ? 'pointer-events-auto' : 'pointer-events-none'
+      } relative overflow-hidden rounded-[14px] bg-[var(--glass-surface)] backdrop-blur-xl text-text font-ui shadow-[0_4px_16px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.45)] border border-[var(--color-border)]/75 dark:border-[var(--glass-border)] touch-pan-y cursor-grab active:cursor-grabbing select-none w-full`}
       data-no-ping
     >
-      <div className="flex items-center gap-3 py-3 pl-3 pr-1">
-        <span className={`flex items-center justify-center w-10 h-10 rounded-full shrink-0 ${look.disc}`} aria-hidden="true">
-          <Icon size={20} />
-        </span>
-        {/* A tappable notice (item.onClick) dismisses itself, then runs its action. */}
-        <div
-          className={`min-w-0 flex-1 text-left ${item.onClick ? 'cursor-pointer' : ''}`}
-          {...(item.onClick ? { role: 'button', tabIndex: 0, onClick: () => { dismiss(item.id); item.onClick(); } } : {})}
-        >
-          <p className="text-heading break-words">{headline}</p>
-          {detail && <p className="text-secondary text-text-secondary break-words">{detail}</p>}
-          {more && <p className="text-secondary text-text-secondary break-words">{more}</p>}
-        </div>
-        <IconButton label="Dismiss notice" icon={X} size={20} onClick={() => dismiss(item.id)} className="shrink-0" />
-      </div>
-      {item.duration > 0 && (
-        // Keyed on postedAt so a refreshed duplicate restarts its countdown.
+      {/* 2.5-3px minimal left severity indicator accent bar */}
+      <span
+        className={`absolute left-0 top-0 bottom-0 w-[3px] ${look.bar} rounded-l-full`}
+        aria-hidden="true"
+      />
+
+      <div className="flex items-start gap-3 py-2.5 pl-3.5 pr-2 min-h-[52px]">
+        {/* Subtle, restrained icon disc */}
         <span
-          key={item.postedAt}
-          className={`absolute bottom-0 left-0 h-[3px] w-full origin-left ${look.bar} locus-drain`}
-          style={{ animationDuration: `${item.duration}ms` }}
+          className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 mt-0.5 ${look.disc} transition-colors`}
           aria-hidden="true"
-        />
-      )}
+        >
+          <Icon size={16} strokeWidth={2.2} />
+        </span>
+
+        {/* Content body */}
+        <div
+          className={`min-w-0 flex-1 text-left py-0.5 ${item.onClick ? 'cursor-pointer' : ''}`}
+          {...(item.onClick
+            ? {
+                role: 'button',
+                tabIndex: 0,
+                onClick: () => {
+                  dismiss(item.id);
+                  item.onClick();
+                },
+              }
+            : {})}
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-heading font-medium text-text tracking-tight leading-snug break-words">
+              {headline}
+            </p>
+            {item.timestamp && (
+              <span className="shrink-0 text-[11px] font-medium text-text-secondary/75 tracking-normal">
+                {item.timestamp}
+              </span>
+            )}
+          </div>
+          {detail && (
+            <p className="text-secondary text-text-secondary leading-relaxed break-words mt-0.5">
+              {detail}
+            </p>
+          )}
+          {more && (
+            <p className="text-secondary text-text-secondary/80 leading-relaxed break-words mt-0.5">
+              {more}
+            </p>
+          )}
+        </div>
+
+        {/* Minimal close button with accessible 44px minimum touch area */}
+        <div className="shrink-0 -mr-1 -mt-0.5 flex items-center justify-center">
+          <IconButton
+            label="Dismiss notice"
+            icon={X}
+            size={15}
+            onClick={() => dismiss(item.id)}
+            className="!min-w-[36px] !min-h-[36px] text-text-secondary/70 hover:text-text hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all"
+          />
+        </div>
+      </div>
     </motion.div>
   );
 }

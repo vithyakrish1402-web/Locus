@@ -9,9 +9,9 @@ import { BUTTON_FOCUS } from './Button';
 //   raised   a floating control over the map: raised surface with a shadow
 
 const VARIANTS = {
-  plain: 'text-text-secondary',
-  tonal: 'bg-accent-soft text-accent',
-  raised: 'bg-raised text-text shadow-[var(--shadow-2)]',
+  plain: 'text-text-secondary hover:text-text hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all',
+  tonal: 'backdrop-blur-md bg-accent-soft/85 text-accent border border-accent/20 hover:bg-accent-soft shadow-sm active:scale-95 transition-all',
+  raised: 'backdrop-blur-xl bg-[var(--glass-surface)] text-text border border-[var(--glass-border)] shadow-[var(--glass-shadow)] hover:bg-surface active:scale-95 transition-all',
 };
 
 /**

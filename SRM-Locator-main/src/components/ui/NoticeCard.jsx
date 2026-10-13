@@ -29,7 +29,11 @@ export default function NoticeCard({ tone = 'info', title, children, icon, onDis
   return (
     <div
       role={role}
-      className={`bg-raised text-text font-ui rounded-card shadow-[var(--shadow-2)] p-4 ${className}`}
+      className={`backdrop-blur-2xl bg-[var(--glass-bg)] border border-[var(--glass-border)] text-text font-ui rounded-[20px] p-4 transition-all duration-200 ${className}`}
+      style={{
+        boxShadow: 'var(--glass-shadow), var(--glass-specular)',
+        ...props.style,
+      }}
       {...props}
     >
       <div className="flex items-start gap-3">

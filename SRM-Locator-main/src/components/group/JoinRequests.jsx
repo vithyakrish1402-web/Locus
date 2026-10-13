@@ -25,7 +25,7 @@ export default function JoinRequests({ open, onClose, requests, code, onAnswer }
             <p className="text-body text-text-secondary">{JOIN_REQUESTS.emptyBody(code)}</p>
           </div>
         ) : requests.map((request) => (
-          <div key={request.targetId} data-testid="join-request" className="rounded-card border border-border p-4 flex flex-col gap-3">
+          <div key={request.targetId} data-testid="join-request" className="rounded-2xl glass-panel p-4 flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <Avatar name={request.name || '?'} />
               <div className="min-w-0">

@@ -360,7 +360,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
     return () => clearInterval(timer);
   }, [debugOpen, diagnosticsRef]);
 
-  // --- 🧭 WRAPAROUND-SAFE ROTATION ---
+  // --- WRAPAROUND-SAFE ROTATION ---
   // (bearing - heading) is a raw difference of two 0-360deg values, which jumps
   // discontinuously whenever either crosses the 0/360 boundary (e.g. heading 359 -> 1
   // makes the raw value swing by ~358 instead of ~2). Framer Motion interpolates
