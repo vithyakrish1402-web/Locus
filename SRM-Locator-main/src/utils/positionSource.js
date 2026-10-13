@@ -8,7 +8,18 @@
 //
 // Paused (false) since js-1.1.14: flip it back to true to resume the TECH PARK field test.
 // Turning it off again after a bad release needs only this line and a JS-only bundle.
-export const WIFI_POSITIONING_ENABLED = false;
+//
+// On only in the separate "LOCUS Test" build (Vite mode 'sidetest', npm run sidetest:install),
+// for the Floor 7 demo. Vite turns the MODE comparison into a constant, so in every other
+// build this is the literal `false` it always was and the WiFi code is left out.
+export const WIFI_POSITIONING_ENABLED = import.meta.env.MODE === 'sidetest';
+
+/**
+ * The Floor 7 demo: bundled Floor 7 access points and the position filter (src/utils/floor7Demo.js)
+ * in place of the live wifi_aps table. Same condition as the flag above, so it is `false` in
+ * every build but the test build, and its code and data are left out of them.
+ */
+export const FLOOR7_DEMO = WIFI_POSITIONING_ENABLED;
 
 /**
  * Minimum Stage 5 confidence for WiFi to replace GPS. A guess, not a measurement: no

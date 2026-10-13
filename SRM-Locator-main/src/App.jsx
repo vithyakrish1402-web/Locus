@@ -93,7 +93,7 @@ import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { useWifiFusion } from './hooks/useWifiFusion';
 import { useIndoorView } from './hooks/useIndoorView';
-import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD } from './utils/positionSource';
+import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD, FLOOR7_DEMO } from './utils/positionSource';
 import { buildingAt, isOnOtherFloor, memberFloorTag } from './utils/indoorView';
 import { ConfidenceHalo, FloorTag } from './components/IndoorMarkers';
 import FloorPicker from './components/FloorPicker';
@@ -112,6 +112,8 @@ import { PrecognitionFilter } from './utils/precognition';
 // Google Maps fails to load — code-split it so the common path never pays
 // for it.
 const TacticalLeafletMap = React.lazy(() => import('./components/TacticalLeafletMap'));
+// Floor 7 alignment overlay: the test build only (FLOOR7_DEMO is false, and this import gone, elsewhere).
+const Floor7DebugOverlay = FLOOR7_DEMO ? React.lazy(() => import('./components/Floor7DebugOverlay')) : null;
 // --- ADDED: FIREBASE AUTH ---
 import { auth, googleProvider } from './firebase';
 import {
@@ -2864,6 +2866,7 @@ const App = () => {
       {WIFI_POSITIONING_ENABLED && indoorView && <FloorPicker view={indoorView} />}
       {/* Owner-only field-test readout: every scan cycle's numbers, for judging the estimates. */}
       {WIFI_POSITIONING_ENABLED && isAdmin && <WifiReadout lastCycle={lastCycle} active={wifiActive} />}
+      {FLOOR7_DEMO && isAdmin && <Suspense fallback={null}><Floor7DebugOverlay /></Suspense>}
 
       {/* Right-hand map controls (components/map/MapControls.jsx) */}
       <MapControls
