@@ -56,7 +56,7 @@ export const memberKey = (uid, socketId) => uid || socketId;
 // The store has no prototype because senderKey is the client-sent uid: on a plain {},
 // a uid of '__proto__' replaced the prototype instead of adding an entry, so the SOS
 // went out live but was never replayed or acknowledgeable.
-export function recordSos(squad, { senderKey, senderId, senderName, lat, lng, timestamp }, now = Date.now()) {
+export function recordSos(squad, { senderKey, senderId, senderName, lat, lng, timestamp, flag }, now = Date.now()) {
   squad.sos = squad.sos || Object.create(null);
   const sos = {
     id: randomUUID(),
@@ -68,8 +68,28 @@ export function recordSos(squad, { senderKey, senderId, senderName, lat, lng, ti
     timestamp: timestamp || now,
     createdAt: now,
     ackedBy: [],
+    // Why the server flagged it (alertRules.js): 'QUIET_ZONE' or 'LOCATION_UNKNOWN'.
+    flag: flag ?? null,
   };
   squad.sos[senderKey] = sos;
+  return sos;
+}
+
+// A sender pressing again while their earlier SOS is still fresh updates that SOS rather
+// than starting another: same id, so no second alarm anywhere, and nobody who already
+// acknowledged it is asked again. Its location and time become the newest. Returns the
+// updated SOS, or null when there is none fresh enough, in which case the caller records
+// a new one (and that is the alarm).
+export function coalesceSos(squad, { senderKey, senderId, lat, lng, timestamp, flag }, now, windowMs) {
+  const sos = squad?.sos?.[senderKey];
+  if (!sos || now - sos.createdAt >= windowMs) return null;
+  sos.senderId = senderId;
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    sos.lat = lat;
+    sos.lng = lng;
+  }
+  sos.timestamp = timestamp || now;
+  if (flag) sos.flag = flag;
   return sos;
 }
 
@@ -84,6 +104,8 @@ export function toSosPayload(sos, now = Date.now()) {
     lng: sos.lng,
     timestamp: sos.timestamp,
     ageMs: Math.max(0, now - sos.createdAt),
+    // Only when the server flagged it, so an ordinary SOS is byte-for-byte what it was.
+    ...(sos.flag ? { flag: sos.flag } : {}),
   };
 }
 

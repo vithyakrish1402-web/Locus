@@ -3,13 +3,23 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { resolveSosRoom, recordSos, toSosPayload, pendingSosFor, ackSos, memberKey, sharedSquad } from './sosRelay.js';
+import { resolveSosRoom, recordSos, coalesceSos, toSosPayload, pendingSosFor, ackSos, memberKey, sharedSquad } from './sosRelay.js';
 import {
   rememberMember, forgetMember, rebindReturningMember, collectStaleSocketIds,
   refuseJoin, addPendingRequest, takePendingRequest, withdrawPendingRequests, pendingRequestsOf,
   isKnownMember, commanderOf,
 } from './squadRoster.js';
 import { toTelemetryRecord } from './telemetry.js';
+import { evaluateAlertPermission, DEFAULT_RULES_CONFIG } from './alertRules.js';
+import {
+  PING_WINDOW_MIN, SOS_COALESCE_SEC, SOS_REPEAT_FLAG_COUNT, SOS_REPEAT_WINDOW_MIN, ALERT_LOG_SIZE,
+  SETTINGS_RESTORE_TTL_HOURS, forceClassHoursStatus, classClock, guardStartupLine,
+} from './alertConfig.js';
+import {
+  settingsOf, canChangeSettings, updateSwitches, isPingerMuted, setPingerMuted,
+  setPersonallyMuted, isPersonallyMuted, settingsFor, createSettingsStore,
+} from './groupSettings.js';
+import { logAlert, pingHistory, recordPing, noteSosAttempt } from './alertLog.js';
 
 const app = express();
 app.use(cors());
@@ -84,6 +94,91 @@ function deleteSquad(roomCode) {
   // and SOS to the old squad's phones.
   io.in(roomCode).socketsLeave(roomCode);
   delete activeSquads[roomCode];
+}
+
+// --- SOS / PING GUARD (alertRules.js decides; this gathers the input and acts) ---
+// Group settings outlast the squad that holds them (see groupSettings.js). Set
+// LOCUS_SETTINGS_FILE to a path on storage that survives a restart to keep them across one.
+const settingsStore = createSettingsStore({
+  filePath: process.env.LOCUS_SETTINGS_FILE || null,
+  ttlMs: SETTINGS_RESTORE_TTL_HOURS * 60 * 60 * 1000,
+});
+
+const forced = forceClassHoursStatus();
+console.log(guardStartupLine({ quietZonesEnabled: DEFAULT_RULES_CONFIG.quietZonesEnabled, forceClassHours: forced.forced }));
+if (forced.forced) {
+  console.warn('[⚠️  GUARD] LOCUS_FORCE_CLASS_HOURS is ON: every moment counts as class time. Demo/testing only.');
+}
+if (forced.refused) {
+  console.error('[⚠️  GUARD] LOCUS_FORCE_CLASS_HOURS ignored: NODE_ENV is production and LOCUS_ALLOW_FORCE_IN_PRODUCTION is not "true".');
+}
+if (classClock() !== null) {
+  console.warn('[⚠️  GUARD] LOCUS_CLASS_CLOCK_ISO pins the class-hours clock. Tests only.');
+}
+
+// A person's stable identity on this squad: their uid, else (an old client) their socket id.
+const keyOf = (squad, socketId) =>
+  memberKey(squad?.memberUids?.[socketId] || io.sockets.sockets.get(socketId)?.data?.uid, socketId);
+
+// Where the server last saw `socketId`, as alertRules.js wants it. accuracyM is only there
+// once phones send an accuracy; until then it is unknown, which is never held against them.
+function lastKnownLocation(socketId, now) {
+  const u = users[socketId];
+  if (!u || !Number.isFinite(u.lat) || !Number.isFinite(u.lng)) return null;
+  return { lat: u.lat, lng: u.lng, ageMs: now - (u.lastSeen ?? 0), accuracyM: Number.isFinite(u.accuracy) ? u.accuracy : undefined };
+}
+
+// The one place a verdict is asked for. Every SOS and Ping the server relays goes through it.
+function decideAlert({ type, squad, senderId, targetId = null, now }) {
+  const senderKey = keyOf(squad, senderId);
+  return evaluateAlertPermission({
+    type,
+    settings: settingsOf(squad),
+    senderMuted: isPingerMuted(squad, senderKey),
+    location: lastKnownLocation(senderId, now),
+    history: type === 'ping'
+      ? pingHistory(squad, senderKey, keyOf(squad, targetId), now, PING_WINDOW_MIN * 60 * 1000)
+      : undefined,
+    now,
+    classNow: classClock() ?? now,
+  }, DEFAULT_RULES_CONFIG);
+}
+
+// Tell the sender what happened to their alert, and keep it in the Group's log (which the
+// Group Lead can read, and is sent each new entry as it happens).
+function reportAlert(socket, squad, roomCode, type, verdict, now, extra = {}) {
+  const name = socket.data?.profile?.name ?? null;
+  const entry = logAlert(squad, {
+    at: now, type, senderId: socket.id, senderName: name,
+    allowed: verdict.allowed, mode: verdict.mode, reasonCode: verdict.reasonCode, ...extra,
+  }, ALERT_LOG_SIZE);
+  socket.emit('alert-result', {
+    type, roomCode, allowed: verdict.allowed, mode: verdict.mode, reasonCode: verdict.reasonCode,
+    ...(verdict.retryAfterSec ? { retryAfterSec: verdict.retryAfterSec } : {}),
+  });
+  if (squad.ownerId && squad.ownerId !== socket.id) io.to(squad.ownerId).emit('alert-log-entry', { roomCode, entry });
+}
+
+// A Group's switches and mutes, as each member should see them.
+function sendGroupSettings(target, squad, roomCode) {
+  target.emit('group-settings', settingsFor(squad, roomCode, {
+    key: keyOf(squad, target.id),
+    isLead: squad.ownerId === target.id,
+    keyOf: (id) => keyOf(squad, id),
+  }));
+}
+function broadcastGroupSettings(roomCode) {
+  const squad = activeSquads[roomCode];
+  if (!squad) return;
+  for (const id of squad.members) {
+    const member = io.sockets.sockets.get(id);
+    if (member) sendGroupSettings(member, squad, roomCode);
+  }
+}
+// Remember the Group's settings past the squad itself, but only once anyone has set any.
+function persistGroupSettings(roomCode) {
+  const squad = activeSquads[roomCode];
+  if (squad?.settings) settingsStore.save(roomCode, commanderOf(squad), squad.settings);
 }
 
 io.on('connection', (socket) => {
@@ -248,9 +343,13 @@ socket.on('check-ping', (clientTimestamp) => {
         activeWaypoint: null,
         lastActivity: Date.now()
       };
+      // The same person setting this Group up again gets their switches back.
+      const saved = settingsStore.restore(roomCode, requesterUid);
+      if (saved) activeSquads[roomCode].settings = saved;
       socket.join(roomCode);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
       sendRallyPoint(socket, activeSquads[roomCode]);
+      sendGroupSettings(socket, activeSquads[roomCode], roomCode);
       return;
     }
 
@@ -297,6 +396,7 @@ socket.on('check-ping', (clientTimestamp) => {
       if (standInId) io.to(standInId).emit('demoted-to-member', { roomCode });
       sendJoinQueue(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
+      sendGroupSettings(socket, existing, roomCode);
       broadcastSquadUpdate(roomCode);
       return;
     }
@@ -327,6 +427,7 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.emit('access-granted', { role: 'OWNER', roomCode });
       sendJoinQueue(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
+      sendGroupSettings(socket, existing, roomCode);
       broadcastSquadUpdate(roomCode);
       return;
     }
@@ -349,6 +450,7 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.emit('access-granted', { role: returning.role, roomCode });
       if (returning.role === 'OWNER') sendJoinQueue(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
+      sendGroupSettings(socket, existing, roomCode);
       broadcastSquadUpdate(roomCode);
       return;
     }
@@ -406,6 +508,7 @@ socket.on('check-ping', (clientTimestamp) => {
         // Approved once; remembered by uid so a reconnect isn't a fresh request.
         rememberMember(squad, targetSocket.data?.uid);
         sendRallyPoint(targetSocket, squad);
+        sendGroupSettings(targetSocket, squad, roomCode);
         // Put them on everyone's roster now. Previously the squad only learned of a new
         // member when that member's first telemetry arrived, so a mid-session joiner was
         // missing from the list for a polling interval (up to 15s in eco mode) — and
@@ -551,11 +654,30 @@ socket.on('check-ping', (clientTimestamp) => {
   // was a `= {}` default, which null skips.
   socket.on('ping-user', (payload) => {
     const { targetId, senderName } = payload ?? {};
-    if (!sharedSquad(activeSquads, socket.id, targetId)) {
+    const roomCode = sharedSquad(activeSquads, socket.id, targetId);
+    if (!roomCode) {
       console.warn(`[PING] Dropped: ${socket.id} is not in a squad with ${targetId}`);
       return;
     }
-    io.to(targetId).emit('receive-ping', { senderName });
+    // The only way a ping is relayed: asked of alertRules.js first (see decideAlert).
+    const squad = activeSquads[roomCode];
+    const now = Date.now();
+    const verdict = decideAlert({ type: 'ping', squad, senderId: socket.id, targetId, now });
+    let delivered = false;
+    if (verdict.allowed) {
+      const senderKey = keyOf(squad, socket.id);
+      const targetKey = keyOf(squad, targetId);
+      recordPing(squad, senderKey, targetKey, now, PING_WINDOW_MIN * 60 * 1000);
+      // Pings the target has muted still count against the sender, and the sender is not
+      // told: a muted person gets silence, not a way to find out they were muted.
+      if (!isPersonallyMuted(squad, targetKey, senderKey)) {
+        io.to(targetId).emit('receive-ping', { senderName });
+        delivered = true;
+      }
+    } else {
+      console.log(`[PING] Refused in ${roomCode}: ${verdict.reasonCode}`);
+    }
+    reportAlert(socket, squad, roomCode, 'ping', verdict, now, { targetId, delivered });
   });
 
   // Squad-wide distress beacon (the "SOS" promised in onboarding) — broadcasts
@@ -579,19 +701,105 @@ socket.on('check-ping', (clientTimestamp) => {
       console.warn(`[🚨 SOS] Dropped: ${socket.id} (${senderName}) is not a member of any squad`);
       return;
     }
-    console.log(`[🚨 SOS] ${senderName} triggered a distress beacon in ${roomCode}`);
     // One clock reading for both, so a live broadcast is reliably age 0 rather than
     // occasionally 1ms if the second Date.now() ticks over.
     const now = Date.now();
-    const sos = recordSos(activeSquads[roomCode], {
-      senderKey: memberKey(socket.data?.uid, socket.id),
-      senderId: socket.id,
-      senderName,
-      lat,
-      lng,
-      timestamp,
-    }, now);
-    socket.to(roomCode).emit('sos-received', toSosPayload(sos, now));
+    const squad = activeSquads[roomCode];
+    // The only way an SOS is relayed: asked of alertRules.js first (see decideAlert). An
+    // SOS is only ever refused by the Group Lead's switch, or by the quiet-zone setting
+    // when that is 'blocked'; otherwise at worst it goes out flagged.
+    const verdict = decideAlert({ type: 'sos', squad, senderId: socket.id, now });
+    if (!verdict.allowed) {
+      console.log(`[🚨 SOS] Refused in ${roomCode}: ${verdict.reasonCode}`);
+      reportAlert(socket, squad, roomCode, 'sos', verdict, now);
+      return;
+    }
+    console.log(`[🚨 SOS] ${senderName} triggered a distress beacon in ${roomCode}`);
+    const senderKey = memberKey(socket.data?.uid, socket.id);
+    const details = {
+      senderKey, senderId: socket.id, senderName, lat, lng, timestamp,
+      flag: verdict.mode === 'guarded' ? verdict.reasonCode : null,
+    };
+    // Pressing again while the last one is fresh updates it: no second alarm.
+    const coalesced = coalesceSos(squad, details, now, SOS_COALESCE_SEC * 1000);
+    const sos = coalesced ?? recordSos(squad, details, now);
+    socket.to(roomCode).emit(coalesced ? 'sos-updated' : 'sos-received', toSosPayload(sos, now));
+    reportAlert(socket, squad, roomCode, 'sos', verdict, now, coalesced ? { coalesced: true } : {});
+
+    // Someone pressing it again and again: tell the Group Lead, quietly (not an alarm).
+    const repeats = noteSosAttempt(squad, senderKey, now, SOS_REPEAT_WINDOW_MIN * 60 * 1000, SOS_REPEAT_FLAG_COUNT);
+    if (repeats.flag && squad.ownerId && squad.ownerId !== socket.id) {
+      io.to(squad.ownerId).emit('group-notice', {
+        roomCode, kind: 'sos-repeat', senderId: socket.id, senderName: senderName ?? null,
+        count: repeats.count, windowMin: SOS_REPEAT_WINDOW_MIN,
+      });
+    }
+  });
+
+  // --- GROUP SWITCHES AND MUTES ---
+  // The Group's own Commander turns SOS and Ping on and off for the Group, and mutes one
+  // member's pings (never their SOS). Each is acknowledged with { ok } or
+  // { ok: false, reason }: 'not-in-squad' or 'not-commander'. Every change goes to every
+  // member at once as 'group-settings'.
+  const settingsRequest = (payload, ack, { leadOnly }) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) { reply({ ok: false, reason: 'not-in-squad' }); return null; }
+    if (leadOnly && !canChangeSettings(squad, socket.id, socket.data?.uid, commanderOf(squad))) {
+      reply({ ok: false, reason: 'not-commander' });
+      return null;
+    }
+    return { reply, roomCode, squad };
+  };
+
+  socket.on('set-group-settings', (payload, ack) => {
+    const request = settingsRequest(payload, ack, { leadOnly: true });
+    if (!request) return;
+    if (updateSwitches(request.squad, payload)) {
+      persistGroupSettings(request.roomCode);
+      broadcastGroupSettings(request.roomCode);
+    }
+    request.reply({ ok: true });
+  });
+
+  socket.on('set-member-ping-mute', (payload, ack) => {
+    const request = settingsRequest(payload, ack, { leadOnly: true });
+    if (!request) return;
+    const { squad, roomCode } = request;
+    const { targetId, muted } = payload;
+    if (targetId === socket.id || !squad.members.includes(targetId) || typeof muted !== 'boolean') {
+      return request.reply({ ok: false, reason: 'bad-target' });
+    }
+    if (setPingerMuted(squad, keyOf(squad, targetId), muted)) {
+      persistGroupSettings(roomCode);
+      broadcastGroupSettings(roomCode);
+    }
+    request.reply({ ok: true });
+  });
+
+  // Any member, for themselves only: stop receiving pings from one person.
+  socket.on('set-personal-ping-mute', (payload, ack) => {
+    const request = settingsRequest(payload, ack, { leadOnly: false });
+    if (!request) return;
+    const { squad } = request;
+    const { targetId, muted } = payload;
+    if (targetId === socket.id || !squad.members.includes(targetId) || typeof muted !== 'boolean') {
+      return request.reply({ ok: false, reason: 'bad-target' });
+    }
+    setPersonallyMuted(squad, keyOf(squad, socket.id), keyOf(squad, targetId), muted);
+    request.reply({ ok: true });
+  });
+
+  // The Group's recent SOS and Ping decisions, for whoever holds command.
+  socket.on('get-alert-log', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || squad.ownerId !== socket.id) return reply({ ok: false, reason: 'not-owner' });
+    const log = [...(squad.alertLog ?? [])];
+    socket.emit('alert-log', { roomCode, log });
+    reply({ ok: true });
   });
 
   // Catch-up for a member who wasn't (fully) in the room when an SOS fired — offline,
@@ -839,7 +1047,10 @@ socket.on('check-ping', (clientTimestamp) => {
       // becomes the squad of whoever holds command now, who is then the one a return
       // hands it back to. (A stand-in leaving changes nothing here: the squad is still
       // the Commander's to reclaim.)
-      if (departingUid && departingUid === squad.commanderUid) squad.commanderUid = squad.ownerUid;
+      if (departingUid && departingUid === squad.commanderUid) {
+        squad.commanderUid = squad.ownerUid;
+        persistGroupSettings(roomCode);
+      }
     }
   }
 
