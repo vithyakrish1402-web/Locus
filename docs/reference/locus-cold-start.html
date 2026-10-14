@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Locus Cold Start</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@700&display=swap">
+<style>
+:root{--bg:#14284d;--gold:#d9952b;--page:#0b1630}
+html,body{height:100%;margin:0;background:var(--page)}
+body{display:flex;align-items:center;justify-content:center;overflow:hidden}
+svg{height:100vh;width:auto;max-width:100vw;aspect-ratio:9/16}
+</style></head><body>
+<svg viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Locus cold start animation">
+<defs></defs>
+<rect width="1080" height="1920" fill="#14284d"/>
+<g id="scene">
+<g transform="translate(540 880)">
+  <path id="pin" fill="#fff"/>
+  <circle id="hole" fill="#14284d"/>
+  <path id="lF" d="M-70 -120V120H90" fill="none" stroke="#fff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="400 400"/>
+  <path id="lR" d="M90 120H-70V-120" fill="none" stroke="#fff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="400 400"/>
+  <circle id="ring" r="230" fill="none" stroke="#fff" stroke-width="22" transform="rotate(-90)" stroke-dasharray="1445 1445"/>
+  <path id="spin" fill="#fff"/>
+  <circle id="shole" fill="#14284d" cx="0" cy="-10"/>
+  <circle id="g3" fill="#d9952b"/><circle id="g2" fill="#d9952b"/><circle id="g1" fill="#d9952b"/>
+  <circle id="dot" fill="#d9952b"/>
+</g>
+<text id="word" x="540" y="1330" text-anchor="middle" fill="#fff" font-family="'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif" font-size="120" font-weight="700" letter-spacing="3"><tspan>L</tspan><tspan>o</tspan><tspan>c</tspan><tspan>u</tspan><tspan>s</tspan></text>
+<rect id="cur" y="1244" width="8" height="104" fill="#d9952b" opacity="0"/>
+</g>
+</svg>
+<script>
+const $=id=>document.getElementById(id),LOOP=8;
+const cl=x=>Math.min(1,Math.max(0,x)),pr=(t,a,b)=>cl((t-a)/(b-a));
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const bounce=x=>{const n=7.5625,d=2.75;if(x<1/d)return n*x*x;if(x<2/d)return n*(x-=1.5/d)*x+.75;if(x<2.5/d)return n*(x-=2.25/d)*x+.9375;return n*(x-=2.625/d)*x+.984375};
+const back=x=>{const c=1.70158+1;return 1+(c+0)*Math.pow(x-1,3)+1.70158*Math.pow(x-1,2)};
+// pin -> stem control points: tip,c1,c2,left,tc1,tc2,right,c3,c4
+const P=[[0,340],[-40,280],[-200,120],[-200,-20],[-200,-287],[200,-287],[200,-20],[200,120],[40,280]];
+const S=[[-70,138],[-88,138],[-88,0],[-88,-120],[-88,-144],[-52,-144],[-52,-120],[-52,0],[-52,138]];
+const mix=(m)=>P.map((p,i)=>[p[0]+(S[i][0]-p[0])*m,p[1]+(S[i][1]-p[1])*m]);
+const path=q=>`M${q[0]}C${q[1]} ${q[2]} ${q[3]}C${q[4]} ${q[5]} ${q[6]}C${q[7]} ${q[8]} ${q[0]}Z`;
+$('spin').setAttribute('d','M0 130C-18 105-80 50-80-10C-80-117 80-117 80-10C80 50 18 105 0 130Z');
+const vis=(el,v)=>el.style.display=v?'':'none';
+const pt=l=>l<=240?[-70,-120+l]:[-70+(l-240),120];
+const sm=x=>x*x*x*(x*(x*6-15)+10);
+const bez=(p0,c,p2,q)=>{const u=1-q;return[u*u*p0[0]+2*u*q*c[0]+q*q*p2[0],u*u*p0[1]+2*u*q*c[1]+q*q*p2[1]]};
+function dotAt(t){
+  if(t<1.8){const dy=-800*(1-bounce(pr(t,0,.9))),pl=1+.4*Math.sin(Math.PI*pr(t,.9,1.2));return[0,-20+dy,42*pl]}
+  if(t<2.4){const q=sm(pr(t,1.8,2.4)),[x,y]=bez([0,-20],[0,-120],[-70,-120],q);return[x,y,42-12*q]}
+  if(t<3.6){const [x,y]=pt(400*sm(pr(t,2.4,3.6)));return[x,y,30]}
+  if(t<4.5)return[90,120,30];
+  const q=sm(pr(t,4.5,5.3)),[x,y]=bez([90,120],[120,20],[0,-10],q);return[x,y,30-13*q]}
+function render(t){
+  const dy=-800*(1-bounce(pr(t,0,.9))),ps=1-eio(pr(t,1.2,2));
+  vis($('pin'),t<2);vis($('hole'),t<2);
+  $('pin').setAttribute('d',path(P));
+  $('pin').setAttribute('transform',`translate(0 ${dy}) translate(0 -20) scale(${ps}) translate(0 20)`);
+  const h=$('hole');h.setAttribute('cx',0);h.setAttribute('cy',-20+dy);h.setAttribute('r',84*ps);
+  vis($('lF'),t>=2.4&&t<4);vis($('lR'),t>=4&&t<4.9);
+  $('lF').setAttribute('stroke-dashoffset',400-400*sm(pr(t,2.4,3.6)));
+  $('lR').setAttribute('stroke-dashoffset',400*sm(pr(t,4,4.9)));
+  const [x,y,r]=dotAt(t),a=dotAt(t-.03),b=dotAt(t+.03);
+  const vx=b[0]-a[0],vy=b[1]-a[1],sp=Math.hypot(vx,vy),st=1+Math.min(.3,sp/70);
+  const d=$('dot'),R=Math.max(0,r);
+  d.setAttribute('r',R);
+  d.setAttribute('transform',`translate(${x} ${y}) rotate(${Math.atan2(vy,vx)*180/Math.PI}) scale(${st} ${1/Math.sqrt(st)})`);
+  [1,2,3].forEach(k=>{const [gx,gy,gr]=dotAt(t-k*.07),e=$('g'+k);
+    e.setAttribute('cx',gx);e.setAttribute('cy',gy);e.setAttribute('r',Math.max(0,gr*(1-k*.18)));
+    e.style.opacity=Math.min(1,sp/12)*(.32-k*.09)});
+  $('ring').setAttribute('stroke-dashoffset',1445*(1-sm(pr(t,5,6.1))));
+  $('ring').setAttribute('transform',`rotate(-90) scale(${1+.1*sm(pr(t,6.1,7.2))})`);
+  const s=t>=5.4?back(pr(t,5.4,6.1)):0;
+  vis($('spin'),s>0);vis($('shole'),s>0);
+  $('spin').setAttribute('transform',`translate(0 -10) scale(${s}) translate(0 10)`);
+  $('shole').setAttribute('r',34*s);
+  const wd=$('word'),n=5,k=Math.min(n,Math.max(0,Math.floor((t-6.1)/.14)+1));
+  [...wd.children].forEach((c,i)=>c.setAttribute('fill-opacity',i<k?1:0));
+  const cu=$('cur');
+  if(t>=6){const cx=k>0?wd.getEndPositionOfChar(k-1).x:wd.getStartPositionOfChar(0).x;cu.setAttribute('x',cx+4);cu.setAttribute('opacity',(k<n||Math.floor(t*5)%2==0)?1:0)}else cu.setAttribute('opacity',0);
+  $('scene').style.opacity=1-pr(t,7.6,8);
+}
+let t0=performance.now();
+(function f(n){render((((n-t0)/1000)%(LOOP/1.5))*1.5);requestAnimationFrame(f)})(t0);
+</script>
+</body></html>

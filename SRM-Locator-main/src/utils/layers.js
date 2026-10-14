@@ -8,6 +8,9 @@
 //              an incoming alert (Emergency batch, E1). Nothing may cover it; each screen keeps
 //              its bottom content clear of it instead (--emergency-clearance in index.css). It
 //              isn't drawn at all on the mandatory update screen, which replaces the whole app.
+//   coldStart  the cold-start splash (ColdStartSplash): over the update dialog, which it ties
+//              with and beats by being mounted after App; it lasts a few seconds from launch,
+//              before there is any squad session, so nothing here needs to outrank it
 //   update     the APK update modal, optional and mandatory (UpdateModal)
 //   toast      in-app notices (CommsFeed): over AR Scan, so a notice posted there is seen
 //   arScan     AR Scan, its permission screen included (ARCompass)
@@ -26,6 +29,7 @@ export const LAYER = {
   arScanSheet: 9520,
   toast: 9600,
   update: 10000,
+  coldStart: 10000,
   emergencyButton: 10001,
   emergency: 10002,
 };
