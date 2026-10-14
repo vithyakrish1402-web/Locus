@@ -1031,7 +1031,7 @@ const App = () => {
       // Fires a native notification to the phone/desktop OS
       new Notification(title, {
         body: body,
-        icon: '/logo_mark.jpg', // Official LOCUS emblem
+        icon: '/locus-icon-192.png', // Official LOCUS emblem (light launcher icon)
         vibrate: [200, 100, 200, 100, 200], // SOS vibration pattern for Android
         tag: 'locus-alert',
         requireInteraction: true // Forces the user to click it to dismiss

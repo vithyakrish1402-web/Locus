@@ -19,6 +19,7 @@ import { Button, Card, IconButton, ListRow, RadioList, SectionLabel, SegmentedCo
 import SendApp from '../SendApp';
 import { SETTINGS } from '../../copy/settings';
 import { setThemePreference, subscribeTheme, getThemePreference } from '../../theme/theme';
+import LocusMark from '../LocusMark';
 import { AR_FEATURE_OPTIONS } from '../../utils/arFeatures';
 import { MAP_STATUS_LABEL, MAP_STATUS_REASON_TEXT } from '../../utils/mapEngineStatus';
 
@@ -168,9 +169,7 @@ export default function SettingsScreen({
           </SectionLabel>
           <Card padded={false} className="divide-y divide-border shadow-sm">
             <div className="p-4 flex items-center gap-3.5 bg-surface/50">
-              <div className="w-12 h-12 rounded-xl overflow-hidden border border-border shadow-xs bg-white shrink-0">
-                <img src="/logo_mark.jpg" alt="LOCUS" className="w-full h-full object-cover" />
-              </div>
+              <LocusMark className="w-12 h-12 shrink-0" title="LOCUS" />
               <div className="flex flex-col">
                 <p className="text-body font-semibold tracking-wide">LOCUS</p>
                 <p className="text-caption text-text-secondary">Find your group on campus</p>

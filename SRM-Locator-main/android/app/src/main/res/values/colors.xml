@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launch background: the dark app background (color-bg in src/theme/tokens.css). -->
-    <color name="locus_launch_background">#0E1116</color>
+    <!-- Launch background: the cold-start splash navy (the splash-bg colour in src/components/ColdStartSplash.jsx). -->
+    <color name="locus_launch_background">#14284d</color>
 </resources>
