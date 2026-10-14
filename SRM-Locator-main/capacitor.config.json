@@ -2,6 +2,7 @@
   "appId": "com.locus.app",
   "appName": "LOCUS",
   "webDir": "dist",
+  "backgroundColor": "#0E1116",
   "plugins": {
     "CapacitorUpdater": {
       "autoUpdate": "off",
