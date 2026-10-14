@@ -295,6 +295,15 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
   filter: invert(1) hue-rotate(180deg) brightness(0.62) contrast(1.15) saturate(0.18);
 }
 
+/* The LOCUS logo (components/LocusMark.jsx): navy in the light theme, white in the dark, with
+   the pin's hole the other way round - the two brand files in branding/. Gold dot is fixed. */
+.locus-mark-ring { stroke: #12294D; }
+.locus-mark-pin { fill: #12294D; }
+.locus-mark-hole { fill: #FFFFFF; }
+:root[data-theme="dark"] .locus-mark-ring { stroke: #FFFFFF; }
+:root[data-theme="dark"] .locus-mark-pin { fill: #FFFFFF; }
+:root[data-theme="dark"] .locus-mark-hole { fill: #12294D; }
+
 /* AR Scan's plates over the camera picture (redesign AR Scan batch): labels, the top
    controls, the readout and notices. Translucent so the scene shows through, solid enough to
    read over bright and dark scenes: white at 90 % in the light theme, ink #161A21 at 86 % in

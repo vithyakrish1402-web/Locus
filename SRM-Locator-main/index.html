@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/jpeg" href="/logo_mark.jpg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
     <!-- Light or dark, before first paint, so the wrong theme never flashes on screen. The
@@ -36,6 +36,10 @@
     <title>LOCUS</title>
   </head>
   <body>
+    <!-- Navy cover from the first paint until the React cold-start splash (ColdStartSplash.jsx)
+         mounts and removes it, so the app's own background never shows between the native
+         launch screen and the splash. Same colour as --splash-bg and locus_launch_background. -->
+    <div id="splash-backdrop" style="position:fixed;inset:0;background:#14284d;z-index:10000"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
