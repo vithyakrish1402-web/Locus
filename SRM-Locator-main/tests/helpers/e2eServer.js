@@ -53,6 +53,7 @@ const freePort = () =>
 export function e2eServer({ env = {} } = {}) {
   let server;
   let url;
+  let output = ''; // everything the server has printed so far
   const clients = [];
   let roomSeq = 0;
 
@@ -61,9 +62,20 @@ export function e2eServer({ env = {} } = {}) {
     url = `http://localhost:${port}`;
     server = spawn(process.execPath, ['backend/server.js'], {
       cwd: ROOT,
-      env: { ...process.env, PORT: String(port), ...env },
+      // The SOS/Ping guard judges class hours on the clock. Pinned to a Sunday (no classes) so
+      // that a test of ordinary behaviour does not depend on the hour it runs at; a test of
+      // the guard itself sets LOCUS_FORCE_CLASS_HOURS or its own LOCUS_CLASS_CLOCK_ISO.
+      env: {
+        ...process.env,
+        PORT: String(port),
+        LOCUS_CLASS_CLOCK_ISO: '2026-01-04T10:00:00Z',
+        LOCUS_FORCE_CLASS_HOURS: '',
+        ...env,
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    server.stdout.on('data', (chunk) => { output += chunk; });
+    server.stderr.on('data', (chunk) => { output += chunk; });
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('server did not start')), 10000);
       server.once('exit', (code) => reject(new Error(`server exited early (${code})`)));
@@ -154,5 +166,6 @@ export function e2eServer({ env = {} } = {}) {
     squadOfThree,
     newRoom,
     serverIsAlive: () => server.exitCode === null,
+    serverOutput: () => output,
   };
 }
