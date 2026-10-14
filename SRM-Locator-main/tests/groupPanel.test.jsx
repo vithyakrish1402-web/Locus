@@ -225,36 +225,40 @@ describe("a member's options", () => {
   };
   const emitted = (event) => fakeSocket.emit.mock.calls.filter(([e]) => e === event);
 
-  it('Ping, Show on map and Find with AR Scan for anyone; Remove and block only for the Group Lead', async () => {
+  it('Navigate, Ping, Show on map and Find with AR Scan for anyone; Remove and block only for the Group Lead', async () => {
     await open(false);
-    expect(options('Meera Iyer').getByRole('button', { name: 'Ping Meera' })).toBeTruthy();
-    expect(options('Meera Iyer').getByRole('button', { name: 'Show on map' })).toBeTruthy();
-    expect(options('Meera Iyer').getByRole('button', { name: 'Find with AR Scan' })).toBeTruthy();
-    expect(options('Meera Iyer').queryByRole('button', { name: 'Remove and block' })).toBeNull();
-    expect(screen.getByRole('dialog', { name: 'Options for Meera Iyer' }).textContent).not.toMatch(/Vote|Navigate to/);
+    expect(options('Meera Iyer').getByRole('button', { name: /^Navigate to Meera/ })).toBeTruthy();
+    expect(options('Meera Iyer').getByRole('button', { name: /^Ping Meera/ })).toBeTruthy();
+    expect(options('Meera Iyer').getByRole('button', { name: /^Show on map/ })).toBeTruthy();
+    expect(options('Meera Iyer').getByRole('button', { name: /^Find with AR Scan/ })).toBeTruthy();
+    expect(options('Meera Iyer').queryByRole('button', { name: /^Remove and block/ })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Options for Meera Iyer' }).textContent).not.toMatch(/Vote/);
   });
 
-  it("shows their battery and speed, which the row doesn't", async () => {
+  it("shows their battery and speed, which the row doesn't, in its stat tiles", async () => {
     await open(true, { battery: 64, speed: 4 });
-    expect(screen.getByTestId('member-options').textContent).toContain('Battery 64% · 4 km/h');
+    const text = screen.getByTestId('member-options').textContent;
+    expect(text).toContain('Battery64%');
+    expect(text).toContain('Speed4 km/h');
   });
 
   it('Ping pings them', async () => {
     await open(false);
-    fireEvent.click(options('Meera Iyer').getByRole('button', { name: 'Ping Meera' }));
+    fireEvent.click(options('Meera Iyer').getByRole('button', { name: /^Ping Meera/ }));
     expect(emitted('ping-user')[0][1]).toMatchObject({ targetId: 'sock-Meera Iyer' });
   });
 
   it('with no fix: Ping only, nothing that would aim at nowhere', async () => {
     await open(false, { lat: null, lng: null });
-    expect(options('Meera Iyer').getByRole('button', { name: 'Ping Meera' })).toBeTruthy();
-    expect(options('Meera Iyer').queryByRole('button', { name: 'Show on map' })).toBeNull();
-    expect(options('Meera Iyer').queryByRole('button', { name: 'Find with AR Scan' })).toBeNull();
+    expect(options('Meera Iyer').getByRole('button', { name: /^Ping Meera/ })).toBeTruthy();
+    expect(options('Meera Iyer').queryByRole('button', { name: /^Show on map/ })).toBeNull();
+    expect(options('Meera Iyer').queryByRole('button', { name: /^Find with AR Scan/ })).toBeNull();
+    expect(options('Meera Iyer').queryByRole('button', { name: /^Navigate to/ })).toBeNull();
   });
 
   it('Remove and block asks first, in words that never mention unblocking, and only then blocks', async () => {
     await open(true);
-    fireEvent.click(options('Meera Iyer').getByRole('button', { name: 'Remove and block' }));
+    fireEvent.click(options('Meera Iyer').getByRole('button', { name: /^Remove and block/ }));
     expect(emitted('block-user')).toEqual([]);
     const confirm = screen.getByRole('dialog', { name: 'Remove and block Meera Iyer?' });
     expect(confirm.textContent).toContain("Meera is removed from your group straight away and can't ask to join again.");
@@ -266,7 +270,7 @@ describe("a member's options", () => {
 
   it('Cancel on the confirmation blocks no one', async () => {
     await open(true);
-    fireEvent.click(options('Meera Iyer').getByRole('button', { name: 'Remove and block' }));
+    fireEvent.click(options('Meera Iyer').getByRole('button', { name: /^Remove and block/ }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Remove and block Meera Iyer?' })).getByRole('button', { name: 'Cancel' }));
     expect(emitted('block-user')).toEqual([]);
     expect(panel().getByText('Meera Iyer')).toBeTruthy();
@@ -276,7 +280,8 @@ describe("a member's options", () => {
     await open(true);
     const sheet = screen.getByTestId('member-options');
     const red = [...sheet.querySelectorAll('button')].filter((b) => /danger/.test(b.innerHTML + b.className));
-    expect(red.map((b) => b.textContent)).toEqual(['Remove and block']);
+    expect(red).toHaveLength(1);
+    expect(red[0].textContent).toMatch(/^Remove and block/);
   });
 });
 

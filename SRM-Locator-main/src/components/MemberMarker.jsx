@@ -28,7 +28,7 @@ export default function MemberMarker({ name, paused = false, heading = 0, isNavi
     <div
       data-testid="member-marker"
       data-paused={paused || undefined}
-      className="relative font-ui pointer-events-none"
+      className="relative font-ui pointer-events-auto cursor-pointer transition-transform duration-150 select-none"
       style={{ width: SIZE, height: SIZE, transform: 'translate(-50%, -50%)' }}
     >
       {isNavigating && !paused && (

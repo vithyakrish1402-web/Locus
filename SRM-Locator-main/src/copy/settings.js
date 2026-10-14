@@ -60,6 +60,10 @@ export const SETTINGS = {
   arPartsHelp: 'Auto follows AR Scan quality. Set a part on its own, for example the road line off on an older phone.',
   arPartNames: { tags: 'Labels', roadLine: 'Road line', arrow: 'Arrow' },
   arPartOptions: { auto: 'Auto', off: 'Off', efficient: 'Efficient', realistic: 'Realistic' },
+
+  account: 'Account',
+  adminTools: 'Admin tools',
+  signOut: 'Sign out',
 };
 
 export const SEND_APP = {

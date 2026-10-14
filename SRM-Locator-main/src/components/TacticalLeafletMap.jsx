@@ -140,6 +140,7 @@ const TacticalLeafletMap = ({
   onArTrack,
   isSatellite,
   highlightBuildingId,
+  onSelectMember,
   // The theme's line colours (App.jsx reads them; Leaflet's path options take literals), a
   // member's distance for their plate, and what a lost-connection member's card says.
   routeColor = '#1F4FB8',
@@ -232,7 +233,15 @@ const TacticalLeafletMap = ({
       {users
         .filter((u) => !blockedUserIds.includes(u.id) && u.status !== 'GHOST' && u.hasFix)
         .map((u) => (
-          <LeafletReactMarker key={u.id} lat={u.lat} lng={u.lng} onClick={() => onFocus({ lat: u.lat, lng: u.lng }, null)}>
+          <LeafletReactMarker
+            key={u.id}
+            lat={u.lat}
+            lng={u.lng}
+            onClick={() => {
+              onFocus({ lat: u.lat, lng: u.lng }, null);
+              onSelectMember?.(u.id);
+            }}
+          >
             <div
               style={{
                 position: 'relative',
@@ -268,7 +277,10 @@ const TacticalLeafletMap = ({
           key={`ghost-${ghost.id}`}
           lat={ghost.position.lat}
           lng={ghost.position.lng}
-          onClick={() => onFocus(ghost.position, ghostFocusItem(ghost))}
+          onClick={() => {
+            onFocus(ghost.position, ghostFocusItem(ghost));
+            onSelectMember?.(ghost.id);
+          }}
         >
           <div style={{ opacity: ghost.fading ? 0 : 1, transition: `opacity ${GHOST_FADE_MS}ms ease` }}>
             <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} />

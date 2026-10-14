@@ -3,6 +3,7 @@ import React, { useEffect, useId, useRef } from 'react';
 import { motion, AnimatePresence, useAnimationControls, useDragControls, useReducedMotion } from 'framer-motion';
 import { fade, releaseSheet, sheetSettle, REDUCED_MOTION_S } from '../../utils/motion';
 import { LAYER } from '../../utils/layers';
+import { markSheetOpen } from '../../utils/openSheets';
 
 // A bottom sheet over a dimmed backdrop: member options, Remove and block's confirmation,
 // Join requests, the permission explainers. It rises on SHEET_SPRING; drag its handle down
@@ -23,13 +24,16 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
  *   title: drawn as the sheet's heading and names the dialog; without one, `label` names it
  *   layer: the z-index to stand on (default LAYER.sheet); AR Scan's own sheets pass one above it
  */
-export default function Sheet({ open, onClose, title, label, dismissible = true, layer = LAYER.sheet, children }) {
+export default function Sheet({ open, onClose, title, label, dismissible = true, layer = LAYER.sheet, panelClassName = '', children }) {
   const reduceMotion = useReducedMotion();
   const dragControls = useDragControls();
   // Drives the panel in, and back open after a release: the same y the drag moves.
   const controls = useAnimationControls();
   const panelRef = useRef(null);
   const titleId = useId();
+
+  // Counted while open, so the Emergency button can float above it (utils/openSheets.js).
+  useEffect(() => (open ? markSheetOpen() : undefined), [open]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -109,7 +113,7 @@ export default function Sheet({ open, onClose, title, label, dismissible = true,
               if (release.close) onClose();
               else controls.start({ y: 0, transition: release.transition });
             }}
-            className="absolute inset-x-0 bottom-0 md:mx-auto md:max-w-xl max-h-[90dvh] [@media(max-height:699px)]:max-h-[94dvh] overflow-y-auto rounded-t-sheet glass-floating text-text font-ui outline-none"
+            className={`absolute inset-x-0 bottom-0 md:mx-auto md:max-w-xl max-h-[90dvh] [@media(max-height:699px)]:max-h-[94dvh] overflow-y-auto rounded-t-sheet ${panelClassName || 'glass-floating'} text-text font-ui outline-none`}
             // Its last buttons end above the Emergency button, which stands over every sheet.
             style={{ paddingBottom: 'var(--emergency-clearance)' }}
           >

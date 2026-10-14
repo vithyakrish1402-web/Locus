@@ -228,16 +228,16 @@
   --shadow-3: 0 -12px 40px rgba(0, 0, 0, 0.55);
 
   /* Apple Liquid Glass tokens (Dark) */
-  --glass-bg: rgba(22, 26, 33, 0.70);
-  --glass-surface: rgba(30, 36, 46, 0.72);
-  --glass-sunken: rgba(18, 22, 28, 0.60);
-  --glass-border: rgba(255, 255, 255, 0.12);
-  --glass-border-subtle: rgba(255, 255, 255, 0.06);
-  --glass-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
-  --glass-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.45), 0 2px 8px 0 rgba(0, 0, 0, 0.25);
-  --glass-shadow-floating: 0 20px 48px -8px rgba(0, 0, 0, 0.6), 0 4px 16px 0 rgba(0, 0, 0, 0.35);
-  --glass-blur: blur(24px);
-  --webkit-glass-blur: blur(24px);
+  --glass-bg: rgba(18, 22, 28, 0.88);
+  --glass-surface: rgba(22, 27, 35, 0.90);
+  --glass-sunken: rgba(14, 17, 22, 0.80);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-border-subtle: rgba(255, 255, 255, 0.08);
+  --glass-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.16);
+  --glass-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.55), 0 2px 8px 0 rgba(0, 0, 0, 0.35);
+  --glass-shadow-floating: 0 20px 48px -8px rgba(0, 0, 0, 0.7), 0 4px 16px 0 rgba(0, 0, 0, 0.45);
+  --glass-blur: blur(32px);
+  --webkit-glass-blur: blur(32px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -285,15 +285,15 @@
     --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.5);
     --shadow-3: 0 -12px 40px rgba(0, 0, 0, 0.55);
 
-    --glass-bg: rgba(22, 26, 33, 0.70);
-    --glass-surface: rgba(30, 36, 46, 0.72);
-    --glass-sunken: rgba(18, 22, 28, 0.60);
-    --glass-border: rgba(255, 255, 255, 0.12);
-    --glass-border-subtle: rgba(255, 255, 255, 0.06);
-    --glass-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
-    --glass-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.45), 0 2px 8px 0 rgba(0, 0, 0, 0.25);
-    --glass-shadow-floating: 0 20px 48px -8px rgba(0, 0, 0, 0.6), 0 4px 16px 0 rgba(0, 0, 0, 0.35);
-    --glass-blur: blur(24px);
-    --webkit-glass-blur: blur(24px);
+    --glass-bg: rgba(18, 22, 28, 0.88);
+    --glass-surface: rgba(22, 27, 35, 0.90);
+    --glass-sunken: rgba(14, 17, 22, 0.80);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-border-subtle: rgba(255, 255, 255, 0.08);
+    --glass-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.16);
+    --glass-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.55), 0 2px 8px 0 rgba(0, 0, 0, 0.35);
+    --glass-shadow-floating: 0 20px 48px -8px rgba(0, 0, 0, 0.7), 0 4px 16px 0 rgba(0, 0, 0, 0.45);
+    --glass-blur: blur(32px);
+    --webkit-glass-blur: blur(32px);
   }
 }

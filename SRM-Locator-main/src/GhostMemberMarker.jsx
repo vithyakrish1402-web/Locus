@@ -28,8 +28,8 @@ const GhostMemberMarker = ({ name, phase = 'projecting', elapsedLabel = '0:00' }
     <div
       data-testid="ghost-marker"
       data-phase={phase}
-      className="relative font-ui"
-      style={{ width: SIZE, height: SIZE, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}
+      className="relative font-ui cursor-pointer select-none"
+      style={{ width: SIZE, height: SIZE, transform: 'translate(-50%, -50%)', pointerEvents: 'auto' }}
     >
       <span
         className="absolute inset-0 flex items-center justify-center rounded-full bg-surface text-secondary font-semibold text-[var(--color-map-last-known)] border-2 border-dashed border-[var(--color-map-last-known)]"

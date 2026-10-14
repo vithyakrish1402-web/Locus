@@ -174,14 +174,15 @@ body {
 /* SosTrigger ARMED-state pulse (src/components/SosTrigger.jsx) */
 /* Room every screen keeps at its bottom for the Emergency button (Emergency batch, E1). The
    button stands over every screen but an incoming alert, so a screen's last buttons must end
-   above it: on a phone its top is 10 rem up plus the gesture bar's inset (SosTrigger: bottom-20,
-   h-20), so 11 rem leaves 1 rem; from md up it is 6.5 rem up, so 7.5 rem. Only while the button
-   is on screen (SosTrigger sets data-emergency-button on <html>); otherwise the usual 1 rem. In
-   rem, so it grows with the text size exactly as the button does. */
+   above it. Floating (App.jsx sos-float: bottom-4, the pill h-12) its top is 4 rem up plus the
+   gesture bar's inset on a phone, so 5 rem leaves 1 rem; from md up (bottom-6) it is 4.5 rem
+   up, so 5.5 rem. Only while the floating button is on screen (SosTrigger sets
+   data-emergency-button on <html>); in the phone's tab bar it needs none, so the usual 1 rem.
+   In rem, so it grows with the text size exactly as the button does. */
 :root { --emergency-clearance: calc(1rem + env(safe-area-inset-bottom)); }
-:root[data-emergency-button] { --emergency-clearance: calc(11rem + env(safe-area-inset-bottom)); }
+:root[data-emergency-button] { --emergency-clearance: calc(5rem + env(safe-area-inset-bottom)); }
 @media (min-width: 768px) {
-  :root[data-emergency-button] { --emergency-clearance: calc(7.5rem + env(safe-area-inset-bottom)); }
+  :root[data-emergency-button] { --emergency-clearance: calc(5.5rem + env(safe-area-inset-bottom)); }
 }
 /* With the keyboard open, a focused field (and anything scrolled into view) stops clear of the
    button rather than under it. */
@@ -229,16 +230,16 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
 
 .glass-panel {
   background: var(--glass-surface);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: var(--glass-blur, blur(28px));
+  -webkit-backdrop-filter: var(--webkit-glass-blur, blur(28px));
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow), var(--glass-specular);
 }
 
 .glass-pill {
   background: var(--glass-surface);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: var(--glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--webkit-glass-blur, blur(20px));
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow), var(--glass-specular);
   border-radius: 9999px;
@@ -246,8 +247,8 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
 
 .glass-floating {
   background: var(--glass-surface);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  backdrop-filter: var(--glass-blur, blur(32px));
+  -webkit-backdrop-filter: var(--webkit-glass-blur, blur(32px));
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-floating), var(--glass-specular);
 }

@@ -56,18 +56,25 @@ function Tab({ tab, active, onSelect, reduceMotion }) {
 
 /**
  * @param {{tabs: Array<{id:string, label:string, Icon:Function, flourish:'lift'|'turn'|'pop'}>,
- *   activeId: string|null, onSelect: (id:string) => void}} props
+ *   activeId: string|null, onSelect: (id:string) => void, sosTrigger?: React.ReactNode}} props
  */
-export default function BottomTabBar({ tabs, activeId, onSelect }) {
+export default function BottomTabBar({ tabs, activeId, onSelect, sosTrigger = null }) {
   const reduceMotion = useReducedMotion();
   return (
     <nav
       aria-label="Main"
-      className="md:hidden fixed bottom-0 w-full glass-panel !rounded-none !border-x-0 !border-b-0 border-t border-[var(--glass-border)] flex items-stretch px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto"
+      className="md:hidden fixed bottom-0 w-full glass-panel !rounded-none !border-x-0 !border-b-0 border-t border-[var(--glass-border)] flex items-center justify-between px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto gap-2"
     >
-      {tabs.map((tab) => (
-        <Tab key={tab.id} tab={tab} active={tab.id === activeId} onSelect={onSelect} reduceMotion={reduceMotion} />
-      ))}
+      <div className="flex-1 flex items-stretch">
+        {tabs.map((tab) => (
+          <Tab key={tab.id} tab={tab} active={tab.id === activeId} onSelect={onSelect} reduceMotion={reduceMotion} />
+        ))}
+      </div>
+      {sosTrigger && (
+        <div className="shrink-0 flex items-center pr-1">
+          {sosTrigger}
+        </div>
+      )}
     </nav>
   );
 }

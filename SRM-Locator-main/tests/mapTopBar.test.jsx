@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
 // The map screen's top bar and sharing chip (redesign Map batch), through the real App.jsx:
-// the bar names the map that is showing and signs out; the chip says your own setting in the
-// owner's words, and never "invisible".
+// the bar names the map that is showing (the design build has no buttons on it; sign-out is in
+// Settings); the chip says your own setting in the owner's words, and never "invisible".
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
@@ -119,18 +119,27 @@ describe('the top bar', () => {
     expect(bar().getByText(TOP_BAR.satelliteView)).toBeTruthy();
   });
 
-  it('signs out', () => {
+  it('signs out from Settings, under Account (the bar itself has no buttons)', () => {
     onTheMap();
-    fireEvent.click(bar().getByRole('button', { name: TOP_BAR.signOut }));
+    expect(bar().queryAllByRole('button')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: SETTINGS.open }));
+    const settings = within(screen.getByTestId('settings'));
+    expect(settings.getByText(SETTINGS.account)).toBeTruthy();
+    fireEvent.click(settings.getByRole('button', { name: SETTINGS.signOut }));
     expect(auth.signOut).toHaveBeenCalled();
+    expect(screen.queryByTestId('settings')).toBeNull();
   });
 
-  it('has Settings in the top bar on every screen size, next to Sign out, and the gear stays in the map controls', () => {
+  it('Settings opens from the gear in the map controls, the one place it lives on the map', () => {
     onTheMap();
-    const inBar = bar().getByRole('button', { name: SETTINGS.open });
-    expect(inBar.parentElement.className).not.toMatch(/(^| )hidden( |$)/);
-    expect(inBar.nextElementSibling).toBe(bar().getByRole('button', { name: TOP_BAR.signOut }));
-    expect(screen.getAllByRole('button', { name: SETTINGS.open }).length).toBe(2);
+    expect(screen.getAllByRole('button', { name: SETTINGS.open })).toHaveLength(1);
+    expect(bar().queryByRole('button', { name: SETTINGS.open })).toBeNull();
+  });
+
+  it('only the admin sees Admin tools in Settings', () => {
+    onTheMap();
+    fireEvent.click(screen.getByRole('button', { name: SETTINGS.open }));
+    expect(within(screen.getByTestId('settings')).queryByRole('button', { name: new RegExp(SETTINGS.adminTools) })).toBeNull();
   });
 });
 
@@ -258,28 +267,30 @@ describe('the group panel list on a phone', () => {
     return m ? Number(m[1]) / 4 : null;
   };
 
-  it('scrolls its last rows clear of the Emergency and meeting point buttons, gesture bar included', () => {
+  it('scrolls its last rows clear of the meeting point button, gesture bar included; the Emergency button sits in the tab bar', () => {
     window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
     onTheMap();
     fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     const list = screen.getByTestId('group-panel-list');
     const panel = list.parentElement;
-    const sos = screen.getByRole('button', { name: /SOS beacon/ });
     const flag = screen.getByTestId('meeting-point-button');
 
-    // Both buttons stand on the gesture bar's inset (set inline, which jsdom drops, so read
-    // from their source); the list's bottom room must count it too.
-    for (const src of ['SosTrigger.jsx', 'map/MapControls.jsx']) {
-      expect(readFileSync(new URL('../src/components/' + src, import.meta.url), 'utf8')).toContain("marginBottom: 'env(safe-area-inset-bottom)'");
-    }
+    // On a phone the Emergency button is in the bottom tab bar, not floating over the list.
+    const sos = screen.getByRole('button', { name: /SOS beacon/ });
+    expect(screen.getByRole('navigation', { name: 'Main' }).contains(sos)).toBe(true);
+    expect(screen.queryByTestId('sos-float')).toBeNull();
+
+    // The meeting point button stands on the gesture bar's inset (set inline, which jsdom
+    // drops, so read from its source); the list's bottom room must count it too.
+    expect(readFileSync(`${process.cwd()}/src/components/map/MapControls.jsx`, 'utf8')).toContain("marginBottom: 'env(safe-area-inset-bottom)'");
     const pad = list.className.match(/(?:^| )pb-\[calc\((\d+)rem\+env\(safe-area-inset-bottom\)\)\]/);
     expect(pad).toBeTruthy();
 
     // Where the last row can end, above the screen's bottom edge (inset aside), against the
-    // top of the taller button: 2 rem between them.
+    // top of the button: 2 rem between them.
     const lastRowEnds = rem(panel.className, 'bottom') + Number(pad[1]);
-    const buttonsTop = Math.max(...[sos, flag].map((b) => rem(b.className, 'bottom') + rem(b.className, 'h')));
-    expect(lastRowEnds - buttonsTop).toBeGreaterThanOrEqual(2);
+    const buttonTop = rem(flag.className, 'bottom') + rem(flag.className, 'h');
+    expect(lastRowEnds - buttonTop).toBeGreaterThanOrEqual(2);
     // A wider screen keeps its own small padding (no floating buttons over the list there).
     expect(list.className).toMatch(/(^| )md:pb-4( |$)/);
     delete window.matchMedia;

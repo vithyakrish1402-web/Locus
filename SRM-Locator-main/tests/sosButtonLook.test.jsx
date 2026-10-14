@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 //
-// The Emergency button's look and words (redesign Emergency batch, E2 and E5), with its
-// behaviour pinned as it was: the same 80 px hit area in every state, the rings and the card
-// taking no touches, "Hold longer" behaving exactly like resting, a screen reader told each
-// change, and reduced motion stopping the pulse but never the rings.
+// The Emergency button's look and words: the pill from the design build (js-1.1.32), with its
+// behaviour pinned as it was: the same hit area in every state, the bars and the card taking
+// no touches, "Hold longer" behaving exactly like resting, a screen reader told each change,
+// and reduced motion stopping the bounce and the pulse but never the bars.
 import React from 'react';
-import fs from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import SosTrigger from '../src/components/SosTrigger.jsx';
@@ -41,58 +40,47 @@ const STATES = {
 };
 
 describe('the hit area', () => {
-  it.each(Object.keys(STATES))('%s: the same 80 x 80 button, in the same spot', (state) => {
-    const b = renderButton();
+  // The pill from the design build (js-1.1.32): in the phone's tab bar, or floating over a
+  // screen. Its size never changes with its state, so a finger mid-hold never slips off it.
+  it.each(Object.keys(STATES))('%s: the same pill in the tab bar, whatever its state', (state) => {
+    const b = renderButton({ layout: 'tab' });
     STATES[state](b);
-    expect(b.className).toMatch(/(^| )w-20( |$)/);
-    expect(b.className).toMatch(/(^| )h-20( |$)/);
-    expect(b.className).toMatch(/(^| )bottom-20( |$)/);
-    expect(b.className).toMatch(/(^| )left-4( |$)/);
-    expect(b.className).not.toMatch(/(^| )(p|px|py)-\d/);
+    expect(b.className).toMatch(/(^| )h-11( |$)/);
+    expect(b.className).toMatch(/(^| )px-3\.5( |$)/);
   });
 
-  it('the rings sit on its casing, centred, and take no touches; the card and the dimmed screen take none either', () => {
+  it.each(Object.keys(STATES))('%s: the same pill floating, whatever its state', (state) => {
+    const b = renderButton({ layout: 'floating' });
+    STATES[state](b);
+    expect(b.className).toMatch(/(^| )h-12( |$)/);
+    expect(b.className).toMatch(/(^| )px-6( |$)/);
+  });
+
+  it('the progress bars, the card and the dimmed screen take no touches', () => {
     const b = renderButton();
-    STATES.armed(b);
-    const svg = b.querySelector('svg');
-    expect(svg.getAttribute('class')).toContain('pointer-events-none');
-    // Centred on the button (its 96-unit box over the 80 px button), each ring on the 4 px
-    // casing (radius 36 to 40), reaching 1 px into the face so no hairline of it shows. No ring floats beside the button.
-    for (const cls of ['left-1/2', 'top-1/2', '-translate-x-1/2', '-translate-y-1/2', 'w-24', 'h-24']) expect(svg.getAttribute('class')).toContain(cls);
-    expect(svg.getAttribute('viewBox')).toBe('0 0 96 96');
-    for (const ring of svg.querySelectorAll('circle')) {
-      expect(ring.getAttribute('cx')).toBe('48');
-      expect(ring.getAttribute('r')).toBe('37.5');
-      expect(ring.getAttribute('stroke-width')).toBe('5');
-    }
-    expect(b.className).toContain('border-4');
+    press(b);
+    wait(HOLD / 2);
+    expect(screen.getByTestId('sos-fill').className).toContain('pointer-events-none');
+    wait(HOLD / 2);
+    release(b);
+    expect(screen.getByTestId('sos-countdown').className).toContain('pointer-events-none');
     expect(card().className).toContain('pointer-events-none');
     expect(screen.getByTestId('sos-scrim').className).toContain('pointer-events-none');
     expect(card().getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('at rest and while armed the hold ring is hidden, so its empty round-capped dash draws no dot', () => {
-    const b = renderButton();
-    expect(screen.getByTestId('sos-ring-hold').style.opacity).toBe('0');
-    STATES.armed(b);
-    expect(screen.getByTestId('sos-ring-hold').style.opacity).toBe('0');
-    expect(screen.getByTestId('sos-ring-countdown').style.opacity).toBe('1');
-  });
-
-  // Which rings show in each state: one ring at a time on the casing, never a stray dot or a
-  // pale hairline (the track's edges) under a full ring.
+  // Which bar shows in each state: the hold fill while holding, the countdown while armed.
   it.each([
-    ['idle', { track: '0', hold: '0', countdown: '0' }],
-    ['arming', { track: '1', hold: '1', countdown: '0' }],
-    ['armed', { track: '1', hold: '0', countdown: '1' }],
-    ['confirming', { track: '1', hold: '1', countdown: '0' }],
-    ['fired', { track: '0', hold: '1', countdown: '0' }],
-  ])('%s: only its own rings show', (state, shown) => {
+    ['idle', { fill: false, countdown: false }],
+    ['arming', { fill: true, countdown: false }],
+    ['armed', { fill: false, countdown: true }],
+    ['confirming', { fill: true, countdown: false }],
+    ['fired', { fill: false, countdown: false }],
+  ])('%s: only its own bar shows', (state, shown) => {
     const b = renderButton();
     STATES[state](b);
-    expect(screen.getByTestId('sos-ring-track').style.opacity).toBe(shown.track);
-    expect(screen.getByTestId('sos-ring-hold').style.opacity).toBe(shown.hold);
-    expect(screen.getByTestId('sos-ring-countdown').style.opacity).toBe(shown.countdown);
+    expect(Boolean(screen.queryByTestId('sos-fill'))).toBe(shown.fill);
+    expect(Boolean(screen.queryByTestId('sos-countdown'))).toBe(shown.countdown);
   });
 
   it('nothing but the button starts a hold: a press on the card or the dimmed screen does nothing', () => {
@@ -195,25 +183,20 @@ describe('the card above the button', () => {
 });
 
 describe('the look', () => {
-  it('red with a casing at rest, white with the red countdown ring once armed, a tick once sent; no glow', () => {
+  it('tinted red at rest, solid red while held, white once armed, green with a tick once sent', () => {
     const b = renderButton();
-    expect(b.className).toMatch(/bg-danger /);
-    expect(b.className).toContain('border-surface');
+    expect(b.className).toContain('bg-danger/15');
+    expect(b.className).toContain('text-danger');
     expect(b.textContent).toBe('SOS');
-    STATES.armed(b);
-    expect(b.className).toContain('bg-surface');
-    expect(b.className).toContain('border-surface');
-    // One ring only, drawn on the casing itself: no second outline beside it.
-    expect(b.className).not.toContain('border-danger');
+    press(b);
+    expect(b.className).toMatch(/(^| )bg-danger( |$)/);
+    wait(HOLD);
+    release(b);
+    expect(b.className).toMatch(/(^| )bg-white( |$)/);
     press(b);
     wait(HOLD);
+    expect(b.className).toMatch(/(^| )bg-success( |$)/);
     expect(b.querySelector('svg.lucide-check')).toBeTruthy();
-    for (const state of Object.keys(STATES)) {
-      cleanup();
-      const c = renderButton();
-      STATES[state](c);
-      expect(document.body.innerHTML).not.toMatch(/rgba\(220,\s*38,\s*38|0_0_\d+px|font-dot|#fca5a5|border-yellow/);
-    }
   });
 });
 
@@ -246,28 +229,25 @@ describe('screen readers', () => {
 });
 
 describe('reduced motion', () => {
-  const css = fs.readFileSync(`${process.cwd()}/src/index.css`, 'utf8');
-  const reduced = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\}\s*\}?/g)].map((m) => m[1]).join('\n');
-
-  it('the armed pulse is a class that reduced motion holds still', () => {
+  it("stops the armed icon bouncing and the card's dot pulsing", () => {
     const b = renderButton();
     STATES.armed(b);
-    // The word pulses, not the button: its face stays solid over the dimmed screen.
-    expect(b.className).not.toContain('locus-sos-armed');
-    expect(b.querySelector('.locus-sos-armed').textContent).toBe('SOS');
-    expect(b.style.animation).toBe('');
-    expect(css).toMatch(/\.locus-sos-armed \{ animation: locus-sos-pulse 0\.6s ease-in-out infinite; \}/);
-    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.locus-sos-armed \{ animation: none; \} \}/);
+    const icon = b.querySelector('svg.lucide-triangle-alert');
+    expect(icon.getAttribute('class')).toContain('animate-bounce');
+    expect(icon.getAttribute('class')).toContain('motion-reduce:animate-none');
+    expect(card().querySelector('.animate-ping').className).toContain('motion-reduce:animate-none');
   });
 
-  it('the rings still fill and drain: their timing is their own, and no reduced-motion rule touches them', () => {
+  it('the bars still fill and drain: their width follows the hold, whatever the motion setting', () => {
     const b = renderButton();
     press(b);
-    expect(screen.getByTestId('sos-ring-hold').style.transition).toBe(`stroke-dashoffset ${HOLD}ms linear`);
-    wait(HOLD);
+    wait(HOLD / 2);
+    expect(parseFloat(screen.getByTestId('sos-fill').style.width)).toBeGreaterThan(0);
+    wait(HOLD / 2);
     release(b);
-    expect(screen.getByTestId('sos-ring-countdown').style.transition).toBe(`stroke-dashoffset ${WINDOW}ms linear`);
-    expect(reduced).not.toMatch(/sos-ring|stroke-dashoffset|svg|circle/);
-    expect(css).not.toMatch(/\*\s*\{[^}]*transition(-duration)?:\s*(none|0)/);
+    wait(WINDOW / 2);
+    const left = parseFloat(screen.getByTestId('sos-countdown').style.width);
+    expect(left).toBeGreaterThan(0);
+    expect(left).toBeLessThan(100);
   });
 });

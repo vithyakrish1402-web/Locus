@@ -1,54 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { LogOut, ShieldAlert, Sliders } from 'lucide-react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.button>, which this config can't see
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import BrandMark from '../access/BrandMark';
-import { IconButton, StatusDot } from '../ui';
+import { StatusDot } from '../ui';
 import { SHARING_CHIP, TOP_BAR } from '../../copy/map';
 import { TOP_BAR_HEIGHT, TOP_BAR_TOP } from '../../utils/mapChrome';
-import { SETTINGS } from '../../copy/settings';
 
 // The map screen's top bar: an ultra-clean, Apple-style floating island positioned on the
 // left side of the screen on mobile, displaying the crisp "L.O.C.U.S" mark and essential actions.
-export function TopBar({ isSatellite, onSignOut, onSettings, isAdmin = false, onAdmin }) {
+export function TopBar({ isSatellite }) {
   return (
     <nav
       aria-label="Top bar"
       data-testid="top-bar"
-      className="absolute left-3 z-[1000] flex items-center gap-2 rounded-full glass-floating text-text font-ui px-2.5 py-1.5 pointer-events-auto transition-[transform,opacity] duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[var(--glass-border)]"
+      className="absolute left-3 z-[1000] flex items-center gap-2 rounded-full glass-floating text-text font-ui px-3 py-1.5 pointer-events-auto transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[var(--glass-border)]"
       style={{ top: TOP_BAR_TOP, minHeight: '44px' }}
     >
-      <div className="flex items-center gap-2 pl-0.5 pr-1.5 select-none">
+      <div className="flex items-center gap-2 pl-0.5 pr-1 select-none">
         <BrandMark size="small" />
         <p className="text-[13px] font-bold tracking-[0.14em] text-text font-ui">{TOP_BAR.name}</p>
         {/* Hidden screen-reader context preserved for map view status */}
         <span className="sr-only">{isSatellite ? TOP_BAR.satelliteView : TOP_BAR.mapView}</span>
-      </div>
-
-      <div className="flex items-center gap-0.5 border-l border-[var(--glass-border-subtle)] pl-1">
-        {isAdmin && (
-          <IconButton
-            label="Admin settings"
-            icon={ShieldAlert}
-            size={16}
-            onClick={onAdmin}
-            className="!min-w-[44px] !min-h-[44px] text-text-secondary hover:text-text hover:bg-sunken"
-          />
-        )}
-        <IconButton
-          label={SETTINGS.open}
-          icon={Sliders}
-          size={16}
-          onClick={onSettings}
-          className="!min-w-[44px] !min-h-[44px] text-text-secondary hover:text-text hover:bg-sunken"
-        />
-        <IconButton
-          label={TOP_BAR.signOut}
-          icon={LogOut}
-          size={16}
-          onClick={onSignOut}
-          className="!min-w-[44px] !min-h-[44px] text-text-secondary hover:text-text hover:bg-sunken"
-        />
       </div>
     </nav>
   );
@@ -105,7 +77,7 @@ export function SharingChip({ mode, waiting = false, pausedNoSpot = false }) {
             ? { duration: 0 }
             : { type: 'spring', stiffness: 380, damping: 30 }
         }
-        className={`group relative inline-flex items-center gap-2.5 min-h-11 rounded-[1.375rem] glass-pill font-ui shadow-sm duration-200 cursor-pointer select-none ${
+        className={`group relative inline-flex items-center gap-2.5 min-h-11 rounded-[1.375rem] glass-pill font-ui shadow-sm transition-colors duration-200 cursor-pointer select-none ${
           collapsed ? 'px-3.5 py-2.5' : 'px-4 py-2'
         }`}
       >

@@ -102,6 +102,7 @@ import { useIsMobile } from './hooks/useIsMobile';
 import { haptic } from './utils/haptics';
 import { SHEET_SPRING, PANEL_SPRING, fade } from './utils/motion';
 import { LAYER } from './utils/layers';
+import { useAnySheetOpen } from './utils/openSheets';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { createSosOutbox } from './utils/sosOutbox';
@@ -476,6 +477,12 @@ const App = () => {
   alertSoundsRef.current = sysConfig.audio;
   // How LOCUS works, opened from Settings (the guide over everything else, until closed).
   const [guideOpen, setGuideOpen] = useState(false);
+
+  // Where the Emergency button stands. On a phone it sits in the bottom tab bar, but AR Scan,
+  // Settings, the guide, the admin tools and every bottom sheet draw over that bar, so while
+  // any of them is open it floats bottom-left above them instead. From md up it always floats.
+  const anySheetOpen = useAnySheetOpen();
+  const sosFloats = !isMobile || Boolean(arTarget) || showSettingsModal || guideOpen || showAdminSettings || anySheetOpen;
 
   // `key` is a setting's name, or 'group.name' for one entry of a nested setting
   // (arFeatureOverrides.roadLine), merged into the rest of its group.
@@ -2035,7 +2042,24 @@ const App = () => {
     return () => controls.stop();
   }, [panelTarget, panelY, reduceMotion]);
   // Whose options sheet is open: an id, so it follows their live updates and closes if they go.
-  const optionsMember = optionsMemberId ? users.find((u) => u.id === optionsMemberId) ?? null : null;
+  const optionsMember = optionsMemberId
+    ? users.find((u) => u.id === optionsMemberId) ??
+      (() => {
+        const ghost = ghostMembers.find((g) => g.id === optionsMemberId);
+        if (!ghost) return null;
+        return {
+          id: ghost.id,
+          name: ghost.name,
+          lat: ghost.position?.lat,
+          lng: ghost.position?.lng,
+          battery: ghost.battery,
+          status: 'GHOST',
+          hasFix: true,
+          phase: ghost.phase,
+          elapsedLabel: ghost.elapsedLabel,
+        };
+      })()
+    : null;
   // The group panel's search box: at the head of the buildings list, and above the members.
   const groupSearch = (
     <label className="relative block">
@@ -2283,10 +2307,6 @@ const App = () => {
       {/* Top bar and sharing chip (components/map/TopBar.jsx) */}
       <TopBar
         isSatellite={isSatellite}
-        onSignOut={handleLogout}
-        onSettings={() => setShowSettingsModal(true)}
-        isAdmin={isAdmin}
-        onAdmin={() => setShowAdminSettings(true)}
       />
 
       {/* Sidebar Panel — visible on desktop always; on a phone, a sheet that is open when
@@ -2295,7 +2315,7 @@ const App = () => {
         // Its y is panelY, moved to the resting height by the effect on panelTarget, and by
         // the finger while dragged (the handle strip and header start the drag).
         data-height={isMobile ? (sheetOpen ? panelHeight : 'closed') : undefined}
-        drag={isMobile ? 'y' : false}
+        drag={isMobile && sheetOpen ? 'y' : false}
         dragListener={false}
         dragControls={sheetDragControls}
         dragConstraints={{ top: 0, bottom: panelStopsNow.closed }}
@@ -2318,7 +2338,9 @@ const App = () => {
         ref={sheetRef}
         className={`${
           isMobile
-            ? 'fixed inset-x-0 bottom-16 z-[900] flex flex-col glass-floating text-text rounded-t-[28px] pointer-events-auto'
+            ? `fixed inset-x-0 bottom-16 z-[900] flex flex-col glass-floating text-text rounded-t-[28px] ${
+                sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
+              }`
             : 'hidden md:flex w-84 glass-floating text-text rounded-3xl fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
         }`}
         // Starts under the header instead of behind it (it used to start at the very top, so
@@ -2539,7 +2561,10 @@ const App = () => {
                     exit={{ opacity: 0 }}
                     key={`ghost-row-${ghost.id}`}
                     data-testid="lost-member-row"
-                    onClick={() => handleFocus(ghost.position, null)}
+                    onClick={() => {
+                      handleFocus(ghost.position, null);
+                      setOptionsMemberId(ghost.id);
+                    }}
                     className="flex items-center gap-3 p-3 rounded-2xl glass-panel font-ui text-text cursor-pointer hover:bg-surface/90 transition-[transform,opacity] duration-150"
                   >
                     <Avatar name={ghost.name || '?'} dashed className="opacity-70" />
@@ -2714,6 +2739,7 @@ const App = () => {
               walkingRoute={shownRoute}
               canClearWaypoint={canClearWaypoint}
               highlightBuildingId={(activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null}
+              onSelectMember={setOptionsMemberId}
               onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}
               onArTrack={setArTarget}
               isSatellite={isSatellite}
@@ -2813,9 +2839,15 @@ const App = () => {
               key={u.id}
               lat={u.lat}
               lng={u.lng}
-              onClick={() => handleFocus({ lat: u.lat, lng: u.lng }, null)}
+              onClick={(e) => {
+                e?.stopPropagation?.();
+                handleFocus({ lat: u.lat, lng: u.lng }, null);
+                setOptionsMemberId(u.id);
+              }}
               style={{
                 cursor: 'pointer',
+                pointerEvents: 'auto',
+                zIndex: 45,
                 animation: 'locus-member-fade-in 0.6s ease',
                 // Stage 7: on another floor of the building you're viewing - dimmed, never hidden.
                 ...(SHOW_INDOOR_POSITION_TO_SQUAD && isOnOtherFloor(u, indoorView) ? { opacity: 0.35 } : {}),
@@ -2840,8 +2872,18 @@ const App = () => {
               key={`ghost-${ghost.id}`}
               lat={ghost.position.lat}
               lng={ghost.position.lng}
-              onClick={() => handleFocus(ghost.position, ghostFocusItem(ghost))}
-              style={{ cursor: 'pointer', opacity: ghost.fading ? 0 : 1, transition: `opacity ${GHOST_FADE_MS}ms ease` }}
+              onClick={(e) => {
+                e?.stopPropagation?.();
+                handleFocus(ghost.position, ghostFocusItem(ghost));
+                setOptionsMemberId(ghost.id);
+              }}
+              style={{
+                cursor: 'pointer',
+                pointerEvents: 'auto',
+                zIndex: 44,
+                opacity: ghost.fading ? 0 : 1,
+                transition: `opacity ${GHOST_FADE_MS}ms ease`
+              }}
             >
               <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} />
             </div>
@@ -2980,6 +3022,8 @@ const App = () => {
                   onCheck: () => appUpdate.check({ manual: true }),
                 }}
                 onOpenGuide={() => setGuideOpen(true)}
+                onSignOut={() => { setShowSettingsModal(false); handleLogout(); }}
+                onAdmin={isAdmin ? () => { setShowSettingsModal(false); setShowAdminSettings(true); } : undefined}
               />
             </motion.div>
           </motion.div>
@@ -3013,6 +3057,22 @@ const App = () => {
           { id: 'scan', label: TABS.scan, Icon: Scan, flourish: 'turn' },
           { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop' },
         ]}
+        sosTrigger={
+          // One Emergency button mounted at a time: in the tab bar on a phone while nothing
+          // covers the bar; otherwise the floating one below (see sosFloats).
+          accessStatus === 'granted' && !sosFloats ? (
+            <SosTrigger
+              socket={socket}
+              getLocation={() => liveLocationRef.current}
+              roomCode={squadCode}
+              senderName={user.displayName}
+              outbox={sosOutbox}
+              held={sosHeld}
+              sharingMode={telemetryMode}
+              layout="tab"
+            />
+          ) : null
+        }
         onSelect={(id) => {
           const current = mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid';
           if (id !== current) haptic('select');
@@ -3057,6 +3117,11 @@ const App = () => {
         headingLive={hasHeadingReading}
         isLead={squadRole === 'OWNER'}
         onClose={() => setOptionsMemberId(null)}
+        onNavigate={(m) => {
+          handleWaypointSelect({ lat: m.lat, lng: m.lng, name: m.name, id: m.id });
+          handleFocus({ lat: m.lat, lng: m.lng }, null);
+          if (isMobile) setMobileView('grid');
+        }}
         onPing={sendPing}
         onShowOnMap={(m) => {
           handleFocus({ lat: m.lat, lng: m.lng }, null);
@@ -3093,18 +3158,28 @@ const App = () => {
         />
       )}
 
-      {/* ========== SOS TRIGGER (double press-and-hold confirm) ========== */}
-      {/* Only once in the group (D3): while waiting to be let in, the server would drop an
-          alert, so the waiting screen says so in the button's place instead. */}
-      {accessStatus === 'granted' && <SosTrigger
-        socket={socket}
-        getLocation={() => liveLocationRef.current}
-        roomCode={squadCode}
-        senderName={user.displayName}
-        outbox={sosOutbox}
-        held={sosHeld}
-        sharingMode={telemetryMode}
-      />}
+      {/* ========== FLOATING SOS TRIGGER ==========
+          Always from md up. On a phone the button lives in the bottom tab bar, and floats here,
+          bottom-left over everything, only while something covers that bar (sosFloats), so it
+          is never out of reach (Emergency batch, E1). */}
+      {accessStatus === 'granted' && sosFloats && (
+        <div
+          data-testid="sos-float"
+          className="fixed left-4 bottom-4 md:bottom-6 md:left-[23rem] pointer-events-auto"
+          style={{ zIndex: LAYER.emergencyButton, marginBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          <SosTrigger
+            socket={socket}
+            getLocation={() => liveLocationRef.current}
+            roomCode={squadCode}
+            senderName={user.displayName}
+            outbox={sosOutbox}
+            held={sosHeld}
+            sharingMode={telemetryMode}
+            layout="floating"
+          />
+        </div>
+      )}
 
       {/* ========== UPDATES: APK modal + JS-only restart strip (mandatory is gated far above) ========== */}
       {updateOverlay}

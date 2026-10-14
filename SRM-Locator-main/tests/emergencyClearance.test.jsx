@@ -83,22 +83,26 @@ describe('one layer for the button', () => {
 });
 
 describe('the clearance', () => {
-  it('11 rem plus the gesture bar while the button is on screen (its top is 10 rem up), 7.5 rem from md up, 1 rem otherwise', () => {
+  it('5 rem plus the gesture bar while the button floats (its top is 4 rem up), 5.5 rem from md up, 1 rem otherwise', () => {
     expect(css).toContain(':root { --emergency-clearance: calc(1rem + env(safe-area-inset-bottom)); }');
-    expect(css).toContain(':root[data-emergency-button] { --emergency-clearance: calc(11rem + env(safe-area-inset-bottom)); }');
-    expect(css).toMatch(/@media \(min-width: 768px\) \{\s*:root\[data-emergency-button\] \{ --emergency-clearance: calc\(7\.5rem \+ env\(safe-area-inset-bottom\)\); \}/);
-    // The button: 5 rem up, 5 rem tall (md: 1.5 rem up), on the gesture bar's inset.
-    const trigger = src('components/SosTrigger.jsx');
-    expect(trigger).toMatch(/fixed bottom-20 left-4 md:bottom-6 md:left-\[23rem\] w-20 h-20/);
-    expect(trigger).toContain("marginBottom: 'env(safe-area-inset-bottom)'");
+    expect(css).toContain(':root[data-emergency-button] { --emergency-clearance: calc(5rem + env(safe-area-inset-bottom)); }');
+    expect(css).toMatch(/@media \(min-width: 768px\) \{\s*:root\[data-emergency-button\] \{ --emergency-clearance: calc\(5\.5rem \+ env\(safe-area-inset-bottom\)\); \}/);
+    // Floating: 1 rem up (md: 1.5 rem), the pill 3 rem tall, on the gesture bar's inset.
+    const app = src('App.jsx');
+    expect(app).toMatch(/fixed left-4 bottom-4 md:bottom-6 md:left-\[23rem\]/);
+    expect(app).toContain("style={{ zIndex: LAYER.emergencyButton, marginBottom: 'env(safe-area-inset-bottom)' }}");
+    expect(src('components/SosTrigger.jsx')).toContain("'h-12 px-6 rounded-2xl shadow-lg'");
   });
 
-  it('applies only while the button is on screen', () => {
+  it('applies only while the button floats: in the tab bar it needs none', () => {
     expect(document.documentElement.dataset.emergencyButton).toBeUndefined();
-    const { unmount } = render(<SosTrigger socket={{ emit: vi.fn() }} />);
+    const floating = render(<SosTrigger socket={{ emit: vi.fn() }} layout="floating" />);
     expect(document.documentElement.dataset.emergencyButton).toBe('on');
-    unmount();
+    floating.unmount();
     expect(document.documentElement.dataset.emergencyButton).toBeUndefined();
+    const inTheBar = render(<SosTrigger socket={{ emit: vi.fn() }} layout="tab" />);
+    expect(document.documentElement.dataset.emergencyButton).toBeUndefined();
+    inTheBar.unmount();
   });
 
   it('with the keyboard open, a focused field stops clear of the button', () => {

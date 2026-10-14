@@ -131,7 +131,25 @@ describe('the Emergency button and AR Scan', () => {
     expect(screen.getByTestId('ar-scan')).toBeTruthy();
     expect(Number(sos().style.zIndex)).toBe(LAYER.emergencyButton);
     expect(Number(sos().style.zIndex)).toBeGreaterThan(Number(screen.getByTestId('ar-scan').style.zIndex));
-    expect(sos().className).toMatch(/(^| )bottom-20 left-4( |$)/);
+    // Floating bottom-left over AR Scan (on a phone it leaves the covered tab bar for this).
+    expect(screen.getByTestId('sos-float').contains(sos())).toBe(true);
+    expect(screen.getByTestId('sos-float').className).toMatch(/(^| )left-4 bottom-4( |$)/);
+  });
+
+  it('on a phone it leaves the tab bar AR Scan covers and floats above it, then goes back', async () => {
+    window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
+    try {
+      await scanning();
+      expect(screen.getByTestId('ar-start')).toBeTruthy();
+      expect(screen.getAllByRole('button', { name: /SOS beacon/ })).toHaveLength(1);
+      expect(screen.getByTestId('sos-float').contains(sos())).toBe(true);
+      expect(Number(screen.getByTestId('sos-float').style.zIndex)).toBeGreaterThan(LAYER.arScan);
+      fireEvent.click(within(screen.getByTestId('ar-start')).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByTestId('sos-float')).toBeNull();
+      expect(screen.getByRole('navigation', { name: 'Main' }).contains(sos())).toBe(true);
+    } finally {
+      delete window.matchMedia;
+    }
   });
 
   it('stays on the same one layer once AR Scan closes (E1: one layer for the button)', async () => {
@@ -150,8 +168,11 @@ describe('the Emergency button and AR Scan', () => {
     const ar = readFileSync(`${process.cwd()}/src/ARCompass.jsx`, 'utf8');
     expect(ar).toContain("export const CLEAR_OF_EMERGENCY_BUTTON = 'var(--emergency-clearance)';");
     expect(ar.match(/paddingBottom: CLEAR_OF_EMERGENCY_BUTTON/g)).toHaveLength(2);
+    // The floating button: App.jsx's sos-float (bottom-4), the pill h-12.
+    const app = readFileSync(`${process.cwd()}/src/App.jsx`, 'utf8');
+    expect(app).toMatch(/fixed left-4 bottom-4 md:bottom-6 md:left-\[23rem\]/);
     const trigger = readFileSync(`${process.cwd()}/src/components/SosTrigger.jsx`, 'utf8');
-    expect(trigger).toMatch(/bottom-20 left-4 [^"]*w-20 h-20/);
+    expect(trigger).toContain("'h-12 px-6 rounded-2xl shadow-lg'");
   });
 });
 
@@ -220,19 +241,19 @@ describe('the target picker', () => {
     await scanning(twoMembers);
     await startArScan();
     fireEvent.click(pill());
-    // The button's top: 5 rem up plus 5 rem tall, on the gesture bar's inset.
-    const trigger = readFileSync(`${process.cwd()}/src/components/SosTrigger.jsx`, 'utf8');
-    expect(trigger).toMatch(/bottom-20 left-4 [^"]*w-20 h-20/);
-    expect(trigger).toContain("marginBottom: 'env(safe-area-inset-bottom)'");
-    // The sheet pads the app's clearance for the button (11 rem plus that inset while the
-    // button is on screen); the picker adds 1 rem (pb-4), leaving 2 rem above the button.
+    // The floating button's top: 1 rem up plus the 3 rem pill, on the gesture bar's inset.
+    const app = readFileSync(`${process.cwd()}/src/App.jsx`, 'utf8');
+    expect(app).toMatch(/fixed left-4 bottom-4 md:bottom-6 md:left-\[23rem\]/);
+    expect(app).toContain("style={{ zIndex: LAYER.emergencyButton, marginBottom: 'env(safe-area-inset-bottom)' }}");
+    // The sheet pads the app's clearance for the button (5 rem plus that inset while the
+    // button floats); the picker adds 1 rem (pb-4), leaving 2 rem above the button.
     const panel = screen.getByTestId('ar-target-picker').parentElement;
     expect(panel.style.paddingBottom).toBe('var(--emergency-clearance)');
     expect(document.documentElement.dataset.emergencyButton).toBe('on');
     const css = readFileSync(`${process.cwd()}/src/index.css`, 'utf8');
-    expect(css).toContain(':root[data-emergency-button] { --emergency-clearance: calc(11rem + env(safe-area-inset-bottom)); }');
+    expect(css).toContain(':root[data-emergency-button] { --emergency-clearance: calc(5rem + env(safe-area-inset-bottom)); }');
     expect(screen.getByTestId('ar-target-picker').className).toMatch(/(^| )pb-4( |$)/);
-    expect(11 + 1).toBeGreaterThanOrEqual(10 + 2);
+    expect(5 + 1).toBeGreaterThanOrEqual(4 + 2);
   });
 
   it('sits above AR Scan and under the Emergency button', () => {

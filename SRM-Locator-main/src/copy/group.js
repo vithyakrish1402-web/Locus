@@ -57,6 +57,7 @@ export const MEMBERS = {
 };
 
 export const MEMBER_OPTIONS = {
+  navigate: (first) => `Navigate to ${first}`,
   ping: (first) => `Ping ${first}`,
   showOnMap: 'Show on map',
   arScan: 'Find with AR Scan',

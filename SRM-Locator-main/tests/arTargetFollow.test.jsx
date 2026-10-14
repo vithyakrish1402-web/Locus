@@ -131,7 +131,7 @@ const cardArAtBravo = async () => {
   roster({ 'sock-1': member(HERE.lat + 0.001, HERE.lng) });
   fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
   fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
-  fireEvent.click(within(screen.getByRole('dialog', { name: 'Options for Bravo' })).getByRole('button', { name: 'Find with AR Scan' }));
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Options for Bravo' })).getByRole('button', { name: /^Find with AR Scan/ }));
   await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Start AR Scan$/ })));
   expect(screen.getByTestId('ar-target-pill').textContent).toContain('Bravo');
 };

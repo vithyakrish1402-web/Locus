@@ -160,11 +160,10 @@ describe.each([
 });
 
 describe('where it stands', () => {
-  it('on its one layer, in its usual spot', () => {
+  it('on its one layer; App.jsx places it (in the tab bar, or floating bottom-left)', () => {
     const button = renderButton();
     expect(Number(button.style.zIndex)).toBe(LAYER.emergencyButton);
-    expect(button.className).toMatch(/(^| )bottom-20( |$)/);
-    expect(button.className).toMatch(/(^| )left-4( |$)/);
+    expect(button.className).not.toMatch(/(^| )(fixed|absolute)( |$)/);
   });
 
   it('that layer is above every other screen and below an incoming alert', () => {

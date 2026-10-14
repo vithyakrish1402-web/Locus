@@ -94,13 +94,14 @@ describe('red is for the Emergency alert and destructive actions only', () => {
 describe('no glow', () => {
   const GLOW = /glow|drop-shadow|blur-\[|shadow-\[(?!var\(--shadow)|shadow-(?:red|danger|emergency)|ring-offset|animate-pulse|animate-ping|text-shadow/i;
 
-  it('the Emergency files draw no glow, and the button has only the standard shadow', () => {
-    for (const path of ['components/SosTrigger.jsx', 'components/SosOverlay.jsx', 'components/guide/GuidePictures.jsx', 'components/access/StatusScreen.jsx']) {
+  // The button itself (SosTrigger.jsx) is the exception: the design build (js-1.1.32) gives
+  // its pill a coloured glow per state, chosen on purpose.
+  it('the other Emergency files draw no glow', () => {
+    for (const path of ['components/SosOverlay.jsx', 'components/guide/GuidePictures.jsx', 'components/access/StatusScreen.jsx']) {
       // Comments may say "no glow"; strip them first.
       const code = read(path).replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
       expect(code.match(GLOW), path).toBeNull();
     }
-    expect(read('components/SosTrigger.jsx')).toContain('shadow-[var(--shadow-2)]');
   });
 
   it('the armed pulse and the alert strobe change opacity only', () => {
