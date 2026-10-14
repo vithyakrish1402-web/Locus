@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { haversineMeters, findNearestPointOnPath, interpolateHeading } from '../utils/navGeometry';
-import { fetchGoogleWalkingRoute, fetchOsrmWalkingRoute } from '../utils/routingProviders';
-import { findCampusPedestrianRoute } from '../data/campusPedestrianGraph';
-import { generateStepsFromPath } from '../utils/navGeometry';
-import { formatDistanceMeters, formatDurationMinutes } from '../utils/walkingRoute';
+import { fetchPedestrianRoute } from '../utils/routingProviders';
 
 // Configurable thresholds for campus navigation
 export const OFF_ROUTE_THRESHOLD_M = 25;       // Sustained distance from path before rerouting
@@ -26,7 +23,8 @@ export function useNavigationController({
   const [rerouteError, setRerouteError] = useState(null);
   const [hasArrived, setHasArrived] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [isFollowingCamera, setIsFollowingCamera] = useState(true);
+  const [autoFollow, setAutoFollow] = useState(false); // Manual recenter by default
+  const [isFollowingCamera, setIsFollowingCamera] = useState(false);
   const [remainingDistanceMeters, setRemainingDistanceMeters] = useState(0);
   const [remainingTimeMinutes, setRemainingTimeMinutes] = useState(0);
   const [distanceToNextStepMeters, setDistanceToNextStepMeters] = useState(0);
@@ -35,6 +33,7 @@ export function useNavigationController({
   const offRouteCountRef = useRef(0);
   const lastRerouteTimeRef = useRef(0);
   const rerouteInFlightRef = useRef(false);
+  const hasInitialCenteredRef = useRef(false);
   const destinationRef = useRef(destination);
   destinationRef.current = destination;
 
@@ -54,30 +53,7 @@ export function useNavigationController({
     lastRerouteTimeRef.current = now;
 
     try {
-      const fetcher = mapEngine === 'google' ? fetchGoogleWalkingRoute : fetchOsrmWalkingRoute;
-      let route = await fetcher(origin, dest);
-
-      // Campus pedestrian graph fallback if public routing fails or returns null
-      if (!route || !route.path || route.path.length === 0) {
-        const campusPath = findCampusPedestrianRoute(origin, dest);
-        if (campusPath && campusPath.length >= 2) {
-          const steps = generateStepsFromPath(campusPath, dest.name);
-          let meters = 0;
-          for (let i = 0; i < campusPath.length - 1; i++) {
-            meters += haversineMeters(campusPath[i], campusPath[i + 1]);
-          }
-          const mins = Math.max(1, Math.round(meters / 1.4 / 60));
-          route = {
-            path: campusPath,
-            steps,
-            distance: { text: formatDistanceMeters(meters) },
-            duration: { text: formatDurationMinutes(mins) },
-            distanceMeters: meters,
-            durationSeconds: mins * 60,
-            isRealRoute: true,
-          };
-        }
-      }
+      const route = await fetchPedestrianRoute(origin, dest, mapEngine);
 
       // Check if destination is still valid
       if (destinationRef.current?.lat === dest.lat && destinationRef.current?.lng === dest.lng) {
@@ -106,7 +82,9 @@ export function useNavigationController({
       setRerouteError(null);
       setHasArrived(false);
       setCurrentStepIndex(0);
-      setIsFollowingCamera(true);
+      setAutoFollow(false);
+      setIsFollowingCamera(false);
+      hasInitialCenteredRef.current = false;
       offRouteCountRef.current = 0;
       return;
     }
@@ -114,7 +92,6 @@ export function useNavigationController({
     setHasArrived(false);
     offRouteCountRef.current = 0;
     setCurrentStepIndex(0);
-    setIsFollowingCamera(true);
 
     // Initial route fetch
     if (liveLocation) {
@@ -180,22 +157,57 @@ export function useNavigationController({
     }
   }, [isNavigating, liveLocation?.lat, liveLocation?.lng, activeRoute, currentStepIndex, triggerRouteCalculation]);
 
-  // Camera Follow Controller: Google Maps & Leaflet smooth position & bearing alignment
+  // Recenter action: smoothly moves camera to user's live position & heading
+  const handleRecenter = useCallback(() => {
+    if (!liveLocation || !mapInstance) return;
+
+    const targetCenter = { lat: liveLocation.lat, lng: liveLocation.lng };
+    const targetHeading = liveHeading || 0;
+
+    if (mapEngine === 'google') {
+      if (typeof mapInstance.moveCamera === 'function') {
+        mapInstance.moveCamera({
+          center: targetCenter,
+          zoom: 19,
+          heading: targetHeading,
+          tilt: 35,
+        });
+      } else if (typeof mapInstance.panTo === 'function') {
+        mapInstance.panTo(targetCenter);
+        mapInstance.setZoom?.(19);
+      }
+    } else if (mapEngine === 'leaflet') {
+      if (typeof mapInstance.flyTo === 'function') {
+        mapInstance.flyTo([targetCenter.lat, targetCenter.lng], 19, { duration: 0.8 });
+      } else if (typeof mapInstance.panTo === 'function') {
+        mapInstance.panTo([targetCenter.lat, targetCenter.lng], { animate: true, duration: 0.4 });
+      }
+    }
+  }, [liveLocation, liveHeading, mapEngine, mapInstance]);
+
+  // Initial one-time centering when navigation starts
   useEffect(() => {
-    if (!isNavigating || !isFollowingCamera || !liveLocation || !mapInstance) return;
+    if (isNavigating && liveLocation && mapInstance && !hasInitialCenteredRef.current) {
+      hasInitialCenteredRef.current = true;
+      handleRecenter();
+    }
+    if (!isNavigating) {
+      hasInitialCenteredRef.current = false;
+    }
+  }, [isNavigating, liveLocation?.lat, liveLocation?.lng, mapInstance, handleRecenter]);
+
+  // Continuous Camera Auto-Follow: ONLY runs if user explicitly turns on autoFollow
+  useEffect(() => {
+    if (!isNavigating || !autoFollow || !liveLocation || !mapInstance) return;
 
     const targetCenter = { lat: liveLocation.lat, lng: liveLocation.lng };
     const targetZoom = 19; // Navigation perspective zoom
 
-    // Google Maps camera handling
     if (mapEngine === 'google' && typeof mapInstance.moveCamera === 'function') {
       try {
-        // Shift center slightly down so heading ahead is visible
-        // Bearing: align with direction of travel when moving (> 0.6 m/s)
         const isMoving = (speedMps || 0) > 0.6;
         const targetHeading = isMoving && liveHeading != null ? liveHeading : (mapInstance.getHeading?.() || 0);
 
-        // Smooth heading interpolation
         const currentCamHeading = lastCameraHeadingRef.current || 0;
         const smoothHeading = isMoving ? interpolateHeading(currentCamHeading, targetHeading, 0.25) : currentCamHeading;
         lastCameraHeadingRef.current = smoothHeading;
@@ -204,7 +216,7 @@ export function useNavigationController({
           center: targetCenter,
           zoom: targetZoom,
           heading: smoothHeading,
-          tilt: 35, // Google Maps perspective tilt for turn-by-turn feel
+          tilt: 35,
         });
       } catch {
         mapInstance.setCenter?.(targetCenter);
@@ -212,7 +224,6 @@ export function useNavigationController({
     } else if (mapEngine === 'google' && typeof mapInstance.panTo === 'function') {
       mapInstance.panTo(targetCenter);
     } else if (mapEngine === 'leaflet') {
-      // Leaflet camera handling: zoom into navigation zoom 19 and follow smoothly
       const currentZoom = mapInstance.getZoom?.() || 17;
       if (currentZoom < targetZoom) {
         mapInstance.flyTo?.([targetCenter.lat, targetCenter.lng], targetZoom, { duration: 0.8 });
@@ -220,35 +231,23 @@ export function useNavigationController({
         mapInstance.panTo([targetCenter.lat, targetCenter.lng], { animate: true, duration: 0.4 });
       }
     }
-  }, [isNavigating, isFollowingCamera, liveLocation?.lat, liveLocation?.lng, liveHeading, speedMps, mapEngine, mapInstance]);
+  }, [isNavigating, autoFollow, liveLocation?.lat, liveLocation?.lng, liveHeading, speedMps, mapEngine, mapInstance]);
 
-  // Handle user manual interaction to disable camera follow
+  // Handle user manual interaction to disable continuous auto-centering
   const handleUserMapInteraction = useCallback(() => {
-    if (isFollowingCamera) {
-      setIsFollowingCamera(false);
-    }
-  }, [isFollowingCamera]);
+    setAutoFollow(false);
+    setIsFollowingCamera(false);
+  }, []);
 
-  // Recenter action
-  const handleRecenter = useCallback(() => {
-    setIsFollowingCamera(true);
-    if (!liveLocation || !mapInstance) return;
-
-    if (mapEngine === 'google') {
-      if (typeof mapInstance.moveCamera === 'function') {
-        mapInstance.moveCamera({
-          center: { lat: liveLocation.lat, lng: liveLocation.lng },
-          zoom: 19,
-          heading: liveHeading || 0,
-          tilt: 45,
-        });
-      } else {
-        mapInstance.panTo({ lat: liveLocation.lat, lng: liveLocation.lng });
+  const toggleAutoFollow = useCallback(() => {
+    setAutoFollow((prev) => {
+      const next = !prev;
+      if (next) {
+        handleRecenter();
       }
-    } else if (mapEngine === 'leaflet') {
-      mapInstance.flyTo?.([liveLocation.lat, liveLocation.lng], 19, { duration: 0.8 });
-    }
-  }, [liveLocation, liveHeading, mapEngine, mapInstance]);
+      return next;
+    });
+  }, [handleRecenter]);
 
   const currentStep = activeRoute?.steps?.[currentStepIndex] || activeRoute?.steps?.[0] || null;
   const nextStep = activeRoute?.steps?.[currentStepIndex + 1] || null;
@@ -265,7 +264,9 @@ export function useNavigationController({
     remainingDistanceMeters,
     remainingTimeMinutes,
     distanceToNextStepMeters,
-    isFollowingCamera,
+    autoFollow,
+    toggleAutoFollow,
+    isFollowingCamera: autoFollow,
     handleUserMapInteraction,
     handleRecenter,
     retryReroute: () => destinationRef.current && liveLocation && triggerRouteCalculation(liveLocation, destinationRef.current),

@@ -1969,6 +1969,11 @@ const App = () => {
     mapInstance: mapEngineFailed ? leafletMapRef.current : mapRef.current,
   });
 
+  const userInteractionHandlerRef = useRef(() => {});
+  userInteractionHandlerRef.current = () => {
+    if (isNavigatingMode) navigationController.handleUserMapInteraction();
+  };
+
   // Native Google Maps polylines for each dark member's projection vector —
   // no-ops when the Leaflet fallback is active (mapRef only holds a Google
   // map instance) or before the map's finished mounting. TacticalLeafletMap
@@ -2879,9 +2884,13 @@ const App = () => {
             });
 
               // Listen for user manual drag/zoom to disable automatic camera follow
-              map.addListener('dragstart', () => {
-                if (isNavigatingMode) navigationController.handleUserMapInteraction();
-              });
+              map.addListener('dragstart', () => userInteractionHandlerRef.current());
+              map.addListener('drag', () => userInteractionHandlerRef.current());
+              const div = map.getDiv?.();
+              if (div) {
+                div.addEventListener('touchstart', () => userInteractionHandlerRef.current(), { passive: true });
+                div.addEventListener('mousedown', () => userInteractionHandlerRef.current(), { passive: true });
+              }
 
             //  GREEN LIGHT: Map canvas is live — safe to draw saved zones now
             setIsMapReady(true);
@@ -3019,7 +3028,13 @@ const App = () => {
       {/* Right-hand map controls (components/map/MapControls.jsx) */}
       <MapControls
         onCampus={() => handleFocus(SRM_KTR_COORDS, null)}
-        onLocate={selfMarkerAt ? () => handleFocus(selfMarkerAt, null) : null}
+        onLocate={selfMarkerAt ? () => {
+          if (isNavigatingMode) {
+            navigationController.handleRecenter();
+          } else {
+            handleFocus(selfMarkerAt, null);
+          }
+        } : null}
         isSatellite={isSatellite}
         onToggleSatellite={() => setIsSatellite(!isSatellite)}
         onSettings={() => setShowSettingsModal(true)}
@@ -3158,9 +3173,18 @@ const App = () => {
       />
 
       {/* --- TURN-BY-TURN NAVIGATION OVERLAYS --- */}
-      {/* Recenter Button when camera follow was broken by user map interaction */}
-      {isNavigatingMode && !navigationController.isFollowingCamera && (
-        <RecenterButton onClick={navigationController.handleRecenter} />
+      {/* Recenter Button during navigation with manual recenter and auto-follow toggle */}
+      {isNavigatingMode && (
+        <RecenterButton
+          onClick={() => {
+            navigationController.handleRecenter();
+            if (liveLocation) {
+              setMapProps((prev) => ({ ...prev, center: { lat: liveLocation.lat, lng: liveLocation.lng }, zoom: 19 }));
+            }
+          }}
+          autoFollow={navigationController.autoFollow}
+          onToggleAutoFollow={navigationController.toggleAutoFollow}
+        />
       )}
 
       {/* Arrival Panel when destination is reached */}

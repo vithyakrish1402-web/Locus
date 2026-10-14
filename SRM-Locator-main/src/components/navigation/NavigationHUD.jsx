@@ -299,18 +299,35 @@ export function NavigationSummaryCard({
 /**
  * Google Maps Floating Action Re-center Button
  */
-export function RecenterButton({ onClick }) {
+export function RecenterButton({ onClick, autoFollow = false, onToggleAutoFollow }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid="nav-recenter-button"
-      aria-label="Re-center navigation"
-      className="absolute bottom-28 right-4 z-40 inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-white dark:bg-[#202124] text-zinc-800 dark:text-white shadow-[0_6px_25px_rgba(0,0,0,0.25)] border border-black/5 dark:border-white/10 text-xs font-bold pointer-events-auto active:scale-95 transition-all"
-    >
-      <Crosshair size={18} className="text-blue-600 dark:text-blue-400 animate-pulse" />
-      <span>Re-center</span>
-    </button>
+    <div className="fixed bottom-[6.5rem] right-4 z-[900] flex items-center gap-2 pointer-events-auto">
+      {onToggleAutoFollow && (
+        <button
+          type="button"
+          onClick={onToggleAutoFollow}
+          aria-label={autoFollow ? 'Disable auto-centering' : 'Enable auto-centering'}
+          title={autoFollow ? 'Auto-centering is ON' : 'Auto-centering is OFF (Manual recenter)'}
+          className={`px-3 py-2 rounded-full text-xs font-semibold shadow-[0_6px_25px_rgba(0,0,0,0.3)] border transition-all active:scale-95 ${
+            autoFollow
+              ? 'bg-blue-600 text-white border-blue-500'
+              : 'bg-white/95 dark:bg-[#202124]/95 text-zinc-600 dark:text-zinc-300 border-black/10 dark:border-white/15'
+          }`}
+        >
+          {autoFollow ? 'Auto: ON' : 'Auto: OFF'}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onClick}
+        data-testid="nav-recenter-button"
+        aria-label="Re-center navigation"
+        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-white dark:bg-[#202124] text-zinc-900 dark:text-white shadow-[0_8px_30px_rgba(0,0,0,0.35)] border border-black/10 dark:border-white/15 text-xs md:text-sm font-bold pointer-events-auto active:scale-95 transition-all hover:bg-zinc-50 dark:hover:bg-[#2a2b2e]"
+      >
+        <Crosshair size={18} className="text-[#1A73E8] dark:text-[#8AB4F8]" />
+        <span>Re-center</span>
+      </button>
+    </div>
   );
 }
 
