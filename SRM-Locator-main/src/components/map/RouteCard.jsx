@@ -14,20 +14,20 @@ const quiet = (text) => String(text ?? '').toLowerCase().replace(/\bmins?\b/, 'm
 
 /**
  * @param {{ start: {name: string}|null, end: {name: string}|null,
- *   data: {distance: {text: string}, duration: {text: string}}|null, onEnd: () => void }} props
+ *   data: {distance: {text: string}, duration: {text: string}}|null, onEnd: () => void, onStartNavigation?: () => void }} props
  */
-export default function RouteCard({ start, end, data, onEnd }) {
+export default function RouteCard({ start, end, data, onEnd, onStartNavigation }) {
   const fromYou = start?.name === 'MY_LOCATION';
   const title = end ? ROUTE_CARD.walkingTo(end.name) : ROUTE_CARD.choosing;
   const where = fromYou ? ROUTE_CARD.fromYou : start ? ROUTE_CARD.from(start.name) : '';
   const detail = end
-    ? [data && quiet(data.duration.text), data && quiet(data.distance.text), where].filter(Boolean).join(' · ')
+    ? [data?.duration?.text && quiet(data.duration.text), data?.distance?.text && quiet(data.distance.text), where].filter(Boolean).join(' · ')
     : ROUTE_CARD.choosingHelp(start?.name);
 
   return (
     <div
       data-testid="route-card"
-      className="flex items-center gap-3 rounded-card glass-panel text-text font-ui py-3 pl-3 pr-1 pointer-events-auto shadow-md"
+      className="flex items-center gap-3 rounded-card glass-panel text-text font-ui py-3 pl-3 pr-2 pointer-events-auto shadow-md"
     >
       <span className="flex items-center justify-center w-10 h-10 rounded-full bg-accent-soft text-accent shrink-0" aria-hidden="true">
         <Navigation size={20} />
@@ -36,16 +36,29 @@ export default function RouteCard({ start, end, data, onEnd }) {
         <p className="text-heading break-words">{title}</p>
         {detail && <p className="text-secondary text-text-secondary break-words">{detail}</p>}
       </div>
+
+      {end && onStartNavigation && (
+        <button
+          type="button"
+          onClick={onStartNavigation}
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent text-accent-on text-xs font-semibold shadow-sm hover:opacity-90 active:scale-95 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <Navigation size={14} className="fill-current" />
+          <span>Start Route</span>
+        </button>
+      )}
+
       <button
         type="button"
         onClick={onEnd}
         aria-label={ROUTE_CARD.end}
         title={ROUTE_CARD.end}
-        className="shrink-0 inline-flex items-center gap-1 min-h-[var(--size-touch)] px-3 rounded-full text-label text-text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        className="shrink-0 inline-flex items-center gap-1 min-h-[var(--size-touch)] px-2.5 rounded-full text-label text-text-secondary hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        {ROUTE_CARD.end}
+        <span className="sr-only">{ROUTE_CARD.end}</span>
         <X size={18} aria-hidden="true" />
       </button>
     </div>
   );
 }
+

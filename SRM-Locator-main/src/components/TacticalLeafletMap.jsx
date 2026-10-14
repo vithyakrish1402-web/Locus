@@ -73,20 +73,34 @@ const ViewController = ({ center, zoom }) => {
 };
 
 // Hands the shared glide (utils/mapFocus.js) this map's own animated move.
-const FocusDriver = () => {
+const FocusDriver = ({ onMapInstance, onUserInteraction }) => {
   const map = useMap();
-  useEffect(() => registerMapDriver({
-    element: map.getContainer(),
-    getView: () => ({ ...map.getCenter(), zoom: map.getZoom() }),
-    setView: ({ lat, lng, zoom }) => map.setView([lat, lng], zoom, { animate: false }),
-    fly: ({ lat, lng, zoom }, ms, done) => {
-      map.once('moveend', done);
-      map.flyTo([lat, lng], zoom, { duration: ms / 1000 });
-      return () => { map.off('moveend', done); map.stop(); };
+  useEffect(() => {
+    onMapInstance?.(map);
+    return registerMapDriver({
+      element: map.getContainer(),
+      getView: () => ({ ...map.getCenter(), zoom: map.getZoom() }),
+      setView: ({ lat, lng, zoom }) => map.setView([lat, lng], zoom, { animate: false }),
+      fly: ({ lat, lng, zoom }, ms, done) => {
+        map.once('moveend', done);
+        map.flyTo([lat, lng], zoom, { duration: ms / 1000 });
+        return () => { map.off('moveend', done); map.stop(); };
+      },
+    });
+  }, [map, onMapInstance]);
+
+  useMapEvents({
+    dragstart() {
+      onUserInteraction?.();
     },
-  }), [map]);
+    zoomstart() {
+      onUserInteraction?.();
+    },
+  });
+
   return null;
 };
+
 
 const ClickHandler = ({ onMapClick }) => {
   useMapEvents({
@@ -141,6 +155,10 @@ const TacticalLeafletMap = ({
   isSatellite,
   highlightBuildingId,
   onSelectMember,
+  onMapInstance,
+  onUserInteraction,
+  currentRoadName = null,
+  routeSteps = null,
   // The theme's line colours (App.jsx reads them; Leaflet's path options take literals), a
   // member's distance for their plate, and what a lost-connection member's card says.
   routeColor = '#1F4FB8',
@@ -167,9 +185,10 @@ const TacticalLeafletMap = ({
         maxZoom={21}
       />
       <ViewController center={center} zoom={zoom} />
-      <FocusDriver />
+      <FocusDriver onMapInstance={onMapInstance} onUserInteraction={onUserInteraction} />
       <ClickHandler onMapClick={onMapClick} />
       <ZoomTracker onZoomChange={onZoomChange} />
+
 
       {liveLocation && (
         <LeafletReactMarker
@@ -180,7 +199,12 @@ const TacticalLeafletMap = ({
           {/* The wrapper gives the halo a positioned parent at the anchor; see IndoorMarkers. */}
           <div style={{ position: 'relative' }}>
             {WIFI_POSITIONING_ENABLED && liveIndoor && <ConfidenceHalo confidence={liveIndoor.confidence} color="#10B981" />}
-            <LiveLocationMarker zoom={currentZoom} isNavigating={liveIsNavigating} heading={liveHeading} />
+            <LiveLocationMarker
+              zoom={currentZoom}
+              isNavigating={liveIsNavigating}
+              heading={liveHeading}
+              roadName={currentRoadName}
+            />
           </div>
         </LeafletReactMarker>
       )}
@@ -203,30 +227,46 @@ const TacticalLeafletMap = ({
         </LeafletReactMarker>
       )}
 
-      {/* Live walking route to the active waypoint — react-leaflet renders this
-          declaratively, unlike the Google engine which needs an imperative
-          Polyline (see App.jsx's useWaypointNavigationLine). walkingRoute is
-          computed once in App.jsx (useWalkingRoute) and shared with the
-          Google engine so there's a single throttling clock, not two.
-          A real route is solid, 5 px on a 9 px casing, as the Google line;
-          the straight-line "best effort" fallback stays a sparse, light dash
-          with no casing, so it visually reads as less certain. */}
-      {walkingRoute && walkingRoute.isRealRoute && (
+      {/* Live walking route to the active waypoint — Google Maps style thick blue on white casing */}
+      {walkingRoute?.path?.length > 0 && walkingRoute.isRealRoute && (
         <Polyline
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
-          pathOptions={{ color: casingColor, weight: ROUTE_CASING_WIDTH, opacity: 1 }}
+          pathOptions={{
+            color: liveIsNavigating ? '#FFFFFF' : casingColor,
+            weight: liveIsNavigating ? 10 : ROUTE_CASING_WIDTH,
+            opacity: 1,
+          }}
         />
       )}
-      {walkingRoute && (
+      {walkingRoute?.path?.length > 0 && (
         <Polyline
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
           pathOptions={
             walkingRoute.isRealRoute
-              ? { color: routeColor, weight: ROUTE_WIDTH, opacity: 1 }
-              : { color: routeColor, dashArray: '2 12', weight: 4, opacity: 0.5 }
+              ? {
+                  color: liveIsNavigating ? '#1A73E8' : routeColor,
+                  weight: liveIsNavigating ? 6 : ROUTE_WIDTH,
+                  opacity: 1,
+                }
+              : {
+                  color: liveIsNavigating ? '#1A73E8' : routeColor,
+                  dashArray: '2 12',
+                  weight: 4,
+                  opacity: 0.6,
+                }
           }
         />
       )}
+
+      {/* Turn maneuver badges along route in navigation mode (Image 2 Google Maps style) */}
+      {liveIsNavigating && routeSteps?.filter((s) => s.startLocation && s.maneuver && !['straight', 'depart', 'arrive'].includes(s.maneuver)).map((s, idx) => (
+        <LeafletReactMarker key={s.id || `step-badge-${idx}`} lat={s.startLocation.lat} lng={s.startLocation.lng}>
+          <div className="px-2.5 py-1 rounded-full bg-[#1A73E8] text-white text-[11px] font-bold shadow-[0_4px_12px_rgba(0,0,0,0.35)] flex items-center gap-1.5 whitespace-nowrap border-2 border-white pointer-events-none transform -translate-x-1/2 -translate-y-1/2">
+            <span className="font-extrabold text-[12px]">{s.maneuver.includes('left') ? '↰' : s.maneuver.includes('right') ? '↱' : '↑'}</span>
+            <span className="max-w-[120px] truncate">{s.instruction.replace(/^(turn left onto |turn right onto |turn |walk on |head towards )/i, '')}</span>
+          </div>
+        </LeafletReactMarker>
+      ))}
 
       {/* Same filter as the Google engine — see App.jsx's matching comment for why
           `permission` is not part of it and why this isn't gated on activeTab. */}

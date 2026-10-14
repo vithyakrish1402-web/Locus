@@ -67,13 +67,17 @@ const CornerBrackets = ({ color }) => {
 // Redesign (Map batch, piece 5): your dot is the accent (--color-map-self) on the map's light
 // casing, with a soft accent halo at rest; colours are set through style so they follow the
 // theme's CSS variables.
-const LiveLocationMarker = ({ zoom, isNavigating = false, heading = 0, color = 'var(--color-map-self)' }) => {
+const LiveLocationMarker = ({
+  zoom,
+  isNavigating = false,
+  heading = 0,
+  accuracy = null,
+  color = 'var(--color-map-self)',
+  roadName = null,
+}) => {
   const isNear = zoom >= NEAR_ZOOM_THRESHOLD;
 
-  const dotSize = isNavigating
-    ? (isNear ? DOT_SIZE.navNear : DOT_SIZE.navFar)
-    : (isNear ? DOT_SIZE.idleNear : DOT_SIZE.idleFar);
-  const chevronSize = isNear ? CHEVRON_BOX.near : CHEVRON_BOX.far;
+  const dotSize = isNear ? DOT_SIZE.idleNear : DOT_SIZE.idleFar;
 
   return (
     <div
@@ -85,24 +89,69 @@ const LiveLocationMarker = ({ zoom, isNavigating = false, heading = 0, color = '
       }}
     >
       <svg width={GRID} height={GRID} viewBox={`0 0 ${GRID} ${GRID}`} style={{ overflow: 'visible' }}>
-        {isNavigating && isNear && <CornerBrackets color={color} />}
-
-        {!isNavigating && (
-          <circle cx={CENTER} cy={CENTER} r={isNear ? RING_DIAMETER / 2 : RING_DIAMETER / 2.6} style={{ fill: 'var(--color-accent-halo)' }} />
+        {isNavigating ? (
+          <>
+            {/* Soft pulsing location beam / accuracy halo */}
+            <circle
+              cx={CENTER}
+              cy={CENTER}
+              r={24}
+              fill="#1A73E8"
+              fillOpacity="0.2"
+              className="animate-pulse"
+            />
+            {/* Google Maps 3D Navigation Chevron Arrow - Rotating with heading */}
+            <g
+              style={{
+                transform: `rotate(${heading}deg)`,
+                transformOrigin: `${CENTER}px ${CENTER}px`,
+                transition: 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)',
+              }}
+            >
+              {/* Outer chevron arrow with pure white outline */}
+              <path
+                d="M 28 6 L 47 43 L 28 34 L 9 43 Z"
+                fill="#1A73E8"
+                stroke="#FFFFFF"
+                strokeWidth="3.5"
+                strokeLinejoin="round"
+                style={{
+                  filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45))',
+                }}
+              />
+              {/* Left-side 3D bevel highlight */}
+              <path
+                d="M 28 9 L 28 33 L 13 40 Z"
+                fill="#FFFFFF"
+                fillOpacity="0.35"
+              />
+            </g>
+          </>
+        ) : (
+          /* Normal idle state */
+          <>
+            <circle cx={CENTER} cy={CENTER} r={isNear ? RING_DIAMETER / 2 : RING_DIAMETER / 2.6} style={{ fill: 'var(--color-accent-halo)' }} />
+            <g
+              style={{
+                transform: `rotate(${heading}deg)`,
+                transformOrigin: `${CENTER}px ${CENTER}px`,
+                transition: 'transform 0.25s ease',
+              }}
+            >
+              <circle cx={CENTER} cy={CENTER} r={dotSize / 2} style={{ fill: color, stroke: 'var(--color-map-casing)' }} strokeWidth={3} />
+            </g>
+          </>
         )}
-
-        {/* Dot + chevron rotate together as one unit; brackets/ring above are static. */}
-        <g
-          style={{
-            transform: `rotate(${heading}deg)`,
-            transformOrigin: `${CENTER}px ${CENTER}px`,
-            transition: 'transform 0.25s ease',
-          }}
-        >
-          {isNavigating && <Chevron size={chevronSize} color={color} dotRadius={dotSize / 2} />}
-          <circle cx={CENTER} cy={CENTER} r={dotSize / 2} style={{ fill: color, stroke: 'var(--color-map-casing)' }} strokeWidth={3} />
-        </g>
       </svg>
+
+      {/* Street/walkway badge below marker when navigating (Google Maps style) */}
+      {isNavigating && roadName && (
+        <div
+          className="absolute top-[52px] left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-white dark:bg-[#202124] text-zinc-800 dark:text-zinc-100 text-[10px] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.3)] border border-black/10 dark:border-white/10 whitespace-nowrap pointer-events-none"
+        >
+          {roadName}
+        </div>
+      )}
     </div>
   );
 };

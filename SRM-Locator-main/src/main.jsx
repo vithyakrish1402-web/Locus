@@ -19,11 +19,12 @@ if (import.meta.env.MODE === 'device-check') {
   import('./devtools/wifiDeviceCheck.js').then((check) => check.installWifiDeviceCheck())
 }
 
+import { ErrorBoundary } from './ErrorBoundary.jsx'
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
+    <ErrorBoundary>
     <App />
-    {/* Cold-start animation over the app: it plays once, then fades once the sign-in check
-        has settled. Mounted here, not in App.jsx, which has ~10 early-return screens. */}
-    <ColdStartSplash />
+    </ErrorBoundary>
   </StrictMode>,
 )

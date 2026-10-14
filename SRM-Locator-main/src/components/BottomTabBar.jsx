@@ -63,7 +63,7 @@ export default function BottomTabBar({ tabs, activeId, onSelect, sosTrigger = nu
   return (
     <nav
       aria-label="Main"
-      className="md:hidden fixed bottom-0 w-full glass-panel !rounded-none !border-x-0 !border-b-0 border-t border-[var(--glass-border)] flex items-center justify-between px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto gap-2"
+      className="md:hidden fixed bottom-0 w-full bg-surface border-t border-border flex items-center justify-between px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto gap-2 shadow-[var(--shadow-2)]"
     >
       <div className="flex-1 flex items-stretch">
         {tabs.map((tab) => (

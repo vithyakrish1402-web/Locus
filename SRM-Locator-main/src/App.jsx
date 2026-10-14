@@ -32,6 +32,13 @@ import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
 import RouteCard from './components/map/RouteCard';
+import {
+  TurnInstructionCard,
+  NavigationSummaryCard,
+  RecenterButton,
+  ArrivalPanel,
+} from './components/navigation/NavigationHUD';
+import { useNavigationController } from './hooks/useNavigationController';
 import BuildingRow from './components/map/BuildingRow';
 import GroupHeader from './components/group/GroupHeader';
 import SharingControl from './components/group/SharingControl';
@@ -71,6 +78,7 @@ import { useLiveHeading } from './hooks/useLiveHeading';
 import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
 import { useWaypointNavigationLine } from './hooks/useWaypointNavigationLine';
 import { useWalkingRoute } from './hooks/useWalkingRoute';
+import { formatDistanceMeters, formatDurationMinutes } from './utils/walkingRoute';
 import LiveLocationMarker, { NAVIGATING_SPEED_MPS } from './LiveLocationMarker';
 import GhostMemberMarker from './GhostMemberMarker';
 import WaypointMarker from './components/WaypointMarker';
@@ -547,6 +555,9 @@ const App = () => {
   const [routeStart, setRouteStart] = useState(null);
   const [routeEnd, setRouteEnd] = useState(null);
   const [routeData, setRouteData] = useState(null);
+  // Full Google Maps-style turn-by-turn navigation session
+  const [isNavigatingMode, setIsNavigatingMode] = useState(false);
+  const leafletMapRef = useRef(null);
 
   // --- MODIFIED: FIREBASE AUTH STATE ---
   const [user, setUser] = useState(null);
@@ -644,6 +655,7 @@ const App = () => {
     setArTarget(prev => followArTarget(prev, users));
   }, [users]);
   const [liveLocation, setLiveLocation] = useState(null);
+  const [liveAccuracy, setLiveAccuracy] = useState(null);
   // Raw m/s from geolocation's coords.speed, tracked separately from the km/h value
   // broadcast over the wire — drives this device's own LiveLocationMarker isNavigating state.
   const [liveSpeed, setLiveSpeed] = useState(0);
@@ -1429,10 +1441,11 @@ const App = () => {
     // ---  FORCE INITIAL GPS LOCK ---
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
+        const { latitude, longitude, accuracy } = position.coords;
         const smoothed = localPrecognition.current.filter(latitude, longitude);
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
+        setLiveAccuracy(accuracy || null);
         setLocationError(null);
         noteRealFix();
 
@@ -1498,12 +1511,13 @@ const App = () => {
     // ---  LIVE GPS TRACKING ---
     const watchId = navigator.geolocation.watchPosition(
       async (position) => {
-        const { latitude, longitude, speed } = position.coords;
+        const { latitude, longitude, speed, accuracy } = position.coords;
         const smoothed = localPrecognition.current.filter(latitude, longitude);
 
         setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
         liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
         setLiveSpeed(speed || 0);
+        setLiveAccuracy(accuracy || null);
         setLocationError(null);
         noteRealFix();
 
@@ -1744,7 +1758,7 @@ const App = () => {
   activeWaypointRef.current = activeWaypoint;
   const selfIdRef = useRef(null);
   selfIdRef.current = user?.uid || socket.id;
-  const focusRallyPointRef = useRef(() => {});
+  const focusRallyPointRef = useRef(() => { });
 
   // Glides the map to a point; if no map engine has registered yet, jumps instead. Either way
   // mapProps ends up at the target, so the controlled `center`/`zoom` stay in step.
@@ -1837,21 +1851,29 @@ const App = () => {
   };
 
   const handleWaypointSelect = (targetCoords) => {
-    if (!routeStart) {
-      if (liveLocation) {
-        setRouteStart({ name: "MY_LOCATION", ...liveLocation });
-        setRouteEnd(targetCoords);
-        calculateActualRoute({ name: "MY_LOCATION", ...liveLocation }, targetCoords);
-      } else {
-        setRouteStart(targetCoords);
+    if (!targetCoords) return;
+    if (!locationReady) {
+      turnOnLocation();
       }
-      setSelectedItem(null);
-    } else if (!routeEnd && targetCoords.id !== routeStart.id) {
+    const origin = liveLocation || SRM_KTR_COORDS;
+    setRouteStart({ name: "MY_LOCATION", ...origin });
       setRouteEnd(targetCoords);
+    calculateActualRoute({ name: "MY_LOCATION", ...origin }, targetCoords);
       setSelectedItem(null);
-      calculateActualRoute(routeStart, targetCoords);
+    setIsNavigatingMode(true);
+    setMobileView('grid');
+    navigationController.handleRecenter();
+    if (leafletMapRef.current) {
+      leafletMapRef.current.flyTo([origin.lat, origin.lng], 19, { duration: 1.0 });
     }
   };
+
+  // Keep routeStart synchronized when live GPS location updates
+  useEffect(() => {
+    if (liveLocation && routeStart?.name === 'MY_LOCATION') {
+      setRouteStart((prev) => (prev ? { ...prev, lat: liveLocation.lat, lng: liveLocation.lng } : null));
+    }
+  }, [liveLocation?.lat, liveLocation?.lng]);
 
   // --- WAYPOINT DISTANCE ENGINE ---
   // Deliberately draws no line/route on the map — the destination building is
@@ -1896,6 +1918,7 @@ const App = () => {
     setRouteStart(null);
     setRouteEnd(null);
     setRouteData(null);
+    setIsNavigatingMode(false);
   };
 
   // The route card's "End route" ends your own route and nothing else. It used to clear the
@@ -1934,6 +1957,18 @@ const App = () => {
     compassHeading: heading,
   });
 
+  // Dedicated Turn-by-Turn Pedestrian Navigation Controller
+  const activeNavTarget = isNavigatingMode ? (personalTarget || activeWaypoint) : null;
+  const navigationController = useNavigationController({
+    isNavigating: Boolean(activeNavTarget),
+    destination: activeNavTarget,
+    liveLocation,
+    liveHeading,
+    speedMps: liveSpeed,
+    mapEngine: mapEngineFailed ? 'leaflet' : 'google',
+    mapInstance: mapEngineFailed ? leafletMapRef.current : mapRef.current,
+  });
+
   // Native Google Maps polylines for each dark member's projection vector —
   // no-ops when the Leaflet fallback is active (mapRef only holds a Google
   // map instance) or before the map's finished mounting. TacticalLeafletMap
@@ -1958,7 +1993,11 @@ const App = () => {
     liveLocation,
     activeWaypoint: personalTarget,
   });
-  const shownRoute = personalTarget ? personalRoute : walkingRoute;
+  const shownRoute = (isNavigatingMode && navigationController.activeRoute)
+    ? navigationController.activeRoute
+    : personalTarget
+      ? personalRoute
+      : walkingRoute;
 
   // Live navigation line from the operative's own position to the active
   // squad waypoint — same "no-op on Leaflet/before mount" gating as above.
@@ -1988,7 +2027,16 @@ const App = () => {
   const isTrackingSquadWaypoint = Boolean(
     routeEnd && activeWaypoint && routeEnd.lat === activeWaypoint.lat && routeEnd.lng === activeWaypoint.lng
   );
-  const displayedRouteData = (personalTarget && personalRoute) || (isTrackingSquadWaypoint && walkingRoute) || routeData;
+
+  const displayedRouteData =
+    (isNavigatingMode && navigationController.activeRoute)
+      ? {
+        distance: { text: formatDistanceMeters(navigationController.remainingDistanceMeters) },
+        duration: { text: formatDurationMinutes(navigationController.remainingTimeMinutes) },
+        isRealRoute: navigationController.activeRoute.isRealRoute,
+        steps: navigationController.activeRoute.steps,
+      }
+      : (personalTarget && personalRoute) || (isTrackingSquadWaypoint && walkingRoute) || routeData;
 
   // --- TACTICAL MAP RENDERING ENGINE ---
   // Memoised on exactly the inputs that can change the map's configuration.
@@ -2321,12 +2369,15 @@ const App = () => {
     <div className="h-screen w-full bg-black flex overflow-hidden text-white font-inter selection:bg-accent-soft bg-dots">
 
       {/* Top bar and sharing chip (components/map/TopBar.jsx) */}
+      {!isNavigatingMode && (
       <TopBar
         isSatellite={isSatellite}
       />
+      )}
 
       {/* Sidebar Panel — visible on desktop always; on a phone, a sheet that is open when
           mobileView is 'matrix' or 'squad' and can be dragged down by its handle strip. */}
+      {!isNavigatingMode && (
       <motion.div
         // Its y is panelY, moved to the resting height by the effect on panelTarget, and by
         // the finger while dragged (the handle strip and header start the drag).
@@ -2352,10 +2403,8 @@ const App = () => {
           else setPanelHeight(next);
         }}
         ref={sheetRef}
-        className={`${
-          isMobile
-            ? `fixed inset-x-0 bottom-16 z-[900] flex flex-col glass-floating text-text rounded-t-[28px] ${
-                sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
+          className={`${isMobile
+              ? `fixed inset-x-0 bottom-16 z-[900] flex flex-col glass-floating text-text rounded-t-[28px] ${sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
               }`
             : 'hidden md:flex w-84 glass-floating text-text rounded-3xl fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
         }`}
@@ -2459,8 +2508,7 @@ const App = () => {
                     key={cat.id}
                     type="button"
                     onClick={() => setBuildingCategoryFilter(cat.id)}
-                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium font-ui transition-[transform,opacity] duration-150 flex items-center gap-1.5 cursor-pointer border ${
-                      isSelected
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium font-ui transition-all duration-150 flex items-center gap-1.5 cursor-pointer border ${isSelected
                         ? 'bg-accent text-accent-on border-accent shadow-sm'
                         : 'glass-pill text-text-secondary hover:text-text'
                     }`}
@@ -2555,7 +2603,7 @@ const App = () => {
                       me={liveLocation}
                       onOpen={() => handleBuildingTap(building)}
                       onArScan={() => setArTarget({ lat: building.lat, lng: building.lng, name: building.name })}
-                      onNavigate={() => { handleWaypointSelect(building); showBuildingOnMap(building); }}
+                        onNavigate={() => handleWaypointSelect(building)}
                     />
                   </motion.div>
                 ))
@@ -2621,6 +2669,7 @@ const App = () => {
           {isMobile && sheetOpen && panelStopsNow[panelHeight] > 0 && <div aria-hidden="true" style={{ height: panelStopsNow[panelHeight] }} />}
         </div>
       </motion.div>
+      )}
 
       {/* --- WAITING FOR APPROVAL, AND "YOU'RE IN" (redesign P3) --- */}
       {/* Full screens over the map and its tab bar, under the Emergency button (see
@@ -2680,10 +2729,11 @@ const App = () => {
           the location banner used to cover the Group Lead's buttons there. */}
       <div
         data-testid="map-top-stack"
-        className="absolute inset-x-3 z-[850] md:z-[1000] md:left-1/2 md:right-auto md:w-[28rem] md:-translate-x-1/2 pointer-events-none flex flex-col gap-2"
-        style={{ top: BELOW_TOP_BAR }}
+        className={`absolute inset-x-3 z-[850] md:z-[1000] md:left-1/2 md:right-auto ${isNavigatingMode ? 'md:w-[32rem]' : 'md:w-[28rem]'
+          } md:-translate-x-1/2 pointer-events-none flex flex-col gap-2`}
+        style={isNavigatingMode ? { top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' } : { top: BELOW_TOP_BAR }}
       >
-        {!(isTargetingMode && isMobile) && !locationError && !showDeclinedCard && <SharingChip mode={telemetryMode} waiting={!liveLocation} pausedNoSpot={!pausedHasSpot} />}
+        {!isNavigatingMode && !(isTargetingMode && isMobile) && !locationError && !showDeclinedCard && <SharingChip mode={telemetryMode} waiting={!liveLocation} pausedNoSpot={!pausedHasSpot} />}
         <AnimatePresence initial={false}>
           {/* Choosing a meeting point (a phone's meeting point button). */}
           {isTargetingMode && (
@@ -2709,11 +2759,41 @@ const App = () => {
               <LocationProblemCard kind="denied" onDismiss={() => setDeclinedCardDismissed(true)} onTurnOn={turnOnLocation} />
             </motion.div>
           )}
-          {(routeStart || routeData) && (
-            <motion.div key="route-card" className="pointer-events-auto" {...fade()}>
-              <RouteCard start={routeStart} end={routeEnd} data={displayedRouteData} onEnd={clearRoute} />
+          {isNavigatingMode && activeNavTarget ? (
+            <motion.div key="turn-instruction-card" className="pointer-events-auto w-full" {...fade()}>
+              <TurnInstructionCard
+                currentStep={navigationController.currentStep}
+                nextStep={navigationController.nextStep}
+                distanceToNextMeters={navigationController.distanceToNextStepMeters}
+                isRerouting={navigationController.isRerouting}
+                rerouteError={navigationController.rerouteError}
+                onRetryReroute={navigationController.retryReroute}
+                onEnd={() => {
+                  setIsNavigatingMode(false);
+                  clearRoute();
+                }}
+                destinationName={activeNavTarget.name}
+              />
             </motion.div>
-          )}
+          ) : (routeStart || routeData) ? (
+            <motion.div key="route-card" className="pointer-events-auto" {...fade()}>
+              <RouteCard
+                start={routeStart}
+                end={routeEnd}
+                data={displayedRouteData}
+                onEnd={clearRoute}
+                onStartNavigation={() => {
+                  if (!locationReady) {
+                    turnOnLocation();
+                  }
+                  setIsNavigatingMode(true);
+                  if (routeEnd) {
+                    handleFocus(routeStart?.name === 'MY_LOCATION' && liveLocation ? liveLocation : routeEnd, null);
+                  }
+                }}
+              />
+            </motion.div>
+          ) : null}
         </AnimatePresence>
       </div>
       {/* "Finding your location…" while the first fix is on its way. */}
@@ -2741,12 +2821,18 @@ const App = () => {
               onZoomChange={setCurrentZoom}
               onMapClick={handleMapClick}
               onFocus={handleFocus}
+              onMapInstance={(map) => { leafletMapRef.current = map; }}
+              onUserInteraction={() => {
+                if (isNavigatingMode) navigationController.handleUserMapInteraction();
+              }}
               liveLocation={showSelfMarker ? selfMarkerAt : null}
               liveIndoor={selfIndoor}
               indoorView={indoorView}
-              liveIsNavigating={isNavigating}
+              liveIsNavigating={isNavigating || isNavigatingMode}
               liveHeading={liveHeading}
               currentZoom={currentZoom}
+              currentRoadName={isNavigatingMode ? navigationController.currentStep?.instruction : null}
+              routeSteps={isNavigatingMode ? navigationController.activeRoute?.steps : null}
               users={users}
               blockedUserIds={blockedUserIds}
               ghostMembers={ghostMembers}
@@ -2791,6 +2877,12 @@ const App = () => {
                 else { map.setCenter({ lat, lng }); map.setZoom(Math.round(zoom)); }
               },
             });
+
+              // Listen for user manual drag/zoom to disable automatic camera follow
+              map.addListener('dragstart', () => {
+                if (isNavigatingMode) navigationController.handleUserMapInteraction();
+              });
+
             //  GREEN LIGHT: Map canvas is live — safe to draw saved zones now
             setIsMapReady(true);
           }}
@@ -2806,8 +2898,9 @@ const App = () => {
               {selfIndoor && <ConfidenceHalo confidence={selfIndoor.confidence} color="#10B981" />}
               <LiveLocationMarker
                 zoom={currentZoom}
-                isNavigating={isNavigating}
+                  isNavigating={isNavigating || isNavigatingMode}
                 heading={liveHeading}
+                  accuracy={liveAccuracy}
               />
             </div>
           )}
@@ -3064,7 +3157,68 @@ const App = () => {
         onClose={() => setShowAdminSettings(false)}
       />
 
+      {/* --- TURN-BY-TURN NAVIGATION OVERLAYS --- */}
+      {/* Recenter Button when camera follow was broken by user map interaction */}
+      {isNavigatingMode && !navigationController.isFollowingCamera && (
+        <RecenterButton onClick={navigationController.handleRecenter} />
+      )}
+
+      {/* Arrival Panel when destination is reached */}
+      <AnimatePresence>
+        {isNavigatingMode && navigationController.hasArrived && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="fixed inset-x-4 bottom-24 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-96 z-[1000] pointer-events-auto"
+          >
+            <ArrivalPanel
+              destinationName={activeNavTarget?.name}
+              onDismiss={() => {
+                setIsNavigatingMode(false);
+                clearRoute();
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Navigation Trip Summary Card at bottom */}
+      <AnimatePresence>
+        {isNavigatingMode && activeNavTarget && !navigationController.hasArrived && (
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 30 }}
+            className="fixed inset-x-3 bottom-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[32rem] z-[850] md:z-[1000] pointer-events-auto"
+          >
+            <NavigationSummaryCard
+              remainingMeters={navigationController.remainingDistanceMeters}
+              remainingMinutes={navigationController.remainingTimeMinutes}
+              destinationName={activeNavTarget.name}
+              onEnd={() => {
+                setIsNavigatingMode(false);
+                clearRoute();
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Google Maps Speed Limit Badge */}
+      {isNavigatingMode && (
+        <div className="fixed bottom-28 left-4 z-[900] pointer-events-none flex flex-col items-center">
+          <div className="w-12 h-12 rounded-full bg-white dark:bg-[#202124] shadow-[0_4px_16px_rgba(0,0,0,0.25)] border-[3.5px] border-red-600 flex flex-col items-center justify-center font-bold">
+            <span className="text-[14px] font-black text-zinc-900 dark:text-white leading-none">
+              {liveSpeed && liveSpeed > 0 ? Math.round(liveSpeed * 3.6) : '5'}
+            </span>
+            <span className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-tighter">km/h</span>
+          </div>
+        </div>
+      )}
+
       {/* ========== MOBILE BOTTOM BAR (src/components/BottomTabBar.jsx) ========== */}
+      {!isNavigatingMode && (
       <BottomTabBar
         activeId={mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid'}
         tabs={[
@@ -3110,9 +3264,10 @@ const App = () => {
           }
         }}
       />
+      )}
 
       {/* The meeting point button (two steps: tap it, then tap the map) */}
-      {!(selectedItem && activeTab === 'buildings') && (
+      {!isNavigatingMode && !(selectedItem && activeTab === 'buildings') && (
         <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
       )}
 
@@ -3176,16 +3331,9 @@ const App = () => {
         />
       )}
 
-      {/* ========== FLOATING SOS TRIGGER ==========
-          Always from md up. On a phone the button lives in the bottom tab bar, and floats here,
-          bottom-left over everything, only while something covers that bar (sosFloats), so it
-          is never out of reach (Emergency batch, E1). */}
-      {accessStatus === 'granted' && sosFloats && (
-        <div
-          data-testid="sos-float"
-          className="fixed left-4 bottom-4 md:bottom-6 md:left-[23rem] pointer-events-auto"
-          style={{ zIndex: LAYER.emergencyButton, marginBottom: 'env(safe-area-inset-bottom)' }}
-        >
+      {/* ========== DESKTOP FLOATING SOS TRIGGER (Mobile is inside BottomTabBar) ========== */}
+      {!isNavigatingMode && accessStatus === 'granted' && (
+        <div className="hidden md:block fixed bottom-6 left-[23rem] z-[10001] pointer-events-auto">
           <SosTrigger
             socket={socket}
             getLocation={() => liveLocationRef.current}
