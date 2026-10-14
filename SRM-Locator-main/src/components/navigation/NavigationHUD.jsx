@@ -89,7 +89,7 @@ export function ManeuverIcon({ maneuver, size = 32, className = '' }) {
 }
 
 /**
- * Authentic Google Maps Green Navigation Header
+ * Sleek Tactical Navigation Header (matches Locus UI)
  */
 export function TurnInstructionCard({
   currentStep,
@@ -119,6 +119,10 @@ export function TurnInstructionCard({
     const parts = rawInstruction.split('towards ');
     secondaryDetail = parts[0].trim();
     primaryTitle = parts[1].trim();
+  } else if (rawInstruction.includes('toward ')) {
+    const parts = rawInstruction.split('toward ');
+    secondaryDetail = parts[0].trim();
+    primaryTitle = parts[1].trim();
   } else if (rawInstruction.toLowerCase().startsWith('turn ')) {
     primaryTitle = rawInstruction;
   }
@@ -126,20 +130,20 @@ export function TurnInstructionCard({
   return (
     <div
       data-testid="turn-instruction-card"
-      className="w-full rounded-3xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.35)] text-white font-ui border border-emerald-400/20 pointer-events-auto transition-all duration-300"
+      className="w-full rounded-3xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.5)] text-white font-ui border border-white/15 bg-[#18181B] pointer-events-auto transition-all duration-300"
     >
-      {/* Primary Green Navigation Bar */}
-      <div className="bg-[#0F9D58] px-4 py-3.5 flex items-start gap-4">
+      {/* Primary Navigation Bar — Tactical dark surface matching Locus UI */}
+      <div className="bg-[#18181B] px-4 py-3.5 flex items-start gap-4">
         {/* Left Side: Large Maneuver Arrow & Distance */}
         <div className="flex flex-col items-center justify-center shrink-0 min-w-[64px]">
           {isRerouting ? (
-            <RefreshCw size={36} className="animate-spin text-white my-1" />
+            <RefreshCw size={36} className="animate-spin text-[#38BDF8] my-1" />
           ) : (
-            <div className="w-12 h-12 flex items-center justify-center text-white">
-              <ManeuverIcon maneuver={currentStep?.maneuver || 'straight'} size={38} />
+            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-[#38BDF8] shadow-inner">
+              <ManeuverIcon maneuver={currentStep?.maneuver || 'straight'} size={32} />
             </div>
           )}
-          <span className="text-xl md:text-2xl font-black text-white tracking-tight mt-0.5">
+          <span className="text-xl md:text-2xl font-black text-white tracking-tight mt-1">
             {distText}
           </span>
         </div>
@@ -149,17 +153,17 @@ export function TurnInstructionCard({
           {isRerouting ? (
             <div>
               <p className="text-xl font-bold text-white animate-pulse">Recalculating…</p>
-              <p className="text-xs text-emerald-100 font-medium mt-0.5">Finding optimal pedestrian path</p>
+              <p className="text-xs text-zinc-400 font-medium mt-0.5">Finding optimal pedestrian path</p>
             </div>
           ) : rerouteError ? (
             <div>
-              <p className="text-lg font-bold text-yellow-200 flex items-center gap-1.5">
+              <p className="text-lg font-bold text-yellow-400 flex items-center gap-1.5">
                 <AlertTriangle size={18} /> Off route
               </p>
               <button
                 type="button"
                 onClick={onRetryReroute}
-                className="text-xs text-white underline font-medium hover:opacity-90 mt-1"
+                className="text-xs text-blue-400 underline font-medium hover:text-blue-300 mt-1"
               >
                 Tap to recalculate route
               </button>
@@ -167,9 +171,9 @@ export function TurnInstructionCard({
           ) : !currentStep ? (
             <div>
               <p className="text-lg font-bold text-white animate-pulse flex items-center gap-2">
-                <LocateFixed size={18} /> Acquiring GPS…
+                <LocateFixed size={18} className="text-[#38BDF8]" /> Acquiring GPS…
               </p>
-              <p className="text-xs text-emerald-100 truncate mt-0.5">
+              <p className="text-xs text-zinc-400 truncate mt-0.5">
                 Navigating to {destinationName || 'destination'}
               </p>
             </div>
@@ -179,7 +183,7 @@ export function TurnInstructionCard({
                 {primaryTitle}
               </h2>
               {secondaryDetail && (
-                <p className="text-xs md:text-sm font-semibold text-emerald-100/90 mt-0.5 truncate">
+                <p className="text-xs md:text-sm font-semibold text-zinc-400 mt-0.5 truncate">
                   {secondaryDetail}
                 </p>
               )}
@@ -193,24 +197,24 @@ export function TurnInstructionCard({
           onClick={onEnd}
           aria-label="End route"
           title="Exit navigation"
-          className="w-9 h-9 rounded-full bg-black/20 hover:bg-black/35 text-white/90 hover:text-white flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+          className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-zinc-300 hover:text-white flex items-center justify-center shrink-0 active:scale-95 transition-all"
         >
           <X size={18} strokeWidth={2.5} />
         </button>
       </div>
 
-      {/* Secondary "Then" Row (Directly attached underneath, exactly like Google Maps) */}
+      {/* Secondary "Then" Row (Directly attached underneath) */}
       {nextStep && !isRerouting && (
-        <div className="bg-[#0B8043] px-4 py-2 flex items-center gap-2.5 text-white/95 text-xs font-semibold border-t border-black/10">
-          <span className="bg-black/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-white">
+        <div className="bg-[#202024] px-4 py-2.5 flex items-center gap-2.5 text-zinc-200 text-xs font-semibold border-t border-white/10">
+          <span className="bg-white/10 border border-white/10 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-300">
             Then
           </span>
-          <ManeuverIcon maneuver={nextStep.maneuver || 'straight'} size={18} className="text-white shrink-0" />
-          <span className="truncate text-xs font-medium text-emerald-50">
+          <ManeuverIcon maneuver={nextStep.maneuver || 'straight'} size={18} className="text-[#38BDF8] shrink-0" />
+          <span className="truncate text-xs font-medium text-zinc-300">
             {nextStep.instruction || destinationName}
           </span>
           {nextStep.distanceMeters > 0 && (
-            <span className="ml-auto text-[11px] text-emerald-100 font-semibold shrink-0">
+            <span className="ml-auto text-[11px] text-zinc-400 font-semibold shrink-0">
               {nextStep.distanceMeters > 1000
                 ? `${(nextStep.distanceMeters / 1000).toFixed(1)} km`
                 : `${Math.round(nextStep.distanceMeters)} m`}

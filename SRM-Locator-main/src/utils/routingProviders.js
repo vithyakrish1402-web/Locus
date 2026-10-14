@@ -171,17 +171,168 @@ export const fetchOsrmWalkingRoute = async (origin, destination) => {
   return null;
 };
 
+const GOOGLE_MAPS_API_KEY = import.meta.env?.VITE_GOOGLE_MAPS_API_KEY || '';
+
+export function decodePolyline(encoded) {
+  if (!encoded) return [];
+  const points = [];
+  let index = 0, len = encoded.length;
+  let lat = 0, lng = 0;
+  while (index < len) {
+    let b, shift = 0, result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lng += dlng;
+
+    points.push({ lat: +(lat / 1e5).toFixed(6), lng: +(lng / 1e5).toFixed(6) });
+  }
+  return points;
+}
+
+/**
+ * Google Routes API (v2 / New) — computes the direct, most suitable campus pedestrian path
+ * using the project's modern API key.
+ */
+export const fetchGoogleRoutesApi = async (origin, destination) => {
+  if (!GOOGLE_MAPS_API_KEY) return null;
+  const oLat = Number(origin.lat);
+  const oLng = Number(origin.lng);
+  const dLat = Number(destination.lat);
+  const dLng = Number(destination.lng);
+
+  if (!Number.isFinite(oLat) || !Number.isFinite(oLng) || !Number.isFinite(dLat) || !Number.isFinite(dLng)) {
+    return null;
+  }
+
+  try {
+    const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps',
+      },
+      body: JSON.stringify({
+        origin: { location: { latLng: { latitude: oLat, longitude: oLng } } },
+        destination: { location: { latLng: { latitude: dLat, longitude: dLng } } },
+        travelMode: 'WALK',
+        languageCode: 'en-US',
+      }),
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (!res.ok) {
+      console.warn('[routing] Routes API response status:', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    const route = data.routes?.[0];
+    if (!route) return null;
+
+    const path = decodePolyline(route.polyline?.encodedPolyline);
+    if (!path || path.length < 2) return null;
+
+    const meters = route.distanceMeters || 0;
+    const durationSeconds = parseInt(route.duration?.replace('s', '') || '0', 10) || Math.round(meters / 1.4);
+    const minutes = Math.max(1, Math.round(durationSeconds / 60));
+
+    const rawSteps = route.legs?.[0]?.steps || [];
+    const steps = rawSteps.map((step, idx) => {
+      const gManeuver = step.navigationInstruction?.maneuver;
+      let maneuver = 'straight';
+      if (gManeuver) {
+        const m = gManeuver.toLowerCase();
+        if (m.includes('depart')) maneuver = 'depart';
+        else if (m.includes('arrive')) maneuver = 'arrive';
+        else if (m.includes('uturn')) maneuver = 'uturn';
+        else if (m.includes('slight_left') || m.includes('slight-left')) maneuver = 'turn-slight-left';
+        else if (m.includes('slight_right') || m.includes('slight-right')) maneuver = 'turn-slight-right';
+        else if (m.includes('sharp_left') || m.includes('sharp-left')) maneuver = 'turn-sharp-left';
+        else if (m.includes('sharp_right') || m.includes('sharp-right')) maneuver = 'turn-sharp-right';
+        else if (m.includes('left')) maneuver = 'turn-left';
+        else if (m.includes('right')) maneuver = 'turn-right';
+        else if (m.includes('roundabout')) maneuver = 'roundabout';
+      }
+
+      const rawLines = (step.navigationInstruction?.instructions || '')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l && !l.toLowerCase().includes('restricted usage'));
+      const instruction = rawLines[0] || (destination?.name ? `Head toward ${destination.name}` : 'Continue on path');
+
+      const startLoc = step.startLocation?.latLng
+        ? { lat: step.startLocation.latLng.latitude, lng: step.startLocation.latLng.longitude }
+        : null;
+      const endLoc = step.endLocation?.latLng
+        ? { lat: step.endLocation.latLng.latitude, lng: step.endLocation.latLng.longitude }
+        : null;
+
+      return {
+        id: `google-routes-step-${idx}`,
+        instruction,
+        maneuver,
+        distanceMeters: step.distanceMeters || 0,
+        distanceText: step.distanceMeters > 1000 ? `${(step.distanceMeters / 1000).toFixed(1)} km` : `${Math.round(step.distanceMeters || 0)} m`,
+        durationText: `${Math.max(1, Math.round((step.distanceMeters || 0) / 1.4 / 60))} min`,
+        startLocation: startLoc,
+        endLocation: endLoc,
+      };
+    });
+
+    return {
+      path,
+      distance: { text: meters > 1000 ? `${(meters / 1000).toFixed(2)} KM` : `${meters} M` },
+      duration: { text: `${minutes} MIN${minutes === 1 ? '' : 'S'}` },
+      distanceMeters: meters,
+      durationSeconds,
+      steps: steps.length > 0 ? steps : generateStepsFromPath(path, destination?.name),
+      isRealRoute: true,
+    };
+  } catch (err) {
+    console.warn('[routing] Routes API error:', err);
+    return null;
+  }
+};
+
 /**
  * Unified optimal walking route provider.
  * Follows real roads by priority:
- * 1. Google Directions (if available)
- * 2. OpenStreetMap / OSRM foot router (contains all campus roads and walkways)
- * 3. Campus pedestrian graph fallback
+ * 1. Google Routes API (v2 / New) — computes the direct, most suitable campus pedestrian path
+ * 2. Legacy Google DirectionsService (if Maps JS is loaded)
+ * 3. OpenStreetMap / OSRM foot router (contains all campus roads and walkways)
+ * 4. Campus pedestrian graph fallback
  */
 export const fetchPedestrianRoute = async (origin, destination, preferredEngine = 'google') => {
   if (!origin || !destination) return null;
 
-  // 1. Google Maps walking directions (when enabled and available)
+  // 1. Google Routes API (New) — most suitable direct pedestrian path
+  if (GOOGLE_MAPS_API_KEY) {
+    try {
+      const routesApiRoute = await fetchGoogleRoutesApi(origin, destination);
+      if (routesApiRoute?.path?.length >= 2) {
+        return routesApiRoute;
+      }
+    } catch {
+      // Proceed to legacy / fallback
+    }
+  }
+
+  // 2. Legacy Google Directions (if Maps JS is enabled and available)
   if (preferredEngine === 'google' && window.google?.maps) {
     try {
       const googleRoute = await fetchGoogleWalkingRoute(origin, destination);
@@ -193,7 +344,7 @@ export const fetchPedestrianRoute = async (origin, destination, preferredEngine 
     }
   }
 
-  // 2. OpenStreetMap / OSRM foot router (follows Intra College Rd, campus avenues, paths)
+  // 3. OpenStreetMap / OSRM foot router (follows Intra College Rd, campus avenues, paths)
   try {
     const osrmRoute = await fetchOsrmWalkingRoute(origin, destination);
     if (osrmRoute?.path?.length >= 2) {
@@ -203,7 +354,7 @@ export const fetchPedestrianRoute = async (origin, destination, preferredEngine 
     // Proceed to campus graph
   }
 
-  // 3. Curated campus pedestrian graph fallback
+  // 4. Curated campus pedestrian graph fallback
   const campusPath = findCampusPedestrianRoute(origin, destination);
   if (campusPath && campusPath.length >= 2) {
     const steps = generateStepsFromPath(campusPath, destination?.name);
