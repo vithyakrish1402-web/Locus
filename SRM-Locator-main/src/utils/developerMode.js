@@ -1,13 +1,14 @@
 // Developer mode: who may have it, and when it is on. Admin accounts only, and it fails
 // closed: while the sign-in is loading, while the phone is offline, for a signed-out user, for
-// anyone but the admin account, and for an admin address that has not been verified (Google
-// sign-in verifies it; an email and password account that was never verified does not count).
+// and anyone but the admin account. The app signs in with email and password only, and those
+// accounts are never email-verified, so verification is not part of the rule. The admin address
+// is a registered account, so nobody else can sign up under it.
 // The check is only for what is shown. Developer mode never writes to the server.
 
 /** 'unknown' hides it without forgetting the setting; 'denied' hides it and switches it off. */
 export function developerStatus({ authLoading, user, online, adminEmail }) {
   if (authLoading || !online) return 'unknown';
-  if (user && user.email === adminEmail && user.emailVerified === true) return 'admin';
+  if (user && user.email === adminEmail) return 'admin';
   return 'denied';
 }
 

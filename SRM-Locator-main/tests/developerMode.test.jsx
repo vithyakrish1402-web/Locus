@@ -5,14 +5,14 @@ import { DEVELOPER_STORAGE_KEY, developerStatus } from '../src/utils/developerMo
 import { useDeveloperMode } from '../src/hooks/useDeveloperMode.js';
 
 const ADMIN = 'admin@example.com';
-const admin = { uid: 'u1', email: ADMIN, emailVerified: true };
+const admin = { uid: 'u1', email: ADMIN, emailVerified: false }; // email and password accounts are never verified
 const status = (over) => developerStatus({ authLoading: false, user: admin, online: true, adminEmail: ADMIN, ...over });
 
 beforeEach(() => window.localStorage.clear());
 afterEach(cleanup);
 
 describe('who may have Developer mode', () => {
-  it('only the admin account, verified, once sign-in has loaded, with a connection', () => {
+  it('only the admin account, once sign-in has loaded, with a connection (an unverified email is fine: the app has no verification step)', () => {
     expect(status({})).toBe('admin');
   });
 
@@ -22,11 +22,9 @@ describe('who may have Developer mode', () => {
     expect(status({ authLoading: true, user: null })).toBe('unknown');
   });
 
-  it('is denied to anyone else: signed out, another account, or an admin address that was never verified', () => {
+  it('is denied to anyone else: signed out, or another account', () => {
     expect(status({ user: null })).toBe('denied');
     expect(status({ user: { ...admin, email: 'someone@example.com' } })).toBe('denied');
-    expect(status({ user: { ...admin, emailVerified: false } })).toBe('denied');
-    expect(status({ user: { uid: 'u1', email: ADMIN } })).toBe('denied'); // no emailVerified at all
     expect(status({ user: { ...admin, email: ADMIN.toUpperCase() } })).toBe('denied');
   });
 });
@@ -93,7 +91,7 @@ describe('the Developer mode switch', () => {
   it('switches off, and is forgotten, when the account stops being admin; another account never inherits it', () => {
     const { result, rerender } = hook({});
     act(() => result.current.setOn(true));
-    rerender({ user: { ...admin, emailVerified: false } });
+    rerender({ user: { ...admin, email: 'moved@example.com' } });
     expect(result.current.on).toBe(false);
     expect(window.localStorage.getItem(DEVELOPER_STORAGE_KEY)).toBeNull();
     window.localStorage.setItem(DEVELOPER_STORAGE_KEY, 'u1');
