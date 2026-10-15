@@ -3,6 +3,8 @@ package com.locus.app;
 import android.os.Bundle;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
+import com.locus.app.sharing.LocusBackgroundPlugin;
+import com.locus.app.sharing.SharingState;
 import com.getcapacitor.Plugin;
 
 public class MainActivity extends BridgeActivity {
@@ -13,6 +15,7 @@ public class MainActivity extends BridgeActivity {
         // before super.onCreate() wires up the bridge.
         registerPlugin(LocusUpdaterPlugin.class);
         registerPlugin(WifiScanPlugin.class);
+        registerPlugin(LocusBackgroundPlugin.class);
         // The Floor 7 walk recorder exists only in the LOCUS Test build (src/sidetest/java);
         // every other build has no such class, so this finds nothing and registers nothing.
         try {
@@ -21,5 +24,22 @@ public class MainActivity extends BridgeActivity {
         }
         SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
+    }
+
+    // Background sharing reports at a light heartbeat while the app is live (in the foreground, its
+    // JavaScript running: the app's own connection is the source then) and at its full rate from the
+    // moment it is not. The WebView freezes at onPause, so that is the moment that counts; these are
+    // native callbacks and still fire when JavaScript has stopped.
+    @Override
+    public void onResume() {
+        super.onResume();
+        SharingState.activityResumed();
+    }
+
+    @Override
+    public void onPause() {
+        // Before super: Capacitor freezes the WebView in super.onPause().
+        SharingState.activityPaused();
+        super.onPause();
     }
 }
