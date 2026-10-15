@@ -24,6 +24,7 @@ import {
   setPresence, presenceOf, livePresence, hasPresence, removePresence, expirePresence,
   presenceKey, uidOfPresenceKey, liveUids,
 } from './presence.js';
+import { chooseSource, PRESENCE } from './displaySource.js';
 import { createIdTokenVerifier } from './identity.js';
 import {
   createBackgroundRouter, backgroundConfig, backgroundStartupLine, endSession, endAllSessions,
@@ -227,9 +228,43 @@ function persistGroupSettings(roomCode) {
 // every mobile reconnect, and a client holding only socket ids cannot tell "same person,
 // new socket" — which is what left a returning member buried under an orphaned ghost
 // marker of themselves that nothing could clear.
+// Whose background (presence) position the Group should see instead of a connected socket's.
+// A person with a live socket AND a presence entry normally shows as the socket. When the socket
+// has gone quiet (its app is paused, the WebView frozen, the server not yet aware it is dead) and
+// the service has reported something newer, the newer one is shown (displaySource.js has the
+// rules, including not flapping). Only people with both feeds are looked at: with no presence
+// entry nothing changes. Returns the set of uids for whom presence wins.
+function presenceWins(squad, now) {
+  const winners = new Set();
+  if (!squad) return winners;
+  const newestLive = new Map(); // uid -> newest update across their connected sockets that have a fix
+  for (const id of squad.members) {
+    const uid = squad.memberUids?.[id];
+    const seen = users[id]?.lastSeen;
+    if (!uid || !io.sockets.sockets.has(id) || !Number.isFinite(seen)) continue;
+    newestLive.set(uid, Math.max(newestLive.get(uid) ?? -Infinity, seen));
+  }
+  const both = new Set();
+  for (const entry of livePresence(squad, now)) {
+    const liveLastSeen = newestLive.get(entry.uid);
+    if (liveLastSeen === undefined) continue;
+    both.add(entry.uid);
+    squad.displaySource ??= Object.create(null);
+    const choice = chooseSource({
+      liveLastSeen, presenceLastSeen: entry.lastSeen, now, previous: squad.displaySource[entry.uid],
+    });
+    squad.displaySource[entry.uid] = choice;
+    if (choice.source === PRESENCE) winners.add(entry.uid);
+  }
+  // A choice is only remembered while the person has both feeds.
+  for (const uid of Object.keys(squad.displaySource ?? {})) if (!both.has(uid)) delete squad.displaySource[uid];
+  return winners;
+}
+
 function broadcastSquadUpdate(roomCode) {
   const squad = activeSquads[roomCode];
   const ids = new Set(squad ? squad.members : []);
+  const winners = presenceWins(squad, Date.now());
   Object.keys(users).forEach(id => { if (users[id].roomCode === roomCode) ids.add(id); });
 
   const roomUsers = {};
@@ -242,6 +277,8 @@ function broadcastSquadUpdate(roomCode) {
     if (!telemetry && !live) return;
 
     const uid = squad?.memberUids?.[id] || live?.data?.uid || null;
+    // Their background position is fresher than this frozen socket's: shown below instead, never both.
+    if (telemetry && uid && winners.has(uid)) return;
     const profile = live?.data?.profile || {};
     roomUsers[id] = telemetry
       ? { ...telemetry, uid, hasFix: true }
@@ -264,7 +301,7 @@ function broadcastSquadUpdate(roomCode) {
   if (squad) {
     const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
     for (const entry of livePresence(squad, Date.now())) {
-      if (connected.has(entry.uid)) continue;
+      if (connected.has(entry.uid) && !winners.has(entry.uid)) continue;
       roomUsers[presenceKey(entry.uid)] = {
         uid: entry.uid,
         roomCode,
@@ -451,13 +488,15 @@ socket.on('check-ping', (clientTimestamp) => {
     if (squad.ownerId !== socket.id) return reply({ ok: false, reason: 'not-owner' });
 
     const squadTelemetry = {};
+    const winners = presenceWins(squad, Date.now());
     squad.members.forEach(memberId => {
+      if (winners.has(squad.memberUids?.[memberId])) return; // their background position is fresher
       const record = toTelemetryRecord(locationCache[memberId]);
       if (record) squadTelemetry[memberId] = record;
     });
     const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
     for (const entry of livePresence(squad, Date.now())) {
-      if (connected.has(entry.uid)) continue;
+      if (connected.has(entry.uid) && !winners.has(entry.uid)) continue;
       const record = toTelemetryRecord({ lat: entry.lat, lng: entry.lng, lastSeen: entry.lastSeen, battery: entry.battery });
       if (record) squadTelemetry[presenceKey(entry.uid)] = record;
     }
