@@ -241,6 +241,38 @@ public class PolicyAndPosterTest {
         }
     }
 
+    @Test(timeout = 8_000)
+    public void anEndlessAnswerIsCutOffAtTheLimitAndNeverHangsTheService() throws Exception {
+        ServerSocket endless = new ServerSocket(0, 5, InetAddress.getByName("127.0.0.1"));
+        Thread talker = new Thread(() -> {
+            try (Socket client = endless.accept()) {
+                BufferedInputStream in = new BufferedInputStream(client.getInputStream());
+                String line;
+                int length = 0;
+                while ((line = TinyServer.readLine(in)) != null && !line.isEmpty()) {
+                    if (line.toLowerCase().startsWith("content-length:")) length = Integer.parseInt(line.substring(15).trim());
+                }
+                for (int i = 0; i < length; i++) in.read();
+                OutputStream out = client.getOutputStream();
+                out.write("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+                byte[] chunk = new byte[1024];
+                java.util.Arrays.fill(chunk, (byte) 'x');
+                while (true) out.write(chunk); // never stops, until the client hangs up
+            } catch (Exception ended) {
+                // the client hung up: exactly what should happen
+            }
+        });
+        talker.setDaemon(true);
+        talker.start();
+        try {
+            HttpResult r = new UrlConnectionPoster().postLocation("http://127.0.0.1:" + endless.getLocalPort(), "t", "{}");
+            assertEquals(200, r.status);
+            assertEquals(UrlConnectionPoster.MAX_BODY_BYTES, r.body.length());
+        } finally {
+            endless.close();
+        }
+    }
+
     @Test
     public void aSlowServerIsGivenUpOnQuickly() {
         delayMs = 2_000;
