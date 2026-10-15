@@ -27,7 +27,9 @@ import java.util.regex.Pattern;
  *                      notifications), "location-denied", "cannot-start"
  *   updateToken({ deviceToken, expiresAt })   renews the pass of a running service
  *   pause({ minutes }) 0 = until resumed;  resume();  stop({ reason })
- *   getState()         { state: running | paused | stopped, reason?, running }
+ *   getState()         { state: running | paused | stopped, reason?, running } - a stopped state keeps its
+ *                      reason (other than user-stop) across a killed process, until acknowledgeStop()
+ *   acknowledgeStop()  the app has shown why sharing ended; forget the reason
  *   event "stateChanged" { state, reason? }   reason says why it stopped: user-stop (or whatever the
  *                      app passed to stop()), revoked, token-expired, forbidden, group-gone,
  *                      server-unreachable (no answer, 502, 503 or 504 for ten minutes of retries),
@@ -88,8 +90,17 @@ public class LocusBackgroundPlugin extends Plugin {
         JSObject r = new JSObject();
         r.put("running", LocationShareService.isRunning());
         r.put("state", LocationShareService.isRunning() ? SharingState.lastState() : "stopped");
-        if (!LocationShareService.isRunning() && SharingState.lastReason() != null) r.put("reason", SharingState.lastReason());
+        if (!LocationShareService.isRunning()) {
+            String reason = SharingState.lastReason() != null ? SharingState.lastReason() : SharingState.stopNote(getContext()).read();
+            if (reason != null) r.put("reason", reason);
+        }
         call.resolve(r);
+    }
+
+    @PluginMethod
+    public void acknowledgeStop(PluginCall call) {
+        SharingState.acknowledgeStop(getContext());
+        call.resolve();
     }
 
     @PluginMethod
@@ -190,6 +201,7 @@ public class LocusBackgroundPlugin extends Plugin {
                 final Session ending = leftover;
                 new Thread(() -> new UrlConnectionPoster().deleteSession(ending.baseUrl, ending.deviceToken)).start();
             }
+            SharingState.stopNote(getContext()).record(reason);
             SharingState.emit("stopped", reason);
         }
         call.resolve();
