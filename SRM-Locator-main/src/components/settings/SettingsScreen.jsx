@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Button, Card, IconButton, ListRow, RadioList, SectionLabel, SegmentedControl, Switch } from '../ui';
 import SendApp from '../SendApp';
+import BackgroundSharingTestSwitch from './BackgroundSharingTestSwitch';
 import { SETTINGS } from '../../copy/settings';
 import { setThemePreference, subscribeTheme, getThemePreference } from '../../theme/theme';
 import LocusMark from '../LocusMark';
@@ -26,28 +27,6 @@ import { MAP_STATUS_LABEL, MAP_STATUS_REASON_TEXT } from '../../utils/mapEngineS
 // Settings, as a full screen (redesign P9). Opened from the gear in the map's right-hand
 // column. Organized cleanly with iOS/macOS styled categorized cards and collapsible advanced tools.
 export const SETTINGS_Z = 5000;
-
-// TEMPORARY - replace with Jose's design. What the test switch says is going on.
-const BACKGROUND_REFUSED = {
-  unsupported: 'This phone cannot do it.',
-  'permission-denied': 'Location and notification permission are needed.',
-  'location-denied': 'Location permission is needed.',
-  'notifications-denied': 'Notifications must be allowed, so you can always see that it is on.',
-  'server-off': 'The server has it switched off.',
-  'no-group': 'The server has no Group with this code.',
-  blocked: 'You are blocked from this Group.',
-  'not-member': 'You are not a member of this Group.',
-  'not-signed-in': 'Sign in again, then try again.',
-  busy: 'The server is busy. Try again in a minute.',
-  network: 'The server could not be reached.',
-};
-function backgroundSharingLine({ state, reason }) {
-  if (state === 'running') return 'On: your position keeps going to your Group when the app is closed.';
-  if (state === 'starting') return 'Starting…';
-  if (state === 'refused') return `Not started. ${BACKGROUND_REFUSED[reason] ?? 'Try again.'}`;
-  if (state === 'stopped') return `Stopped${reason ? ` (${reason})` : ''}.`;
-  return 'Join a Group, then it starts by itself.';
-}
 
 const THEME_ICONS = { system: Smartphone, light: Sun, dark: Moon };
 
@@ -185,24 +164,10 @@ export default function SettingsScreen({
           </Card>
         </section>
 
-        {/* TEMPORARY - replace with Jose's design. Background sharing test switch: only offered in the
-            LOCUS Test build, inside an Android shell that has the plugin (see backgroundSharing.available). */}
-        {backgroundSharing?.available && (
-          <section className="mb-6" data-testid="background-sharing-test">
-            <SectionLabel className="flex items-center gap-1.5">
-              <Radio size={13} className="opacity-70" />
-              Background sharing (test)
-            </SectionLabel>
-            <Card padded={false} className="shadow-sm">
-              <Switch
-                label="Keep sharing when the app is closed"
-                description={backgroundSharingLine(backgroundSharing.status)}
-                checked={backgroundSharing.on}
-                onChange={backgroundSharing.setOn}
-              />
-            </Card>
-          </section>
-        )}
+        {/* TEMPORARY - replace with Jose's design. The background sharing test switch exists only in the
+            LOCUS Test build: the condition is a build-time constant, so every other build leaves out the
+            component and its words altogether (tests/backgroundSharingBuild.test.js proves it). */}
+        {import.meta.env.MODE === 'sidetest' && <BackgroundSharingTestSwitch backgroundSharing={backgroundSharing} />}
 
         {/* 6. System & Application Info */}
         <section className="mb-6">

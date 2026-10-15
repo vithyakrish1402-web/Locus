@@ -102,6 +102,8 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
   };
 });
 
+// The LOCUS Test build: the mode is read when App.jsx is first evaluated (it is a build-time constant there).
+vi.stubEnv('MODE', 'sidetest');
 const { default: App } = await import('../src/App.jsx');
 
 const HERE = { lat: 12.8230, lng: 80.0440 };
@@ -135,7 +137,6 @@ beforeEach(() => {
   plugin.lastState = { running: false, state: 'stopped' };
   fetchMock = vi.fn(async () => ({ status: 200, json: async () => goodToken() }));
   vi.stubGlobal('fetch', fetchMock);
-  vi.stubEnv('MODE', 'sidetest');
   try { localStorage.removeItem(SWITCH_KEY); } catch { /* no storage */ }
   vi.spyOn(window, 'alert').mockImplementation(() => {});
   Object.defineProperty(navigator, 'geolocation', {
@@ -152,7 +153,6 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
   delete navigator.geolocation;
 });
 
@@ -167,18 +167,6 @@ describe('the test switch', () => {
     expect(theSwitch().getAttribute('aria-checked')).toBe('false');
     expect(plugin.start).not.toHaveBeenCalled();
     expect(tokenRequests()).toHaveLength(0);
-  });
-
-  it('is not in any other build, and the plugin is never even asked', async () => {
-    vi.stubEnv('MODE', 'production');
-    await renderApp();
-    await intoGroup();
-    openSettings();
-    await flush();
-    expect(screen.queryByTestId('background-sharing-test')).toBeNull();
-    expect(plugin.getCapabilities).not.toHaveBeenCalled();
-    expect(plugin.start).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('is not shown by a shell whose plugin speaks another version', async () => {
@@ -322,14 +310,5 @@ describe('opening the app after the Group ended', () => {
     await renderApp();
     await flush();
     expect(screen.queryByText(MESSAGE)).toBeNull();
-  });
-
-  it('says nothing in a build without the switch', async () => {
-    vi.stubEnv('MODE', 'production');
-    plugin.lastState = { running: false, state: 'stopped', reason: 'group-gone' };
-    await renderApp();
-    await flush();
-    expect(screen.queryByText(MESSAGE)).toBeNull();
-    expect(plugin.getState).not.toHaveBeenCalled();
   });
 });

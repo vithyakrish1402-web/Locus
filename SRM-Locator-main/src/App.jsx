@@ -100,7 +100,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { useWifiFusion } from './hooks/useWifiFusion';
-import { useBackgroundSharing } from './hooks/useBackgroundSharing';
+import { useBackgroundSharing as useBackgroundSharingReal } from './hooks/useBackgroundSharing';
 import { stopBackgroundSharing } from './utils/backgroundSharing';
 import { useIndoorView } from './hooks/useIndoorView';
 import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD } from './utils/positionSource';
@@ -139,6 +139,12 @@ import {
 // Without this check, the native app would try to hit a "backend" on the phone itself
 // and never reach the real server at all. Capacitor.isNativePlatform() is the only
 // reliable way to tell "actually running inside the app" apart from "actually on localhost".
+// Background sharing exists only in the LOCUS Test build (Vite mode 'sidetest'). The condition is a
+// build-time constant, so in every other build the hook, its words and its storage key are not in
+// the bundle at all and this is the do-nothing version (tests/backgroundSharingBuild.test.js).
+const NO_BACKGROUND_SHARING = { available: false, on: false, setOn: () => {}, status: { state: 'off' } };
+const useBackgroundSharing = import.meta.env.MODE === 'sidetest' ? useBackgroundSharingReal : () => NO_BACKGROUND_SHARING;
+
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
   || (!Capacitor.isNativePlatform() && window.location.hostname === 'localhost'
     ? 'http://localhost:5000'

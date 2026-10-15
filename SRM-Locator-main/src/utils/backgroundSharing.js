@@ -25,7 +25,7 @@ export const SUPPORTED_PLUGIN_VERSION = 1;
 
 const unavailable = () => Promise.reject(Object.assign(new Error('Background sharing is only available in the Android app'), { code: 'UNAVAILABLE' }));
 
-export const LocusBackground = registerPlugin('LocusBackground', {
+export const LocusBackground = /*#__PURE__*/ registerPlugin('LocusBackground', {
   web: {
     getCapabilities: unavailable,
     getState: unavailable,
@@ -178,7 +178,7 @@ export async function startBackgroundSharing({ baseUrl, roomCode, groupName, pol
  */
 export function stopBackgroundSharing(reason = 'user-stop', plugin = LocusBackground) {
   try {
-    if (!Capacitor.isNativePlatform() || typeof plugin?.stop !== 'function') return Promise.resolve();
+    if (!Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable('LocusBackground') || typeof plugin?.stop !== 'function') return Promise.resolve();
     return Promise.resolve(plugin.stop({ reason })).catch(() => {});
   } catch {
     return Promise.resolve();
