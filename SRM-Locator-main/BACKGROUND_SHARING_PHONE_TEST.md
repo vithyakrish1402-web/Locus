@@ -9,15 +9,15 @@ away or turn the screen off, shows a notification that says so, stops when you t
 never starts by itself where Android does not allow it.
 
 > **Before you start (once):**
-> 1. The test app **"LOCUS Test"** is installed on **Phone A** (it sits next to normal LOCUS and
->    never touches it). Phone B can run normal LOCUS or LOCUS Test.
-> 2. The two settings are on Render (Krish only, never pasted anywhere): the secret
->    `LOCUS_DEVICE_TOKEN_SECRET` and `LOCUS_BACKGROUND_SHARING_ENABLED=true`. When you are
->    done testing, **delete `LOCUS_BACKGROUND_SHARING_ENABLED`** to switch it off again.
-> 3. The JavaScript half (Part B) of this work is in the test app. Until it is, the test app
->    cannot start sharing and these tests cannot be run. Claude will tell you when it is.
-> 4. In LOCUS Test, open **Settings** with Developer mode on. There is a plain switch,
->    **"Background sharing (test)"**. That is the only way to turn it on.
+> 1. The test app is **"LOCUS BG Test"** (app id `com.locus.app.bgtest`). It is a **third** app: it
+>    sits next to normal LOCUS **and next to the existing "LOCUS Test"**, and replaces neither. See
+>    **Installing LOCUS BG Test** below. Phone B can run normal LOCUS, LOCUS Test or LOCUS BG Test.
+> 2. The server needs two settings on Render (Krish only; the secret is never pasted anywhere). See
+>    **Settings on Render** below. When you are done testing, **delete
+>    `LOCUS_BACKGROUND_SHARING_ENABLED`** to switch it off again.
+> 3. In LOCUS BG Test, open **Settings**. There is a plain switch, **Background sharing (test)**,
+>    that exists **only in this app**. That is the only way to turn it on. (There is no Developer
+>    mode in this app.)
 >
 > **Safety:** if your computer gets its internet from one of these phones' hotspot, do **not**
 > use that phone as Phone A, and never switch airplane mode or mobile data off on it.
@@ -27,10 +27,51 @@ known for closing apps aggressively). *Phone B* = the phone that watches the map
 
 ---
 
+## Installing LOCUS BG Test (for a human, once per phone)
+
+You are given one file: **`app-bgtest.apk`** (about 10 MB). It is signed with the standard Android
+*debug* key, which is **not** the key LOCUS and "LOCUS Test" are signed with. That is fine and
+safe: a different app id plus a different key means Android treats it as a separate app. It can
+never update, replace or be asked to replace either of them, and **you are never asked to uninstall
+anything**. (If a message ever says "App not installed" or offers to *replace* an existing app,
+**stop and tell me**: that must not happen.)
+
+1. Put the file on the phone: connect by USB and copy it into **Downloads**, or send it to yourself
+   (Drive, email, WhatsApp) and download it on the phone.
+2. On the phone open **Files** → **Downloads** → tap `app-bgtest.apk`.
+3. Android asks to **allow installs from this source** (the Files app, Drive or the browser you used).
+   Turn it **on** for that app, go back, and tap Install. After testing, turn that permission **off**
+   again (Settings → Apps → special access → Install unknown apps).
+4. If Play Protect says the app is unknown, choose **Install anyway** (it is a test build of our own
+   app).
+5. Open **LOCUS BG Test** (the icon says "LOCUS BG Test"). Sign in with your usual account.
+6. Check, in Android Settings → Apps → **LOCUS BG Test** → App info → Version: it should read
+   **1.1.44-bgtest**. The existing **LOCUS Test** and **LOCUS** are still in the list, unchanged.
+
+Do **not** open "LOCUS Test" for these tests. Its Floor 7 recorder is a different test.
+
+## Settings on Render (Krish only, before the first test)
+
+In the Render dashboard, for the LOCUS server, Environment:
+
+| Name | Value |
+|---|---|
+| `LOCUS_BACKGROUND_SHARING_ENABLED` | `true` |
+| `LOCUS_DEVICE_TOKEN_SECRET` | a long random string, **at least 32 characters**; make it up in a password manager, never paste it into chat, a file or the repository |
+
+Then redeploy **outside class hours** (a redeploy ends every live Group). In the deploy log look for
+the line **"Using Node.js version ..."**: it must be **22 or higher** (the sign-in check needs it);
+and for the `[BACKGROUND]` startup line, which says sharing is on. With either setting missing, the
+switch in the app says *"The server has it switched off"*, which is the correct and safe answer.
+A free Render server **sleeps after 15 minutes** without traffic and takes about a minute to wake;
+the first action after a quiet period can be slow. That is the plan, not a fault.
+
+---
+
 ## Set-up (do this first, every day you test)
 
 1. **Phone B:** open LOCUS, create a Group. Note the code.
-2. **Phone A:** open LOCUS Test, sign in, **join** the Group with the code.
+2. **Phone A:** open **LOCUS BG Test**, sign in, **join** the Group with the code.
 3. **Phone B:** approve Phone A when the request appears.
 4. **Both:** you should each see the other on the map list. Put Phone A's blue dot somewhere you
    can recognise, ideally outdoors.
@@ -42,8 +83,7 @@ information → Android version), and the time you start.
 
 ## Test 1: turning it on, and the permissions
 
-**Do:** On Phone A open Settings (inside the Group), Developer mode, and turn on
-**Background sharing (test)**.
+**Do:** On Phone A, inside the Group, open Settings and turn on **Background sharing (test)**.
 
 **You should see:**
 - If Android asks to allow **notifications**, allow it. If it asks for **location**, choose
@@ -53,7 +93,7 @@ information → Android version), and the time you start.
   **Pause 1 hour**, **Stop**.
 - On Phone B, nothing looks different yet (Phone A is still shown as normal).
 
-**Now try the refusal.** Turn it off (Stop). Go to Android Settings → Apps → LOCUS Test →
+**Now try the refusal.** Turn it off (Stop). Go to Android Settings → Apps → LOCUS BG Test →
 Notifications and **turn notifications off**. Turn **Background sharing (test)** on again.
 
 **You should see:** it does **not** start, and the app tells you it needs notifications. No
@@ -134,7 +174,7 @@ then tap the second app so LOCUS is no longer the one you are using. It should b
 **Do:**
 1. Turn on **Background sharing (test)** on Phone A. Check the notification is showing. (Do this one
    *after* Tests 3A and 3B, which should already have passed.)
-2. Open the phone's recent-apps screen and **swipe LOCUS Test away**.
+2. Open the phone's recent-apps screen and **swipe LOCUS BG Test away**.
 3. **Walk** with Phone A for at least 5 minutes (or carry it somewhere else). Keep Phone B open
    on the map.
 
@@ -174,7 +214,7 @@ not moved while you were moving. Write down how long it lasted.
 
 (Skip the parts that don't apply if Phone A is on Android 13 or older, and say so.)
 
-**5a, location permission "only while using the app".** In Android Settings → Apps → LOCUS Test →
+**5a, location permission "only while using the app".** In Android Settings → Apps → LOCUS BG Test →
 Permissions → Location, check it says **Allow only while using the app**. Redo Test 3.
 
 > You should see: it **keeps working after the swipe** even though you never chose "allow all
@@ -194,11 +234,11 @@ computer. With Phone A connected by USB, sharing on, app swiped away, open Power
 - **(b)** a notification *"LOCUS stopped sharing your location. Tap to resume sharing with <Group>"*,
   and sharing is **not** running.
 
-Either is acceptable. What is **not** acceptable: a crash message, the phone showing "LOCUS Test
+Either is acceptable. What is **not** acceptable: a crash message, the phone showing "LOCUS BG Test
 keeps stopping", the notification flickering on and off, or sharing silently carrying on with **no
 notification**. **Tell me which of (a) or (b) happened**, the Android version, and a screenshot.
 
-**5c, forcing it to stop.** Android Settings → Apps → LOCUS Test → **Force stop**.
+**5c, forcing it to stop.** Android Settings → Apps → LOCUS BG Test → **Force stop**.
 
 > You should see: the notification disappears and sharing **stays stopped** (Android does not
 > restart a force-stopped app). That is expected. **Tell me if** the notification comes back by
@@ -208,13 +248,13 @@ notification**. **Tell me which of (a) or (b) happened**, the Android version, a
 
 ## Test 6: restarting the phone
 
-**Do:** With sharing on, **restart Phone A** and unlock it. Do not open LOCUS Test yet.
+**Do:** With sharing on, **restart Phone A** and unlock it. Do not open LOCUS BG Test yet.
 
 **You should see:**
 - A notification: *"LOCUS stopped sharing your location. Tap to resume sharing with <Group>"*.
 - **No** location icon at the top and **no** sharing notification. Phone B shows Phone A as lost.
   Sharing must **not** restart by itself.
-- Tap the notification: LOCUS Test opens. Turn **Background sharing (test)** on again and sharing
+- Tap the notification: LOCUS BG Test opens. Turn **Background sharing (test)** on again and sharing
   resumes.
 
 **Tell me if:** sharing restarts by itself after the reboot; the "tap to resume" notice never
@@ -238,7 +278,7 @@ compare.
 | Battery after one hour | | |
 
 Then look at Settings → Battery → Battery usage (or "Device care" on Samsung) and **screenshot
-what it shows for LOCUS Test**.
+what it shows for LOCUS BG Test**.
 
 **Tell me:** both numbers and the screenshot. A drop of about **2 to 4 percentage points more** than
 the "off" hour is reasonable. **More than about 8 points more**, tell me straight away.
@@ -272,13 +312,16 @@ sharing stops, with no message needed. Phone B no longer shows Phone A.
 ## Test 10: logging out and leaving
 
 **Do, one at a time:**
-1. Sharing on. In LOCUS Test, **leave the Group**.
-2. Join again, sharing on. **Log out** of LOCUS Test.
+1. Sharing on. In LOCUS BG Test, **leave the Group**.
+2. Join again, sharing on, then **turn the switch off** in Settings.
 
 **You should see:** each time the sharing notification **disappears straight away**, and Phone B
 no longer shows Phone A.
 
-**Tell me if:** a notification is left behind after leaving or logging out.
+(This version of the app has no log-out button, so logging out cannot be tested. Signing out is
+covered by the same stop; it is checked by the automatic tests.)
+
+**Tell me if:** a notification is left behind after leaving or switching off.
 
 ---
 
@@ -297,13 +340,15 @@ Then redeploy the server.
    last position, then "signal lost" (the Group is gone with the restart).
 2. Once the server is back, within a minute or two Phone A's sharing notification **disappears** and a
    new notice appears: **"Your Group ended. Tap to reopen LOCUS."**
-3. Tapping the notice opens LOCUS and the notice goes away. (Until the lobby message from the app
-   half exists it simply opens LOCUS; later it says "Your Group ended (the server restarted).
-   Rejoin with the code".)
+3. Tapping the notice opens LOCUS BG Test and the notice goes away. After you sign in, the screen
+   where you pick a Group says: **"Your Group ended (the server restarted). Rejoin with the code."**
+   This works even if Android had closed the app in between. It is shown **once**: close and reopen
+   the app and it is gone.
 4. Sharing does **not** resume by itself: the Group has to be joined again and sharing switched on.
 
 **Tell me if:** the sharing notification stays for more than five minutes after the server is
-back, no notice appears, the notice stays after you tap it, or sharing restarts without you.
+back, no notice appears, the notice stays after you tap it, the "Your Group ended" message is
+missing or appears a second time, or sharing restarts without you.
 
 ---
 
@@ -327,7 +372,7 @@ Some phones close apps they think you are not using. On a Samsung: Settings → 
 usage limits.
 
 1. First test with the phone's **default** settings (Tests 3 and 4).
-2. Then add **LOCUS Test** to **Never sleeping apps** and repeat Test 4.
+2. Then add **LOCUS BG Test** to **Never sleeping apps** and repeat Test 4.
 
 **Tell me:** whether the default setting made sharing stop, how long it lasted, and whether adding
 it to "Never sleeping apps" fixed it. This decides whether the app should offer to open that screen.
