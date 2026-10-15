@@ -29,6 +29,7 @@ final class FakeServer {
     private final List<Received> requests = Collections.synchronizedList(new ArrayList<>());
     private final List<Integer> answered = Collections.synchronizedList(new ArrayList<>());
     volatile int status = 200;
+    volatile int retryAfterSec = 0;
     volatile String body = "{\"ok\":true}";
     private volatile boolean stopped = false;
 
@@ -127,7 +128,8 @@ final class FakeServer {
         requests.add(new Received(at, parts[0] + " " + parts[1] + " auth=" + auth.get() + " body=" + new String(bodyBytes, StandardCharsets.UTF_8)));
         int replyStatus = status;
         byte[] out = body.getBytes(StandardCharsets.UTF_8);
-        String head = "HTTP/1.1 " + replyStatus + " X\r\nContent-Length: " + out.length + "\r\nConnection: close\r\n\r\n";
+        String retry = retryAfterSec > 0 ? "Retry-After: " + retryAfterSec + "\r\n" : "";
+        String head = "HTTP/1.1 " + replyStatus + " X\r\nContent-Length: " + out.length + "\r\n" + retry + "Connection: close\r\n\r\n";
         OutputStream os = client.getOutputStream();
         os.write(head.getBytes(StandardCharsets.UTF_8));
         os.write(out);

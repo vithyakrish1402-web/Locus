@@ -282,6 +282,45 @@ no longer shows Phone A.
 
 ---
 
+## Test 10A: the server restarts while the app is closed ("Your Group ended")
+
+LOCUS's server runs on Render's free plan. A restart or a new deploy wipes every Group (they live
+in memory only), and a free instance takes **about a minute** to wake up afterwards. This is how
+that looks to Phone A. **Ask Krish to redeploy the server** (or do it with the Render "Manual
+Deploy" button) while the test below is running; do it outside class hours, it ends live Groups.
+
+**Do:** Sharing on, app swiped away, Phone A's notification showing, Phone B shows Phone A.
+Then redeploy the server.
+
+**You should see:**
+1. For up to about a minute the sharing notification **stays**, and Phone B shows Phone A's
+   last position, then "signal lost" (the Group is gone with the restart).
+2. Once the server is back, within a minute or two Phone A's sharing notification **disappears** and a
+   new notice appears: **"Your Group ended. Tap to reopen LOCUS."**
+3. Tapping the notice opens LOCUS and the notice goes away. (Until the lobby message from the app
+   half exists it simply opens LOCUS; later it says "Your Group ended (the server restarted).
+   Rejoin with the code".)
+4. Sharing does **not** resume by itself: the Group has to be joined again and sharing switched on.
+
+**Tell me if:** the sharing notification stays for more than five minutes after the server is
+back, no notice appears, the notice stays after you tap it, or sharing restarts without you.
+
+---
+
+## Test 10B: the server is away for a long time
+
+**Do:** Same start as Test 10A, but ask Krish to **suspend** the Render service (not redeploy) and
+leave it suspended for **12 minutes**, then resume it.
+
+**You should see:** the sharing notification stays for the first ten minutes (LOCUS keeps trying
+with longer and longer pauses); around the ten-minute mark it disappears and a notice says **"LOCUS
+stopped sharing your location. The server could not be reached. Tap to reopen LOCUS."** It does not
+vanish silently, and it does not try forever.
+
+**Tell me if:** it gives up in under three minutes, never gives up, or gives up with no notice.
+
+---
+
 ## Test 11 (Samsung and similar): "sleeping apps"
 
 Some phones close apps they think you are not using. On a Samsung: Settings → Battery → Background

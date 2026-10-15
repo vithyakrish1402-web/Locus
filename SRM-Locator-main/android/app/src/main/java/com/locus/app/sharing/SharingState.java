@@ -33,6 +33,18 @@ public final class SharingState {
         store(context).clear();
     }
 
+    // --- how long the server may be unreachable before the service gives up (a knob only the tests turn) ---
+    private static volatile long outageGiveUpMs = OutageTracker.GIVE_UP_AFTER_MS;
+
+    public static long outageGiveUpMs() {
+        return outageGiveUpMs;
+    }
+
+    /** Tests only. */
+    public static void setOutageGiveUpMsForTests(long ms) {
+        outageGiveUpMs = ms;
+    }
+
     // --- what the JavaScript is told ---
     /** Called on the main thread whenever the state changes. */
     public interface Listener {

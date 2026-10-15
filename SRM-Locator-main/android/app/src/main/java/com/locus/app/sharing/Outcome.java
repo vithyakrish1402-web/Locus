@@ -16,10 +16,13 @@ public final class Outcome {
     public final Action action;
     public final long delayMs;
     public final String stopReason;
+    /** True when this failure means the SERVER could not be reached (no answer, 502, 503, 504), as opposed to it answering. */
+    public final boolean serverUnreachable;
 
-    Outcome(Action action, long delayMs, String stopReason) {
+    Outcome(Action action, long delayMs, String stopReason, boolean serverUnreachable) {
         this.action = action;
         this.delayMs = delayMs;
         this.stopReason = stopReason;
+        this.serverUnreachable = serverUnreachable;
     }
 }

@@ -25,27 +25,27 @@ public final class ResponseHandler {
     private ResponseHandler() {}
 
     public static Outcome forLocation(HttpResult r, Backoff backoff) {
-        if (r.networkError || r.status == 0) return retry(backoff.next());
+        if (r.networkError || r.status == 0) return retry(backoff.next(), true);
         int s = r.status;
         if (s == 200) {
             backoff.reset();
-            return new Outcome(Outcome.Action.CONTINUE, 0, null);
+            return new Outcome(Outcome.Action.CONTINUE, 0, null, false);
         }
-        if (s == 429) return retry(Backoff.retryAfterMs(r.retryAfterSec > 0 ? r.retryAfterSec : 60));
-        if (s == 400 || s == 413) return new Outcome(Outcome.Action.DROP, 0, null);
+        if (s == 429) return retry(Backoff.retryAfterMs(r.retryAfterSec > 0 ? r.retryAfterSec : 60), false); // the server is up and answering
+        if (s == 400 || s == 413) return new Outcome(Outcome.Action.DROP, 0, null, false);
         if (s == 401) return stop(r.body.contains("\"expired\"") ? TOKEN_EXPIRED : REVOKED);
         if (s == 403) return stop(FORBIDDEN);
         if (s == 410) return stop(GROUP_GONE);
         if (s == 503 && r.body.contains("\"disabled\"")) return stop(DISABLED);
-        if (s >= 500) return retry(backoff.next());
+        if (s >= 500) return retry(backoff.next(), s == 502 || s == 503 || s == 504);
         return stop(REJECTED);
     }
 
-    private static Outcome retry(long delayMs) {
-        return new Outcome(Outcome.Action.RETRY, delayMs, null);
+    private static Outcome retry(long delayMs, boolean serverUnreachable) {
+        return new Outcome(Outcome.Action.RETRY, delayMs, null, serverUnreachable);
     }
 
     private static Outcome stop(String reason) {
-        return new Outcome(Outcome.Action.STOP, 0, reason);
+        return new Outcome(Outcome.Action.STOP, 0, reason, false);
     }
 }
