@@ -70,3 +70,22 @@ describe('how the service can be started', () => {
     expect(read('sharing', 'Endpoint.java')).toContain('scheme.equals("https")');
   });
 });
+
+describe('the notice after a restart', () => {
+  it('asks only to hear that the phone has restarted', () => {
+    expect(permissions).toContain('android.permission.RECEIVE_BOOT_COMPLETED');
+  });
+
+  it('is a receiver for the boot broadcast and nothing else', () => {
+    const receiver = manifest.match(/<receiver[^>]*BootResumeReceiver[\s\S]*?<\/receiver>/)?.[0];
+    expect(receiver).toBeTruthy();
+    expect([...receiver.matchAll(/<action android:name="([^"]+)"/g)].map((m) => m[1])).toEqual(['android.intent.action.BOOT_COMPLETED']);
+  });
+
+  it('only posts a notice: it never starts the service, and never opens the sealed token', () => {
+    const code = read('sharing', 'BootResumeReceiver.java');
+    expect(code).not.toMatch(/LocationShareService|startService|startForegroundService|\.load\(|SharingState\.session|KeystoreSecretBox/);
+    expect(code).toMatch(/resumeHint\(/);
+    expect(code).toMatch(/ACTION_BOOT_COMPLETED/);
+  });
+});

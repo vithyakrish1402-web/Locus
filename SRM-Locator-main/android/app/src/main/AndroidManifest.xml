@@ -28,6 +28,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Only to post "Tap to resume sharing with <Group>" after a restart (sharing/BootResumeReceiver.java).
+         It never starts the location service. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- navigator.vibrate() in the WebView. Without it every call silently did nothing: the
          SOS alarm's vibration (SosOverlay.jsx) never fired on a phone, and neither do the
@@ -76,6 +79,14 @@
             android:name=".sharing.LocationShareService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <receiver
+            android:name=".sharing.BootResumeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
