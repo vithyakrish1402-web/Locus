@@ -106,6 +106,8 @@ export const LOBBY = {
   notFound: 'No group uses this code right now. Check it with your Group Lead and try again.',
   ended: (code) => `Group ${spacedCode(code)} has ended. Ask your Group Lead to create it again, or start a new group.`,
   codeTaken: "That code is already in use, so here's a new one to share.",
+  // Opening the app after background sharing ended because the server lost the Group.
+  groupEndedRestart: 'Your Group ended (the server restarted). Rejoin with the code.',
 };
 
 export const WAITING = {

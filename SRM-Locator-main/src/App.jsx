@@ -100,6 +100,8 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { useWifiFusion } from './hooks/useWifiFusion';
+import { useBackgroundSharing } from './hooks/useBackgroundSharing';
+import { stopBackgroundSharing } from './utils/backgroundSharing';
 import { useIndoorView } from './hooks/useIndoorView';
 import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD } from './utils/positionSource';
 import { buildingAt, isOnOtherFloor, memberFloorTag } from './utils/indoorView';
@@ -787,6 +789,17 @@ const App = () => {
   // inside, reading or not, so an unsurveyed building gets one too (saying it has no floors).
   const wifiActive = Boolean(user && hasJoinedSquad && accessStatus === 'granted');
   const { positionFor, indoor, lastCycle } = useWifiFusion(wifiActive);
+  // Background sharing (Stage 3b Part B): keeps this person on the Group's map after the app is
+  // swiped away. Does nothing unless the test switch in Settings is on (LOCUS Test build only).
+  const backgroundSharing = useBackgroundSharing({
+    inGroup: wifiActive,
+    roomCode: squadCode.trim().toUpperCase(),
+    groupName: squadCode.trim().toUpperCase(),
+    polling: sysConfig.polling,
+    backendUrl: BACKEND_URL,
+    getIdToken: () => auth.currentUser.getIdToken(),
+    onGroupEnded: () => setLobbyNotice(LOBBY.groupEndedRestart),
+  });
   const gpsBuilding = useMemo(
     () => (WIFI_POSITIONING_ENABLED ? buildingAt(liveLocation)?.name ?? null : null),
     [liveLocation]
@@ -1692,6 +1705,7 @@ const App = () => {
 
   // ---  KILL SWITCH LOGOUT HANDLER ---
   const handleLogout = () => {
+    stopBackgroundSharing();
     socket.emit('leave-squad');
     endSquadSession();
     setLiveLocation(null);
@@ -1703,6 +1717,7 @@ const App = () => {
   // owning the squad just left) survives into the next join attempt — see
   // handleJoinSquad's comment.
   const handleLeaveSquad = () => {
+    stopBackgroundSharing();
     socket.emit('leave-squad');
     endSquadSession();
   };
@@ -3123,6 +3138,7 @@ const App = () => {
                 status: appUpdate.status,
                 onCheck: () => appUpdate.check({ manual: true }),
               }}
+              backgroundSharing={backgroundSharing}
               onOpenGuide={() => setGuideOpen(true)}
             />
           </motion.div>
