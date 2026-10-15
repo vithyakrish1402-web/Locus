@@ -119,12 +119,15 @@ export function rebindReturningMember(squad, { uid, socketId }) {
 // squad by another name. A CREATE is stricter: any squad still on file under the code,
 // live or not, counts as taken, so a new squad never inherits another's state.
 //
+// `holdsPresence` says the squad has members still sharing their position without a socket
+// (presence.js): it is then a live squad whatever its sockets say, not an abandoned one.
+//
 // Returns the event to refuse with ('squad-not-found' | 'squad-code-taken'), or null to
 // carry on through the usual cases.
-export function refuseJoin(squad, { intent, uid, isSocketLive = () => true }) {
+export function refuseJoin(squad, { intent, uid, isSocketLive = () => true, holdsPresence = false }) {
   const members = squad?.members ?? [];
-  if (intent === 'join' && !members.some(isSocketLive)) return 'squad-not-found';
-  if (intent === 'create' && members.length > 0 && !(uid && (squad.ownerUid === uid || commanderOf(squad) === uid))) {
+  if (intent === 'join' && !members.some(isSocketLive) && !holdsPresence) return 'squad-not-found';
+  if (intent === 'create' && (members.length > 0 || holdsPresence) && !(uid && (squad.ownerUid === uid || commanderOf(squad) === uid))) {
     return 'squad-code-taken';
   }
   return null;
