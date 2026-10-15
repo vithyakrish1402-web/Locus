@@ -30,10 +30,9 @@ known for closing apps aggressively). *Phone B* = the phone that watches the map
 ## Installing LOCUS BG Test (for a human, once per phone)
 
 You are given one file: **`app-bgtest.apk`** (about 10 MB). It is signed with the standard Android
-*debug* key, which is **not** the key LOCUS and "LOCUS Test" are signed with. That is fine and
-safe: a different app id plus a different key means Android treats it as a separate app. It can
-never update, replace or be asked to replace either of them, and **you are never asked to uninstall
-anything**. (If a message ever says "App not installed" or offers to *replace* an existing app,
+*debug* key (the same kind as "LOCUS Test", and **not** the release key normal LOCUS is signed
+with). That is fine and safe: its app id is its own, so Android treats it as a separate app. It can
+never update or replace either of the others, and **you are never asked to uninstall anything**. (If a message ever says "App not installed" or offers to *replace* an existing app,
 **stop and tell me**: that must not happen.)
 
 1. Put the file on the phone: connect by USB and copy it into **Downloads**, or send it to yourself
