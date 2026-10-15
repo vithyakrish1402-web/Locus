@@ -66,7 +66,10 @@ export function useBackgroundSharing({ inGroup, roomCode, groupName, polling, ba
     if (!supported) return undefined;
     let alive = true;
     Promise.resolve(plugin.getState?.()).then((state) => {
-      if (alive && state && !state.running && GROUP_ENDED_REASONS.includes(state.reason)) latest.current.onGroupEnded?.();
+      if (!alive || !state || state.running || !state.reason) return;
+      if (GROUP_ENDED_REASONS.includes(state.reason)) latest.current.onGroupEnded?.();
+      // Shown (or not ours to show): the phone can forget why, so it is not shown again next launch.
+      return plugin.acknowledgeStop?.();
     }).catch(() => {});
     return () => { alive = false; };
   }, [supported, plugin]);

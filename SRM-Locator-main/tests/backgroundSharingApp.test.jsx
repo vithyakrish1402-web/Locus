@@ -42,6 +42,7 @@ const plugin = vi.hoisted(() => {
     requestPermissions: vi.fn(async () => ({})),
     start: vi.fn(async () => ({ started: true, persisted: true })),
     stop: vi.fn(async () => {}),
+    acknowledgeStop: vi.fn(async () => {}),
     addListener: vi.fn(async (_event, fn) => {
       listeners.push(fn);
       return { remove: () => { listeners.splice(listeners.indexOf(fn), 1); } };
@@ -128,7 +129,7 @@ const theSwitch = () => within(screen.getByTestId('background-sharing-test')).ge
 beforeEach(() => {
   fakeSocket.handlers.clear();
   fakeSocket.emit.mockClear();
-  for (const fn of [plugin.getCapabilities, plugin.getState, plugin.requestPermissions, plugin.start, plugin.stop, plugin.addListener]) fn.mockClear();
+  for (const fn of [plugin.getCapabilities, plugin.getState, plugin.requestPermissions, plugin.start, plugin.stop, plugin.acknowledgeStop, plugin.addListener]) fn.mockClear();
   plugin.listeners.length = 0;
   plugin.caps = { version: 1, running: false, notificationsEnabled: true, locationGranted: true, resumable: false };
   plugin.lastState = { running: false, state: 'stopped' };
@@ -289,6 +290,21 @@ describe('opening the app after the Group ended', () => {
     plugin.lastState = { running: false, state: 'stopped', reason: 'group-gone' };
     await renderApp();
     await waitFor(() => expect(screen.getByText(MESSAGE)).toBeTruthy());
+    expect(plugin.acknowledgeStop).toHaveBeenCalledTimes(1); // so it is not shown again next launch
+  });
+
+  it('forgets any other ending too, without saying anything', async () => {
+    plugin.lastState = { running: false, state: 'stopped', reason: 'forbidden' };
+    await renderApp();
+    await waitFor(() => expect(plugin.acknowledgeStop).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(MESSAGE)).toBeNull();
+  });
+
+  it('does not touch the stored ending while sharing is still running', async () => {
+    plugin.lastState = { running: true, state: 'running', reason: 'group-gone' };
+    await renderApp();
+    await flush();
+    expect(plugin.acknowledgeStop).not.toHaveBeenCalled();
   });
 
   it('says nothing for any other ending', async () => {
