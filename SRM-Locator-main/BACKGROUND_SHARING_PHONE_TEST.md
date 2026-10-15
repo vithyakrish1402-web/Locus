@@ -87,10 +87,53 @@ longer or shorter than it says; or Stop leaves the notification behind. Screensh
 
 ---
 
-## Test 3: swiping the app away
+## Test 3A: Home button, WITHOUT swiping
+
+This matters most. The moment you leave LOCUS, its screen is frozen; the sharing has to carry on from
+that very moment, not only after the app is swiped away.
 
 **Do:**
 1. Turn on **Background sharing (test)** on Phone A. Check the notification is showing.
+2. Stand somewhere you can **walk** from, with Phone B open on the map showing Phone A.
+3. Press the **Home button** on Phone A (do **not** open recent apps, do **not** swipe anything).
+4. **Write down the time.** Walk about 30 steps.
+
+**You should see:**
+- The sharing notification stays.
+- On Phone B, within **about 2 to 5 seconds** of pressing Home, Phone A's marker starts following you
+  as you walk, about once a second to once every 15 seconds (it follows your Settings "Location
+  refresh rate"). No "signal lost".
+- Nothing goes wrong when you open LOCUS again: it picks up from where it was.
+
+**Tell me if:** Phone B's marker stays still for more than about 10 seconds after you pressed Home, then
+moves; the marker only starts moving much later (30 seconds or more); or you see "signal lost". Write
+down the time you pressed Home and when the marker first moved.
+
+---
+
+## Test 3B: screen off, WITHOUT swiping
+
+**Do:**
+1. LOCUS open on Phone A, sharing on, notification showing.
+2. Press the **power button** to turn the screen off. Do **not** swipe the app away.
+3. **Write down the time.** Put the phone in your pocket and **walk** for 2 minutes.
+
+**You should see:** the same as Test 3A. Phone B follows you within a few seconds of the screen going
+off, and keeps following for the whole walk.
+
+**Tell me if:** it looks frozen for more than about 10 seconds after the screen goes off, or stops
+partway.
+
+**Optional (if your phone has split screen):** open LOCUS and a second app together in split screen,
+then tap the second app so LOCUS is no longer the one you are using. It should behave like Test 3A.
+
+---
+
+## Test 3: swiping the app away
+
+**Do:**
+1. Turn on **Background sharing (test)** on Phone A. Check the notification is showing. (Do this one
+   *after* Tests 3A and 3B, which should already have passed.)
 2. Open the phone's recent-apps screen and **swipe LOCUS Test away**.
 3. **Walk** with Phone A for at least 5 minutes (or carry it somewhere else). Keep Phone B open
    on the map.

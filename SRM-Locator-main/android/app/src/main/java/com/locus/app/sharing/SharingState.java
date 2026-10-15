@@ -63,31 +63,38 @@ public final class SharingState {
         if (l != null) l.onState(state, reason);
     }
 
-    // --- is the app on screen? ---
-    public interface VisibilityListener {
-        void onVisibility(boolean visible);
+    // --- is the app live: in the foreground, with its JavaScript running? ---
+    //
+    // Followed through the activity's onResume and onPause, NOT onStart and onStop: the WebView
+    // freezes its timers and socket at onPause (Capacitor's BridgeActivity.onPause), which can come
+    // well before onStop, or without any onStop (split screen, a dialog over the app). These are
+    // native callbacks, so they still fire when JavaScript has stopped.
+    public interface LiveListener {
+        void onLive(boolean live);
     }
 
-    private static final java.util.concurrent.atomic.AtomicInteger startedActivities = new java.util.concurrent.atomic.AtomicInteger();
-    private static volatile VisibilityListener visibilityListener;
+    private static final java.util.concurrent.atomic.AtomicInteger resumedActivities = new java.util.concurrent.atomic.AtomicInteger();
+    private static volatile LiveListener liveListener;
 
-    public static boolean isAppVisible() {
-        return startedActivities.get() > 0;
+    public static boolean isAppLive() {
+        return resumedActivities.get() > 0;
     }
 
-    public static void setVisibilityListener(VisibilityListener l) {
-        visibilityListener = l;
+    public static void setLiveListener(LiveListener l) {
+        liveListener = l;
     }
 
-    /** MainActivity.onStart */
-    public static void activityStarted() {
-        boolean was = isAppVisible();
-        startedActivities.incrementAndGet();
-        if (!was && visibilityListener != null) visibilityListener.onVisibility(true);
+    /** MainActivity.onResume */
+    public static void activityResumed() {
+        boolean was = isAppLive();
+        resumedActivities.incrementAndGet();
+        if (!was && liveListener != null) liveListener.onLive(true);
     }
 
-    /** MainActivity.onStop */
-    public static void activityStopped() {
-        if (startedActivities.updateAndGet(n -> Math.max(0, n - 1)) == 0 && visibilityListener != null) visibilityListener.onVisibility(false);
+    /** MainActivity.onPause */
+    public static void activityPaused() {
+        // Only a real change is reported: a stray pause with nothing resumed changes nothing.
+        int before = resumedActivities.getAndUpdate(n -> Math.max(0, n - 1));
+        if (before == 1 && liveListener != null) liveListener.onLive(false);
     }
 }

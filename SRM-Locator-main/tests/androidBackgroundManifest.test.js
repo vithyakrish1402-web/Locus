@@ -66,6 +66,16 @@ describe('how the service can be started', () => {
     }
   });
 
+  it('follows the app going to and from the foreground through onResume and onPause, which still fire when JavaScript is frozen', () => {
+    const activity = read('MainActivity.java');
+    expect(activity).toMatch(/public void onResume\(\)[\s\S]*SharingState\.activityResumed\(\)/);
+    expect(activity).toMatch(/public void onPause\(\)[\s\S]*SharingState\.activityPaused\(\)/);
+    // ...and not onStop, which comes later (or, in split screen, never).
+    expect(activity).not.toMatch(/onStop|onStart/);
+    // The pause is reported BEFORE super.onPause(), where Capacitor freezes the WebView.
+    expect(activity.indexOf('SharingState.activityPaused()')).toBeLessThan(activity.indexOf('super.onPause()'));
+  });
+
   it('refuses to send a token over anything but https (or the developer machine)', () => {
     expect(read('sharing', 'Endpoint.java')).toContain('scheme.equals("https")');
   });

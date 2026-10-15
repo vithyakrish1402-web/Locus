@@ -12,6 +12,7 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.BatteryManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -30,11 +31,11 @@ import java.util.concurrent.Executors;
  * only time Android 12+ allows it). It reports over HTTPS with the device token the app gave it,
  * never over the socket, never logs a token or a coordinate, and holds nothing it was not given.
  *
- * Who reports while the app is on screen: both. The app's own socket stays the source the Group
- * sees (the server shows a live connection in preference to this service's report), and the
- * service sends a light heartbeat every 30 s so that, the moment the app is swiped away, the
- * person's place is already held and they do not vanish. Once the app is not on screen the
- * service reports at the adaptive rate (see AdaptiveRate).
+ * Who reports, and when: see ReportPlanner. In short: while the app is live (foreground, JavaScript
+ * running) its own socket is the source and the service sends only a light 30 s heartbeat, so the
+ * person's place is already held. From the moment the activity is PAUSED (Home, screen off, split
+ * screen: the WebView freezes right then, long before any swipe) the service reports real GPS at the
+ * adaptive rate, starting with the first fix taken after that moment (see AdaptiveRate).
  *
  * The service ends itself, clearing the token, when: the person stops it (notification or app),
  * the server says the pass is finished (401, 403, 410, switched off), notifications or location
@@ -66,13 +67,11 @@ public class LocationShareService extends Service implements LocationListener {
 
     private Session session;
     private AdaptiveRate rate;
-    private Fix lastFix;
+    private ReportPlanner planner;
     private boolean started = false;
     private boolean posting = false;
     private boolean updatesOn = false;
     private long requestedIntervalMs = -1;
-    private long lastPostAt = 0;
-    private long nextAllowedAt = 0;
     private boolean wasPaused = false;
 
     @Override
@@ -188,16 +187,18 @@ public class LocationShareService extends Service implements LocationListener {
             started = true;
             running = true;
             rate = new AdaptiveRate(s.pollingMs);
+            planner = new ReportPlanner(rate, SharingState.isAppLive());
             registerUpdates();
             if (!started) return; // location was refused and sharing has already ended
-            SharingState.setVisibilityListener(this::onVisibilityChanged);
+            SharingState.setLiveListener(this::onLiveChanged);
             main.postDelayed(tick, TICK_MS);
             SharingState.emit("running", null);
         } else {
             rate = new AdaptiveRate(s.pollingMs);
+            planner.setRate(rate);
             retune();
         }
-        lastPostAt = 0; // report straight away
+        planner.reportSoon(); // report straight away
         refreshNotification();
         maybePost();
     }
@@ -205,10 +206,10 @@ public class LocationShareService extends Service implements LocationListener {
     // --- pause, resume ----------------------------------------------------------------------
 
     private void pauseSharing(int minutes) {
-        pause.pause(minutes <= 0 ? 0 : minutes * 60_000L, System.currentTimeMillis(), lastFix);
+        pause.pause(minutes <= 0 ? 0 : minutes * 60_000L, System.currentTimeMillis(), planner.lastFix());
         wasPaused = true;
         removeUpdates();
-        lastPostAt = 0;
+        planner.reportSoon();
         refreshNotification();
         SharingState.emit("paused", null);
         maybePost();
@@ -218,7 +219,7 @@ public class LocationShareService extends Service implements LocationListener {
         pause.resume();
         wasPaused = false;
         registerUpdates();
-        lastPostAt = 0;
+        planner.reportSoon();
         refreshNotification();
         SharingState.emit("running", null);
     }
@@ -240,31 +241,31 @@ public class LocationShareService extends Service implements LocationListener {
         }
     };
 
-    private void onVisibilityChanged(boolean visible) {
-        main.post(() -> {
-            if (!started) return;
-            retune();
-            if (!visible) lastPostAt = 0; // just left the app: report now, the place must already be held
-            maybePost();
-        });
+    /**
+     * The app went to or came from the foreground (the activity's onResume and onPause: see
+     * ReportPlanner). Called on the main thread, from the lifecycle callback itself, so the switch
+     * is immediate: from here on the service asks for fixes at the full rate, asks for one right now,
+     * and reports the first fix taken after this moment.
+     */
+    private void onLiveChanged(boolean live) {
+        if (!started) return;
+        planner.setLive(live, System.currentTimeMillis());
+        retune();
+        if (!live) requestFreshFix();
+        maybePost();
     }
 
     private void maybePost() {
         if (!started || posting) return;
         long now = System.currentTimeMillis();
-        if (now < nextAllowedAt) return;
         boolean paused = pause.isPaused(now);
-        long gap = paused ? PauseState.PAUSE_HEARTBEAT_MS : rate.intervalMs(SharingState.isAppVisible(), batteryPercent());
-        if (now - lastPostAt < gap * 9 / 10) return;
-        Fix fix = paused ? pause.held() : lastFix;
-        if (fix == null) return; // nothing to say yet; better silent than wrong
-        // A position that is old is not reported as where they are now: the lease is allowed to run out.
-        if (!paused && now - fix.takenAtMs > Math.max(gap * 3, 60_000)) return;
-        String body = ReportJson.build(fix, pause.status(now), AdaptiveRate.nextPostWithinSec(gap), batteryPercent());
+        ReportPlanner.Plan plan = planner.plan(now, paused, pause.held(), batteryPercent());
+        if (!plan.post) return;
+        String body = ReportJson.build(plan.fix, pause.status(now), AdaptiveRate.nextPostWithinSec(plan.gapMs), batteryPercent());
         if (body == null) return;
         final Session sending = session;
         posting = true;
-        lastPostAt = now;
+        planner.onPosted(now);
         network.execute(() -> {
             HttpResult result = poster.postLocation(sending.baseUrl, sending.deviceToken, body);
             main.post(() -> onPosted(result));
@@ -277,8 +278,7 @@ public class LocationShareService extends Service implements LocationListener {
         Outcome outcome = ResponseHandler.forLocation(result, backoff);
         switch (outcome.action) {
             case RETRY:
-                nextAllowedAt = System.currentTimeMillis() + outcome.delayMs;
-                lastPostAt = 0;
+                planner.holdOff(System.currentTimeMillis(), outcome.delayMs);
                 break;
             case STOP:
                 endSharing(outcome.stopReason, false);
@@ -303,7 +303,7 @@ public class LocationShareService extends Service implements LocationListener {
     }
 
     private long wantedRequestMs() {
-        return rate.intervalMs(SharingState.isAppVisible(), batteryPercent());
+        return planner.requestIntervalMs(batteryPercent());
     }
 
     private void registerUpdates() {
@@ -347,13 +347,29 @@ public class LocationShareService extends Service implements LocationListener {
     }
 
     private void accept(Location l) {
-        lastFix = new Fix(
+        planner.onFix(new Fix(
             l.getLatitude(), l.getLongitude(),
             l.hasAccuracy() ? l.getAccuracy() : Double.NaN,
             l.hasSpeed() ? l.getSpeed() : Double.NaN,
             l.hasBearing() ? l.getBearing() : Double.NaN,
-            System.currentTimeMillis());
-        rate.onFix(lastFix.speedMps);
+            System.currentTimeMillis()));
+    }
+
+    /** Asks the phone for one fix right now (Android 11+), rather than waiting for the next scheduled one. */
+    private void requestFreshFix() {
+        if (Build.VERSION.SDK_INT < 30 || !updatesOn) return;
+        try {
+            String provider = chooseProvider();
+            if (provider == null) return;
+            locationManager.getCurrentLocation(provider, null, ContextCompat.getMainExecutor(this), location -> {
+                if (location != null && started) {
+                    accept(location);
+                    maybePost();
+                }
+            });
+        } catch (SecurityException e) {
+            // no location access right now; the scheduled updates are the fallback
+        }
     }
 
     @Override
@@ -407,7 +423,7 @@ public class LocationShareService extends Service implements LocationListener {
      */
     private void endSharing(String reason, boolean tellServer) {
         main.removeCallbacks(tick);
-        SharingState.setVisibilityListener(null);
+        SharingState.setLiveListener(null);
         removeUpdates();
         final Session ending = session != null ? session : SharingState.session();
         started = false;
@@ -428,7 +444,7 @@ public class LocationShareService extends Service implements LocationListener {
     @Override
     public void onDestroy() {
         main.removeCallbacksAndMessages(null);
-        SharingState.setVisibilityListener(null);
+        SharingState.setLiveListener(null);
         removeUpdates();
         started = false;
         running = false;
