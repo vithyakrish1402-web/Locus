@@ -27,6 +27,17 @@ public final class SharingState {
         return new TokenStore(new KeystoreSecretBox(), new FileKeyValue(new java.io.File(context.getApplicationContext().getNoBackupFilesDir(), "locus_sharing")));
     }
 
+    /** Why sharing last stopped by itself, kept across a killed process (see StopNote). */
+    public static StopNote stopNote(Context context) {
+        return new StopNote(new FileKeyValue(new java.io.File(context.getApplicationContext().getNoBackupFilesDir(), "locus_sharing")));
+    }
+
+    /** The app has shown the ending (or sharing is starting again): forget it, in memory and on disk. */
+    public static void acknowledgeStop(Context context) {
+        lastReason = null;
+        stopNote(context).clear();
+    }
+
     /** Forgets the session everywhere: memory and disk. */
     public static void forget(Context context) {
         session = null;

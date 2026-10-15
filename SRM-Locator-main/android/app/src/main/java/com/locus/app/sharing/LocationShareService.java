@@ -190,6 +190,7 @@ public class LocationShareService extends Service implements LocationListener {
             rate = new AdaptiveRate(s.pollingMs);
             planner = new ReportPlanner(rate, SharingState.isAppLive());
             outage = new OutageTracker(SharingState.outageGiveUpMs());
+            SharingState.acknowledgeStop(this);
             SharingNotifications.cancelEnded(this); // sharing is on again: an old "ended" notice is no longer true
             registerUpdates();
             if (!started) return; // location was refused and sharing has already ended
@@ -439,6 +440,7 @@ public class LocationShareService extends Service implements LocationListener {
         started = false;
         running = false;
         SharingState.forget(this);
+        SharingState.stopNote(this).record(reason);
         SharingState.emit("stopped", reason);
         stopForeground(STOP_FOREGROUND_REMOVE);
         // Not asked for, and the app may be closed: say so instead of vanishing.

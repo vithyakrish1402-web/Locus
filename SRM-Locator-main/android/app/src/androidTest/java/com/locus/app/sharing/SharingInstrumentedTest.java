@@ -102,6 +102,7 @@ public class SharingInstrumentedTest {
         locations.setTestProviderEnabled(LocationManager.GPS_PROVIDER, true);
         server = new FakeServer();
         SharingState.forget(context);
+        SharingState.acknowledgeStop(context);
         SharingState.setListener((state, reason) -> states.add(new String[] {state, reason}));
         notifications.cancelAll();
     }
@@ -335,6 +336,28 @@ public class SharingInstrumentedTest {
         assertTrue("it goes away when tapped", (notice.getNotification().flags & android.app.Notification.FLAG_AUTO_CANCEL) != 0);
         assertNotNull("tapping it opens the app", notice.getNotification().contentIntent);
         assertNull("the sharing notification is gone", active(SharingNotifications.SHARING_ID));
+        // Kept on disk, so a killed process still knows why when the app is next opened.
+        assertEquals("group-gone", SharingState.stopNote(context).read());
+        SharingState.acknowledgeStop(context);
+        assertNull(SharingState.stopNote(context).read());
+        assertNull(SharingState.lastReason());
+    }
+
+    @Test
+    public void startingAgainForgetsAnOldEnding() throws Exception {
+        SharingState.stopNote(context).record("group-gone");
+        startSharing(sessionFor(3_600_000, "v1.restart.token"));
+        waitFor("sharing", 20_000, () -> server.count("POST") >= 1);
+        assertNull(SharingState.stopNote(context).read());
+    }
+
+    @Test
+    public void aStopThePersonAskedForLeavesNoEnding() throws Exception {
+        startSharing(sessionFor(3_600_000, "v1.userstop.token"));
+        waitFor("sharing", 20_000, () -> server.count("POST") >= 1);
+        send(LocationShareService.ACTION_STOP, 0);
+        waitFor("the service to end", 15_000, () -> !LocationShareService.isRunning());
+        assertNull(SharingState.stopNote(context).read());
     }
 
     @Test
