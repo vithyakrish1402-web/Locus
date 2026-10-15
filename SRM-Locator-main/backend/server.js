@@ -24,10 +24,15 @@ import {
   setPresence, presenceOf, livePresence, hasPresence, removePresence, expirePresence,
   presenceKey, uidOfPresenceKey, liveUids,
 } from './presence.js';
+import { createIdTokenVerifier } from './identity.js';
+import {
+  createBackgroundRouter, backgroundConfig, backgroundStartupLine, endSession, endAllSessions,
+} from './backgroundSharing.js';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// One proxy hop (Render's): lets req.ip be the caller rather than the proxy, for rate limits.
+app.set('trust proxy', 1);
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -42,6 +47,22 @@ const io = new Server(server, {
 const activeSquads = Object.create(null);
 const users = {};
 const locationCache = {};
+
+// --- BACKGROUND SHARING (backgroundSharing.js) ---
+// HTTPS endpoints for a phone reporting its position while LOCUS is closed. Off unless
+// LOCUS_BACKGROUND_SHARING_ENABLED=true and LOCUS_DEVICE_TOKEN_SECRET is set; off, they answer 503
+// and nothing else changes. Mounted before the general JSON parser: they bring their own, with a
+// much smaller limit.
+const backgroundSettings = backgroundConfig();
+console.log(backgroundStartupLine(backgroundSettings));
+app.use('/api/background', createBackgroundRouter({
+  config: backgroundSettings,
+  verifyIdToken: createIdTokenVerifier().verifyIdToken,
+  getSquad: (roomCode) => activeSquads[roomCode],
+  accept: (roomCode, uid, report, now) => acceptBackgroundPosition(roomCode, uid, report, now),
+  endSharing: (roomCode, uid) => endSharing(roomCode, uid),
+}));
+app.use(express.json());
 
 // --- 🧹 STALE SQUAD SWEEP ---
 // Defense-in-depth against ghost rooms: mobile clients that get killed/backgrounded
@@ -254,6 +275,7 @@ function broadcastSquadUpdate(roomCode) {
         speed: entry.speed,
         heading: entry.heading,
         battery: entry.battery,
+        ...(entry.accuracy === null ? {} : { accuracy: entry.accuracy }),
         status: entry.status,
         lastSeen: entry.lastSeen,
         hasFix: true,
@@ -293,6 +315,20 @@ function expireLeases(now) {
     }
     broadcastSquadUpdate(roomCode);
   }
+}
+
+// The person stops sharing (their own choice, through the endpoint): off the map without a
+// "signal lost", since they did not go dark, they went away. Their session is ended by the caller.
+function endSharing(roomCode, uid) {
+  const squad = activeSquads[roomCode];
+  if (!squad) return;
+  if (removePresence(squad, uid)) broadcastSquadUpdate(roomCode);
+}
+
+// Ends every device token `uid` holds, in every squad. (Leaving, a vote-out and a block already
+// end the one for their squad; this is for anything that must cut a person off everywhere.)
+export function revokeAllDeviceTokens(uid) {
+  return endAllSessions(activeSquads, uid);
 }
 
 // A position reported by a phone that is sharing without a socket (the background service),
@@ -378,6 +414,7 @@ socket.on('check-ping', (clientTimestamp) => {
         // No socket to detach: off the roster and out of the map, and they must be admitted again.
         forgetMember(squad, sharingUid);
         removePresence(squad, sharingUid);
+        endSession(squad, sharingUid);
       }
       if (users[targetId]) {
         delete users[targetId];
@@ -689,6 +726,7 @@ socket.on('check-ping', (clientTimestamp) => {
     if (targetUid && !squad.blockedUids.includes(targetUid)) squad.blockedUids.push(targetUid);
     forgetMember(squad, targetUid);
     removePresence(squad, targetUid);
+    endSession(squad, targetUid);
 
     squad.members = squad.members.filter(id => id !== targetId);
     if (squad.memberUids) delete squad.memberUids[targetId];
@@ -1141,6 +1179,7 @@ socket.on('check-ping', (clientTimestamp) => {
       if (departingUid) {
         forgetMember(squad, departingUid);
         removePresence(squad, departingUid);
+        endSession(squad, departingUid);
         delete squad.memberUids[disconnectedId];
       }
 

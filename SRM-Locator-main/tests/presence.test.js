@@ -46,7 +46,7 @@ describe('who can hold a place', () => {
     const squad = squadOf();
     const entry = setPresence(squad, 'uA', { ...here, speed: 3, heading: 90, battery: 55, status: 'FROZEN', name: 'Asha', photo: 'p.png', nextPostWithinSec: 100 }, NOW);
     expect(entry).toEqual({
-      uid: 'uA', name: 'Asha', photo: 'p.png', lat: 12.82, lng: 80.04, speed: 3, heading: 90, battery: 55,
+      uid: 'uA', name: 'Asha', photo: 'p.png', lat: 12.82, lng: 80.04, speed: 3, heading: 90, battery: 55, accuracy: null,
       status: 'FROZEN', lastSeen: NOW, leaseUntil: NOW + 300000,
     });
     expect(squad.presence.uA).toBe(entry);
