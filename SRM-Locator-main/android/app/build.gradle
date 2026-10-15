@@ -18,8 +18,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Bumped by scripts/release.mjs - do not hand-edit. versionName must stay valid
         // semver: the in-app updater compares it against the GitHub release tag.
-        versionCode 3
-        versionName "1.1.21"
+        versionCode 10
+        versionName "1.1.44"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Empty string (not null) so a missing key fails obviously inside Google Maps
         // (invalid key error) instead of Gradle throwing over an unresolved placeholder.
@@ -64,6 +64,16 @@ android {
         sidetest {
             initWith debug
             applicationIdSuffix ".sidetest"
+            matchingFallbacks = ['debug']
+        }
+        // The background-sharing test build (npm run bgtest:build): a THIRD app, "LOCUS BG Test"
+        // (src/bgtest/res), beside LOCUS and beside "LOCUS Test" - a different app id, so it can
+        // never replace or be replaced by either. Debug-signed. Its web build is the Vite 'sidetest'
+        // mode, which is what switches both updaters off and offers the background sharing switch.
+        bgtest {
+            initWith debug
+            applicationIdSuffix ".bgtest"
+            versionNameSuffix "-bgtest"
             matchingFallbacks = ['debug']
         }
     }

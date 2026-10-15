@@ -22,10 +22,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readBuildMode } from './lib/webBuild.mjs';
 
+// --bgtest: the same build, as the separate app "LOCUS BG Test" (com.locus.app.bgtest), so it can sit
+// next to LOCUS Test without replacing it.
+const variant = process.argv.includes('--bgtest') ? 'bgtest' : 'sidetest';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ANDROID_DIR = join(ROOT, 'android');
 const WEB_ASSETS = join(ANDROID_DIR, 'app', 'src', 'main', 'assets', 'public');
-const APK = join(ANDROID_DIR, 'app', 'build', 'outputs', 'apk', 'sidetest', 'app-sidetest.apk');
+const APK = join(ANDROID_DIR, 'app', 'build', 'outputs', 'apk', variant, `app-${variant}.apk`);
 const IS_WINDOWS = process.platform === 'win32';
 const buildOnly = process.argv.includes('--build-only');
 
@@ -81,7 +84,7 @@ try {
   run('npx', ['vite', 'build', '--mode', 'sidetest']);
   if (readBuildMode(join(ROOT, 'dist')) !== 'sidetest') throw new Error('the web build is not the sidetest build');
   run('npx', ['cap', 'sync', 'android']);
-  run(gradlew, ['assembleSidetest'], { cwd: ANDROID_DIR });
+  run(gradlew, [variant === 'bgtest' ? 'assembleBgtest' : 'assembleSidetest'], { cwd: ANDROID_DIR });
   if (!existsSync(APK)) throw new Error(`no APK at ${APK}`);
   if (buildOnly) {
     console.log(`\n  Built ${APK}\n  (--build-only: nothing installed)`);
