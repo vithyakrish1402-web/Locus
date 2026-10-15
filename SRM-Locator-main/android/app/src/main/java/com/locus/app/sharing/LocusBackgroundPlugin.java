@@ -30,6 +30,7 @@ import java.util.regex.Pattern;
  *   getState()         { state: running | paused | stopped, reason?, running }
  *   event "stateChanged" { state, reason? }   reason says why it stopped: user-stop (or whatever the
  *                      app passed to stop()), revoked, token-expired, forbidden, group-gone,
+ *                      server-unreachable (no answer, 502, 503 or 504 for ten minutes of retries),
  *                      disabled, rejected, notifications-denied, location-denied,
  *                      restart-blocked, cannot-start-foreground, no-session
  * The standard requestPermissions({ permissions: ["location", "notifications"] }) asks for the two

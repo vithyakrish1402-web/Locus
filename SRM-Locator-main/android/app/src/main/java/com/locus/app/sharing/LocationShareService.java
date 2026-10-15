@@ -68,6 +68,7 @@ public class LocationShareService extends Service implements LocationListener {
     private Session session;
     private AdaptiveRate rate;
     private ReportPlanner planner;
+    private OutageTracker outage;
     private boolean started = false;
     private boolean posting = false;
     private boolean updatesOn = false;
@@ -188,6 +189,8 @@ public class LocationShareService extends Service implements LocationListener {
             running = true;
             rate = new AdaptiveRate(s.pollingMs);
             planner = new ReportPlanner(rate, SharingState.isAppLive());
+            outage = new OutageTracker(SharingState.outageGiveUpMs());
+            SharingNotifications.cancelEnded(this); // sharing is on again: an old "ended" notice is no longer true
             registerUpdates();
             if (!started) return; // location was refused and sharing has already ended
             SharingState.setLiveListener(this::onLiveChanged);
@@ -276,9 +279,16 @@ public class LocationShareService extends Service implements LocationListener {
         posting = false;
         if (!started) return;
         Outcome outcome = ResponseHandler.forLocation(result, backoff);
+        long now = System.currentTimeMillis();
+        // Any answer, even a refusal, means the server is back; no answer, 502, 503 or 504 is an outage.
+        boolean unreachable = outcome.action == Outcome.Action.RETRY && outcome.serverUnreachable;
+        if (outage.observe(!unreachable, now)) {
+            endSharing(ReasonNotice.SERVER_UNREACHABLE, false);
+            return;
+        }
         switch (outcome.action) {
             case RETRY:
-                planner.holdOff(System.currentTimeMillis(), outcome.delayMs);
+                planner.holdOff(now, outcome.delayMs);
                 break;
             case STOP:
                 endSharing(outcome.stopReason, false);
@@ -431,6 +441,8 @@ public class LocationShareService extends Service implements LocationListener {
         SharingState.forget(this);
         SharingState.emit("stopped", reason);
         stopForeground(STOP_FOREGROUND_REMOVE);
+        // Not asked for, and the app may be closed: say so instead of vanishing.
+        SharingNotifications.postEnded(this, ReasonNotice.forStopReason(reason));
         if (tellServer && ending != null) {
             network.execute(() -> {
                 poster.deleteSession(ending.baseUrl, ending.deviceToken);

@@ -28,6 +28,7 @@ public final class SharingNotifications {
     public static final String CHANNEL_RESUME = "bg_resume";
     public static final int SHARING_ID = 7401;
     public static final int RESUME_ID = 7402;
+    public static final int ENDED_ID = 7403;
 
     private SharingNotifications() {}
 
@@ -116,5 +117,33 @@ public final class SharingNotifications {
 
     public static void cancelResume(Context context) {
         context.getSystemService(NotificationManager.class).cancel(RESUME_ID);
+    }
+
+    /**
+     * Said once when sharing ended and nobody asked it to ("Your Group ended", or the server could not
+     * be reached for the whole retry window), so the notification does not just vanish. Tapping it
+     * opens the app and removes it.
+     */
+    public static void postEnded(Context context, ReasonNotice.Kind kind) {
+        if (kind == ReasonNotice.Kind.NONE) return;
+        ensureChannels(context);
+        boolean unreachable = kind == ReasonNotice.Kind.UNREACHABLE;
+        Notification notification = new NotificationCompat.Builder(context, CHANNEL_RESUME)
+            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentTitle(unreachable ? "LOCUS stopped sharing your location" : "Your Group ended")
+            .setContentText(unreachable ? "The server could not be reached. Tap to reopen LOCUS" : "Tap to reopen LOCUS")
+            .setContentIntent(openApp(context))
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .build();
+        try {
+            context.getSystemService(NotificationManager.class).notify(ENDED_ID, notification);
+        } catch (RuntimeException e) {
+            // Notifications not allowed: nothing to show.
+        }
+    }
+
+    public static void cancelEnded(Context context) {
+        context.getSystemService(NotificationManager.class).cancel(ENDED_ID);
     }
 }

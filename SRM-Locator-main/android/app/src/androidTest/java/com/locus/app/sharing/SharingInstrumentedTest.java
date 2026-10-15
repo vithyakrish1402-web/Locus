@@ -115,6 +115,7 @@ public class SharingInstrumentedTest {
         }
         waitFor("service to end", 10_000, () -> !LocationShareService.isRunning());
         SharingState.setListener(null);
+        SharingState.setOutageGiveUpMsForTests(OutageTracker.GIVE_UP_AFTER_MS);
         SharingState.forget(context);
         server.stop();
         try {
@@ -319,6 +320,91 @@ public class SharingInstrumentedTest {
     }
 
     @Test
+    public void aGroupThatEndedLeavesATappableNoticeAndNoToken() throws Exception {
+        server.status = 410;
+        server.body = "{\"error\":\"no-group\"}";
+        startSharing(sessionFor(3_600_000, "v1.ended.token"));
+        waitFor("the service to stop", 25_000, () -> server.count("POST") >= 1 && !LocationShareService.isRunning());
+        assertEquals("stopped:group-gone", lastState());
+        assertNull("the pass is wiped: a new one needs a fresh sign-in", SharingState.session());
+        assertNull(SharingState.store(context).load());
+        StatusBarNotification notice = active(SharingNotifications.ENDED_ID);
+        assertNotNull("a notice says the Group ended", notice);
+        assertEquals("Your Group ended", notice.getNotification().extras.getString("android.title"));
+        assertEquals("Tap to reopen LOCUS", String.valueOf(notice.getNotification().extras.getCharSequence("android.text")));
+        assertTrue("it goes away when tapped", (notice.getNotification().flags & android.app.Notification.FLAG_AUTO_CANCEL) != 0);
+        assertNotNull("tapping it opens the app", notice.getNotification().contentIntent);
+        assertNull("the sharing notification is gone", active(SharingNotifications.SHARING_ID));
+    }
+
+    @Test
+    public void aMemberRemovedOrAPassThatRanOutLeavesNoNotice() throws Exception {
+        server.status = 403;
+        server.body = "{\"error\":\"blocked\"}";
+        startSharing(sessionFor(3_600_000, "v1.removed.token"));
+        waitFor("the service to stop", 25_000, () -> server.count("POST") >= 1 && !LocationShareService.isRunning());
+        assertEquals("stopped:forbidden", lastState());
+        assertNull(active(SharingNotifications.ENDED_ID));
+    }
+
+    @Test
+    public void aServerThatStaysDownForTheWholeWindowEndsWithANoticeNotSilence() throws Exception {
+        SharingState.setOutageGiveUpMsForTests(4_000);
+        try {
+            server.status = 503;
+            server.body = "";
+            startSharing(sessionFor(3_600_000, "v1.outage.token"));
+            waitFor("the service to give up", 40_000, () -> server.count("POST") >= 2 && !LocationShareService.isRunning());
+            assertEquals("stopped:server-unreachable", lastState());
+            StatusBarNotification notice = active(SharingNotifications.ENDED_ID);
+            assertNotNull(notice);
+            assertEquals("LOCUS stopped sharing your location", notice.getNotification().extras.getString("android.title"));
+            assertTrue((notice.getNotification().flags & android.app.Notification.FLAG_AUTO_CANCEL) != 0);
+        } finally {
+            SharingState.setOutageGiveUpMsForTests(OutageTracker.GIVE_UP_AFTER_MS);
+        }
+    }
+
+    @Test
+    public void anOutageThatEndsInTimeKeepsSharingWithNoNotice() throws Exception {
+        SharingState.setOutageGiveUpMsForTests(60_000);
+        try {
+            server.status = 502;
+            server.body = "";
+            startSharing(sessionFor(3_600_000, "v1.blip.token"));
+            waitFor("the first failed attempt", 20_000, () -> server.count("POST") >= 1);
+            server.status = 200;
+            server.body = "{\"ok\":true}";
+            waitFor("a report to get through", 30_000, () -> server.countWithStatus(200) >= 1);
+            assertTrue(LocationShareService.isRunning());
+            assertNull(active(SharingNotifications.ENDED_ID));
+        } finally {
+            SharingState.setOutageGiveUpMsForTests(OutageTracker.GIVE_UP_AFTER_MS);
+        }
+    }
+
+    @Test
+    public void aServerThatIsBusyButAnsweringIsNotAnOutage() throws Exception {
+        SharingState.setOutageGiveUpMsForTests(3_000);
+        server.status = 429;
+        server.body = "{\"error\":\"rate\"}";
+        server.retryAfterSec = 1;
+        startSharing(sessionFor(3_600_000, "v1.busy.token"));
+        waitFor("several refused attempts, well past the give-up time", 30_000, () -> server.count("POST") >= 5);
+        assertTrue("still sharing: a 429 means the server is up", LocationShareService.isRunning());
+        assertNull(active(SharingNotifications.ENDED_ID));
+    }
+
+    @Test
+    public void startingAgainRemovesAStaleEndedNotice() throws Exception {
+        SharingNotifications.postEnded(context, ReasonNotice.Kind.GROUP_ENDED);
+        waitFor("the notice", 5_000, () -> active(SharingNotifications.ENDED_ID) != null);
+        startSharing(sessionFor(3_600_000, "v1.again.token"));
+        waitFor("sharing", 20_000, () -> server.count("POST") >= 1);
+        assertNull(active(SharingNotifications.ENDED_ID));
+    }
+
+    @Test
     public void aPassThatHasRunOutEndsSharing() throws Exception {
         startSharing(sessionFor(7_000, "v1.shortlived.token"));
         waitFor("the first report", 20_000, () -> server.count("POST") >= 1);
@@ -352,6 +438,7 @@ public class SharingInstrumentedTest {
         assertNull("only the boot broadcast counts", active(SharingNotifications.RESUME_ID));
 
         receiver.onReceive(context, new Intent(Intent.ACTION_BOOT_COMPLETED));
+        waitFor("the resume notice (posting is asynchronous)", 5_000, () -> active(SharingNotifications.RESUME_ID) != null);
         StatusBarNotification notice = active(SharingNotifications.RESUME_ID);
         assertNotNull(notice);
         assertEquals(SharingNotifications.CHANNEL_RESUME, notice.getNotification().getChannelId());
