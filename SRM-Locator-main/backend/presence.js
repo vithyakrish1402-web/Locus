@@ -7,7 +7,7 @@
 // it holds a *lease* on its place in the Group, renewed by every report and valid for as long
 // as the phone said it would stay quiet.
 //
-//   squad.presence[uid] = { uid, name, photo, lat, lng, speed, heading, battery, status,
+//   squad.presence[uid] = { uid, name, photo, lat, lng, speed, heading, battery, accuracy, status,
 //                           lastSeen, leaseUntil }
 //
 // Everything here works on a squad object and takes the time as an argument; nothing touches
@@ -71,6 +71,7 @@ export function setPresence(squad, uid, report, now, lease = {}) {
     speed: finite(report.speed, 0),
     heading: finite(report.heading, 0),
     battery: finite(report.battery, 0),
+    accuracy: finite(report.accuracy, null), // metres, when the phone says
     status: STATUSES.includes(report.status) ? report.status : 'ACTIVE',
     lastSeen: now,
     leaseUntil: now + leaseSeconds(report.nextPostWithinSec, lease.min, lease.max) * 1000,
