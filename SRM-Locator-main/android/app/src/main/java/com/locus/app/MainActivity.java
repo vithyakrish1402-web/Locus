@@ -26,17 +26,20 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
     }
 
-    // Background sharing reports at a light heartbeat while the app is on screen (the app's own
-    // connection is the source then) and at its full rate once it is not.
+    // Background sharing reports at a light heartbeat while the app is live (in the foreground, its
+    // JavaScript running: the app's own connection is the source then) and at its full rate from the
+    // moment it is not. The WebView freezes at onPause, so that is the moment that counts; these are
+    // native callbacks and still fire when JavaScript has stopped.
     @Override
-    public void onStart() {
-        super.onStart();
-        SharingState.activityStarted();
+    public void onResume() {
+        super.onResume();
+        SharingState.activityResumed();
     }
 
     @Override
-    public void onStop() {
-        super.onStop();
-        SharingState.activityStopped();
+    public void onPause() {
+        // Before super: Capacitor freezes the WebView in super.onPause().
+        SharingState.activityPaused();
+        super.onPause();
     }
 }
