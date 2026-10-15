@@ -20,6 +20,10 @@ import {
   setPersonallyMuted, isPersonallyMuted, settingsFor, createSettingsStore,
 } from './groupSettings.js';
 import { logAlert, pingHistory, recordPing, noteSosAttempt } from './alertLog.js';
+import {
+  setPresence, presenceOf, livePresence, hasPresence, removePresence, expirePresence,
+  presenceKey, uidOfPresenceKey, liveUids,
+} from './presence.js';
 
 const app = express();
 app.use(cors());
@@ -65,20 +69,28 @@ const locationCache = {};
 // (tests/squadSweep.e2e.test.js): minutes are too long to wait for in a test run.
 const ROOM_TTL_MS = Number(process.env.LOCUS_ROOM_TTL_MS) || 5 * 60 * 1000;
 const SWEEP_INTERVAL_MS = Number(process.env.LOCUS_SWEEP_INTERVAL_MS) || 60 * 1000;
-setInterval(() => {
+const sweepTimer = setInterval(() => {
   const now = Date.now();
+  expireLeases(now);
   for (const roomCode in activeSquads) {
     const squad = activeSquads[roomCode];
     squad.members = squad.members.filter(id => io.sockets.sockets.has(id));
 
-    const isStale = now - (squad.lastActivity || 0) > ROOM_TTL_MS;
+    // Someone still sharing their position from the background (presence.js) holds the squad
+    // open: they count as activity, and as members, until their lease runs out.
+    const held = hasPresence(squad, now);
+    const isStale = !held && now - (squad.lastActivity || 0) > ROOM_TTL_MS;
 
-    if (squad.members.length === 0 || isStale) {
+    if ((squad.members.length === 0 && !held) || isStale) {
       console.log(`[🧹 SWEEP] Removing abandoned/stale squad: ${roomCode}`);
       deleteSquad(roomCode);
     }
   }
 }, SWEEP_INTERVAL_MS);
+
+// A lease that runs out is noticed within this long. (Only the e2e tests shorten it.)
+const PRESENCE_CHECK_MS = Number(process.env.LOCUS_PRESENCE_CHECK_MS) || 5 * 1000;
+const presenceTimer = setInterval(() => expireLeases(Date.now()), PRESENCE_CHECK_MS);
 
 // Every deletion of a squad comes through here, so nothing it leaves behind outlives it.
 function deleteSquad(roomCode) {
@@ -181,6 +193,125 @@ function persistGroupSettings(roomCode) {
   if (squad?.settings) settingsStore.save(roomCode, commanderOf(squad), squad.settings);
 }
 
+// The squad's roster, as everyone else's member list and map see it.
+//
+// Built from `squad.members` — the authoritative roster — rather than only from whoever
+// has sent telemetry. `users` fills in on the first GPS fix, so a member who is indoors,
+// has denied location permission, or has simply just been approved used to be missing
+// from this payload altogether: absent from the squad list as well as the map. They now
+// come through with their telemetry merged in where there is any and `hasFix: false`
+// where there isn't, so the client can list them without trying to plot them.
+//
+// Every entry carries `uid`, the person's stable identity. Socket ids are reminted on
+// every mobile reconnect, and a client holding only socket ids cannot tell "same person,
+// new socket" — which is what left a returning member buried under an orphaned ghost
+// marker of themselves that nothing could clear.
+function broadcastSquadUpdate(roomCode) {
+  const squad = activeSquads[roomCode];
+  const ids = new Set(squad ? squad.members : []);
+  Object.keys(users).forEach(id => { if (users[id].roomCode === roomCode) ids.add(id); });
+
+  const roomUsers = {};
+  ids.forEach(id => {
+    const telemetry = users[id];
+    if (telemetry && telemetry.roomCode !== roomCode) return;
+    const live = io.sockets.sockets.get(id);
+    // A roster entry whose socket is gone and which never reported a fix: there is
+    // nothing to show, and its own disconnect handler is about to prune it anyway.
+    if (!telemetry && !live) return;
+
+    const uid = squad?.memberUids?.[id] || live?.data?.uid || null;
+    const profile = live?.data?.profile || {};
+    roomUsers[id] = telemetry
+      ? { ...telemetry, uid, hasFix: true }
+      : {
+          uid,
+          roomCode,
+          name: profile.name,
+          photo: profile.photo,
+          status: 'ACTIVE',
+          speed: 0,
+          heading: 0,
+          battery: 0,
+          hasFix: false,
+        };
+  });
+
+  // People still sharing from the background (presence.js): on the map and in the list, keyed
+  // apart from any socket. Not when they also have a connection on the roster, which already
+  // shows them: one person is never two markers.
+  if (squad) {
+    const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
+    for (const entry of livePresence(squad, Date.now())) {
+      if (connected.has(entry.uid)) continue;
+      roomUsers[presenceKey(entry.uid)] = {
+        uid: entry.uid,
+        roomCode,
+        name: entry.name,
+        photo: entry.photo,
+        lat: entry.lat,
+        lng: entry.lng,
+        speed: entry.speed,
+        heading: entry.heading,
+        battery: entry.battery,
+        status: entry.status,
+        lastSeen: entry.lastSeen,
+        hasFix: true,
+        presence: true,
+      };
+    }
+  }
+  io.to(roomCode).emit('users-update', roomUsers);
+}
+
+// A presence lease that has run out: the person is gone from the map and the list, and the
+// Group is told their signal is lost (the same notice a dropped connection raises, after a
+// grace period the phone itself set). Not for someone who has a connection on the roster.
+function expireLeases(now) {
+  for (const roomCode in activeSquads) {
+    const squad = activeSquads[roomCode];
+    const expired = expirePresence(squad, now);
+    if (expired.length === 0) continue;
+    const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
+    for (const entry of expired) {
+      if (connected.has(entry.uid)) continue;
+      io.to(roomCode).emit('member-signal-lost', {
+        targetId: presenceKey(entry.uid),
+        uid: entry.uid,
+        name: entry.name,
+        photo: entry.photo,
+        lastKnownLocation: {
+          latitude: entry.lat,
+          longitude: entry.lng,
+          speed: entry.speed,
+          heading: entry.heading,
+          batteryLevel: entry.battery,
+        },
+        timeDelta: (now - entry.lastSeen) / 1000,
+        disconnectTime: new Date(now).toISOString(),
+      });
+    }
+    broadcastSquadUpdate(roomCode);
+  }
+}
+
+// A position reported by a phone that is sharing without a socket (the background service),
+// for the squad `roomCode`. The endpoint that receives those reports calls this for each one
+// it has authenticated. Refuses, with a reason, anyone the Commander has not admitted or has
+// blocked, and a Group that no longer exists. Otherwise it renews the person's lease (see
+// presence.js), counts as the Group's activity, and puts them on everyone's map.
+export function acceptBackgroundPosition(roomCode, uid, report, now = Date.now()) {
+  const squad = activeSquads[roomCode];
+  if (!squad) return { ok: false, reason: 'no-group' };
+  if (squad.blockedUids?.includes(uid)) return { ok: false, reason: 'blocked' };
+  if (!isKnownMember(squad, uid)) return { ok: false, reason: 'not-member' };
+  const entry = setPresence(squad, uid, report, now);
+  if (!entry) return { ok: false, reason: 'bad-report' };
+  squad.lastActivity = now;
+  broadcastSquadUpdate(roomCode);
+  return { ok: true, leaseUntil: entry.leaseUntil };
+}
+
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
 
@@ -227,7 +358,9 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.on('vote-to-kick', (payload) => {
     const { targetId, roomCode } = payload ?? {};
     const squad = activeSquads[roomCode];
-    if (!squad || !squad.members.includes(socket.id) || !squad.members.includes(targetId)) return;
+    const sharingUid = uidOfPresenceKey(targetId);
+    const targetIsSharing = Boolean(sharingUid) && Boolean(presenceOf(squad, sharingUid, Date.now()));
+    if (!squad || !squad.members.includes(socket.id) || !(squad.members.includes(targetId) || targetIsSharing)) return;
 
     if (!squad.kickVotes) squad.kickVotes = {};
     if (!squad.kickVotes[targetId]) squad.kickVotes[targetId] = new Set();
@@ -241,6 +374,11 @@ socket.on('check-ping', (clientTimestamp) => {
     if (currentVotes >= requiredVotes) {
       io.to(targetId).emit('exiled');
       delete squad.kickVotes[targetId];
+      if (targetIsSharing) {
+        // No socket to detach: off the roster and out of the map, and they must be admitted again.
+        forgetMember(squad, sharingUid);
+        removePresence(squad, sharingUid);
+      }
       if (users[targetId]) {
         delete users[targetId];
         delete locationCache[targetId];
@@ -280,6 +418,12 @@ socket.on('check-ping', (clientTimestamp) => {
       const record = toTelemetryRecord(locationCache[memberId]);
       if (record) squadTelemetry[memberId] = record;
     });
+    const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
+    for (const entry of livePresence(squad, Date.now())) {
+      if (connected.has(entry.uid)) continue;
+      const record = toTelemetryRecord({ lat: entry.lat, lng: entry.lng, lastSeen: entry.lastSeen, battery: entry.battery });
+      if (record) squadTelemetry[presenceKey(entry.uid)] = record;
+    }
     socket.emit('telemetry-sync-complete', squadTelemetry);
     reply({ ok: true });
   });
@@ -321,14 +465,21 @@ socket.on('check-ping', (clientTimestamp) => {
 
     // A JOIN for a code no live squad has, or a CREATE for a code a live squad already
     // has, is refused here rather than turned into the other (see refuseJoin).
-    const refusal = refuseJoin(existing, { intent, uid: requesterUid, isSocketLive: (id) => io.sockets.sockets.has(id) });
+    const refusal = refuseJoin(existing, {
+      intent,
+      uid: requesterUid,
+      isSocketLive: (id) => io.sockets.sockets.has(id),
+      holdsPresence: Boolean(existing) && hasPresence(existing, Date.now()),
+    });
     if (refusal) {
       socket.emit(refusal, { roomCode });
       return;
     }
 
-    // Case 1: brand-new or fully abandoned room -> requester becomes the owner.
-    if (!existing || existing.members.length === 0) {
+    // Case 1: brand-new or fully abandoned room -> requester becomes the owner. A squad whose
+    // members are all sharing from the background is not abandoned: starting afresh here would
+    // wipe its roster out from under them.
+    if (!existing || (existing.members.length === 0 && !hasPresence(existing, Date.now()))) {
       activeSquads[roomCode] = {
         ownerId: socket.id,
         ownerUid: requesterUid,
@@ -386,6 +537,7 @@ socket.on('check-ping', (clientTimestamp) => {
       staleIds.forEach(id => delete existing.memberUids[id]);
       existing.memberUids[socket.id] = requesterUid;
       rememberMember(existing, requesterUid);
+      removePresence(existing, requesterUid);
       existing.lastActivity = Date.now();
       socket.join(roomCode);
       purgeStaleSockets(roomCode, staleIds);
@@ -421,6 +573,7 @@ socket.on('check-ping', (clientTimestamp) => {
       staleIds.forEach(id => delete existing.memberUids[id]);
       existing.memberUids[socket.id] = requesterUid;
       rememberMember(existing, requesterUid);
+      removePresence(existing, requesterUid);
       existing.lastActivity = Date.now();
       socket.join(roomCode);
       purgeStaleSockets(roomCode, staleIds);
@@ -441,6 +594,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // squad whose owner has vanished) is still handled the way it always was.
     const returning = rebindReturningMember(existing, { uid: requesterUid, socketId: socket.id });
     if (returning) {
+      removePresence(existing, requesterUid);
       // The same person's previous connection(s): superseded. Detached from the room and
       // stripped of per-socket state so they can't show as a duplicate marker, or later
       // raise a false "signal lost" for someone who is in fact back.
@@ -526,7 +680,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const squad = activeSquads[roomCode];
     if (!squad || squad.ownerId !== socket.id || targetId === socket.id) return;
 
-    const targetUid = squad.memberUids?.[targetId] || io.sockets.sockets.get(targetId)?.data?.uid;
+    const targetUid = squad.memberUids?.[targetId] || io.sockets.sockets.get(targetId)?.data?.uid || uidOfPresenceKey(targetId);
     // A stand-in holds command only until the Commander returns. Blocking the Commander
     // (whose old connection is still on the roster while they're away) would turn
     // "temporarily" into "for good": a block is checked before the Commander's return.
@@ -534,6 +688,7 @@ socket.on('check-ping', (clientTimestamp) => {
     squad.blockedUids = squad.blockedUids || [];
     if (targetUid && !squad.blockedUids.includes(targetUid)) squad.blockedUids.push(targetUid);
     forgetMember(squad, targetUid);
+    removePresence(squad, targetUid);
 
     squad.members = squad.members.filter(id => id !== targetId);
     if (squad.memberUids) delete squad.memberUids[targetId];
@@ -617,6 +772,11 @@ socket.on('check-ping', (clientTimestamp) => {
       return;
     }
     squad.lastActivity = Date.now();
+    const reporter = squad.memberUids?.[socket.id];
+    if (reporter) {
+      squad.profiles ??= Object.create(null);
+      squad.profiles[reporter] = { name: data.name ?? null, photo: data.photo ?? null };
+    }
 
     const oldRoom = users[socket.id]?.roomCode;
 
@@ -868,9 +1028,13 @@ socket.on('check-ping', (clientTimestamp) => {
       const userData = users[socket.id];
       const lastLocation = locationCache[socket.id];
       const squad = activeSquads[room];
+      // Still sharing from the background (presence.js)? Then the connection dropping is not
+      // them going dark: their lease says when that is.
+      const sharingUid = squad ? (squad.memberUids?.[socket.id] || socket.data?.uid) : null;
+      const stillSharing = Boolean(sharingUid) && Boolean(presenceOf(squad, sharingUid, Date.now()));
 
       // TRIGGER DEAD MAN'S SWITCH 
-      if (lastLocation && squad) {
+      if (lastLocation && squad && !stillSharing) {
         
         // 1. Calculate the exact time in the dark (in seconds)
         const lastSeenTime = lastLocation.lastSeen || Date.now(); 
@@ -967,52 +1131,6 @@ socket.on('check-ping', (clientTimestamp) => {
     }
   }
 
-  // The squad's roster, as everyone else's member list and map see it.
-  //
-  // Built from `squad.members` — the authoritative roster — rather than only from whoever
-  // has sent telemetry. `users` fills in on the first GPS fix, so a member who is indoors,
-  // has denied location permission, or has simply just been approved used to be missing
-  // from this payload altogether: absent from the squad list as well as the map. They now
-  // come through with their telemetry merged in where there is any and `hasFix: false`
-  // where there isn't, so the client can list them without trying to plot them.
-  //
-  // Every entry carries `uid`, the person's stable identity. Socket ids are reminted on
-  // every mobile reconnect, and a client holding only socket ids cannot tell "same person,
-  // new socket" — which is what left a returning member buried under an orphaned ghost
-  // marker of themselves that nothing could clear.
-  function broadcastSquadUpdate(roomCode) {
-    const squad = activeSquads[roomCode];
-    const ids = new Set(squad ? squad.members : []);
-    Object.keys(users).forEach(id => { if (users[id].roomCode === roomCode) ids.add(id); });
-
-    const roomUsers = {};
-    ids.forEach(id => {
-      const telemetry = users[id];
-      if (telemetry && telemetry.roomCode !== roomCode) return;
-      const live = io.sockets.sockets.get(id);
-      // A roster entry whose socket is gone and which never reported a fix: there is
-      // nothing to show, and its own disconnect handler is about to prune it anyway.
-      if (!telemetry && !live) return;
-
-      const uid = squad?.memberUids?.[id] || live?.data?.uid || null;
-      const profile = live?.data?.profile || {};
-      roomUsers[id] = telemetry
-        ? { ...telemetry, uid, hasFix: true }
-        : {
-            uid,
-            roomCode,
-            name: profile.name,
-            photo: profile.photo,
-            status: 'ACTIVE',
-            speed: 0,
-            heading: 0,
-            battery: 0,
-            hasFix: false,
-          };
-    });
-    io.to(roomCode).emit('users-update', roomUsers);
-  }
-
   function handleSquadSuccession(disconnectedId) {
     for (const roomCode in activeSquads) {
       const squad = activeSquads[roomCode];
@@ -1022,13 +1140,20 @@ socket.on('check-ping', (clientTimestamp) => {
       const departingUid = squad.memberUids?.[disconnectedId];
       if (departingUid) {
         forgetMember(squad, departingUid);
+        removePresence(squad, departingUid);
         delete squad.memberUids[disconnectedId];
       }
 
       squad.members = squad.members.filter(id => id !== disconnectedId);
 
       if (squad.members.length === 0) {
-        deleteSquad(roomCode);
+        if (!hasPresence(squad, Date.now())) deleteSquad(roomCode);
+        // Members still sharing from the background keep the squad. Nobody connected holds
+        // command; whoever of the admitted comes back first takes it (request-join, Case 4).
+        else if (squad.ownerId === disconnectedId) {
+          squad.ownerId = null;
+          squad.ownerUid = null;
+        }
       } else if (squad.ownerId === disconnectedId) {
         // A connected member, if there is one. members[0] could be a dead socket still on
         // the roster (typically the Commander's, while they're away), and promoting it
@@ -1074,3 +1199,12 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 LOCUS Server running on port ${PORT}`);
 });
+
+// For tests that run this server inside their own process: the port it chose (PORT=0), and a
+// way to stop everything it started. Running `node backend/server.js` never uses either.
+export const listening = new Promise((resolve) => server.once('listening', () => resolve(server.address().port)));
+export function stopServer() {
+  clearInterval(sweepTimer);
+  clearInterval(presenceTimer);
+  return new Promise((resolve) => io.close(() => resolve()));
+}
