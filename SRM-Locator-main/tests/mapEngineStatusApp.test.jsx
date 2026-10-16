@@ -39,7 +39,7 @@ vi.mock('google-map-react', async () => {
     default: function FakeGoogleMap({ onGoogleApiLoaded, options }) {
       google.options = options;
       React.useEffect(() => {
-        if (google.loads) onGoogleApiLoaded?.({ map: { setTilt() {}, getDiv() {}, getCenter: () => ({ lat: () => 0, lng: () => 0 }), getZoom: () => 17 } });
+        if (google.loads) onGoogleApiLoaded?.({ map: { setTilt() {}, addListener() {}, getDiv() {}, getCenter: () => ({ lat: () => 0, lng: () => 0 }), getZoom: () => 17 } });
       // eslint-disable-next-line react-hooks/exhaustive-deps
       }, []);
       return <div data-testid="google-map" />;

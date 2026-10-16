@@ -67,7 +67,7 @@ vi.mock('@capacitor/app', () => ({
 vi.mock('google-map-react', () => ({
   default: function FakeGoogleMap({ children, onGoogleApiLoaded }) {
     useEffect(() => {
-      onGoogleApiLoaded?.({ map: { setTilt() {} } });
+      onGoogleApiLoaded?.({ map: { setTilt() {}, addListener() {} } });
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     return <div data-testid="google-map">{children}</div>;

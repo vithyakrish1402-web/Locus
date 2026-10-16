@@ -180,13 +180,15 @@ describe('a matrix building tap', () => {
     }
   });
 
-  it("also glides when the row's waypoint button is pressed", async () => {
+  // Changed for Jose's navigation (09086a7): the row's Navigate button no longer glides the map to
+  // the building (it used to share the row tap's glide). It starts turn-by-turn, and the camera
+  // follows the person. The row tap itself still glides (the tests above).
+  it("the row's Navigate button starts turn-by-turn instead of gliding to the building", async () => {
     render(<App />);
     await joinAsMember();
     await screen.findAllByText(SRM_MASTER_DATABASE[0].name);
     fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
-    expect(focus.spy).toHaveBeenCalledTimes(1);
-    const b = SRM_MASTER_DATABASE[0];
-    expect(focus.spy.mock.calls[0][0]).toEqual({ lat: b.lat, lng: b.lng, zoom: 19 });
+    expect(focus.spy).not.toHaveBeenCalled();
+    expect(screen.getByTestId('turn-instruction-card')).toBeTruthy();
   });
 });

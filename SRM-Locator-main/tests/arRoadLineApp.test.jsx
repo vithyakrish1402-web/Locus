@@ -178,7 +178,7 @@ describe('the AR road line', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
     fireEvent.click(screen.getByRole('button', { name: `Navigate to ${building.name}` }));
     await act(async () => {});
-    expect(screen.getByTestId('route-card')).toBeTruthy();
+    expect(screen.getByTestId('turn-instruction-card')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: `AR Scan to ${building.name}` }));
     await grantAndFaceNorth();
@@ -190,7 +190,7 @@ describe('the AR road line', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
     fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
     await act(async () => {});
-    expect(screen.getByTestId('route-card')).toBeTruthy();
+    expect(screen.getByTestId('turn-instruction-card')).toBeTruthy();
 
     fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();
