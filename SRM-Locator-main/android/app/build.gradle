@@ -66,6 +66,17 @@ android {
             applicationIdSuffix ".sidetest"
             matchingFallbacks = ['debug']
         }
+        // The release-candidate test build (npm run rctest:build): a THIRD app, "LOCUS RC Test"
+        // (src/rctest/res), beside LOCUS and beside "LOCUS Test" / "LOCUS BG Test" - its own app id,
+        // so it can never replace or be replaced by any of them. Debug-signed. Its web build is the
+        // Vite 'sidetest' mode only because that switches both updaters off; the app's own screens are
+        // the production ones. Never released from.
+        rctest {
+            initWith debug
+            applicationIdSuffix ".rctest"
+            versionNameSuffix "-rctest"
+            matchingFallbacks = ['debug']
+        }
     }
 }
 

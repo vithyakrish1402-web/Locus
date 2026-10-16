@@ -16,7 +16,8 @@
     "release:verify": "node scripts/verify-release.mjs",
     "release:index": "node scripts/release-index.mjs",
     "device-check:wifi": "node scripts/device-check-wifi.mjs",
-    "sidetest:install": "node scripts/sidetest-install.mjs"
+    "sidetest:install": "node scripts/sidetest-install.mjs",
+    "rctest:build": "node scripts/sidetest-install.mjs --rctest --build-only"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",

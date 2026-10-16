@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Button, Card, IconButton, ListRow, RadioList, SectionLabel, SegmentedControl, Switch } from '../ui';
 import SendApp from '../SendApp';
+import BackgroundSharingSection from './BackgroundSharingSection';
 import { SETTINGS } from '../../copy/settings';
 import { setThemePreference, subscribeTheme, getThemePreference } from '../../theme/theme';
 import LocusMark from '../LocusMark';
@@ -42,12 +43,13 @@ const THEME_ICONS = { system: Smartphone, light: Sun, dark: Moon };
  *   arFeatureOverrides: Record<string, string>, onArFeatureOverride: (feature: string, value: string) => void,
  *   update: { installedVersion: string|null, supported: boolean, status: string, onCheck: () => void },
  *   onOpenGuide: () => void,
+ *   backgroundSharing?: object, group?: string,
  *   onSignOut?: () => void, onAdmin?: () => void }} props
  */
 export default function SettingsScreen({
   onClose, polling, onPolling, arFidelity, onArFidelity, alertSounds, onAlertSounds,
   isSatellite, onSatellite, mapStatus, arFeatureOverrides, onArFeatureOverride, update, onOpenGuide,
-  onSignOut, onAdmin,
+  onSignOut, onAdmin, backgroundSharing, group,
 }) {
   const titleId = useId();
   const headingRef = useRef(null);
@@ -136,6 +138,9 @@ export default function SettingsScreen({
             />
           </Card>
         </section>
+
+        {/* Background sharing: present only when this phone's app can do it and the server has it on. */}
+        <BackgroundSharingSection backgroundSharing={backgroundSharing} group={group} layer={SETTINGS_Z + 10} />
 
         {/* 4. AR Scanner Fidelity */}
         <section className="mb-6">
