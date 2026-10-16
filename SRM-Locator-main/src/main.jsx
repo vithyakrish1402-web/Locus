@@ -24,7 +24,10 @@ import { ErrorBoundary } from './ErrorBoundary.jsx'
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
-    <App />
+      <App />
     </ErrorBoundary>
+    {/* Cold-start animation over the app: it plays once, then fades once the sign-in check
+        has settled. Mounted here, not in App.jsx, which has ~10 early-return screens. */}
+    <ColdStartSplash />
   </StrictMode>,
 )

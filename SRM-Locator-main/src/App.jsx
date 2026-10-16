@@ -2513,7 +2513,8 @@ const App = () => {
                     key={cat.id}
                     type="button"
                     onClick={() => setBuildingCategoryFilter(cat.id)}
-                      className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium font-ui transition-all duration-150 flex items-center gap-1.5 cursor-pointer border ${isSelected
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium font-ui transition-[transform,opacity] duration-150 flex items-center gap-1.5 cursor-pointer border ${
+                      isSelected
                         ? 'bg-accent text-accent-on border-accent shadow-sm'
                         : 'glass-pill text-text-secondary hover:text-text'
                     }`}
@@ -3355,9 +3356,16 @@ const App = () => {
         />
       )}
 
-      {/* ========== DESKTOP FLOATING SOS TRIGGER (Mobile is inside BottomTabBar) ========== */}
-      {!isNavigatingMode && accessStatus === 'granted' && (
-        <div className="hidden md:block fixed bottom-6 left-[23rem] z-[10001] pointer-events-auto">
+      {/* ========== FLOATING SOS TRIGGER ==========
+          Always from md up. On a phone the button lives in the bottom tab bar, and floats here,
+          bottom-left over everything, only while something covers that bar (sosFloats), so it
+          is never out of reach (Emergency batch, E1). */}
+      {accessStatus === 'granted' && sosFloats && (
+        <div
+          data-testid="sos-float"
+          className="fixed left-4 bottom-4 md:bottom-6 md:left-[23rem] pointer-events-auto"
+          style={{ zIndex: LAYER.emergencyButton, marginBottom: 'env(safe-area-inset-bottom)' }}
+        >
           <SosTrigger
             socket={socket}
             getLocation={() => liveLocationRef.current}
