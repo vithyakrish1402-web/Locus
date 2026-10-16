@@ -261,11 +261,34 @@ function presenceWins(squad, now) {
   return winners;
 }
 
+// The uids whose background service holds a PAUSED spot (status FROZEN, lease running) while none
+// of their connections in the squad has a position at all. That is someone who opened the app again
+// while sharing is paused: a paused app sends nothing newer than where it paused, and a fresh
+// connection has nothing. Their position-less connection used to hide the service's Paused marker,
+// so the Group saw them in the list and not on the map. For these people the service's entry is
+// shown instead (one entry each). Only a pause: a live service and a connection still waiting for
+// its first fix stay as displaySource.js left them (the connection is shown).
+function fixlessPresenceUids(squad, roomCode, now) {
+  const result = new Set();
+  if (!squad) return result;
+  const withFix = new Set();
+  for (const id of Object.keys(users)) {
+    if (users[id].roomCode !== roomCode) continue;
+    const uid = squad.memberUids?.[id] || io.sockets.sockets.get(id)?.data?.uid;
+    if (uid) withFix.add(uid);
+  }
+  for (const entry of livePresence(squad, now)) {
+    if (entry.status === 'FROZEN' && !withFix.has(entry.uid)) result.add(entry.uid);
+  }
+  return result;
+}
+
 function broadcastSquadUpdate(roomCode) {
   const squad = activeSquads[roomCode];
   const ids = new Set(squad ? squad.members : []);
   const winners = presenceWins(squad, Date.now());
   Object.keys(users).forEach(id => { if (users[id].roomCode === roomCode) ids.add(id); });
+  const fixless = fixlessPresenceUids(squad, roomCode, Date.now());
 
   const roomUsers = {};
   ids.forEach(id => {
@@ -279,6 +302,8 @@ function broadcastSquadUpdate(roomCode) {
     const uid = squad?.memberUids?.[id] || live?.data?.uid || null;
     // Their background position is fresher than this frozen socket's: shown below instead, never both.
     if (telemetry && uid && winners.has(uid)) return;
+    // No position on this connection, one from the background: that one is shown below, never both.
+    if (!telemetry && uid && fixless.has(uid)) return;
     const profile = live?.data?.profile || {};
     roomUsers[id] = telemetry
       ? { ...telemetry, uid, hasFix: true }
@@ -301,7 +326,7 @@ function broadcastSquadUpdate(roomCode) {
   if (squad) {
     const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
     for (const entry of livePresence(squad, Date.now())) {
-      if (connected.has(entry.uid) && !winners.has(entry.uid)) continue;
+      if (connected.has(entry.uid) && !winners.has(entry.uid) && !fixless.has(entry.uid)) continue;
       roomUsers[presenceKey(entry.uid)] = {
         uid: entry.uid,
         roomCode,
@@ -495,8 +520,9 @@ socket.on('check-ping', (clientTimestamp) => {
       if (record) squadTelemetry[memberId] = record;
     });
     const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
+    const fixless = fixlessPresenceUids(squad, roomCode, Date.now());
     for (const entry of livePresence(squad, Date.now())) {
-      if (connected.has(entry.uid) && !winners.has(entry.uid)) continue;
+      if (connected.has(entry.uid) && !winners.has(entry.uid) && !fixless.has(entry.uid)) continue;
       const record = toTelemetryRecord({ lat: entry.lat, lng: entry.lng, lastSeen: entry.lastSeen, battery: entry.battery });
       if (record) squadTelemetry[presenceKey(entry.uid)] = record;
     }
