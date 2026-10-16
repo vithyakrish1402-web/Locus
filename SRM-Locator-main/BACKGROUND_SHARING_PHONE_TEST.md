@@ -48,7 +48,11 @@ never update or replace either of the others, and **you are never asked to unins
    app).
 5. Open **LOCUS RC Test** (the icon says "LOCUS RC Test"). Sign in with your usual account.
 6. Check, in Android Settings → Apps → **LOCUS RC Test** → App info → Version: it should read
-   **1.1.39-rctest**. The existing **LOCUS Test** and **LOCUS** are still in the list, unchanged.
+   **1.1.44-rctest** (the 1.1.45 navigation candidate; the earlier one read 1.1.39-rctest). The
+   existing **LOCUS Test** and **LOCUS** are still in the list, unchanged.
+
+If an earlier **LOCUS RC Test** is already on the phone, this one **updates it in place**: Android
+says *"Do you want to update this app?"* (not "replace"), and you stay signed in. That is expected.
 
 Do **not** open "LOCUS Test" for these tests. Its Floor 7 recorder is a different test.
 
@@ -426,6 +430,59 @@ Settings.
 reads **"Sharing with <Group>"** again.
 
 **Tell me if:** it keeps saying "Sharing" while paused, or the other way round.
+
+---
+
+## Test 14: navigation, and the Emergency button during it (1.1.45 candidate)
+
+Navigation (Jose's turn-by-turn) hides the bottom bar the Emergency button normally sits in. In this
+build the button **floats bottom-left** instead, so it is never out of reach. This test checks that,
+and that the button still only arms on a hold.
+
+> **Never send a real Emergency alert in this test.** A full alert needs **two** holds: hold once
+> to arm, then hold **again within 4 seconds** to send. In this test you only ever do the **first**
+> hold. After arming, take your finger off and **do not touch the button for 5 seconds**. Do it in
+> the test Group with only Phone B in it, and tell whoever holds Phone B first.
+
+**Do (start navigating):** On Phone A, in the Group, with location on, start a route in either of these ways:
+- open the Group list, switch to **Buildings**, and tap the **navigate** button on a building's row
+  (its label reads *"Navigate to <building>"*); or
+- tap a building on the map, set it as the destination, then tap **Start Route** on the route card.
+
+**You should see:** a turn instruction card at the top, the bottom bar **gone**, and the red
+**SOS** button floating **bottom-left**, above the map. There is one SOS button, not two.
+
+**Do (arm, then let it lapse):** press and **hold** SOS.
+
+**You should see:** a card above it, **"Keep holding"** (*"Release to cancel. Nothing has been
+sent."*), and a ring filling. After about a second the card changes to **"Hold again to send an
+emergency alert"**. **Now take your finger off and wait 5 seconds without touching the button.**
+The card goes away and the button reads **SOS** again. Phone B gets **nothing**.
+
+**Do (cancel by sliding off):** press and hold SOS, and **before the ring fills** slide your finger
+off the button (keep it on the screen).
+
+**You should see:** the card goes away at once, the ring empties, and the button may briefly read
+**"Hold longer"**. Nothing is armed and Phone B gets **nothing**. A quick tap does the same.
+
+**Do (map controls still work):** while navigating, drag the map away, then tap the **re-centre**
+button. Then end the route with the **End route** (X) button.
+
+**You should see:** the map follows you again after re-centre. After End route the turn card goes,
+the bottom bar comes back, and the SOS button is **back in the bottom bar** (not floating, and not
+missing).
+
+**Also look at, and tell me what you see (known open items, not failures yet):**
+- whether any **red** appears in the navigation screen other than the SOS button (the speed badge
+  ring, parts of the turn card);
+- whether there is any way to open **AR Scan** pointed at the destination while navigating;
+- if an error screen ever appears, whether the SOS button is still visible on top of it.
+
+**Tell me if:** the SOS button is missing at any point while navigating; there are two of them;
+it arms on a tap; sliding off does not cancel; anything at all reaches Phone B; or the bottom bar
+does not come back after End route. Screenshot the navigation screen with the SOS button showing.
+
+**Stop at once and tell me if** Phone B ever receives an Emergency alert during this test.
 
 ---
 
