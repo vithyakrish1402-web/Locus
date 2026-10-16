@@ -24,6 +24,8 @@ export const SHARING_CHIP = {
 export const MAP_CONTROLS = {
   satellite: 'Satellite view',
   locate: 'Show where you are',
+  autoOn: 'Auto-centre is on: tap to stop following you',
+  autoOff: 'Auto-centre is off: tap to keep the map on you',
   campus: 'Show the whole campus',
   settings: 'Settings',
   placeMeetingPoint: 'Place a meeting point',
