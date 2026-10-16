@@ -218,6 +218,30 @@ describe('the Emergency button during turn-by-turn navigation', () => {
     expect([...float.classList].some((c) => c.includes('sos-hold-card'))).toBe(false);
   });
 
+  // Auto and Re-center are buttons in the right-hand toolbar now, not big buttons along the bottom.
+  it('has Auto in the toolbar (lit when on) and no big bottom buttons', async () => {
+    await startNavigating();
+    expect(screen.queryByTestId('nav-recenter-button')).toBeNull();
+    expect(screen.queryByText(/Auto: O/)).toBeNull();
+    const toolbar = screen.getByTestId('map-controls');
+    const auto = within(toolbar).getByTestId('auto-follow-button');
+    expect(auto.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(auto);
+    await waitFor(() => expect(within(screen.getByTestId('map-controls')).getByTestId('auto-follow-button').getAttribute('aria-pressed')).toBe('true'));
+  });
+
+  it('shortens a long "toward" clause so the one-line instruction keeps its action', async () => {
+    const { shortenInstruction } = await import('../src/components/navigation/NavigationHUD.jsx');
+    expect(shortenInstruction('Head northwest toward Temple tree PG for girls hostel')).toBe('Head northwest');
+    expect(shortenInstruction('Turn right')).toBe('Turn right');
+  });
+
+  it('shows no Auto button when not navigating', () => {
+    window.matchMedia = (q) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} });
+    onTheMap();
+    expect(screen.queryByTestId('auto-follow-button')).toBeNull();
+  });
+
   it('leaves its hold card where SosTrigger puts it when not navigating (wide screen: always floats)', () => {
     window.matchMedia = (q) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} });
     onTheMap();
@@ -238,7 +262,7 @@ describe('the Emergency button during turn-by-turn navigation', () => {
       fixes.forEach((ok) => ok({ coords: { latitude: lat, longitude: lng, accuracy: 5, heading: null, speed: 0 }, timestamp: Date.now() }));
     });
     await startNavigating();
-    const target = screen.getByText(/Walking to/).querySelector('strong').textContent;
+    const target = screen.getByTestId('navigation-summary').lastElementChild.textContent;
     const { SRM_MASTER_DATABASE } = await import('../src/srmDatabase.js');
     const b = SRM_MASTER_DATABASE.find((x) => x.name === target);
     await at(b.lat + 0.002, b.lng); // ~220 m away: a route is drawn and the trip card is up

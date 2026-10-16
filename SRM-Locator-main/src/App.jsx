@@ -34,7 +34,6 @@ import { BELOW_TOP_BAR } from './utils/mapChrome';
 import RouteCard from './components/map/RouteCard';
 import {
   TurnInstructionCard,
-  RecenterButton,
   ArrivalPanel,
 } from './components/navigation/NavigationHUD';
 import { useNavigationController } from './hooks/useNavigationController';
@@ -3174,7 +3173,11 @@ const App = () => {
         onCampus={() => handleFocus(SRM_KTR_COORDS, null)}
         onLocate={selfMarkerAt ? () => {
           if (isNavigatingMode) {
+            // Re-center while navigating
             navigationController.handleRecenter();
+            if (liveLocation) {
+              setMapProps((prev) => ({ ...prev, center: { lat: liveLocation.lat, lng: liveLocation.lng }, zoom: 19 }));
+            }
           } else {
             handleFocus(selfMarkerAt, null);
           }
@@ -3182,6 +3185,8 @@ const App = () => {
         isSatellite={isSatellite}
         onToggleSatellite={() => setIsSatellite(!isSatellite)}
         onSettings={() => setShowSettingsModal(true)}
+        autoFollow={navigationController.autoFollow}
+        onToggleAutoFollow={isNavigatingMode ? navigationController.toggleAutoFollow : null}
       />
 
       {/* The place card (components/PlaceCard.jsx). On a phone it sits above the floating SOS
@@ -3317,20 +3322,6 @@ const App = () => {
       />
 
       {/* --- TURN-BY-TURN NAVIGATION OVERLAYS --- */}
-      {/* Recenter Button during navigation with manual recenter and auto-follow toggle */}
-      {isNavigatingMode && (
-        <RecenterButton
-          onClick={() => {
-            navigationController.handleRecenter();
-            if (liveLocation) {
-              setMapProps((prev) => ({ ...prev, center: { lat: liveLocation.lat, lng: liveLocation.lng }, zoom: 19 }));
-            }
-          }}
-          autoFollow={navigationController.autoFollow}
-          onToggleAutoFollow={navigationController.toggleAutoFollow}
-        />
-      )}
-
       {/* Arrival Panel when destination is reached */}
       <AnimatePresence>
         {isNavigatingMode && navigationController.hasArrived && (
@@ -3470,7 +3461,7 @@ const App = () => {
           bottom-left over everything, only while something covers that bar (sosFloats), so it
           is never out of reach (Emergency batch, E1). During navigation there is no bottom card
           any more (the trip summary lives in the top panel), so it sits in the normal corner;
-          the Auto / Re-center buttons are bottom-right. Not shown in Settings at all (Krish,
+          Auto and Re-center are in the right-hand toolbar. Not shown in Settings at all (Krish,
           2026-10-16: it sat over Settings' own text); it is back the moment Settings closes. */}
       {accessStatus === 'granted' && sosFloats && !showSettingsModal && (
         <div

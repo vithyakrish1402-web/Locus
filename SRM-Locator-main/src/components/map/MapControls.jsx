@@ -1,7 +1,7 @@
 import React from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.span>, which this config can't see
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Flag, Layers, LocateFixed, MapPin, Settings, X } from 'lucide-react';
+import { Flag, Layers, LocateFixed, MapPin, Navigation, Settings, X } from 'lucide-react';
 import { MAP_CONTROLS } from '../../copy/map';
 
 // The map's right-hand controls (redesign Map batch, piece 2): one raised column of round
@@ -16,10 +16,12 @@ const ROUND = 'relative inline-flex items-center justify-center w-11 h-11 rounde
 
 /**
  * @param {{ onCampus: () => void, onLocate?: (() => void) | null, isSatellite: boolean,
- *   onToggleSatellite: () => void, onSettings: () => void }} props
- *   onLocate: null until there is a fix to show
+ *   onToggleSatellite: () => void, onSettings: () => void, onToggleAutoFollow?: (() => void) | null,
+ *   autoFollow?: boolean }} props
+ *   onLocate: null until there is a fix to show (while navigating it is Re-center)
+ *   onToggleAutoFollow: only while navigating; keeps the camera on you (Auto), lit when on
  */
-export function MapControls({ onCampus, onLocate = null, isSatellite, onToggleSatellite, onSettings }) {
+export function MapControls({ onCampus, onLocate = null, isSatellite, onToggleSatellite, onSettings, onToggleAutoFollow = null, autoFollow = false }) {
   return (
     <div
       data-testid="map-controls"
@@ -33,6 +35,11 @@ export function MapControls({ onCampus, onLocate = null, isSatellite, onToggleSa
           {/* One soft ring breathes out now and then, like a beacon. */}
           <span className="absolute inset-1 rounded-full border border-accent locus-soft-ring" aria-hidden="true" />
           <LocateFixed size={21} aria-hidden="true" />
+        </button>
+      )}
+      {onToggleAutoFollow && (
+        <button type="button" data-testid="auto-follow-button" className={`${ROUND} ${autoFollow ? 'bg-accent-soft text-accent' : 'text-text-secondary'}`} onClick={onToggleAutoFollow} aria-pressed={autoFollow} aria-label={autoFollow ? MAP_CONTROLS.autoOn : MAP_CONTROLS.autoOff} title={autoFollow ? MAP_CONTROLS.autoOn : MAP_CONTROLS.autoOff}>
+          <Navigation size={21} aria-hidden="true" />
         </button>
       )}
       <button type="button" className={ROUND} onClick={onCampus} aria-label={MAP_CONTROLS.campus} title={MAP_CONTROLS.campus}>
