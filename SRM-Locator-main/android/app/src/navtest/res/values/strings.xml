@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- The navigation-overlay test build's name on the phone (android/app/build.gradle, build type
+     "navtest"): only these two override src/main/res/values/strings.xml, in that build. -->
+<resources>
+    <string name="app_name">LOCUS NAV Test</string>
+    <string name="title_activity_main">LOCUS NAV Test</string>
+</resources>

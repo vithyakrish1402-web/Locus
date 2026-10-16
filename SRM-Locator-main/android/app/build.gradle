@@ -77,6 +77,16 @@ android {
             versionNameSuffix "-rctest"
             matchingFallbacks = ['debug']
         }
+        // The navigation-overlay test build (npm run sidetest:install -- --navtest): a FOURTH app,
+        // "LOCUS NAV Test" (src/navtest/res), with its own app id, so it never replaces or is
+        // replaced by LOCUS, LOCUS Test, LOCUS RC Test or LOCUS BG Test. Debug-signed, updaters
+        // off (Vite 'sidetest' mode). Never released from.
+        navtest {
+            initWith debug
+            applicationIdSuffix ".navtest"
+            versionNameSuffix "-navtest"
+            matchingFallbacks = ['debug']
+        }
     }
 }
 

@@ -24,7 +24,8 @@ import { readBuildMode } from './lib/webBuild.mjs';
 
 // --rctest: the same build, as the separate app "LOCUS RC Test" (com.locus.app.rctest), so a release
 // candidate can sit next to every other install without replacing any of them.
-const variant = process.argv.includes('--rctest') ? 'rctest' : 'sidetest';
+// --navtest: the same again, as "LOCUS NAV Test" (com.locus.app.navtest): a fourth app, for trying the navigation overlay.
+const variant = process.argv.includes('--navtest') ? 'navtest' : process.argv.includes('--rctest') ? 'rctest' : 'sidetest';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ANDROID_DIR = join(ROOT, 'android');
 const WEB_ASSETS = join(ANDROID_DIR, 'app', 'src', 'main', 'assets', 'public');
@@ -84,7 +85,7 @@ try {
   run('npx', ['vite', 'build', '--mode', 'sidetest']);
   if (readBuildMode(join(ROOT, 'dist')) !== 'sidetest') throw new Error('the web build is not the sidetest build');
   run('npx', ['cap', 'sync', 'android']);
-  run(gradlew, [variant === 'rctest' ? 'assembleRctest' : 'assembleSidetest'], { cwd: ANDROID_DIR });
+  run(gradlew, [`assemble${variant[0].toUpperCase()}${variant.slice(1)}`], { cwd: ANDROID_DIR });
   if (!existsSync(APK)) throw new Error(`no APK at ${APK}`);
   if (buildOnly) {
     console.log(`\n  Built ${APK}\n  (--build-only: nothing installed)`);
