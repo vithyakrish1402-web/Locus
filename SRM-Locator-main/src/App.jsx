@@ -31,6 +31,7 @@ import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
+import { trimRouteBehind } from './utils/routeTrim';
 import RouteCard from './components/map/RouteCard';
 import {
   TurnInstructionCard,
@@ -2108,12 +2109,19 @@ const App = () => {
       ? personalRoute
       : walkingRoute;
 
+  // While navigating, the line behind you disappears as you walk: only what is still ahead is
+  // drawn (display only; navigation keeps the whole route).
+  const drawnRoute = useMemo(() => {
+    if (!isNavigatingMode || !shownRoute?.path) return shownRoute;
+    return { ...shownRoute, path: trimRouteBehind(shownRoute.path, liveLocation) };
+  }, [isNavigatingMode, shownRoute, liveLocation]);
+
   // Live navigation line from the operative's own position to the active
   // squad waypoint — same "no-op on Leaflet/before mount" gating as above.
   useWaypointNavigationLine(
     !mapEngineFailed && isMapReady ? mapRef.current : null,
-    shownRoute?.path,
-    shownRoute?.isRealRoute,
+    drawnRoute?.path,
+    drawnRoute?.isRealRoute,
     routeColor,
     casingColor
   );
@@ -2986,7 +2994,7 @@ const App = () => {
               ghostMembers={ghostMembers}
               activeTab={activeTab}
               activeWaypoint={activeWaypoint}
-              walkingRoute={shownRoute}
+              walkingRoute={drawnRoute}
               canClearWaypoint={canClearWaypoint}
               highlightBuildingId={(activeTab === 'buildings' && selectedItem?.id) || routeEnd?.id || null}
               onSelectMember={setOptionsMemberId}
