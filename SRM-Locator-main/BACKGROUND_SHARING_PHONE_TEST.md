@@ -450,7 +450,10 @@ and that the button still only arms on a hold.
 - tap a building on the map, set it as the destination, then tap **Start Route** on the route card.
 
 **You should see:** a turn instruction card at the top, the bottom bar **gone**, and the red
-**SOS** button floating **bottom-left**, above the map. There is one SOS button, not two.
+**SOS** button floating on the left, **above** the trip card at the bottom ("8 min · 713 m …") and
+above the round speed badge, **not on top of** either. There is one SOS button, not two. If you walk
+all the way to the destination, the "You Have Arrived!" panel replaces the trip card and the SOS
+button drops back to the bottom-left corner, below that panel.
 
 **Do (arm, then let it lapse):** press and **hold** SOS.
 
@@ -478,7 +481,13 @@ missing).
 - whether there is any way to open **AR Scan** pointed at the destination while navigating;
 - if an error screen ever appears, whether the SOS button is still visible on top of it.
 
-**Tell me if:** the SOS button is missing at any point while navigating; there are two of them;
+**Do (Settings):** open **Settings** (the gear on the right of the map), then go back.
+
+**You should see:** **no SOS button anywhere** while Settings is open (it used to sit over the
+Settings text). As soon as you go back, it is there again.
+
+**Tell me if:** the SOS button covers any text or button while navigating; it shows in Settings or
+is missing after leaving Settings; the SOS button is missing at any point while navigating; there are two of them;
 it arms on a tap; sliding off does not cancel; anything at all reaches Phone B; or the bottom bar
 does not come back after End route. Screenshot the navigation screen with the SOS button showing.
 

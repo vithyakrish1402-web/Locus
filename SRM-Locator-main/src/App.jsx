@@ -3362,11 +3362,19 @@ const App = () => {
       {/* ========== FLOATING SOS TRIGGER ==========
           Always from md up. On a phone the button lives in the bottom tab bar, and floats here,
           bottom-left over everything, only while something covers that bar (sosFloats), so it
-          is never out of reach (Emergency batch, E1). */}
-      {accessStatus === 'granted' && sosFloats && (
+          is never out of reach (Emergency batch, E1). While the trip summary card is up (same
+          condition as its render below) it stands above that card and the speed badge on it
+          (bottom-28 + h-12 = 10rem), on every screen size, instead of over the card's text.
+          Its hold card (SosTrigger's bottom-24 / md:bottom-28) goes up with it, 2 rem above the
+          pill's top (10.5 + 3 + 2 = 15.5rem) as at rest, so ARMED never covers "Hold again".
+          Not shown in Settings at all (Krish, 2026-10-16: it sat over Settings' own text); it is
+          back the moment Settings closes. */}
+      {accessStatus === 'granted' && sosFloats && !showSettingsModal && (
         <div
           data-testid="sos-float"
-          className="fixed left-4 bottom-4 md:bottom-6 md:left-[23rem] pointer-events-auto"
+          className={isNavigatingMode && activeNavTarget && !navigationController.hasArrived
+            ? 'fixed left-4 bottom-[10.5rem] md:left-[23rem] pointer-events-auto [&_[data-testid=sos-hold-card]]:bottom-[15.5rem]'
+            : 'fixed left-4 bottom-4 md:bottom-6 md:left-[23rem] pointer-events-auto'}
           style={{ zIndex: LAYER.emergencyButton, marginBottom: 'env(safe-area-inset-bottom)' }}
         >
           <SosTrigger
