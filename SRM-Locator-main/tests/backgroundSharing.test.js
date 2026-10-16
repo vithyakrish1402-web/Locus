@@ -93,6 +93,31 @@ describe('when it is not switched on', () => {
     ['off by default', { enabled: false }],
     ['on, but without the secret', { secret: '' }],
     ['on, but with a short secret', { secret: 'x'.repeat(MIN_SECRET_LENGTH - 1) }],
+  ])('%s: the status route still answers, and says it is not available', async (_name, config) => {
+    const { h } = await answers(config);
+    const r = await h.send('GET', '/status');
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ available: false });
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    // Only that one route: a POST to it, and every other path, are still shut.
+    expect(await h.send('POST', '/status')).toMatchObject({ status: 503, json: { error: 'disabled' } });
+    expect(await h.send('GET', '/status/extra')).toMatchObject({ status: 503 });
+  });
+
+  it('on, with a proper secret: the status route says it is available, and nothing more', async () => {
+    const h = await harness({});
+    const r = await h.send('GET', '/status');
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ available: true });
+    expect(Object.keys(r.json)).toEqual(['available']);
+    expect(r.text).not.toMatch(/secret|token|[A-Za-z0-9._-]{30,}/i);
+    expect(h.calls.accept).toEqual([]);
+  });
+
+  it.each([
+    ['off by default', { enabled: false }],
+    ['on, but without the secret', { secret: '' }],
+    ['on, but with a short secret', { secret: 'x'.repeat(MIN_SECRET_LENGTH - 1) }],
   ])('%s: every endpoint answers 503 and nothing happens', async (_name, config) => {
     const { h, results } = await answers(config);
     for (const r of results) expect(r).toMatchObject({ status: 503, json: { error: 'disabled' } });

@@ -24,6 +24,13 @@ describe('background sharing at its default (off)', () => {
     }
   });
 
+  it('still answers the status route: not available', async () => {
+    const socket = await connect();
+    const res = await fetch(`${socket.io.uri}/api/background/status`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ available: false });
+  });
+
   it('leaves the Group alone', async () => {
     const socket = await connect();
     await createSquad(socket, newRoom(), 'uA');

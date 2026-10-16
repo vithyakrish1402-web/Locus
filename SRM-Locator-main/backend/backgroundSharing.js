@@ -7,6 +7,8 @@
 //                     -> { ok, leaseSec, serverTime }       renews the person's lease (presence.js)
 //   DELETE /session   Authorization: Bearer <device token>
 //                     -> { ok }                             the person stops sharing
+//   GET    /status    no authorisation
+//                     -> { available }                      whether the above are switched on (answers 200 even when off)
 //
 // OFF unless LOCUS_BACKGROUND_SHARING_ENABLED=true AND LOCUS_DEVICE_TOKEN_SECRET is a proper
 // secret; off, all three answer 503 and nothing else in the server changes.
@@ -175,7 +177,15 @@ export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept
   };
   const bearer = (req) => BEARER.exec(req.get('authorization') ?? '')?.[1] ?? null;
 
-  // Off, or not properly configured: nothing here exists.
+  // Whether background sharing is available at all, so the app can leave its switch out when it is
+  // not. Registered BEFORE the check below, which answers 503 to everything else when it is off.
+  // Open to anyone and says only that: no configuration, no secrets, no counts.
+  router.get('/status', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.status(200).json({ available: status.active });
+  });
+
+  // Off, or not properly configured: nothing else here exists.
   router.use((req, res, next) => (status.active ? next() : fail(res, 503, 'disabled')));
   // Small bodies only; anything else is refused before it is parsed.
   router.use(express.json({ limit: '2kb' }));
