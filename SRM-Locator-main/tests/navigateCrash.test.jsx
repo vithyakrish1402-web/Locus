@@ -91,6 +91,6 @@ describe('Navigate click test', () => {
 
     // Check if turn-instruction-card and summary card appear directly
     expect(await screen.findByTestId('turn-instruction-card')).toBeTruthy();
-    expect(await screen.findByTestId('navigation-summary-card')).toBeTruthy();
+    expect(await screen.findByTestId('navigation-summary')).toBeTruthy();
   });
 });
