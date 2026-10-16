@@ -149,11 +149,15 @@ export async function mintDeviceToken({ baseUrl, roomCode, idToken, fetchImpl = 
  * Starts (or restarts) background sharing for the Group the person is in.
  *
  * @param {{ baseUrl: string, roomCode: string, groupName: string, pollingMs: number,
- *   getIdToken: () => Promise<string>, plugin?: object, fetchImpl?: typeof fetch }} options
+ *   getIdToken: () => Promise<string>, plugin?: object, fetchImpl?: typeof fetch,
+ *   now?: () => number, sleep?: (ms: number) => Promise<void>, stillWanted?: () => boolean }} options
+ *   stillWanted: asked last thing before the service starts; false (the person left, switched it
+ *   off, went Hidden while the token was fetched or a stop finished) and nothing starts.
  * @returns {Promise<{ ok: true } | { ok: false, reason: string }>} reason is one of mintDeviceToken's,
- *   or: unsupported, permission-denied, notifications-denied, location-denied, cannot-start, not-signed-in
+ *   or: unsupported, permission-denied, notifications-denied, location-denied, cannot-start, not-signed-in,
+ *   no-longer-wanted
  */
-export async function startBackgroundSharing({ baseUrl, roomCode, groupName, pollingMs, getIdToken, plugin = LocusBackground, fetchImpl }) {
+export async function startBackgroundSharing({ baseUrl, roomCode, groupName, pollingMs, getIdToken, plugin = LocusBackground, fetchImpl, now = Date.now, sleep = defaultSleep, stillWanted = () => true }) {
   const support = await checkSupport(plugin);
   if (!support.supported) return { ok: false, reason: 'unsupported' };
 
@@ -182,9 +186,25 @@ export async function startBackgroundSharing({ baseUrl, roomCode, groupName, pol
   const minted = await mintDeviceToken({ baseUrl, roomCode, idToken, fetchImpl });
   if (!minted.ok) return minted;
 
+  // Never moved silently from one Group to another. A start for a new Group used to swap the
+  // running service over to it (a pause included), and the old Group's pass was never ended: its
+  // members saw "signal lost" minutes later. Sharing for any other Group is ended first.
+  const previous = sharedRoom();
+  if (previous && previous !== roomCode) await stopBackgroundSharing(APP_STOP, plugin);
+  // A stop finishes on the phone only after it has told the server, and the service ending then
+  // takes a start that came in meanwhile down with it, silently. Give a recent stop time to finish.
+  const settle = STOP_SETTLE_MS - (now() - lastStopAt);
+  if (settle > 0) await sleep(settle);
+  // All of the above takes time. Sharing for a Group the person has left in the meantime would
+  // carry on after leaving, with nothing left on screen to stop it.
+  if (!stillWanted()) return { ok: false, reason: 'no-longer-wanted' };
+
   try {
     const result = await plugin.start({ baseUrl, roomCode, groupName, deviceToken: minted.token, expiresAt: minted.expiresAt, pollingMs });
-    if (result?.started) return { ok: true };
+    if (result?.started) {
+      rememberSharedRoom(roomCode);
+      return { ok: true };
+    }
     return { ok: false, reason: typeof result?.state === 'string' ? result.state : 'cannot-start' };
   } catch {
     return { ok: false, reason: 'cannot-start' };
@@ -192,16 +212,60 @@ export async function startBackgroundSharing({ baseUrl, roomCode, groupName, pol
 }
 
 /**
+ * The stop reason for every stop the app makes itself (leaving, signing out, the switch, Start
+ * fresh, moving to another Group). The notification's own Stop button says "user-stop", which is
+ * how the app tells the person's Stop (the switch goes off) from its own.
+ */
+export const APP_STOP = 'app-stop';
+
+/**
  * Ends background sharing and wipes the token: for leaving the Group, logging out, or turning it
  * off. Safe to call at any time, from anywhere, as often as you like: with nothing running, or
  * outside the Android shell, it does nothing. Never throws.
  */
-export function stopBackgroundSharing(reason = 'user-stop', plugin = LocusBackground) {
+export function stopBackgroundSharing(reason = APP_STOP, plugin = LocusBackground) {
+  rememberSharedRoom(null);
   try {
     if (!Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable('LocusBackground') || typeof plugin?.stop !== 'function') return Promise.resolve();
+    lastStopAt = Date.now();
     return Promise.resolve(plugin.stop({ reason })).catch(() => {});
   } catch {
     return Promise.resolve();
+  }
+}
+
+/**
+ * How long after a stop a new start waits. The service tells the server it has stopped and only
+ * then ends itself, so a start inside that window was ended along with it. Ending a pass on
+ * Render takes well under a second; this leaves room for a slow answer.
+ */
+export const STOP_SETTLE_MS = 5000;
+let lastStopAt = -Infinity;
+const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Tests only: forget the last stop, so the next start does not wait for it. */
+export function forgetLastStopForTests() {
+  lastStopAt = -Infinity;
+}
+
+// The Group the service was last started for, kept across a closed app, so that a start for
+// another Group knows to end that one first (see startBackgroundSharing).
+export const SHARED_ROOM_KEY = 'locus.backgroundSharing.room';
+
+export function sharedRoom() {
+  try {
+    return window.localStorage?.getItem(SHARED_ROOM_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberSharedRoom(roomCode) {
+  try {
+    if (roomCode) window.localStorage?.setItem(SHARED_ROOM_KEY, roomCode);
+    else window.localStorage?.removeItem(SHARED_ROOM_KEY);
+  } catch {
+    // Not remembered: a start for another Group then swaps the service over, as it used to.
   }
 }
 

@@ -107,6 +107,8 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 });
 
 const { default: App } = await import('../src/App.jsx');
+// A stop makes the next start wait a few seconds (STOP_SETTLE_MS); each test starts without one.
+const { forgetLastStopForTests } = await import('../src/utils/backgroundSharing.js');
 
 const HERE = { lat: 12.8230, lng: 80.0440 };
 const SWITCH_KEY = 'locus.backgroundSharing';
@@ -140,6 +142,7 @@ const consentSheet = () => screen.queryByTestId('background-sharing-consent');
 const tokenRequests = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/api/background/token'));
 
 beforeEach(() => {
+  forgetLastStopForTests();
   fakeSocket.handlers.clear();
   fakeSocket.emit.mockClear();
   for (const fn of [plugin.getCapabilities, plugin.getState, plugin.requestPermissions, plugin.start, plugin.stop, plugin.acknowledgeStop, plugin.addListener]) fn.mockClear();
@@ -413,11 +416,20 @@ describe('what the service says', () => {
     await waitFor(() => expect(stateText()).toBe(COPY.stopped.forbidden));
   });
 
-  it('the person\'s own stop is not reported as a stop', async () => {
+  it('the app\'s own stop is not reported as a stop', async () => {
+    await runningInAGroup();
+    act(() => plugin.listeners.forEach((fn) => fn({ state: 'stopped', reason: 'app-stop' })));
+    await flush();
+    expect(stateText()).not.toMatch(/stopped/i);
+    expect(theSwitch().getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('Stop on the notification turns the switch off, and the line says Not sharing', async () => {
     await runningInAGroup();
     act(() => plugin.listeners.forEach((fn) => fn({ state: 'stopped', reason: 'user-stop' })));
-    await flush();
-    expect(stateText()).toMatch(/^Sharing with /);
+    await waitFor(() => expect(theSwitch().getAttribute('aria-checked')).toBe('false'));
+    expect(stateText()).toBe('Not sharing');
+    expect(localStorage.getItem(SWITCH_KEY)).toBe('0');
   });
 });
 
@@ -432,7 +444,7 @@ describe('what ends it', () => {
     await waitFor(() => section());
     plugin.stop.mockClear();
     fireEvent.click(theSwitch());
-    await waitFor(() => expect(plugin.stop).toHaveBeenCalledWith({ reason: 'user-stop' }));
+    await waitFor(() => expect(plugin.stop).toHaveBeenCalledWith({ reason: 'app-stop' }));
     await waitFor(() => expect(stateText()).toBe('Not sharing'));
   });
 
@@ -448,7 +460,7 @@ describe('what ends it', () => {
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Leave the group?' })).getByRole('button', { name: 'Leave group' }));
     await flush();
     expect(fakeSocket.emit.mock.calls.some(([e]) => e === 'leave-squad')).toBe(true);
-    expect(plugin.stop).toHaveBeenCalledWith({ reason: 'user-stop' });
+    expect(plugin.stop).toHaveBeenCalledWith({ reason: 'app-stop' });
   });
 
   it('signing out', async () => {
@@ -461,7 +473,7 @@ describe('what ends it', () => {
     await openSettings();
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await flush();
-    expect(plugin.stop).toHaveBeenCalledWith({ reason: 'user-stop' });
+    expect(plugin.stop).toHaveBeenCalledWith({ reason: 'app-stop' });
   });
 
   it('the server switching it off: the switch goes, the service is stopped, nothing loops', async () => {
@@ -479,7 +491,7 @@ describe('what ends it', () => {
     await flush();
     await openSettings();
     await waitFor(() => expect(screen.queryByTestId('background-sharing')).toBeNull());
-    expect(plugin.stop).toHaveBeenCalledWith({ reason: 'user-stop' });
+    expect(plugin.stop).toHaveBeenCalledWith({ reason: 'app-stop' });
     await flush();
     expect(plugin.start).toHaveBeenCalledTimes(1);
     expect(tokenRequests()).toHaveLength(1);

@@ -12,7 +12,7 @@ import {
   Building2, MessageSquare, Send, Loader2,
   BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Activity,
-  AlertCircle, Check, Sliders, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Layers
+  AlertCircle, Check, Sliders, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Layers, Undo2
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
@@ -65,7 +65,7 @@ import LocationExplainer from './components/LocationExplainer';
 import { locationKnownAllowed, locationPermissionGranted, rememberLocationAllowed } from './utils/locationPermission';
 import { cameraKnownAllowed, cameraPermissionGranted, rememberCameraAllowed } from './utils/cameraPermission';
 import { NOTICES, OS_NOTICES } from './copy/notices';
-import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
+import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, RESUME, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
 import { authProblem } from './utils/authProblems';
 import ARCompass from './ARCompass';
 import { SRM_MASTER_DATABASE } from './srmDatabase';
@@ -102,6 +102,7 @@ import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { useWifiFusion } from './hooks/useWifiFusion';
 import { useBackgroundSharing } from './hooks/useBackgroundSharing';
 import { stopBackgroundSharing } from './utils/backgroundSharing';
+import { rememberGroup, rememberedGroup, forgetGroup } from './utils/rememberedGroup';
 import { useIndoorView } from './hooks/useIndoorView';
 import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD } from './utils/positionSource';
 import { buildingAt, isOnOtherFloor, memberFloorTag } from './utils/indoorView';
@@ -719,6 +720,9 @@ const App = () => {
   const [squadCode, setSquadCode] = useState('');
   const [squadMode, setSquadMode] = useState('create'); // 'create' or 'join'
   const [hasJoinedSquad, setHasJoinedSquad] = useState(false);
+  // The Group this phone remembers from before the app was closed ({ code, role }), offered on
+  // the way in: "Return to <Group>" or "Start fresh". Null when there is none, or once chosen.
+  const [resumeOffer, setResumeOffer] = useState(null);
   // Out of the group, however it happened (left, removed, turned down, signed out): an
   // Emergency alert still held for it can't reach anyone now. (A group gone from the server
   // is dropped first, with its own words, in the 'squad-not-found' handler.)
@@ -804,12 +808,18 @@ const App = () => {
   // turned it on in Settings (after agreeing to what it does).
   const backgroundSharing = useBackgroundSharing({
     inGroup: wifiActive,
+    hidden: telemetryMode === 'GHOST',
     roomCode: squadCode.trim().toUpperCase(),
     groupName: squadCode.trim().toUpperCase(),
     polling: sysConfig.polling,
     backendUrl: BACKEND_URL,
     getIdToken: () => auth.currentUser.getIdToken(),
-    onGroupEnded: () => setLobbyNotice(LOBBY.groupEndedRestart),
+    onGroupEnded: () => {
+      // The Group is gone: nothing to go back to, so the lobby says so instead of offering it.
+      forgetGroup();
+      setResumeOffer(null);
+      setLobbyNotice(LOBBY.groupEndedRestart);
+    },
   });
   const gpsBuilding = useMemo(
     () => (WIFI_POSITIONING_ENABLED ? buildingAt(liveLocation)?.name ?? null : null),
@@ -1274,6 +1284,9 @@ const App = () => {
   // used to survive leaving, and GRANT on an old request then answered for whatever squad
   // the Commander was in by then.
   const endSquadSession = useCallback((nextCode = '') => {
+    // Every way out of a Group by anyone's choice comes through here (leaving, signing out, being
+    // removed, turned down, or the Group being gone): opening the app again must not offer it.
+    forgetGroup();
     setHasJoinedSquad(false);
     setSquadCode(nextCode);
     setUsers([]);
@@ -1315,6 +1328,9 @@ const App = () => {
       if (accessStatus === 'pending') setJustApproved(true);
       setAccessStatus('granted');
       setSquadRole(payload?.role);
+      // So that opening the app again, after a swipe or from the sharing notification, can offer
+      // to come back here rather than start at "Create a group" with a new code.
+      rememberGroup({ code: payload?.roomCode || currentRoom, role: payload?.role, uid: user?.uid });
       // Paused: a reconnect gives this phone a new socket, which the server has no position
       // for, so the squad would lose this member from map and roster. Hand it the paused
       // position again. (Live members do this with their next heartbeat.)
@@ -1343,6 +1359,9 @@ const App = () => {
 
     socket.on('access-denied', (payload) => {
       if (!isAboutThisSquad(payload)) return;
+      forgetGroup();
+      // Coming back to a Group that has since blocked this person: the sharing left running for it ends.
+      if (accessStatus === 'returning') stopBackgroundSharing();
       setAccessStatus('denied');
       setHasJoinedSquad(false);
       setDeniedCode(currentRoom);
@@ -1355,7 +1374,9 @@ const App = () => {
       if (!isAboutThisSquad(payload)) return;
       // A reconnect found the group gone: an alert held for it can never reach anyone.
       sosOutbox.drop('gone');
-      returnToLobby(accessStatus === 'granted' ? LOBBY.ended(currentRoom) : LOBBY.notFound);
+      // Coming back to a Group that has ended: so is any sharing still running for it.
+      if (accessStatus === 'returning') stopBackgroundSharing();
+      returnToLobby(accessStatus === 'granted' || accessStatus === 'returning' ? LOBBY.ended(currentRoom) : LOBBY.notFound);
     });
 
     // A CREATE under a code a live squad already has. Answered this way rather than by
@@ -1732,6 +1753,88 @@ const App = () => {
     socket.emit('leave-squad');
     endSquadSession();
   };
+
+  // Opened again (after a swipe, or from the sharing notification) by the person who was in a
+  // Group: offer it back. Read once per sign-in, and only from the lobby.
+  useEffect(() => {
+    if (!user?.uid || hasJoinedSquad) return;
+    setResumeOffer(rememberedGroup(user.uid));
+    // Only on signing in (or opening the app signed in): leaving a Group forgets it anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
+
+  // "Return to <Group>": always asks to JOIN the Group that exists. Never a create, and never
+  // 'resume' (which re-creates a Group the server lost): a Group that has ended is reported as
+  // ended, in the lobby. The server still knows the person: their Group Lead role comes straight
+  // back, an approved member skips approval, someone blocked is refused, someone who left asks again.
+  const returnToGroup = () => {
+    const offer = resumeOffer;
+    if (!offer || !user) return;
+    setResumeOffer(null);
+    setDeniedCode(null);
+    setLobbyNotice(null);
+    setSquadMode('join');
+    setSquadCode(offer.code);
+    setAccessStatus('returning');
+    setHasJoinedSquad(true);
+    socket.emit('request-join', {
+      roomCode: offer.code,
+      user: { name: user.displayName, photo: user.photoURL, uid: user.uid },
+      intent: 'join',
+    });
+  };
+
+  // "Start fresh": the lobby, with no Group and no sharing left running for the old one. Nothing is
+  // said to the server about the Group itself, so the code still lets the person back in later.
+  const startFresh = () => {
+    stopBackgroundSharing();
+    forgetGroup();
+    setResumeOffer(null);
+    setSquadMode('create'); // the lobby as on a first launch (Return switched it to joining)
+    // A pause taken over from the old Group's sharing (opened again while it was paused) ends with it.
+    if (telemetryModeRef.current === 'FROZEN') {
+      telemetryModeRef.current = 'ACTIVE';
+      setTelemetryMode('ACTIVE');
+    }
+    if (hasJoinedSquad) {
+      socket.emit('cancel-join', { roomCode: squadCode.trim().toUpperCase() });
+      endSquadSession();
+    }
+  };
+
+  // Live, Paused or Hidden, chosen in the app. Background sharing follows, so the notification,
+  // this screen and the Group always agree (Hidden stops it: see useBackgroundSharing).
+  const changeSharingMode = (mode) => {
+    telemetryModeRef.current = mode;
+    setTelemetryMode(mode);
+    if (mode === 'FROZEN') backgroundSharing.pause();
+    else if (mode === 'ACTIVE') backgroundSharing.resume();
+  };
+
+  // ... and the other way: Pause, Resume, or a pause running out, on the sharing notification.
+  // The app's own mode follows, so its connection stops sending live positions over the pause
+  // (it used to keep sending Live every few seconds, and the Group never saw Paused).
+  const backgroundState = backgroundSharing.serviceState;
+  const previousBackgroundState = useRef(backgroundState);
+  useEffect(() => {
+    const before = previousBackgroundState.current;
+    previousBackgroundState.current = backgroundState;
+    const mode = telemetryModeRef.current;
+    if (backgroundState === 'paused' && mode === 'ACTIVE') {
+      telemetryModeRef.current = 'FROZEN';
+      setTelemetryMode('FROZEN');
+    } else if (backgroundState === 'running' && mode === 'FROZEN') {
+      if (before === 'paused') {
+        telemetryModeRef.current = 'ACTIVE';
+        setTelemetryMode('ACTIVE');
+      } else {
+        // Sharing has just started while the app is paused: the service pauses too.
+        backgroundSharing.pause();
+      }
+    }
+    // Keyed on the service's state only; the mode is read at the moment it changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backgroundState]);
 
   const sendPing = (targetId) => {
     socket.emit('ping-user', {
@@ -2301,6 +2404,29 @@ const App = () => {
       );
     }
 
+    // Opened again by someone who was in a Group: back to it, or the lobby. Never joined for them.
+    if (resumeOffer) {
+      return (
+        <>
+          {updateOverlay}
+          <StatusScreen
+            testId="resume"
+            icon={<Undo2 size={40} />}
+            title={RESUME.title}
+            action={(
+              <div className="flex flex-col gap-3">
+                <Button block size="large" onClick={returnToGroup}>{RESUME.returnButton(resumeOffer.code)}</Button>
+                <Button block size="large" variant="secondary" onClick={startFresh}>{RESUME.freshButton}</Button>
+              </div>
+            )}
+          >
+            <p>{RESUME.body(resumeOffer.code, resumeOffer.role)}</p>
+            <p>{RESUME.freshHelp}{backgroundSharing.on ? ` ${RESUME.sharingNote}` : ''}</p>
+          </StatusScreen>
+        </>
+      );
+    }
+
     // The lobby (redesign P3; words in src/copy/access.js): create a group, or join one by
     // its code. Why the server turned a request down (no group under that code, the group
     // ended, the code taken) shows in the card, in amber.
@@ -2571,7 +2697,7 @@ const App = () => {
           {activeTab === 'users' && (
             <SharingControl
               mode={telemetryMode}
-              onChange={(mode) => { telemetryModeRef.current = mode; setTelemetryMode(mode); }}
+              onChange={changeSharingMode}
               waiting={!liveLocation}
               pausedNoSpot={!pausedHasSpot}
               polling={sysConfig.polling}
@@ -2683,7 +2809,20 @@ const App = () => {
       {/* --- WAITING FOR APPROVAL, AND "YOU'RE IN" (redesign P3) --- */}
       {/* Full screens over the map and its tab bar, under the Emergency button (see
           StatusScreen). Waiting used to be a dark overlay with the tab bar still on top. */}
-      {hasJoinedSquad && accessStatus !== 'granted' && (
+      {hasJoinedSquad && accessStatus === 'returning' && (
+        <StatusScreen
+          testId="returning"
+          icon={<Loader2 size={40} className="animate-spin motion-reduce:animate-none" />}
+          title={RESUME.returningTitle}
+          emergencyNote={WAITING.emergency}
+          action={(
+            <Button variant="secondary" block size="large" onClick={startFresh}>{RESUME.freshButton}</Button>
+          )}
+        >
+          <p>{RESUME.returningBody(squadCode)}</p>
+        </StatusScreen>
+      )}
+      {hasJoinedSquad && accessStatus !== 'granted' && accessStatus !== 'returning' && (
         <StatusScreen
           testId="waiting"
           icon={<Loader2 size={40} className="animate-spin motion-reduce:animate-none" />}

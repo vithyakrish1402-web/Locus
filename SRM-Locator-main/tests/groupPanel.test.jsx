@@ -294,6 +294,7 @@ describe("the Group Lead's tools", () => {
     tab(GROUP_TABS.members);
     expect(screen.queryByTestId('lead-tools')).toBeNull();
     cleanup();
+    localStorage.removeItem('locus.group'); // reopened with no Group to go back to (tests/resumeGroup.test.jsx covers that)
     await inAGroup();
     tab(GROUP_TABS.members);
     expect(tools().getByRole('button', { name: /^Join requests/ })).toBeTruthy();

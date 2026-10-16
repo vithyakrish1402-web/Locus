@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  APP_STOP,
   GROUP_ENDED_REASONS,
   LocusBackground,
   checkSupport,
@@ -13,13 +14,20 @@ import { giveConsent, hasConsent } from '../utils/backgroundConsent';
 // Keeping a person on their Group's map while LOCUS is closed (Stage 3b). See
 // src/utils/backgroundSharing.js for what it does and when it does nothing at all.
 //
-//   const bg = useBackgroundSharing({ inGroup, roomCode, groupName, polling, backendUrl, getIdToken, onGroupEnded });
+//   const bg = useBackgroundSharing({ inGroup, hidden, roomCode, groupName, polling, backendUrl, getIdToken, onGroupEnded });
 //   bg.available      whether to show the switch: this phone's app can do it AND the server has it on
 //   bg.on             the switch (off until the person turns it on, and only once they have agreed)
 //   bg.requestChange(on)  the switch was tapped: turning on asks for consent first, if not given
 //   bg.consentOpen / bg.acceptConsent() / bg.declineConsent()   the consent step
 //   bg.refresh()      ask the server again whether it is on
 //   bg.status         { state: 'off' | 'starting' | 'running' | 'paused' | 'refused' | 'stopped', reason? }
+//   bg.serviceState  'running' | 'paused' | null: what the service last said, in a Group or not
+//   bg.pause() / bg.resume()   the person paused or resumed in the app: the service follows, so the
+//                     notification, the app and the Group always agree (a pause from the
+//                     notification reaches the app through bg.status)
+//
+// `hidden`: the person chose Hidden in the app. The service has no "hidden" to report (only live
+// or paused, both on the map), so sharing does not run while hidden; it starts again on Live.
 //
 // Order when turning on, the first time: consent, then the permissions (notifications, location),
 // then the device token, then the service. Any step failing means nothing starts and the status
@@ -45,7 +53,7 @@ const writeSwitch = (on) => {
   }
 };
 
-export function useBackgroundSharing({ inGroup, roomCode, groupName, polling, backendUrl, getIdToken, onGroupEnded, plugin = LocusBackground, fetchImpl }) {
+export function useBackgroundSharing({ inGroup, hidden = false, roomCode, groupName, polling, backendUrl, getIdToken, onGroupEnded, plugin = LocusBackground, fetchImpl }) {
   const [support, setSupport] = useState(null); // null while checking
   const [serverStatus, setServerStatus] = useState('checking'); // 'checking' | 'available' | 'off' | 'unknown'
   const [on, setOnState] = useState(readSwitch);
@@ -89,7 +97,14 @@ export function useBackgroundSharing({ inGroup, roomCode, groupName, polling, ba
     if (!supported) return undefined;
     let alive = true;
     Promise.resolve(plugin.getState?.()).then((state) => {
-      if (!alive || !state || state.running || !state.reason) return undefined;
+      if (!alive || !state) return undefined;
+      // Opened again while the service is still sharing, paused from its notification: the app
+      // starts out paused too, rather than showing Live and sending live positions over it.
+      if (state.running) {
+        if (state.state === 'paused') setOutcome({ state: 'paused' });
+        return undefined;
+      }
+      if (!state.reason) return undefined;
       if (GROUP_ENDED_REASONS.includes(state.reason)) latest.current.onGroupEnded?.();
       // Shown (or not ours to show): the phone can forget why, so it is not shown again next launch.
       return plugin.acknowledgeStop?.();
@@ -104,7 +119,14 @@ export function useBackgroundSharing({ inGroup, roomCode, groupName, polling, ba
     let handle = null;
     let gone = false;
     Promise.resolve(plugin.addListener('stateChanged', (event) => {
-      if (event?.state === 'stopped' && event.reason !== 'user-stop') setOutcome({ state: 'stopped', reason: event.reason });
+      // Stop on the notification: the person turned sharing off, so the switch says so. (It used
+      // to stay on, with the line under it still saying "Sharing".)
+      if (event?.state === 'stopped' && event.reason === 'user-stop') {
+        writeSwitch(false);
+        setOnState(false);
+        setOutcome(null);
+      } else if (event?.state === 'stopped' && event.reason === APP_STOP) setOutcome(null); // the app's own: nothing to report
+      else if (event?.state === 'stopped') setOutcome({ state: 'stopped', reason: event.reason });
       else if (event?.state === 'paused') setOutcome({ state: 'paused' });
       else if (event?.state === 'running') setOutcome({ state: 'running' });
     })).then((h) => {
@@ -116,13 +138,13 @@ export function useBackgroundSharing({ inGroup, roomCode, groupName, polling, ba
 
   const available = supported && serverStatus === 'available';
   const effectiveOn = on && consented;
-  const active = available && effectiveOn && inGroup && Boolean(roomCode);
+  const active = available && effectiveOn && inGroup && !hidden && Boolean(roomCode);
 
   useEffect(() => {
     if (!active) return undefined;
     let cancelled = false;
     const { groupName: name, polling: rate, backendUrl: baseUrl, getIdToken: idToken, fetchImpl: fetcher } = latest.current;
-    startBackgroundSharing({ baseUrl, roomCode, groupName: name || roomCode, pollingMs: pollingMsFor(rate), getIdToken: idToken, plugin, fetchImpl: fetcher }).then((result) => {
+    startBackgroundSharing({ baseUrl, roomCode, groupName: name || roomCode, pollingMs: pollingMsFor(rate), getIdToken: idToken, plugin, fetchImpl: fetcher, stillWanted: () => !cancelled }).then((result) => {
       if (cancelled) return;
       // 'running' may already have been said by the service itself: a refusal is the only news here.
       setOutcome((previous) => (result.ok ? (previous?.state === 'paused' ? previous : { state: 'running' }) : { state: 'refused', reason: result.reason }));
@@ -130,7 +152,7 @@ export function useBackgroundSharing({ inGroup, roomCode, groupName, polling, ba
     return () => {
       cancelled = true;
       // Leaving the Group, switching it off, or going away: sharing ends and the token is wiped.
-      stopBackgroundSharing('user-stop', plugin);
+      stopBackgroundSharing(APP_STOP, plugin);
       setOutcome(null);
     };
   }, [active, roomCode, plugin]);
@@ -159,9 +181,26 @@ export function useBackgroundSharing({ inGroup, roomCode, groupName, polling, ba
 
   const declineConsent = useCallback(() => setConsentOpen(false), []);
 
+  // Until resumed, like the app's own Paused. The service answers with its new state (stateChanged),
+  // which is what bg.status then says: nothing is assumed here. A service that is not running yet
+  // ignores it, and the app pauses it once it says it is running (see App.jsx).
+  const pause = useCallback(() => {
+    if (!active) return;
+    Promise.resolve(plugin.pause?.({ minutes: 0 })).catch(() => {});
+  }, [active, plugin]);
+
+  const resume = useCallback(() => {
+    if (!active) return;
+    Promise.resolve(plugin.resume?.()).catch(() => {});
+  }, [active, plugin]);
+
   let status = { state: 'off' };
   if (active) status = outcome ?? { state: 'starting' };
   else if (available && effectiveOn && outcome?.state === 'stopped') status = outcome;
 
-  return { available, on: effectiveOn, status, consentOpen, requestChange, acceptConsent, declineConsent, refresh };
+  // What the service last said, whether or not this screen is in a Group yet: opened again while it
+  // is paused, the app must be paused before it joins, or its first report would be a live one.
+  const serviceState = outcome?.state === 'paused' || outcome?.state === 'running' ? outcome.state : null;
+
+  return { available, on: effectiveOn, status, serviceState, consentOpen, requestChange, acceptConsent, declineConsent, refresh, pause, resume };
 }

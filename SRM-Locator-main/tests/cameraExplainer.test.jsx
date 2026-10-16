@@ -157,6 +157,7 @@ describe('the camera explainer', () => {
     await act(async () => fireEvent.click(await screen.findByRole('button', { name: AR_START.start })));
     expect(localStorage.getItem(CAMERA_ALLOWED_KEY)).toBe('1');
     cleanup();
+    localStorage.removeItem('locus.group'); // reopened with no Group to go back to (tests/resumeGroup.test.jsx covers that)
 
     await onTheMap();
     openArScan();

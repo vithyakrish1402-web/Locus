@@ -495,6 +495,67 @@ does not come back after End route. Screenshot the navigation screen with the SO
 
 ---
 
+## Test 15: opening LOCUS again from the notification, and Pause everywhere
+
+Two bugs found on 2026-10-16: opening LOCUS from its notification after closing it offered
+**Create a group** with a new code (one tap made a new Group), and **Pause** on the notification did
+nothing the Group could see while the app was open. Phone B watches Phone A throughout.
+
+**Do (Pause with the app open):** Phone A in the Group, sharing on, LOCUS **on screen**. Pull down the
+shade and tap **Pause 15 min** (expand the LOCUS notification first if the buttons are hidden).
+
+**You should see:** the notification says *"LOCUS sharing is paused"* with **Resume**. In LOCUS on
+Phone A, **Your location** in the Group panel switches to **Paused**, and so does the chip at the top.
+On Phone B, within about **5 seconds**, Phone A shows as **Paused** and stops moving if you walk.
+
+**Do:** tap **Resume** on the notification.
+
+**You should see:** Phone A's app goes back to **Live**, and Phone B sees Phone A moving again.
+
+**Do (Pause in the app):** in Phone A's Group panel, tap **Paused**, then pull down the shade.
+
+**You should see:** the notification also says *"LOCUS sharing is paused"*. Tap **Live** in the
+app: the notification goes back to *"LOCUS is sharing your location"*.
+
+**Do (Hidden):** tap **Hidden** in the app.
+
+**You should see:** the sharing notification **goes away** (background sharing does not run while
+you are hidden: it can only show you). Tap **Live**: it comes back within a few seconds.
+
+**Do (reopen while paused):** pause from the notification, then close LOCUS (swipe it away from
+recent apps). Wait 30 seconds. Tap the LOCUS notification.
+
+**You should see:** a screen **"Back to your Group?"** naming your Group, with **Return to <code>**
+and **Start fresh**. Nothing has been joined or created yet. Tap **Return**: a short *"Returning to
+your Group"*, then the map, in the **same** Group, with **Your location** showing **Paused**. The
+Group Lead gets their Group Lead tools back; a member is **not** asked to be approved again. Phone B
+still sees Phone A as **Paused**, on the map, never moving and never twice. (The marker on the map
+needs the server change on branch `claude/presence-shows-over-fixless-socket` to be live on Render.
+Before that, Phone B lists Phone A but shows no marker until Phone A resumes.)
+
+**Do (Start fresh):** close and reopen LOCUS again, and this time tap **Start fresh**.
+
+**You should see:** the lobby on **Create a group**, the sharing notification **gone**, and on
+Phone B Phone A disappears from the old Group without a "signal lost" alarm.
+
+**Do (a Group that has ended):** with Phone A remembering a Group (close LOCUS while in one), have
+everyone else leave it and wait for it to end, or restart the server. Reopen LOCUS on Phone A and tap
+**Return**.
+
+**You should see:** the lobby saying the Group **has ended**. **No** new Group is created.
+
+**Do (Stop with the app open):** sharing on, LOCUS open, tap **Stop** on the notification, then open
+Settings.
+
+**You should see:** **Keep sharing when the app is closed** is **off**, and the line under it says
+**Not sharing**.
+
+**Tell me if:** LOCUS ever opens on **Create a group** while it still has your Group; anything is
+joined or created before you tap; Phone B ever sees Phone A moving while the notification says paused;
+the app and the notification ever disagree about Paused and Live; or you see two Phone A markers.
+
+---
+
 ## What to send me
 
 For each test that did not go as described: the **test number**, **Phone A's make, model and

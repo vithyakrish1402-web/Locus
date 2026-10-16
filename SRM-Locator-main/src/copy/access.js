@@ -110,6 +110,21 @@ export const LOBBY = {
   groupEndedRestart: 'Your Group ended (the server restarted). Rejoin with the code.',
 };
 
+// Opening LOCUS again (after a swipe, or from the sharing notification) while this phone still
+// remembers the Group it was in. Nothing is joined until the person chooses.
+export const RESUME = {
+  title: 'Back to your Group?',
+  body: (code, role) => (role === 'OWNER'
+    ? `You are the Group Lead of ${spacedCode(code)}.`
+    : `You were in Group ${spacedCode(code)}.`),
+  freshHelp: 'Start fresh takes you to the lobby. You can still rejoin later with the code.',
+  sharingNote: 'Starting fresh also stops sharing your location while LOCUS is closed.',
+  returnButton: (code) => `Return to ${spacedCode(code)}`,
+  freshButton: 'Start fresh',
+  returningTitle: 'Returning to your Group',
+  returningBody: (code) => `Getting you back into ${spacedCode(code)}.`,
+};
+
 export const WAITING = {
   title: 'Waiting for approval',
   body: (code) => `We asked the Group Lead of ${spacedCode(code)} to let you in. You will join as soon as they approve.`,

@@ -13,7 +13,7 @@ vi.mock('@capacitor/core', () => ({
 
 const {
   SUPPORTED_PLUGIN_VERSION, checkSupport, fetchServerStatus, mintDeviceToken, pollingMsFor,
-  startBackgroundSharing, stopBackgroundSharing,
+  startBackgroundSharing, stopBackgroundSharing, forgetLastStopForTests,
 } = await import('../src/utils/backgroundSharing.js');
 
 const goodCaps = { version: SUPPORTED_PLUGIN_VERSION, running: false, notificationsEnabled: true, locationGranted: true, resumable: false };
@@ -29,6 +29,7 @@ const okToken = () => ({ token: 'v1.abc.def', expiresAt: Date.now() + 14 * 86_40
 const OPTIONS = { baseUrl: 'https://server.example', roomCode: 'ABC123', groupName: 'ABC123', pollingMs: 5000, getIdToken: async () => 'id-token' };
 
 beforeEach(() => {
+  forgetLastStopForTests();
   shell.native = true;
   shell.platform = 'android';
   shell.plugins = new Set(['LocusBackground']);
