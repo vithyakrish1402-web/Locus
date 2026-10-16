@@ -4,7 +4,7 @@
 // floating bottom-left over anything that covers that bar, and always floating from md up.
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
   const handlers = new Map();
@@ -162,6 +162,41 @@ describe('the Emergency button on a phone (design build + E1: never out of reach
     expect(sosButtons()).toHaveLength(1);
     expect(screen.getByTestId('sos-float').contains(sosButtons()[0])).toBe(true);
     expect(tabBar().contains(sosButtons()[0])).toBe(false);
+  });
+});
+
+// Turn-by-turn navigation (Jose's 09086a7) hides the bottom bar the Emergency button sits in. The
+// button must then float, as it does over AR Scan or a sheet: never out of reach. Only where it
+// stands is tested here; how it behaves is covered by sosTrigger.test.jsx and is unchanged.
+describe('the Emergency button during turn-by-turn navigation', () => {
+  const startNavigating = async () => {
+    phone();
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('offline'))));
+    onTheMap();
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
+    fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
+    await act(async () => {});
+  };
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('floats bottom-left on a phone while the bottom bar is hidden, one button, on its one layer', async () => {
+    await startNavigating();
+    expect(screen.getByTestId('turn-instruction-card')).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull(); // the bar is hidden...
+    expect(sosButtons()).toHaveLength(1); // ...and the button is not
+    const float = screen.getByTestId('sos-float');
+    expect(float.contains(sosButtons()[0])).toBe(true);
+    expect(Number(float.style.zIndex)).toBe(LAYER.emergencyButton);
+  });
+
+  it('goes back into the tab bar when the route ends', async () => {
+    await startNavigating();
+    fireEvent.click(screen.getAllByRole('button', { name: 'End route' })[0]);
+    await waitFor(() => expect(screen.queryByTestId('turn-instruction-card')).toBeNull());
+    expect(screen.queryByTestId('sos-float')).toBeNull();
+    expect(sosButtons()).toHaveLength(1);
+    expect(tabBar().contains(sosButtons()[0])).toBe(true);
   });
 });
 

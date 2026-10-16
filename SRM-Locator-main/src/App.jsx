@@ -492,7 +492,7 @@ const App = () => {
   // Settings, the guide, the admin tools and every bottom sheet draw over that bar, so while
   // any of them is open it floats bottom-left above them instead. From md up it always floats.
   const anySheetOpen = useAnySheetOpen();
-  const sosFloats = !isMobile || Boolean(arTarget) || showSettingsModal || guideOpen || showAdminSettings || anySheetOpen;
+  // (sosFloats itself is worked out below, once turn-by-turn navigation's state exists.)
 
   // `key` is a setting's name, or 'group.name' for one entry of a nested setting
   // (arFeatureOverrides.roadLine), merged into the rest of its group.
@@ -557,6 +557,9 @@ const App = () => {
   const [routeData, setRouteData] = useState(null);
   // Full Google Maps-style turn-by-turn navigation session
   const [isNavigatingMode, setIsNavigatingMode] = useState(false);
+  // Turn-by-turn navigation hides the bottom bar the Emergency button sits in, so while it is on the
+  // button floats like it does over AR Scan or a sheet: it is never out of reach.
+  const sosFloats = !isMobile || Boolean(arTarget) || showSettingsModal || guideOpen || showAdminSettings || anySheetOpen || isNavigatingMode;
   const leafletMapRef = useRef(null);
 
   // --- MODIFIED: FIREBASE AUTH STATE ---
