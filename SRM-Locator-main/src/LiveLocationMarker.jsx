@@ -11,6 +11,7 @@ export const NEAR_ZOOM_THRESHOLD = 18;       // zoom >= this = "near" state
 export const NAVIGATING_SPEED_MPS = 0.5;     // movement alone counts as navigating above this
 export const GPS_HEADING_SPEED_MPS = 1.0;    // above this, trust GPS course over compass
 export const CHEVRON_GAP_PX = 4;             // chevron's near edge to dot's edge
+export const NAV_POINTER_SIZE_PX = 16;       // diameter of the navigating pointer's dot (the chevron ahead of it is sized from it)
 
 // Same fixed-design-grid approach as LocationMarker.jsx: author every shape
 // against a constant GRID, then let the <svg> width/height (never zoom) do
@@ -36,6 +37,10 @@ const Chevron = ({ size, color, dotRadius }) => {
     </svg>
   );
 };
+
+// The navigating pointer: a dot with one chevron just ahead of it, drawn pointing up (north).
+const NAV_DOT_R = NAV_POINTER_SIZE_PX / 2;
+const navChevron = `M ${CENTER - 8} ${CENTER - NAV_DOT_R - 4} L ${CENTER} ${CENTER - NAV_DOT_R - 13} L ${CENTER + 8} ${CENTER - NAV_DOT_R - 4}`;
 
 // Screen-fixed viewfinder corners — frame position, never rotate with heading.
 const CornerBrackets = ({ color }) => {
@@ -91,16 +96,8 @@ const LiveLocationMarker = ({
       <svg width={GRID} height={GRID} viewBox={`0 0 ${GRID} ${GRID}`} style={{ overflow: 'visible' }}>
         {isNavigating ? (
           <>
-            {/* Soft pulsing location beam / accuracy halo */}
-            <circle
-              cx={CENTER}
-              cy={CENTER}
-              r={24}
-              fill="#1A73E8"
-              fillOpacity="0.2"
-              className="animate-pulse"
-            />
-            {/* Google Maps 3D Navigation Chevron Arrow - Rotating with heading */}
+            {/* Your dot with a chevron ahead of it, turning with your heading. A thin map-casing
+                edge keeps both readable on any map. */}
             <g
               style={{
                 transform: `rotate(${heading}deg)`,
@@ -108,23 +105,9 @@ const LiveLocationMarker = ({
                 transition: 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)',
               }}
             >
-              {/* Outer chevron arrow with pure white outline */}
-              <path
-                d="M 28 6 L 47 43 L 28 34 L 9 43 Z"
-                fill="#1A73E8"
-                stroke="#FFFFFF"
-                strokeWidth="3.5"
-                strokeLinejoin="round"
-                style={{
-                  filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45))',
-                }}
-              />
-              {/* Left-side 3D bevel highlight */}
-              <path
-                d="M 28 9 L 28 33 L 13 40 Z"
-                fill="#FFFFFF"
-                fillOpacity="0.35"
-              />
+              <path d={navChevron} fill="none" style={{ stroke: 'var(--color-map-casing)' }} strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" />
+              <path d={navChevron} fill="none" style={{ stroke: color }} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx={CENTER} cy={CENTER} r={NAV_DOT_R} style={{ fill: color, stroke: 'var(--color-map-casing)' }} strokeWidth={3} />
             </g>
           </>
         ) : (
@@ -147,7 +130,7 @@ const LiveLocationMarker = ({
       {/* Street/walkway badge below marker when navigating (Google Maps style) */}
       {isNavigating && roadName && (
         <div
-          className="absolute top-[52px] left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-white dark:bg-[#202124] text-zinc-800 dark:text-zinc-100 text-[10px] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.3)] border border-black/10 dark:border-white/10 whitespace-nowrap pointer-events-none"
+          className="absolute top-[52px] left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-fill bg-[var(--color-map-plate)] text-text text-caption shadow-[var(--shadow-1)] border border-border whitespace-nowrap pointer-events-none"
         >
           {roadName}
         </div>

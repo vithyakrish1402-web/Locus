@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { PANEL_SPRING } from '../../utils/motion';
 import {
   MapPin,
   CheckCircle2,
@@ -9,8 +11,12 @@ import {
   Crosshair,
 } from 'lucide-react';
 
+// Navigation overlay settings.
+export const NAV_PANEL_MAX_TEXT_LINES = 2; // instruction and THEN text wrap to this many lines
+export const NAV_SHOW_ARRIVAL_TIME = true; // the arrival clock time in the summary strip
+
 /**
- * Authentic Google Maps directional navigation arrows
+ * Turn arrows
  */
 export function ManeuverIcon({ maneuver, size = 32, className = '' }) {
   const s = size;
@@ -74,7 +80,7 @@ export function ManeuverIcon({ maneuver, size = 32, className = '' }) {
       return (
         <svg width={s} height={s} viewBox="0 0 32 32" fill="none" className={className}>
           <path d="M16 4C10.4772 4 6 8.47715 6 14C6 21 16 29 16 29C16 29 26 21 26 14C26 8.47715 21.5228 4 16 4Z" fill="currentColor" />
-          <circle cx="16" cy="14" r="4" fill="#0B8043" />
+          <circle cx="16" cy="14" r="4" style={{ fill: 'var(--color-surface)' }} />
         </svg>
       );
     case 'straight':
@@ -88,8 +94,24 @@ export function ManeuverIcon({ maneuver, size = 32, className = '' }) {
   }
 }
 
+const fmtDistance = (m, digits = 1) =>
+  m > 1000 ? `${(m / 1000).toFixed(digits)} km` : `${Math.round(m || 0)} m`;
+
+// Wraps to at most NAV_PANEL_MAX_TEXT_LINES lines, then ends with an ellipsis only if it
+// really is longer than that.
+const clampLines = {
+  display: '-webkit-box',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: NAV_PANEL_MAX_TEXT_LINES,
+  overflow: 'hidden',
+  overflowWrap: 'anywhere',
+};
+
 /**
- * Sleek Tactical Navigation Header (matches Locus UI)
+ * The one navigation panel, at the top of the map: the next turn, the step after it, and
+ * a summary strip (minutes left, distance left, arrival time, destination). The close
+ * button ends navigation. Colours, font and corners come from the theme tokens
+ * (src/theme/tokens.css), so it follows light/dark and any future accent change.
  */
 export function TurnInstructionCard({
   currentStep,
@@ -100,222 +122,172 @@ export function TurnInstructionCard({
   onRetryReroute,
   onEnd,
   destinationName,
-}) {
-  const distText =
-    distanceToNextMeters > 1000
-      ? `${(distanceToNextMeters / 1000).toFixed(1)} km`
-      : `${Math.round(distanceToNextMeters || 0)} m`;
-
-  // Parse street/walkway title cleanly
-  const rawInstruction = currentStep?.instruction || `Head to ${destinationName || 'destination'}`;
-  let primaryTitle = rawInstruction;
-  let secondaryDetail = '';
-
-  if (rawInstruction.includes('onto ')) {
-    const parts = rawInstruction.split('onto ');
-    secondaryDetail = parts[0].trim();
-    primaryTitle = parts[1].trim();
-  } else if (rawInstruction.includes('towards ')) {
-    const parts = rawInstruction.split('towards ');
-    secondaryDetail = parts[0].trim();
-    primaryTitle = parts[1].trim();
-  } else if (rawInstruction.includes('toward ')) {
-    const parts = rawInstruction.split('toward ');
-    secondaryDetail = parts[0].trim();
-    primaryTitle = parts[1].trim();
-  } else if (rawInstruction.toLowerCase().startsWith('turn ')) {
-    primaryTitle = rawInstruction;
-  }
-
-  return (
-    <div
-      data-testid="turn-instruction-card"
-      className="w-full rounded-3xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.5)] text-white font-ui border border-white/15 bg-[#18181B] pointer-events-auto transition-all duration-300"
-    >
-      {/* Primary Navigation Bar — Tactical dark surface matching Locus UI */}
-      <div className="bg-[#18181B] px-4 py-3.5 flex items-start gap-4">
-        {/* Left Side: Large Maneuver Arrow & Distance */}
-        <div className="flex flex-col items-center justify-center shrink-0 min-w-[64px]">
-          {isRerouting ? (
-            <RefreshCw size={36} className="animate-spin text-[#38BDF8] my-1" />
-          ) : (
-            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-[#38BDF8] shadow-inner">
-              <ManeuverIcon maneuver={currentStep?.maneuver || 'straight'} size={32} />
-            </div>
-          )}
-          <span className="text-xl md:text-2xl font-black text-white tracking-tight mt-1">
-            {distText}
-          </span>
-        </div>
-
-        {/* Center / Right: Large Street Name & Next Action */}
-        <div className="min-w-0 flex-1 pt-0.5">
-          {isRerouting ? (
-            <div>
-              <p className="text-xl font-bold text-white animate-pulse">Recalculating…</p>
-              <p className="text-xs text-zinc-400 font-medium mt-0.5">Finding optimal pedestrian path</p>
-            </div>
-          ) : rerouteError ? (
-            <div>
-              <p className="text-lg font-bold text-yellow-400 flex items-center gap-1.5">
-                <AlertTriangle size={18} /> Off route
-              </p>
-              <button
-                type="button"
-                onClick={onRetryReroute}
-                className="text-xs text-blue-400 underline font-medium hover:text-blue-300 mt-1"
-              >
-                Tap to recalculate route
-              </button>
-            </div>
-          ) : !currentStep ? (
-            <div>
-              <p className="text-lg font-bold text-white animate-pulse flex items-center gap-2">
-                <LocateFixed size={18} className="text-[#38BDF8]" /> Acquiring GPS…
-              </p>
-              <p className="text-xs text-zinc-400 truncate mt-0.5">
-                Navigating to {destinationName || 'destination'}
-              </p>
-            </div>
-          ) : (
-            <div>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-snug truncate">
-                {primaryTitle}
-              </h2>
-              {secondaryDetail && (
-                <p className="text-xs md:text-sm font-semibold text-zinc-400 mt-0.5 truncate">
-                  {secondaryDetail}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Top-Right: Exit Button */}
-        <button
-          type="button"
-          onClick={onEnd}
-          aria-label="End route"
-          title="Exit navigation"
-          className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-zinc-300 hover:text-white flex items-center justify-center shrink-0 active:scale-95 transition-all"
-        >
-          <X size={18} strokeWidth={2.5} />
-        </button>
-      </div>
-
-      {/* Secondary "Then" Row (Directly attached underneath) */}
-      {nextStep && !isRerouting && (
-        <div className="bg-[#202024] px-4 py-2.5 flex items-center gap-2.5 text-zinc-200 text-xs font-semibold border-t border-white/10">
-          <span className="bg-white/10 border border-white/10 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-zinc-300">
-            Then
-          </span>
-          <ManeuverIcon maneuver={nextStep.maneuver || 'straight'} size={18} className="text-[#38BDF8] shrink-0" />
-          <span className="truncate text-xs font-medium text-zinc-300">
-            {nextStep.instruction || destinationName}
-          </span>
-          {nextStep.distanceMeters > 0 && (
-            <span className="ml-auto text-[11px] text-zinc-400 font-semibold shrink-0">
-              {nextStep.distanceMeters > 1000
-                ? `${(nextStep.distanceMeters / 1000).toFixed(1)} km`
-                : `${Math.round(nextStep.distanceMeters)} m`}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Authentic Google Maps Bottom Trip Summary Card
- */
-export function NavigationSummaryCard({
   remainingMeters,
   remainingMinutes,
-  destinationName,
-  onEnd,
 }) {
-  const isLoading = !remainingMeters && !remainingMinutes;
-  const distText =
-    remainingMeters > 1000
-      ? `${(remainingMeters / 1000).toFixed(2)} km`
-      : `${Math.round(remainingMeters || 0)} m`;
+  const reduceMotion = useReducedMotion();
+  const distText = fmtDistance(distanceToNextMeters);
+  const instruction = currentStep?.instruction || `Head to ${destinationName || 'destination'}`;
 
+  const summaryLoading = !remainingMeters && !remainingMinutes;
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
-
-  const timeString = useMemo(() => {
-    const etaArrival = new Date(currentTime + Math.max(1, remainingMinutes || 1) * 60000);
-    return etaArrival.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }, [currentTime, remainingMinutes]);
+  const arrivalTime = useMemo(
+    () =>
+      new Date(currentTime + Math.max(1, remainingMinutes || 1) * 60000).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    [currentTime, remainingMinutes],
+  );
 
   return (
     <div
-      data-testid="navigation-summary-card"
-      className="w-full bg-white dark:bg-[#1E1E1E] text-zinc-900 dark:text-white rounded-3xl shadow-[0_12px_40px_rgba(0,0,0,0.3)] border border-black/5 dark:border-white/10 p-4 font-ui pointer-events-auto transition-all"
+      data-testid="turn-instruction-card"
+      className="w-full overflow-hidden rounded-card border border-border bg-surface text-text shadow-[var(--shadow-2)] font-ui pointer-events-auto"
     >
-      <div className="flex items-center justify-between gap-3">
-        {/* Left Side: Walking ETA, Arrival Time, Distance */}
-        <div className="min-w-0 flex-1">
-          {isLoading ? (
-            <div className="flex items-baseline gap-2">
-              <span className="text-base font-bold text-[#1E8E3E] dark:text-[#34D399] animate-pulse">
-                Calculating walking ETA…
-              </span>
-            </div>
+      <div className="flex items-start gap-3 px-3 pt-3 pb-2.5">
+        {/* Turn arrow and the distance to it */}
+        <div className="flex min-w-[64px] shrink-0 flex-col items-center gap-1">
+          {isRerouting ? (
+            <RefreshCw size={30} className="my-1.5 animate-spin text-accent" />
           ) : (
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-[#1E8E3E] dark:text-[#34D399] tracking-tight">
-                {remainingMinutes} <span className="text-base font-bold text-zinc-500 dark:text-zinc-400">min</span>
-              </span>
-              <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
-                · {distText}
-              </span>
-              <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
-                · {timeString}
-              </span>
+            <div className="flex h-12 w-12 items-center justify-center rounded-fill border border-border bg-accent-soft text-accent">
+              <ManeuverIcon maneuver={currentStep?.maneuver || 'straight'} size={30} />
             </div>
           )}
-          <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300 font-medium truncate mt-1">
-            <MapPin size={13} className="text-red-500 shrink-0" />
-            <span className="truncate">Walking to <strong className="font-semibold text-zinc-900 dark:text-white">{destinationName || 'Destination'}</strong></span>
-          </div>
+          <span className="text-numeric tabular-nums">{distText}</span>
         </div>
 
-        {/* Right Side: Circular Exit Cross Button */}
+        {/* The instruction */}
+        <div className="min-w-0 flex-1 pt-0.5">
+          {isRerouting ? (
+            <>
+              <p className="text-title animate-pulse">Recalculating…</p>
+              <p className="text-caption text-text-secondary">Finding the best walking path</p>
+            </>
+          ) : rerouteError ? (
+            <>
+              <p className="text-title flex items-center gap-1.5 text-warning">
+                <AlertTriangle size={18} /> Off route
+              </p>
+              <button
+                type="button"
+                onClick={onRetryReroute}
+                className="mt-1 min-h-11 text-label text-accent underline"
+              >
+                Tap to recalculate route
+              </button>
+            </>
+          ) : !currentStep ? (
+            <>
+              <p className="text-title flex animate-pulse items-center gap-2">
+                <LocateFixed size={18} className="text-accent" /> Acquiring GPS…
+              </p>
+              <p className="text-caption text-text-secondary" style={clampLines}>
+                Navigating to {destinationName || 'destination'}
+              </p>
+            </>
+          ) : (
+            <h2 data-testid="nav-instruction" className="text-[1.0625rem] font-semibold leading-snug" style={clampLines}>
+              {instruction}
+            </h2>
+          )}
+        </div>
+
+        {/* End navigation */}
         <button
           type="button"
           onClick={onEnd}
           aria-label="End route"
           title="Exit navigation"
-          className="w-11 h-11 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0 active:scale-95 transition-all shadow-sm"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-fill border border-border-control text-text-secondary transition-transform active:scale-95 hover:text-text"
         >
           <X size={20} strokeWidth={2.5} />
         </button>
+      </div>
+
+      {/* The step after this one */}
+      <AnimatePresence initial={false}>
+        {nextStep && !isRerouting && (
+          <motion.div
+            key="then"
+            data-testid="nav-then-row"
+            initial={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+            animate={reduceMotion ? { opacity: 1 } : { height: 'auto', opacity: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+            transition={PANEL_SPRING}
+            style={{ overflow: 'hidden' }}
+          >
+            <div className="flex items-start gap-2.5 border-t border-border bg-bg px-3 py-2">
+              <span className="mt-0.5 shrink-0 rounded-fill border border-border px-1.5 py-0.5 text-caption uppercase tracking-wider text-text-secondary">
+                Then
+              </span>
+              <ManeuverIcon maneuver={nextStep.maneuver || 'straight'} size={20} className="mt-0.5 shrink-0 text-accent" />
+              <span className="min-w-0 flex-1 text-secondary" style={clampLines}>
+                {nextStep.instruction || destinationName}
+              </span>
+              {nextStep.distanceMeters > 0 && (
+                <span className="mt-0.5 shrink-0 text-caption tabular-nums text-text-secondary">
+                  {fmtDistance(nextStep.distanceMeters)}
+                </span>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Trip summary: one line of numbers, then where you are going */}
+      <div data-testid="navigation-summary" className="border-t border-border px-3 py-2">
+        {summaryLoading ? (
+          <p className="text-label animate-pulse text-text-secondary">Calculating walking time…</p>
+        ) : (
+          <p className="text-label flex flex-wrap items-baseline gap-x-1.5 tabular-nums">
+            <span className="text-accent">{remainingMinutes} min</span>
+            <span aria-hidden="true" className="text-text-secondary">·</span>
+            <span>{fmtDistance(remainingMeters, 2)}</span>
+            {NAV_SHOW_ARRIVAL_TIME && (
+              <>
+                <span aria-hidden="true" className="text-text-secondary">·</span>
+                <span>{arrivalTime}</span>
+              </>
+            )}
+          </p>
+        )}
+        <p className="mt-0.5 flex items-center gap-1.5 text-caption text-text-secondary">
+          <MapPin size={13} className="shrink-0 text-accent" />
+          <span className="min-w-0 truncate">
+            Walking to <strong className="font-semibold text-text">{destinationName || 'Destination'}</strong>
+          </span>
+        </p>
       </div>
     </div>
   );
 }
 
 /**
- * Google Maps Floating Action Re-center Button
+ * Auto-follow toggle and Re-center, bottom right (the bottom card they used to sit above is
+ * gone). Theme colours, the theme's small corner radius, 44 px touch targets.
  */
 export function RecenterButton({ onClick, autoFollow = false, onToggleAutoFollow }) {
   return (
-    <div className="fixed bottom-[6.5rem] right-4 z-[900] flex items-center gap-2 pointer-events-auto">
+    <div
+      className="fixed right-4 z-[900] flex items-center gap-2 pointer-events-auto"
+      style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+    >
       {onToggleAutoFollow && (
         <button
           type="button"
           onClick={onToggleAutoFollow}
           aria-label={autoFollow ? 'Disable auto-centering' : 'Enable auto-centering'}
           title={autoFollow ? 'Auto-centering is ON' : 'Auto-centering is OFF (Manual recenter)'}
-          className={`px-3 py-2 rounded-full text-xs font-semibold shadow-[0_6px_25px_rgba(0,0,0,0.3)] border transition-all active:scale-95 ${
+          className={`min-h-11 rounded-fill border px-3.5 text-label uppercase tracking-wider shadow-[var(--shadow-2)] transition-[transform,background-color,color] duration-150 active:scale-95 ${
             autoFollow
-              ? 'bg-blue-600 text-white border-blue-500'
-              : 'bg-white/95 dark:bg-[#202124]/95 text-zinc-600 dark:text-zinc-300 border-black/10 dark:border-white/15'
+              ? 'border-accent bg-accent text-accent-on'
+              : 'border-border-control bg-surface text-text-secondary'
           }`}
         >
           {autoFollow ? 'Auto: ON' : 'Auto: OFF'}
@@ -326,9 +298,9 @@ export function RecenterButton({ onClick, autoFollow = false, onToggleAutoFollow
         onClick={onClick}
         data-testid="nav-recenter-button"
         aria-label="Re-center navigation"
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-white dark:bg-[#202124] text-zinc-900 dark:text-white shadow-[0_8px_30px_rgba(0,0,0,0.35)] border border-black/10 dark:border-white/15 text-xs md:text-sm font-bold pointer-events-auto active:scale-95 transition-all hover:bg-zinc-50 dark:hover:bg-[#2a2b2e]"
+        className="inline-flex min-h-11 items-center gap-2 rounded-fill border border-border-control bg-surface px-3.5 text-label uppercase tracking-wider text-text shadow-[var(--shadow-2)] transition-transform active:scale-95"
       >
-        <Crosshair size={18} className="text-[#1A73E8] dark:text-[#8AB4F8]" />
+        <Crosshair size={18} className="text-accent" />
         <span>Re-center</span>
       </button>
     </div>

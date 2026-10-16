@@ -36,7 +36,6 @@ import { BELOW_TOP_BAR } from './utils/mapChrome';
 import RouteCard from './components/map/RouteCard';
 import {
   TurnInstructionCard,
-  NavigationSummaryCard,
   RecenterButton,
   ArrivalPanel,
 } from './components/navigation/NavigationHUD';
@@ -3005,6 +3004,8 @@ const App = () => {
                   clearRoute();
                 }}
                 destinationName={activeNavTarget.name}
+                remainingMeters={navigationController.remainingDistanceMeters}
+                remainingMinutes={navigationController.remainingTimeMinutes}
               />
             </motion.div>
           ) : (routeStart || routeData) ? (
@@ -3446,40 +3447,6 @@ const App = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Navigation Trip Summary Card at bottom */}
-      <AnimatePresence>
-        {isNavigatingMode && activeNavTarget && !navigationController.hasArrived && (
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-            className="fixed inset-x-3 bottom-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[32rem] z-[850] md:z-[1000] pointer-events-auto"
-          >
-            <NavigationSummaryCard
-              remainingMeters={navigationController.remainingDistanceMeters}
-              remainingMinutes={navigationController.remainingTimeMinutes}
-              destinationName={activeNavTarget.name}
-              onEnd={() => {
-                setIsNavigatingMode(false);
-                clearRoute();
-              }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Google Maps Speed Limit Badge */}
-      {isNavigatingMode && (
-        <div className="fixed bottom-28 left-4 z-[900] pointer-events-none flex flex-col items-center">
-          <div className="w-12 h-12 rounded-full bg-white dark:bg-[#202124] shadow-[0_4px_16px_rgba(0,0,0,0.25)] border-[3.5px] border-red-600 flex flex-col items-center justify-center font-bold">
-            <span className="text-[14px] font-black text-zinc-900 dark:text-white leading-none">
-              {liveSpeed && liveSpeed > 0 ? Math.round(liveSpeed * 3.6) : '5'}
-            </span>
-            <span className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-tighter">km/h</span>
-          </div>
-        </div>
-      )}
 
       {/* ========== MOBILE BOTTOM BAR (src/components/BottomTabBar.jsx) ========== */}
       {!isNavigatingMode && (
