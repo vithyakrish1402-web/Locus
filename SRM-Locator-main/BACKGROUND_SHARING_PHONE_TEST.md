@@ -95,8 +95,8 @@ under the switch reads **"Not sharing"**. Tap **Keep sharing when the app is clo
 **You should see first, before any permission question:** a panel titled **"Share your location when
 LOCUS is closed?"** that says LOCUS will share your live location with the members of your current
 Group even when the app is closed or the screen is off; that a notification stays visible while
-sharing is on; that it goes only to your Group and ends when you leave the Group; that you can pause
-or stop it from the notification or from Settings; and that it can use more battery. Two buttons:
+sharing is on; that it goes only to your Group and ends when you leave the Group; that you can pause it from
+the notification, or stop it at any time from the notification or from Settings; and that it can use more battery. Two buttons:
 **Turn on** and **Not now**.
 
 **Try "Not now" first:** the panel closes, the switch stays off, **no** permission question appears.

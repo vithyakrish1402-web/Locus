@@ -36,7 +36,7 @@ describe('the consent to share when LOCUS is closed', () => {
     const { title, body, accept, decline } = BACKGROUND_SHARING.consent;
     expect(title).toBe('Share your location when LOCUS is closed?');
     expect([accept, decline]).toEqual(['Turn on', 'Not now']);
-    for (const promise of ['live location', 'members of your current Group', 'even when the app is closed', 'notification stays visible', 'only to your Group', 'ends when you leave the Group', 'pause or stop', 'battery']) {
+    for (const promise of ['live location', 'members of your current Group', 'even when the app is closed', 'notification stays visible', 'only to your Group', 'ends when you leave the Group', 'You can pause it from the notification, or stop it at any time from the notification or from Settings.', 'battery']) {
       expect(body, promise).toContain(promise);
     }
     expect(body + title).not.toMatch(/squad|log ?out/i);

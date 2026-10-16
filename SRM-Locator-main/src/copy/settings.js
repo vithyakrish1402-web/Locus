@@ -131,7 +131,7 @@ export const BACKGROUND_SHARING = {
   // any word of it asks everyone again (utils/backgroundConsent.js).
   consent: {
     title: 'Share your location when LOCUS is closed?',
-    body: 'LOCUS will share your live location with the members of your current Group, even when the app is closed or your screen is off. A notification stays visible while sharing is on. Your location goes only to your Group, and sharing ends when you leave the Group. You can pause or stop it at any time from the notification or from Settings. This can use more battery.',
+    body: 'LOCUS will share your live location with the members of your current Group, even when the app is closed or your screen is off. A notification stays visible while sharing is on. Your location goes only to your Group, and sharing ends when you leave the Group. You can pause it from the notification, or stop it at any time from the notification or from Settings. This can use more battery.',
     accept: 'Turn on',
     decline: 'Not now',
   },
