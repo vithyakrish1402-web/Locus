@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ArrowLeft,
   ArrowUp,
-  Bookmark,
   Building2,
   Car,
   Clock,
@@ -49,6 +48,9 @@ function getFacilityIcon(facility) {
  * Matches the inspiration design with full-bleed photo hero, facilities chips,
  * photo gallery, walk metrics, and sticky navigation bar.
  *
+ * `onBack` (optional) makes the back arrow collapse to the cloud instead of closing.
+ * `onHeaderPointerDown` (optional) gets the photo header's pointer-down, to start a sheet drag.
+ * The card fills the height its container gives it: the body scrolls; header and actions stay.
  * @param {{ place: object, me: {lat:number,lng:number}|null, heading?: number,
  *   headingLive?: boolean, choosingDestination?: boolean, expanded: boolean,
  *   onToggleExpanded: () => void, onClose: () => void, onNavigate: () => void,
@@ -63,6 +65,8 @@ export default function PlaceCard({
   expanded,
   onToggleExpanded,
   onClose,
+  onBack = null,
+  onHeaderPointerDown,
   onNavigate,
   onArScan,
   onSetMeetingPoint = null,
@@ -78,103 +82,95 @@ export default function PlaceCard({
   const asset = getBuildingAsset(place);
   const photos = asset?.photos || [asset?.image];
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
-  const [isBookmarked, setIsBookmarked] = useState(false);
 
   // Approximate walk time in minutes
   const walkMinutes = where && !where.here ? Math.max(1, Math.round(where.distance / 75)) : 2;
 
+  // One scroll area (the body) and one drag area (the photo header): the card fills the
+  // height its sheet gives it, so there is never a scroller inside a scroller.
+  const stopDrag = (e) => e.stopPropagation(); // a button on the header must not start a drag
   return (
-    <div className="relative rounded-3xl glass-floating text-text font-ui flex flex-col overflow-hidden max-h-[85vh]">
-      {/* Top Hero Photo Gallery */}
-      <div className="relative w-full h-48 sm:h-56 bg-sunken shrink-0">
-        <CampusBuildingImage
-          src={photos[activePhotoIdx] || asset?.image}
-          alt={place.name}
-          aspectRatio="aspect-auto"
-          containerClassName="w-full h-full"
-        />
+    <div className="relative flex flex-col h-full min-h-0 bg-surface text-text font-ui">
+      {/* Header: the photo, the grab handle and the controls. Dragging it down collapses. */}
+      <div
+        className="relative w-full h-40 shrink-0 bg-sunken overflow-hidden cursor-grab"
+        style={{ touchAction: 'none' }}
+        onPointerDown={onHeaderPointerDown}
+      >
+        <div className="absolute inset-0 locus-hero-settle">
+          <CampusBuildingImage
+            src={photos[activePhotoIdx] || asset?.image}
+            alt={place.name}
+            aspectRatio="aspect-auto"
+            containerClassName="w-full h-full"
+          />
+        </div>
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/45 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-surface/70 to-transparent pointer-events-none" />
+        <span aria-hidden="true" className="absolute top-2 left-1/2 -translate-x-1/2 block w-10 h-1 rounded-full bg-white/80 pointer-events-none" />
 
-        {/* Floating Controls Over Hero Banner */}
-        <div className="absolute inset-x-0 top-0 p-3 flex items-center justify-between bg-gradient-to-b from-black/50 via-black/20 to-transparent pointer-events-none">
+        <div className="absolute inset-x-0 top-3 px-3 flex items-center justify-between pointer-events-none">
+          <button
+            type="button"
+            onClick={onBack || onClose}
+            onPointerDown={stopDrag}
+            aria-label="Back"
+            className="w-11 h-11 rounded-full bg-surface/90 text-text flex items-center justify-center shadow-md pointer-events-auto active:scale-95"
+          >
+            <ArrowLeft size={19} />
+          </button>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Back"
-            className="w-9 h-9 rounded-full glass-pill text-text flex items-center justify-center shadow-md hover:scale-105 pointer-events-auto transition-transform active:scale-95"
+            onPointerDown={stopDrag}
+            aria-label={PLACE.close}
+            className="w-11 h-11 rounded-full bg-surface/90 text-text flex items-center justify-center shadow-md pointer-events-auto active:scale-95"
           >
-            <ArrowLeft size={18} />
+            <X size={19} />
           </button>
-
-          <div className="flex items-center gap-2 pointer-events-auto">
-            <button
-              type="button"
-              onClick={() => setIsBookmarked(!isBookmarked)}
-              aria-label="Bookmark"
-              className={`w-9 h-9 rounded-full glass-pill flex items-center justify-center shadow-md transition-[transform,opacity] active:scale-95 ${
-                isBookmarked
-                  ? '!bg-accent !text-accent-on !border-accent'
-                  : 'text-text hover:scale-105'
-              }`}
-            >
-              <Bookmark size={18} className={isBookmarked ? 'fill-current' : ''} />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label={PLACE.close}
-              className="w-9 h-9 rounded-full glass-pill text-text flex items-center justify-center shadow-md hover:scale-105 active:scale-95"
-            >
-              <X size={18} />
-            </button>
-          </div>
         </div>
 
-        {/* Photo Index Indicator */}
         {photos.length > 1 && (
-          <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[11px] font-medium flex items-center gap-1.5 shadow-sm">
+          <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-black/60 text-white text-[11px] font-medium flex items-center gap-1.5 pointer-events-none">
             <Camera size={12} className="opacity-90" />
             <span>{activePhotoIdx + 1}/{photos.length}</span>
           </div>
         )}
       </div>
 
-      {/* Scrollable Content Body */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-4 custom-scrollbar">
-        {/* Title & Category Header */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              {category && <Chip tone="neutral">{category}</Chip>}
-              {asset?.categoryDisplay && asset.categoryDisplay !== category && (
-                <span className="text-[11px] font-semibold text-accent bg-accent-soft px-2.5 py-1 rounded-full border border-accent/20">
-                  {asset.categoryDisplay}
-                </span>
-              )}
-            </div>
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-text break-words leading-snug">
-              {place.name}
-            </h2>
-            {asset?.floors && (
-              <p className="text-xs font-semibold text-text-secondary mt-1 tracking-normal">
-                {asset.floors} Floors
-              </p>
+      {/* Body: the only scroller. Its children arrive one after another (index.css). */}
+      <div className="locus-cloud-reveal flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-4 pb-5 flex flex-col gap-5 custom-scrollbar">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            {category && <Chip tone="neutral">{category}</Chip>}
+            {asset?.categoryDisplay && asset.categoryDisplay !== category && (
+              <span className="text-[11px] font-semibold text-accent bg-accent-soft px-2.5 py-1 rounded-full">
+                {asset.categoryDisplay}
+              </span>
             )}
           </div>
+          <h2 className="text-[22px] font-bold tracking-tight text-text break-words leading-tight">
+            {place.name}
+          </h2>
+          {asset?.floors && (
+            <p className="text-[13px] font-medium text-text-secondary mt-1">
+              {asset.floors} floors
+            </p>
+          )}
         </div>
 
-        {/* Quick Stat Chips (Apple Maps inspiration) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 py-1">
-          {/* Distance & Walk Time */}
+        {/* Three equal tiles: how far, whether it is open, and the camera finder. */}
+        <div className="grid grid-cols-3 gap-2.5">
           {where && (
             <div
               data-testid="place-distance"
-              className="flex items-center gap-2.5 p-2.5 rounded-2xl glass-panel text-left"
+              className="flex flex-col items-start gap-2 p-3 rounded-2xl bg-sunken text-left min-w-0"
             >
-              <span className="w-8 h-8 rounded-xl bg-accent-soft text-accent flex items-center justify-center shrink-0">
+              <span className="w-8 h-8 rounded-xl bg-accent-soft text-accent flex items-center justify-center">
                 <MapPin size={16} />
               </span>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-text leading-tight">
+              <div className="min-w-0 w-full">
+                <p className="text-[13px] font-bold text-text leading-tight truncate">
                   {!where.here ? distanceLabel(where.shownDistance) : 'Here'}
                 </p>
                 <p className="text-[11px] font-medium text-text-secondary truncate">
@@ -184,14 +180,13 @@ export default function PlaceCard({
             </div>
           )}
 
-          {/* Operating Hours */}
-          <div className="flex items-center gap-2.5 p-2.5 rounded-2xl glass-panel text-left">
-            <span className="w-8 h-8 rounded-xl bg-success-soft text-success flex items-center justify-center shrink-0">
+          <div className="flex flex-col items-start gap-2 p-3 rounded-2xl bg-sunken text-left min-w-0">
+            <span className="w-8 h-8 rounded-xl bg-success-soft text-success flex items-center justify-center">
               <Clock size={16} />
             </span>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-success leading-tight flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-success inline-block shrink-0 shadow-[0_0_6px_var(--color-success)]" />
+            <div className="min-w-0 w-full">
+              <p className="text-[13px] font-bold text-success leading-tight flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-success inline-block shrink-0" />
                 <span>Open</span>
               </p>
               <p className="text-[11px] font-medium text-text-secondary truncate">
@@ -200,17 +195,16 @@ export default function PlaceCard({
             </div>
           </div>
 
-          {/* Quick AR Action */}
           <button
             type="button"
             onClick={onArScan}
-            className="flex items-center gap-2.5 p-2.5 rounded-2xl glass-panel hover:bg-surface/80 text-left"
+            className="flex flex-col items-start gap-2 p-3 rounded-2xl bg-sunken text-left min-w-0 active:scale-[0.97]"
           >
-            <span className="w-8 h-8 rounded-xl bg-accent-soft text-accent flex items-center justify-center shrink-0">
+            <span className="w-8 h-8 rounded-xl bg-accent-soft text-accent flex items-center justify-center">
               <ScanLine size={16} />
             </span>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-text leading-tight">
+            <div className="min-w-0 w-full">
+              <p className="text-[13px] font-bold text-text leading-tight truncate">
                 AR Scan
               </p>
               <p className="text-[11px] font-medium text-text-secondary truncate">
@@ -220,38 +214,35 @@ export default function PlaceCard({
           </button>
         </div>
 
-        {/* Description */}
-        <div className="text-sm text-text-secondary leading-relaxed font-normal">
+        <p className="text-[15px] text-text-secondary leading-relaxed">
           {asset?.description || place.info}
-        </div>
+        </p>
 
-        {/* Facilities Grid */}
         {asset?.facilities && asset.facilities.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-text-secondary">
-              Facilities & Amenities
+          <div className="flex flex-col gap-2.5">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
+              Facilities &amp; Amenities
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="flex flex-wrap gap-2">
               {asset.facilities.map((fac) => {
                 const IconComponent = getFacilityIcon(fac);
                 return (
-                  <div
+                  <span
                     key={fac}
-                    className="flex items-center gap-2 p-2 rounded-xl glass-panel text-xs font-medium text-text"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sunken text-[12px] font-medium text-text"
                   >
-                    <IconComponent size={15} className="text-accent shrink-0" />
-                    <span className="truncate">{fac}</span>
-                  </div>
+                    <IconComponent size={14} className="text-accent shrink-0" />
+                    {fac}
+                  </span>
                 );
               })}
             </div>
           </div>
         )}
 
-        {/* Photos Strip */}
         {photos.length > 1 && (
-          <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+          <div className="flex flex-col gap-2.5">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
               Photos
             </h3>
             <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
@@ -260,10 +251,9 @@ export default function PlaceCard({
                   type="button"
                   key={photoUrl}
                   onClick={() => setActivePhotoIdx(idx)}
-                  className={`relative w-20 h-16 rounded-xl overflow-hidden shrink-0 transition-[transform,opacity] border-2 ${
-                    activePhotoIdx === idx
-                      ? 'border-accent scale-105 shadow-md'
-                      : 'border-transparent opacity-75 hover:opacity-100'
+                  aria-label={`Photo ${idx + 1} of ${photos.length}`}
+                  className={`relative w-24 h-[72px] rounded-xl overflow-hidden shrink-0 border-2 ${
+                    activePhotoIdx === idx ? 'border-accent' : 'border-transparent opacity-70'
                   }`}
                 >
                   <CampusBuildingImage
@@ -278,21 +268,20 @@ export default function PlaceCard({
           </div>
         )}
 
-        {/* Expandable Building Info section */}
         {expanded && (
-          <div className="border-t border-border pt-3">
+          <div className="border-t border-border pt-4">
             <BuildingInfo building={place} me={me} heading={heading} headingLive={headingLive} />
           </div>
         )}
       </div>
 
-      {/* Sticky Bottom Actions Bar */}
-      <div className="p-3.5 sm:p-4 glass-panel !border-x-0 !border-b-0 border-t border-border/60 flex flex-col gap-2 shrink-0">
-        <div className="grid grid-cols-2 gap-2">
+      {/* Actions stay in view while the body scrolls. */}
+      <div className="px-4 pt-3 pb-1 bg-surface border-t border-border flex flex-col gap-0.5 shrink-0">
+        <div className="grid grid-cols-2 gap-2.5">
           <Button
             icon={Navigation}
             onClick={onNavigate}
-            className="w-full !rounded-xl !h-11 !py-0 font-semibold !text-[13px] tracking-tight gap-1.5"
+            className="w-full !rounded-xl !h-12 !py-0 font-semibold !text-[14px] tracking-tight gap-1.5"
           >
             {choosingDestination ? PLACE.setDestination : PLACE.navigate}
           </Button>
@@ -300,30 +289,29 @@ export default function PlaceCard({
             variant="tonal"
             icon={ScanLine}
             onClick={onArScan}
-            className="w-full !rounded-xl !h-11 !py-0 font-semibold !text-[13px] tracking-tight gap-1.5"
+            className="w-full !rounded-xl !h-12 !py-0 font-semibold !text-[14px] tracking-tight gap-1.5"
           >
             {PLACE.arScan}
           </Button>
         </div>
 
-        {onSetMeetingPoint && (
-          <Button
-            variant="secondary"
-            icon={Flag}
-            block
-            onClick={onSetMeetingPoint}
-            className="!rounded-xl !h-9 !py-0 font-medium !text-[12px] text-text-secondary hover:text-text gap-1.5 border-0"
-          >
-            {PLACE.setMeetingPoint}
-          </Button>
-        )}
-
-        <div className="flex justify-center items-center gap-3 pt-0.5">
+        {/* The less-used actions share one quiet row, so the body keeps the room. */}
+        <div className="flex items-center justify-center gap-1">
+          {onSetMeetingPoint && (
+            <Button
+              variant="plain"
+              icon={Flag}
+              onClick={onSetMeetingPoint}
+              className="!text-[12.5px] font-medium !min-h-11 !py-0 px-3 text-text-secondary hover:text-text gap-1.5"
+            >
+              {PLACE.setMeetingPoint}
+            </Button>
+          )}
           <Button
             variant="plain"
             onClick={onToggleExpanded}
             aria-expanded={expanded}
-            className="!text-[11.5px] font-medium !min-h-6 !py-0 px-2 text-text-secondary hover:text-text"
+            className="!text-[12.5px] font-medium !min-h-11 !py-0 px-3 text-text-secondary hover:text-text"
           >
             {expanded ? PLACE.less : PLACE.more}
           </Button>
@@ -332,7 +320,7 @@ export default function PlaceCard({
               variant="plain"
               icon={MapPin}
               onClick={onShowOnMap}
-              className="!text-[11.5px] font-medium !min-h-6 !py-0 px-2 text-text-secondary hover:text-text"
+              className="!text-[12.5px] font-medium !min-h-11 !py-0 px-3 text-text-secondary hover:text-text"
             >
               {PLACE.showOnMap}
             </Button>

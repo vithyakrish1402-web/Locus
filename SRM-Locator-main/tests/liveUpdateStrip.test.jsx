@@ -256,7 +256,7 @@ describe('a building card on a phone', () => {
       expect(card.className).toContain('bottom-[calc(11rem');
       expect(card.className).not.toMatch(/(^| )bottom-24( |$)/);
       expect(strip()).toBeNull();
-      fireEvent.click(within(card).getAllByRole('button')[0]); // the card's close (X)
+      fireEvent.click(within(card).getByRole('button', { name: /^close$/i })); // the card's close (X); the first button is Back, which now returns to the cloud
       expect(strip()).toBeTruthy();
     } finally {
       window.matchMedia = realMatchMedia;

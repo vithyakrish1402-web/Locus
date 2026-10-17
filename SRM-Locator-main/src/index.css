@@ -335,3 +335,36 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
   background-color: rgb(255 255 255 / 0.7);
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
 }
+
+/* The building cloud (components/BuildingCloud.jsx). Only transform and opacity move. */
+@keyframes locus-cloud-float {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  50% { transform: translateY(calc(var(--cloud-float, 3px) * -1)) scale(1.012, 0.99); }
+}
+.locus-cloud-float { animation: locus-cloud-float var(--cloud-float-period, 4s) ease-in-out infinite; }
+.locus-cloud-float[data-paused='true'] { animation-play-state: paused; }
+@keyframes locus-cloud-reveal {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* The sheet's content arrives in a stagger: chips + name, stats, description, the rest. */
+.locus-cloud-reveal > * {
+  animation: locus-cloud-reveal 360ms var(--ease-enter) both;
+  animation-delay: calc(var(--cloud-stagger, 50ms) * var(--i, 0) + var(--cloud-reveal-delay, 0ms));
+}
+.locus-cloud-reveal > :nth-child(1) { --i: 1; }
+.locus-cloud-reveal > :nth-child(2) { --i: 2; }
+.locus-cloud-reveal > :nth-child(3) { --i: 3; }
+.locus-cloud-reveal > :nth-child(4) { --i: 4; }
+.locus-cloud-reveal > :nth-child(n+5) { --i: 5; }
+/* The header photo eases from a slight zoom to rest as the sheet rises. */
+@keyframes locus-hero-settle {
+  from { transform: scale(1.1); }
+  to { transform: scale(1); }
+}
+.locus-hero-settle { animation: locus-hero-settle 800ms var(--ease-enter) both; }
+@media (prefers-reduced-motion: reduce) {
+  .locus-hero-settle { animation: none; }
+  .locus-cloud-float { animation: none; }
+  .locus-cloud-reveal > * { animation: none; }
+}

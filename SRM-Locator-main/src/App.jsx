@@ -24,7 +24,7 @@ import BrandMark from './components/access/BrandMark';
 import BootScreen from './components/access/BootScreen';
 import StatusScreen from './components/access/StatusScreen';
 import { Avatar, Button, Card, IconButton, InlineMessage, SegmentedControl, TextField } from './components/ui';
-import PlaceCard from './components/PlaceCard';
+import BuildingCloud from './components/BuildingCloud';
 import MeetingPointConfirm from './components/MeetingPointConfirm';
 import { SETTINGS } from './copy/settings';
 import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen';
@@ -648,6 +648,10 @@ const App = () => {
     setTimeout(apply, 400);
   };
   const [selectedItem, setSelectedItem] = useState(null);
+  // A list-row tap opens the full sheet; a map-pin tap shows the cloud first.
+  const [cardStartsOpen, setCardStartsOpen] = useState(false);
+  // When a building was last picked: a map click arriving with the same tap must not dismiss it.
+  const pickedAtRef = useRef(0);
   const [buildingCategoryFilter, setBuildingCategoryFilter] = useState('ALL');
 
   const [users, setUsers] = useState([]);
@@ -1887,6 +1891,8 @@ const App = () => {
   const handleBuildingTap = (building) => {
     if (!showBuildingOnMap(building)) return;
     setShowBuildingInfo(false);
+    setCardStartsOpen(true);
+    pickedAtRef.current = Date.now();
     setSelectedItem(building);
   };
 
@@ -1909,7 +1915,7 @@ const App = () => {
   const handleFocus = (coords, item) => {
     setMapProps({ center: coords, zoom: 19 });
     setShowBuildingInfo(false); // a new pin starts with its info closed
-    if (item) setSelectedItem(item);
+    if (item) { setCardStartsOpen(false); pickedAtRef.current = Date.now(); setSelectedItem(item); }
   };
 
   // ---  MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
@@ -1940,6 +1946,10 @@ const App = () => {
       }
       return; // Stop normal click behavior
     }
+
+    // 2. A tap on empty map dismisses the building popup (not the tap that just opened it).
+    if (Date.now() - pickedAtRef.current < 400) return;
+    setSelectedItem(null);
   };
 
   // --- TACTICAL ROUTING ENGINE ---
@@ -3200,34 +3210,24 @@ const App = () => {
       {/* The place card (components/PlaceCard.jsx). On a phone it sits above the floating SOS
           button (80 px tall, 80 px up, plus the safe area): it used to start at 96 px, so SOS -
           drawn on top - covered the card's first button. 11rem clears it with a gap. */}
-      <AnimatePresence>
-        {selectedItem && activeTab === 'buildings' && (
-          <motion.div
-            initial={{ opacity: 0, y: 24, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.98 }}
-            transition={reduceMotion ? { duration: 0.15 } : { type: 'spring', stiffness: 400, damping: 34, mass: 0.85 }}
-            data-testid="location-card"
-            className="absolute inset-x-3 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 z-[600] md:w-96 max-h-[60vh] md:max-h-[80vh] overflow-y-auto rounded-card pointer-events-auto"
-          >
-            <PlaceCard
-              place={selectedItem}
-              me={liveLocation}
-              heading={heading}
-              headingLive={hasHeadingReading}
-              choosingDestination={Boolean(routeStart && !routeEnd)}
-              expanded={showBuildingInfo}
-              onToggleExpanded={() => setShowBuildingInfo((open) => !open)}
-              onClose={() => setSelectedItem(null)}
-              onNavigate={() => handleWaypointSelect(selectedItem)}
-              onArScan={() => setArTarget({ lat: selectedItem.lat, lng: selectedItem.lng, name: selectedItem.name })}
-              // Who may set one follows the server: any member of the group.
-              onSetMeetingPoint={hasJoinedSquad ? () => setMeetingPointToConfirm(selectedItem) : null}
-              onShowOnMap={() => showBuildingOnMap(selectedItem)}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <BuildingCloud
+        place={activeTab === 'buildings' ? selectedItem : null}
+        startOpen={cardStartsOpen}
+        onDismiss={() => setSelectedItem(null)}
+        cardProps={{
+          me: liveLocation,
+          heading,
+          headingLive: hasHeadingReading,
+          choosingDestination: Boolean(routeStart && !routeEnd),
+          expanded: showBuildingInfo,
+          onToggleExpanded: () => setShowBuildingInfo((open) => !open),
+          onNavigate: () => handleWaypointSelect(selectedItem),
+          onArScan: () => setArTarget({ lat: selectedItem.lat, lng: selectedItem.lng, name: selectedItem.name }),
+          // Who may set one follows the server: any member of the group.
+          onSetMeetingPoint: hasJoinedSquad ? () => setMeetingPointToConfirm(selectedItem) : null,
+          onShowOnMap: () => showBuildingOnMap(selectedItem),
+        }}
+      />
 
       {/* "Set as meeting point" asks first: it moves the meeting point on everyone's map. */}
       <MeetingPointConfirm

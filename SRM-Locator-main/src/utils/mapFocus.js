@@ -102,3 +102,9 @@ export function focusMapOn({ lat, lng, zoom = MAP_FOCUS_BUILDING_ZOOM } = {}, { 
   cancelGlide = () => { stop(); cancelAnimationFrame(frame); };
   return true;
 }
+
+/** The live map's camera and container, or null before an engine has registered. */
+export function getMapView() {
+  if (!driver) return null;
+  return { view: driver.getView(), element: driver.element };
+}
