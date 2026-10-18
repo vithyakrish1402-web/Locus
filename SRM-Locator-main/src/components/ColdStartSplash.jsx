@@ -4,6 +4,7 @@ import { StatusBar, Style } from '@capacitor/status-bar'
 import '@fontsource/dm-sans/latin-700.css'
 import { auth } from '../firebase.js'
 import { LAYER } from '../utils/layers.js'
+import { syncStatusBar } from '../theme/theme.js'
 
 // Colours live here so the app's new theme can swap them in one place.
 const SPLASH_VARS = {
@@ -112,12 +113,14 @@ const reducedMotion = () =>
   typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
   Boolean(window.matchMedia('(prefers-reduced-motion: reduce)')?.matches)
 
-// Native bars: navy behind the splash (light icons), back to the system default after.
+// Native bars: navy behind the splash (light icons), then the app theme's after (theme.js
+// keeps them with the theme from there on, also when it switches).
 // The overlay already draws under the bars (edge-to-edge), so only the icons need setting.
 // A shell that predates the plugin rejects the call; nothing depends on it.
 function setBars(onSplash) {
   if (!Capacitor.isNativePlatform()) return
-  StatusBar.setStyle({ style: onSplash ? Style.Dark : Style.Default }).catch(() => {})
+  if (onSplash) StatusBar.setStyle({ style: Style.Dark }).catch(() => {})
+  else syncStatusBar()
 }
 
 const defaultBootReady = () => auth.authStateReady()

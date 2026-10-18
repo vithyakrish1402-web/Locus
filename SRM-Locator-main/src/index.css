@@ -12,44 +12,28 @@
 /* Light and dark design tokens (redesign). Screens move onto them one piece at a time. */
 @import "./theme/tokens.css";
 
-/* Circular View Transition for AnimatedThemeToggler */
-html.view-transition-active::view-transition-old(root),
-html.view-transition-active::view-transition-new(root) {
+/* Theme switch (src/theme/theme.js, the one place it happens). While the theme is swapped,
+   nothing fades its own colours across and CSS animations hold still: the new theme lands
+   in one frame, out of sight. */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+  animation-play-state: paused !important;
+}
+
+/* The circular reveal, on a
+   phone proven fast for it, is the clip-path animation theme.js runs; the browser's own
+   cross-fade must stay off for the whole transition. Not tied to a class: when it was,
+   removing the class before the transition ended switched the cross-fade back on and the
+   old theme flashed back. */
+::view-transition-old(root),
+::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
 }
-html.view-transition-active::view-transition-old(root) {
+::view-transition-new(root) {
   z-index: 1;
-}
-html.view-transition-active::view-transition-new(root) {
-  z-index: 9999;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(root),
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation: none !important;
-  }
-}
-
-/* Smooth theme transition across the app when toggling themes */
-html.theme-transitioning,
-html.theme-transitioning body,
-html.theme-transitioning #root,
-html.theme-transitioning [role="dialog"],
-html.theme-transitioning [role="radiogroup"],
-html.theme-transitioning nav,
-html.theme-transitioning header,
-html.theme-transitioning section,
-html.theme-transitioning main,
-html.theme-transitioning .glass-floating,
-html.theme-transitioning .glass-pill,
-html.theme-transitioning .glass-panel,
-html.theme-transitioning [data-card] {
-  transition: background-color 250ms cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 250ms cubic-bezier(0.4, 0, 0.2, 1),
-              color 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ---------------------------------------------------------------- touch feel */
@@ -331,7 +315,6 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
    separate pane, so none of this touches the squad/building markers drawn on top. */
 .locus-map-tiles {
   filter: saturate(0.55) contrast(0.95) brightness(1.03);
-  transition: filter 500ms ease;
 }
 :root[data-theme="dark"] .locus-map-tiles {
   filter: invert(1) hue-rotate(180deg) brightness(0.62) contrast(1.15) saturate(0.18);
@@ -339,9 +322,6 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
 
 /* The LOCUS logo (components/LocusMark.jsx): navy in the light theme, white in the dark, with
    the pin's hole the other way round - the two brand files in branding/. Gold dot is fixed. */
-.locus-mark-ring, .locus-mark-pin, .locus-mark-hole {
-  transition: stroke 400ms ease, fill 400ms ease;
-}
 .locus-mark-ring { stroke: #12294D; }
 .locus-mark-pin { fill: #12294D; }
 .locus-mark-hole { fill: #FFFFFF; }

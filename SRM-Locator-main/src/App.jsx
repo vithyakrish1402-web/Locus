@@ -60,6 +60,7 @@ import MemberMarker from './components/MemberMarker';
 import { MARKERS } from './copy/map';
 import { distanceLabel } from './copy/place';
 import { useResolvedTheme } from './theme/useResolvedTheme';
+import { registerThemeSettle } from './theme/theme';
 import CameraExplainer from './components/CameraExplainer';
 import LocationExplainer from './components/LocationExplainer';
 import { locationKnownAllowed, locationPermissionGranted, rememberLocationAllowed } from './utils/locationPermission';
@@ -2161,6 +2162,20 @@ const App = () => {
     clickableIcons: false,
     draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : 'grab',
   }), [isSatellite, resolvedTheme, isAdmin, isRecordingPath]);
+
+  // A theme switch shows the Google map only once it has redrawn its tiles in the new style
+  // (theme.js registerThemeSettle): under the switch's cover, or veiled in the new theme
+  // until then, so the map never shows the old theme under the new one. Satellite photos
+  // and the backup map don't restyle that way.
+  useEffect(() => registerThemeSettle(() => {
+    const map = mapRef.current;
+    const events = window.google?.maps?.event;
+    if (!map || !events || isSatellite || mapEngineFailed) return null;
+    return {
+      ready: new Promise((resolve) => { events.addListenerOnce(map, 'tilesloaded', () => resolve()); }),
+      veil: map.getDiv?.() ?? null,
+    };
+  }), [isSatellite, mapEngineFailed]);
 
   // Incoming SOS (stays up until acknowledged). Built once here because two branches
   // render it: the map below, and the mandatory-update gate. It used to live only in

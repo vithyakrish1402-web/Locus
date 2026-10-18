@@ -155,12 +155,14 @@ describe('Settings', () => {
     });
   });
 
-  it('shows the theme choice at once and remembers it', () => {
+  it('switches to the theme chosen and remembers it', async () => {
     openSettings();
     expect(radio(SETTINGS.theme, SETTINGS.themeOptions.system).getAttribute('aria-checked')).toBe('true');
     expect(screen.getByText(SETTINGS.themeHelp.system)).toBeTruthy();
     fireEvent.click(radio(SETTINGS.theme, SETTINGS.themeOptions.dark));
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.querySelector('[data-theme-cover]')).toBeTruthy();
+    // Lands under the switch's cover (theme.js), a moment after the tap.
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
     expect(localStorage.getItem('locus.theme')).toBe('dark');
     expect(screen.getByText(SETTINGS.themeHelp.dark)).toBeTruthy();
   });
