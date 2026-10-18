@@ -117,6 +117,21 @@ describe('opened again while paused: a connection with no position, a paused bac
     expect(rows.some((r) => r.latitude === PAUSED_AT.lat && r.longitude === PAUSED_AT.lng)).toBe(true);
   });
 
+  it('a position the same person sends in another Group does not hide the paused spot here', async () => {
+    // Bravo also on another Group (a second phone, or a connection not yet noticed as dead), with a position there.
+    const other = newRoom();
+    const lead = await connect();
+    await join(lead, other, 'uX', 'Xray', { intent: 'create' });
+    const elsewhere = await connect();
+    await admit(lead, elsewhere, other, 'uB', 'Bravo');
+    elsewhere.emit('update-location', { ...LIVE_NOW, name: 'Bravo', roomCode: other, heading: 0, battery: 90, status: 'ACTIVE' });
+    await waitFor(() => entriesFor(newest(lead), 'uB')[0]?.[1].hasFix === true);
+    const { alpha } = await reopenedWhilePaused();
+    await waitFor(() => entriesFor(newest(alpha), 'uB')[0]?.[1].presence === true);
+    expect(entriesFor(newest(alpha), 'uB')).toHaveLength(1);
+    expect(entriesFor(newest(alpha), 'uB')[0][1]).toMatchObject({ status: 'FROZEN', lat: PAUSED_AT.lat });
+  });
+
   it('unchanged: a live (not paused) service does not take over from a connection waiting for its first fix', async () => {
     const room = newRoom();
     const alpha = await connect();
