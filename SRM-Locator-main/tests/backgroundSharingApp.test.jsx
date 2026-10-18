@@ -463,9 +463,18 @@ describe('what ends it', () => {
     expect(plugin.stop).toHaveBeenCalledWith({ reason: 'app-stop' });
   });
 
-  // handleLogout stops it, but this design has no Sign out button to press: put the test back
-  // with the button.
-  it.todo('signing out');
+  it('signing out', async () => {
+    localStorage.setItem(CONSENT_KEY, consentFingerprint());
+    localStorage.setItem(SWITCH_KEY, '1');
+    await renderApp();
+    await intoGroup();
+    await waitFor(() => expect(plugin.start).toHaveBeenCalled());
+    plugin.stop.mockClear();
+    await openSettings();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    await flush();
+    expect(plugin.stop).toHaveBeenCalledWith({ reason: 'app-stop' });
+  });
 
   it('the server switching it off: the switch goes, the service is stopped, nothing loops', async () => {
     localStorage.setItem(CONSENT_KEY, consentFingerprint());

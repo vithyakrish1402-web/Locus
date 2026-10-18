@@ -265,6 +265,8 @@ function SettingsDemo({ scrollTo = null }) {
       onArFeatureOverride={(feature, v) => setOverrides((o) => ({ ...o, [feature]: v }))}
       update={{ installedVersion: '1.1.0', supported: true, status: 'up-to-date', onCheck: () => {} }}
       onOpenGuide={() => {}}
+      onSignOut={() => {}}
+      onAdmin={() => {}}
     />
   );
 }

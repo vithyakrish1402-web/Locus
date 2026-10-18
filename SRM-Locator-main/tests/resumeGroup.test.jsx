@@ -238,9 +238,14 @@ describe('remembering the Group', () => {
     expect(stored()).toBeNull();
   });
 
-  // handleLogout forgets it (through endSquadSession), but this design has no Sign out button to
-  // press: put the test back with the button.
-  it.todo('is forgotten on signing out');
+  it('is forgotten on signing out', async () => {
+    await renderApp();
+    await intoGroup();
+    await openSettings();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    await flush();
+    expect(stored()).toBeNull();
+  });
 
   it('is forgotten when a reconnect finds the Group gone', async () => {
     await renderApp();

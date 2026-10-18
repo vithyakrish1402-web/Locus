@@ -3293,6 +3293,8 @@ const App = () => {
               onOpenGuide={() => setGuideOpen(true)}
               backgroundSharing={backgroundSharing}
               group={squadCode}
+              onSignOut={() => { setShowSettingsModal(false); handleLogout(); }}
+              onAdmin={isAdmin ? () => { setShowSettingsModal(false); setShowAdminSettings(true); } : undefined}
             />
           </motion.div>
         )}

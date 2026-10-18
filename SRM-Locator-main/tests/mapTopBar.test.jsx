@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 //
 // The map screen's top bar and sharing chip (redesign Map batch), through the real App.jsx:
-// the bar names the map that is showing and signs out; the chip says your own setting in the
+// the bar names the map that is showing (the design build has no buttons on it; sign-out and
+// the owner's Admin tools are in Settings > Account); the chip says your own setting in the
 // owner's words, and never "invisible".
 import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent, within, waitFor } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => {
   const handlers = new Map();
@@ -25,7 +26,8 @@ const fakeSocket = vi.hoisted(() => {
     receive: (event, payload) => handlers.get(event)?.forEach((fn) => fn(payload)),
   };
 });
-const auth = vi.hoisted(() => ({ signOut: null }));
+// `user` is who signs in; a test may set it before rendering (reset after each test).
+const auth = vi.hoisted(() => ({ signOut: null, user: null }));
 
 vi.mock('socket.io-client', () => ({ io: () => fakeSocket }));
 vi.mock('../src/firebase.js', () => ({ auth: { currentUser: null }, googleProvider: {}, db: {} }));
@@ -33,7 +35,7 @@ vi.mock('firebase/auth', () => {
   auth.signOut = vi.fn(() => Promise.resolve());
   return {
     onAuthStateChanged: (_auth, callback) => {
-      callback({ uid: 'u-self', displayName: 'Alpha', photoURL: null });
+      callback(auth.user ?? { uid: 'u-self', displayName: 'Alpha', photoURL: null });
       return () => {};
     },
     signInWithPopup: vi.fn(),
@@ -80,6 +82,8 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 const { default: App } = await import('../src/App.jsx');
 const { SHARING_CHIP, TOP_BAR } = await import('../src/copy/map.js');
 const { SETTINGS } = await import('../src/copy/settings.js');
+// The owner's email, read from App.jsx rather than written out again here.
+const ADMIN_EMAIL = readFileSync(`${process.cwd()}/src/App.jsx`, 'utf8').match(/const ADMIN_EMAIL = "([^"]+)"/)[1];
 
 const onTheMap = () => {
   render(<App />);
@@ -100,6 +104,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  auth.user = null;
   vi.restoreAllMocks();
   delete navigator.geolocation;
 });
@@ -119,17 +124,43 @@ describe('the top bar', () => {
     expect(bar().getByText(TOP_BAR.satelliteView)).toBeTruthy();
   });
 
-  it('signs out', () => {
+  it('signs out from Settings, under Account (the bar itself has no buttons)', async () => {
     onTheMap();
-    fireEvent.click(bar().getByRole('button', { name: TOP_BAR.signOut }));
+    expect(bar().queryAllByRole('button')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: SETTINGS.open }));
+    const settings = within(screen.getByTestId('settings'));
+    expect(settings.getByText(SETTINGS.account)).toBeTruthy();
+    fakeSocket.emit.mockClear();
+    fireEvent.click(settings.getByRole('button', { name: SETTINGS.signOut }));
     expect(auth.signOut).toHaveBeenCalled();
+    expect(fakeSocket.emit.mock.calls.some(([e]) => e === 'leave-squad')).toBe(true);
+    // Settings is closed too, so it isn't still open over the map on the next Group.
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
+    act(() => fakeSocket.receive('access-granted', { role: 'OWNER' }));
+    await waitFor(() => expect(screen.queryByTestId('settings')).toBeNull());
   });
 
-  it('keeps the gear in the map controls as Settings on a phone (no new top-bar button there)', () => {
+  it('Settings opens from the gear in the map controls, the one place it lives on the map', () => {
     onTheMap();
-    const inBar = bar().getByRole('button', { name: SETTINGS.open });
-    expect(inBar.parentElement.className).toMatch(/(^| )hidden md:flex/);
-    expect(screen.getAllByRole('button', { name: SETTINGS.open }).length).toBe(2);
+    expect(screen.getAllByRole('button', { name: SETTINGS.open })).toHaveLength(1);
+    expect(bar().queryByRole('button', { name: SETTINGS.open })).toBeNull();
+  });
+
+  it('only the admin sees Admin tools in Settings', () => {
+    onTheMap();
+    fireEvent.click(screen.getByRole('button', { name: SETTINGS.open }));
+    expect(within(screen.getByTestId('settings')).queryByRole('button', { name: new RegExp(SETTINGS.adminTools) })).toBeNull();
+  });
+
+  it('the admin opens Admin tools from Settings, which closes Settings', async () => {
+    auth.user = { uid: 'u-self', displayName: 'Alpha', photoURL: null, email: ADMIN_EMAIL };
+    onTheMap();
+    expect(screen.queryByTestId('admin-tools')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: SETTINGS.open }));
+    fireEvent.click(within(screen.getByTestId('settings')).getByRole('button', { name: new RegExp(SETTINGS.adminTools) }));
+    expect(screen.getByRole('dialog', { name: 'ADMIN_OVERRIDE' })).toBeTruthy();
+    // Settings leaves with its exit animation.
+    await waitFor(() => expect(screen.queryByTestId('settings')).toBeNull());
   });
 });
 

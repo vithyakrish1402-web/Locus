@@ -6,13 +6,16 @@ import {
   ChevronRight,
   Eye,
   Info,
+  LogOut,
   Map as MapIcon,
   Moon,
   Radio,
   RefreshCw,
+  ShieldAlert,
   Sliders,
   Smartphone,
   Sun,
+  UserRound,
   Volume2
 } from 'lucide-react';
 import { Button, Card, IconButton, ListRow, RadioList, SectionLabel, SegmentedControl, Switch } from '../ui';
@@ -40,12 +43,13 @@ const THEME_ICONS = { system: Smartphone, light: Sun, dark: Moon };
  *   arFeatureOverrides: Record<string, string>, onArFeatureOverride: (feature: string, value: string) => void,
  *   update: { installedVersion: string|null, supported: boolean, status: string, onCheck: () => void },
  *   onOpenGuide: () => void,
- *   backgroundSharing?: object, group?: string }} props
+ *   backgroundSharing?: object, group?: string,
+ *   onSignOut?: () => void, onAdmin?: () => void }} props
  */
 export default function SettingsScreen({
   onClose, polling, onPolling, arFidelity, onArFidelity, alertSounds, onAlertSounds,
   isSatellite, onSatellite, mapStatus, arFeatureOverrides, onArFeatureOverride, update, onOpenGuide,
-  backgroundSharing, group,
+  backgroundSharing, group, onSignOut, onAdmin,
 }) {
   const titleId = useId();
   const headingRef = useRef(null);
@@ -280,6 +284,34 @@ export default function SettingsScreen({
             )}
           </Card>
         </section>
+
+        {/* 8. Account. The redesigned map has no top-bar buttons, so signing out (and the
+            owner's admin tools) live here. */}
+        {(onSignOut || onAdmin) && (
+          <section className="mb-6">
+            <SectionLabel className="flex items-center gap-1.5">
+              <UserRound size={13} className="opacity-70" />
+              {SETTINGS.account}
+            </SectionLabel>
+            <Card padded={false} className="divide-y divide-border shadow-sm">
+              {onAdmin && (
+                <ListRow
+                  leading={<ShieldAlert size={18} className="text-text-secondary" />}
+                  title={SETTINGS.adminTools}
+                  trailing={<ChevronRight size={18} className="text-text-secondary" />}
+                  onClick={onAdmin}
+                />
+              )}
+              {onSignOut && (
+                <div className="px-4 py-3">
+                  <Button variant="secondary" icon={LogOut} block onClick={onSignOut}>
+                    {SETTINGS.signOut}
+                  </Button>
+                </div>
+              )}
+            </Card>
+          </section>
+        )}
       </div>
     </div>
   );
