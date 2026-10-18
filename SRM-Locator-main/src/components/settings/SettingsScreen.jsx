@@ -18,7 +18,7 @@ import {
 import { Button, Card, IconButton, ListRow, RadioList, SectionLabel, SegmentedControl, Switch } from '../ui';
 import SendApp from '../SendApp';
 import { SETTINGS } from '../../copy/settings';
-import { setThemePreference, subscribeTheme, getThemePreference } from '../../theme/theme';
+import { setThemePreference, subscribeTheme, getThemePreference, resolveTheme, systemPrefersDark } from '../../theme/theme';
 import LocusMark from '../LocusMark';
 import { AR_FEATURE_OPTIONS } from '../../utils/arFeatures';
 import { MAP_STATUS_LABEL, MAP_STATUS_REASON_TEXT } from '../../utils/mapEngineStatus';
@@ -47,10 +47,37 @@ export default function SettingsScreen({
   const titleId = useId();
   const headingRef = useRef(null);
   const [theme, setTheme] = useState(getThemePreference);
-  const [moreExpanded, setMoreExpanded] = useState(false);
+  const [moreExpanded, setMoreExpanded] = useState(true);
 
   useEffect(() => subscribeTheme(({ preference }) => setTheme(preference)), []);
   useEffect(() => { headingRef.current?.focus(); }, []);
+
+  const handleThemeChange = (next, event) => {
+    const from = resolveTheme(theme, systemPrefersDark());
+    const to = resolveTheme(next, systemPrefersDark());
+    if (from === to || typeof document === 'undefined') {
+      setThemePreference(next);
+      return;
+    }
+    if (document.startViewTransition && !document.documentElement.classList.contains('view-transition-active')) {
+      const rect = event?.currentTarget?.getBoundingClientRect();
+      const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+      const y = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
+      const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+      document.documentElement.classList.add('view-transition-active');
+      document
+        .startViewTransition(() => { setThemePreference(next); })
+        .ready.then(() =>
+          document.documentElement.animate(
+            { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+            { duration: 480, easing: 'cubic-bezier(0.2, 0, 0, 1)', pseudoElement: '::view-transition-new(root)' },
+          ).finished.catch(() => {}),
+        )
+        .finally(() => { document.documentElement.classList.remove('view-transition-active'); });
+    } else {
+      setThemePreference(next);
+    }
+  };
 
   const checking = update.status === 'checking';
   const updateLine = update.supported ? SETTINGS.updateStatus[update.status] : SETTINGS.updatesWebOnly;
@@ -60,7 +87,7 @@ export default function SettingsScreen({
       role="dialog"
       aria-labelledby={titleId}
       data-testid="settings"
-      className="fixed inset-0 overflow-y-auto glass-floating !rounded-none bg-bg/85 backdrop-blur-2xl text-text font-ui pointer-events-auto"
+      className="fixed inset-0 overflow-y-auto bg-bg text-text font-ui pointer-events-auto overscroll-contain"
       style={{ zIndex: SETTINGS_Z, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(var(--emergency-clearance) + 1rem)' }}
     >
       <div className="max-w-xl mx-auto px-4 pb-8">
@@ -86,7 +113,7 @@ export default function SettingsScreen({
             <SegmentedControl
               label={SETTINGS.theme}
               value={theme}
-              onChange={setThemePreference}
+              onChange={handleThemeChange}
               options={['system', 'light', 'dark'].map((v) => ({
                 value: v,
                 label: SETTINGS.themeOptions[v],
@@ -207,7 +234,8 @@ export default function SettingsScreen({
             >
               <div className="flex items-center gap-2.5">
                 <Sliders size={16} className="text-text-secondary" />
-                <span className="text-body font-medium">{SETTINGS.more} (Advanced & Share)</span>
+                <span className="text-body font-medium">{SETTINGS.more}</span>
+                <span className="text-caption text-text-secondary font-normal">(Advanced & Share)</span>
               </div>
               <ChevronDown
                 size={18}

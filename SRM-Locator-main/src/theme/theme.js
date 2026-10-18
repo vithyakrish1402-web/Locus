@@ -78,7 +78,7 @@ function enableSmoothTransition() {
   clearTimeout(transitionTimer);
   transitionTimer = setTimeout(() => {
     root.classList.remove('theme-transitioning');
-  }, 450);
+  }, 280);
 }
 
 function update() {
