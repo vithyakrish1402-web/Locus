@@ -2495,6 +2495,10 @@ const App = () => {
           <Button block size="large" onClick={handleJoinSquad} disabled={!squadCode.trim()}>
             {joining ? LOBBY.joinButton : LOBBY.createButton}
           </Button>
+          {/* Settings opens only from the map, so the lobby has its own way to sign out. */}
+          <Button variant="plain" onClick={handleLogout} block className="mt-2">
+            {LOBBY.signOut}
+          </Button>
         </div>
       </div>
     );

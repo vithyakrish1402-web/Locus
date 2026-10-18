@@ -228,6 +228,16 @@ describe('joining a group', () => {
     expect(screen.getByText(LOBBY.hello('Meera'))).toBeTruthy();
   });
 
+  it('signs out from the lobby, without joining a group first', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: LOBBY.signOut }));
+    expect(firebaseAuth.signOut).toHaveBeenCalledTimes(1);
+    // On both tabs.
+    fireEvent.click(screen.getByRole('radio', { name: LOBBY.joinTab }));
+    fireEvent.click(screen.getByRole('button', { name: LOBBY.signOut }));
+    expect(firebaseAuth.signOut).toHaveBeenCalledTimes(2);
+  });
+
   it('waiting: says who it asked, over the tab bar', () => {
     render(<App />);
     joinAs('K7M2QX');

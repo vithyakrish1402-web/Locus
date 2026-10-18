@@ -99,6 +99,7 @@ export const LOBBY = {
   joinHelp: 'Ask your Group Lead for the 6-character code. Letters and numbers only.',
   createButton: 'Create group',
   joinButton: 'Join group',
+  signOut: 'Sign out',
   shareTitle: 'LOCUS group',
   shareText: (code) => `Join my LOCUS group with code ${code}`,
   copyFailed: "Couldn't copy. Read the code out instead.",
