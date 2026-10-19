@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.div>, which this config can't see
 import { motion, AnimatePresence, useAnimationControls, useDragControls, useReducedMotion } from 'framer-motion';
 import { fade, releaseSheet, sheetSettle, REDUCED_MOTION_S } from '../../utils/motion';
@@ -14,6 +15,11 @@ import { LAYER } from '../../utils/layers';
 // A modal dialog to assistive tech: focus moves into it when it opens, Tab stays inside it,
 // and focus goes back where it was when it closes. `dismissible={false}` keeps it open
 // until one of its own buttons closes it (no handle, no backdrop tap, no Escape).
+//
+// Drawn into document.body, not where it is written. A sheet opened from inside a screen that
+// scrolls or animates (Settings' sections arrive with a transform) would otherwise be placed
+// against that section instead of the screen: `position: fixed` is relative to the nearest
+// ancestor with a transform, so the sheet scrolled away with the content.
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
 
@@ -75,7 +81,8 @@ export default function Sheet({ open, onClose, title, label, dismissible = true,
     ? { initial: { opacity: 0 }, exit: { opacity: 0, transition: { duration: REDUCED_MOTION_S } } }
     : { initial: { y: '100%' }, exit: { y: '100%', transition: sheetSettle(false) } };
 
-  return (
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0" style={{ zIndex: layer }} onKeyDown={onKeyDown}>
@@ -130,6 +137,7 @@ export default function Sheet({ open, onClose, title, label, dismissible = true,
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
