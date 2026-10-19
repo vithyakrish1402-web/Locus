@@ -17,19 +17,70 @@ day-to-day fixes — can go out as a Phase 2 bundle with no reinstall at all.
 
 **Both tag series share one number line.** Number every release, APK or bundle, above everything already published in either series. A phone running the JS built into its APK counts as running the APK's version. So a bundle numbered at or below the newest APK is silently skipped by every fresh install of it: `js-1.0.9`, cut after `v1.1.0`, never reached a phone and was reissued as `js-1.1.1`. An APK numbered at or below the newest bundle is worse: on first launch, that older bundle replaces the APK's own JS. Both release scripts refuse such a version (`releaseVersionConflict` in `src/utils/liveUpdateManifest.js`).
 
+## The update index (how a launch finds the releases)
+
+Both tiers, and Send LOCUS to someone, read one list of releases per launch
+([src/utils/releasesLookup.js](src/utils/releasesLookup.js)). GitHub's releases API allows only
+60 anonymous requests an hour per public internet address, shared by everyone behind it
+(campus Wi-Fi), so the app reads a copy of that list first: **`update-index.json`**, a file on a
+permanent pre-release tagged **`update-index`**
+([src/utils/updateIndex.js](src/utils/updateIndex.js)).
+
+- **Not counted against the 60.** It downloads from
+  `https://github.com/<repo>/releases/download/update-index/update-index.json`, which the API
+  limit does not count (measured 2026-10-13: 60 downloads, counter unchanged, and downloads
+  worked while the API was refusing).
+- **Native HTTP only.** GitHub's download links carry no CORS headers, so the WebView's own
+  `fetch` cannot read the file. The app reads it with Capacitor's built-in `CapacitorHttp`
+  plugin, which every shell from v1.1.0 has. A browser preview has none and goes straight to the API.
+- **Always a fresh copy.** The link carries `?t=<current time>`: without it GitHub kept serving a
+  replaced file for up to two minutes.
+- **Same fields, same checks.** The file is laid out like GitHub's own listing, trimmed to what
+  the update checks read (`tag_name`, `prerelease`, `body`, and each APK/bundle asset's `name`,
+  `browser_download_url` and `size`) for the newest 30 `v*` and `js-*` releases, so the same
+  parsers run on it unchanged.
+- **Fails closed to the API.** The app uses the file only if it parses, has `formatVersion` 1,
+  is no older than `UPDATE_INDEX_MAX_AGE_HOURS` (720, 30 days: a last-resort safety net, since the
+  file is only rebuilt when a release is made), is not dated more than
+  `UPDATE_INDEX_FUTURE_TOLERANCE_HOURS` (24) ahead of the phone's clock, has every download link
+  inside this repo's releases, and has at least one usable APK release and one usable bundle
+  release. On any failure (also a missing file, a network error, no answer in 10 s) it asks the
+  API listing exactly as before. A bad file can cost one API request; it can never offer anything.
+- **Rebuilt by the release scripts, last.** `npm run release` and `npm run release:bundle` rebuild
+  and re-upload it as their final step, after the release itself succeeded, listing the releases
+  with `gh api` (signed in, so it never spends the phones' allowance). If that fails they say so
+  loudly and print the fix, but the release stands. **Until the file is rebuilt, phones are not
+  offered the new release.** Rebuild it by hand with:
+
+  ```bash
+  npm run release:index
+  ```
+
+  Do the same after editing, deleting or hand-making a release on GitHub. `npm run release:verify`
+  checks that the published file passes the app's checks and matches the real releases.
+- **Never mistaken for a release.** The update checks, Send LOCUS and the release-number
+  safeguard only read `v*` and `js-*` tags. Don't delete the `update-index` release, rename it or
+  untick its pre-release box.
+
 # Phase 1 — full APK self-updater
 
 ## How it works
 
-The GitHub release **is** the update manifest — there is no separate JSON file to keep in
-sync. On each cold start (and from the **CHECK FOR UPDATES** button in the LOCUS guide),
-the app calls:
+The GitHub release **is** the update manifest. The only other file is the update index, a
+copy of the releases list that the release scripts rebuild for you (see
+[The update index](#the-update-index-how-a-launch-finds-the-releases)). On each cold start
+(and from the **CHECK FOR UPDATES** button in the LOCUS guide), the app reads that file, or,
+when it cannot be used, calls:
 
 ```
 GET https://api.github.com/repos/vithyakrish1402-web/Locus/releases?per_page=30
 ```
 
 then keeps only `v*` tags and picks the **highest version** among them.
+
+That request lives in one place, [src/utils/releasesLookup.js](src/utils/releasesLookup.js),
+shared by this check, the Phase 2 check and Send LOCUS to someone: one request per launch,
+whoever asks first, and a manual check asks again. See [Limits worth knowing](#limits-worth-knowing).
 
 This used to read `/releases/latest`, which is wrong once both tag series exist: "latest"
 means whichever release was published most recently across *every* tag, so cutting a
@@ -94,6 +145,9 @@ only way into the app is to install.
 | [src/components/UpdateModal.jsx](src/components/UpdateModal.jsx) | HUD modal and the mandatory gate |
 | [LocusUpdaterPlugin.java](android/app/src/main/java/com/locus/app/LocusUpdaterPlugin.java) | Native: download + hash + install intent |
 | [scripts/release.mjs](scripts/release.mjs) | Cuts a release the client can consume |
+| [src/utils/releasesLookup.js](src/utils/releasesLookup.js) | The one releases lookup per launch: the update index, else the API (shared with Phase 2 and Send LOCUS) |
+| [src/utils/updateIndex.js](src/utils/updateIndex.js) | Builds and checks the update index. Unit tested. |
+| [scripts/lib/updateIndex.mjs](scripts/lib/updateIndex.mjs), [scripts/release-index.mjs](scripts/release-index.mjs) | Rebuild and upload the update index (both release scripts; `npm run release:index`) |
 
 **Zero new npm dependencies.** The native half is a locally-defined Capacitor plugin,
 registered by hand in `MainActivity` (Capacitor only auto-discovers plugins under
@@ -182,6 +236,8 @@ That one command:
 5. Stages it as `locus-latest.apk` and computes the SHA-256
 6. Builds the release body: your notes + `SHA256:` + optionally `[MANDATORY]`
 7. Commits the version bump, pushes, and `gh release create`s the tag with the APK attached
+8. Rebuilds the [update index](#the-update-index-how-a-launch-finds-the-releases), last; a
+   failure is reported loudly with the fix (`npm run release:index`) and never undoes the release
 
 Useful flags:
 
@@ -242,6 +298,10 @@ For a bundle it checks the checksum, that `index.html` is at the zip root, that 
 uses backslash separators, and that `MIN_NATIVE` is not gated above the shell it was
 built from.
 
+For both, it downloads the published [update index](#the-update-index-how-a-launch-finds-the-releases)
+the way the app does and checks that the app would trust it, that it matches the real
+releases, and that the `update-index` release is still a pre-release.
+
 Almost all of these are failures that otherwise surface only on a phone, usually after
 the release has already gone out.
 
@@ -295,8 +355,18 @@ verify on real hardware.
 
 ## Limits worth knowing
 
-- **Unauthenticated GitHub API**: 60 requests/hour per IP. One check per cold start is far
-  inside that; a 403 surfaces as "rate limit reached, try again in a few minutes".
+- **Unauthenticated GitHub API**: 60 requests/hour per **public IP**, and everyone behind
+  that address shares them: campus Wi-Fi (RailTel, in testing) or a carrier's shared address
+  can use them up with LOCUS doing nothing wrong. That happened on 2026-10-12, and Send LOCUS
+  showed "GitHub returned HTTP 403". So the three lookups share one request per launch (see
+  [How it works](#how-it-works)), and a refusal (403 or 429) is `RATE_LIMITED`: the manual
+  check says the update server is busy, Send LOCUS says when to try again (from
+  `X-RateLimit-Reset`), and the automatic checks stay quiet. Conditional requests
+  (`If-None-Match`) don't help: GitHub counts an anonymous 304 against the limit like any other
+  answer (measured 2026-10-12). Since js-1.1.24 a launch reads the
+  [update index](#the-update-index-how-a-launch-finds-the-releases) instead, which that limit
+  does not count; the API is only asked when the file cannot be used, and only then can a busy
+  network still block updates for up to an hour.
 - **The install is not silent.** Android always shows its own installer confirmation. The
   app is killed and replaced when the user accepts, so there is no post-install callback.
 - **Private repos won't work** without an access token in the client, which is exactly the
@@ -397,6 +467,8 @@ npm run release:bundle -- 1.0.1
    live release by comparing hashes (from `js-1.0.4` on; `js-1.0.3` and earlier were
    stamped with the wall-clock time and cannot be reproduced)
 5. Publishes a `js-1.0.1` release with the zip attached and both markers in the body
+6. Rebuilds the [update index](#the-update-index-how-a-launch-finds-the-releases), last; a
+   failure is reported loudly with the fix (`npm run release:index`) and never undoes the release
 
 ```bash
 npm run release:bundle -- 1.0.1 --dry-run                 # build + hash, publish nothing

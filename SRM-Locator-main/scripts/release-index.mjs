@@ -1,0 +1,30 @@
+#!/usr/bin/env node
+// Rebuild the update index by hand and upload it (see src/utils/updateIndex.js).
+//
+//   npm run release:index [-- --repo <owner/repo>]
+//
+// Both release scripts do this as their last step. Run it when that step failed, or after a
+// release was edited, deleted or made by hand on GitHub: until the index is rebuilt, phones
+// read the old one at launch. --repo (or LOCUS_RELEASE_REPO) picks the repo the same way the
+// release scripts do.
+
+import { spawnSync } from 'node:child_process';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { publishUpdateIndex, reportUpdateIndex, UPDATE_REPO } from './lib/updateIndex.mjs';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+const argv = process.argv.slice(2);
+const repoFlag = argv.indexOf('--repo');
+const repo = (repoFlag === -1 ? null : argv[repoFlag + 1]) || process.env.LOCUS_RELEASE_REPO || UPDATE_REPO;
+
+if (spawnSync('gh', ['auth', 'status'], { encoding: 'utf8' }).status !== 0) {
+  console.error('\n  release:index: the GitHub CLI is not installed or not authenticated - run `gh auth login`\n');
+  process.exit(1);
+}
+
+console.log(`\n  Rebuilding the update index of ${repo}`);
+const result = publishUpdateIndex({ dir: join(ROOT, 'dist-release', 'update-index'), repo });
+reportUpdateIndex(result, { afterRelease: false, repo });
+process.exit(result.ok ? 0 : 1);
