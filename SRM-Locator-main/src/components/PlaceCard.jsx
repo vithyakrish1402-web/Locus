@@ -21,11 +21,11 @@ export const ACTION_BUTTON_HEIGHT = 56;
 export const ACTION_BUTTON_GAP = 10;
 export const ACTION_BUTTON_RADIUS = 12;
 
-// Flat and quiet: one solid colour for the primary action, hairline outlines for the others, no
-// glow and no movement on press.
-const PRIMARY_LOOK = 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white border border-blue-600';
+// Flat and quiet, in the app's own accent (theme tokens, so it follows light and dark): one
+// solid colour for the primary action, hairline outlines for the others, no glow.
+const PRIMARY_LOOK = 'bg-accent hover:brightness-110 active:brightness-95 text-accent-on border border-accent';
 const SECONDARY_LOOK = 'bg-transparent hover:bg-white/[0.06] active:bg-white/10 text-slate-200 border border-white/15';
-const ACTIVE_LOOK = 'bg-blue-500/10 hover:bg-blue-500/15 active:bg-blue-500/20 text-blue-300 border border-blue-400/60';
+const ACTIVE_LOOK = 'bg-accent-soft hover:brightness-110 text-accent border border-accent';
 
 // eslint-disable-next-line no-unused-vars -- Icon is used as <Icon />, which this config can't see
 function ActionButton({ icon: Icon, label, look, ...props }) {
@@ -37,7 +37,7 @@ function ActionButton({ icon: Icon, label, look, ...props }) {
       {...props}
     >
       <Icon size={18} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
-      <span className="max-w-full truncate whitespace-nowrap text-xs leading-none">{label}</span>
+      <span className="max-w-full truncate whitespace-nowrap text-xs leading-4">{label}</span>
     </button>
   );
 }
