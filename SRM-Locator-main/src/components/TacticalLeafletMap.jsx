@@ -147,6 +147,10 @@ const TacticalLeafletMap = ({
   blockedUserIds,
   ghostMembers,
   activeTab,
+  // Every place to mark (the database plus the admin's additions), and the spot the admin
+  // has just chosen for a new one.
+  places = SRM_MASTER_DATABASE,
+  draftPlace = null,
   activeWaypoint,
   walkingRoute,
   canClearWaypoint,
@@ -209,11 +213,17 @@ const TacticalLeafletMap = ({
         </LeafletReactMarker>
       )}
 
-      {activeTab === 'buildings' && SRM_MASTER_DATABASE.map((b) => (
+      {activeTab === 'buildings' && places.map((b) => (
         <LeafletReactMarker key={b.id} lat={b.lat} lng={b.lng} onClick={() => onFocus({ lat: b.lat, lng: b.lng }, b)}>
           <BuildingMarker highlighted={highlightBuildingId === b.id} />
         </LeafletReactMarker>
       ))}
+
+      {draftPlace && (
+        <LeafletReactMarker lat={draftPlace.lat} lng={draftPlace.lng}>
+          <BuildingMarker highlighted />
+        </LeafletReactMarker>
+      )}
 
       {activeWaypoint && (
         <LeafletReactMarker lat={activeWaypoint.lat} lng={activeWaypoint.lng}>

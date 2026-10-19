@@ -502,11 +502,31 @@ export function getBuildingAsset(building) {
     ENGINEERING: "Engineering Wing",
     MEDICAL: "Healthcare & Medicine",
     RESIDENTIAL: "Residential Hall",
-    LOGISTICS: "Campus Hub & Dining"
+    LOGISTICS: "Campus Hub & Dining",
+    GROUNDS: "Campus Ground"
   };
-  
+
   const defaultCategory = categoryMap[building.category] || "Campus Facility";
-  
+
+  // Open ground has no floors, lift or opening time to show; the building defaults below
+  // would invent all three.
+  if (building.category === 'GROUNDS') {
+    const image = asset.image || "/buildings/campus_main.jpg";
+    return {
+      id: building.id,
+      name: building.name,
+      categoryDisplay: asset.categoryDisplay || defaultCategory,
+      image,
+      photos: asset.photos && asset.photos.length > 0 ? asset.photos : [image],
+      hours: asset.hours || "Open • Campus Hours",
+      isOpen: asset.isOpen !== false,
+      floors: null,
+      departments: [],
+      facilities: asset.facilities || [],
+      description: asset.description || building.info || "Open ground at SRMIST Kattankulathur."
+    };
+  }
+
   return {
     id: building.id,
     name: building.name,
