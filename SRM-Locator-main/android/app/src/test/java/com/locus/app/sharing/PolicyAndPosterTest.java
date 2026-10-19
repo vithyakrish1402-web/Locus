@@ -301,6 +301,80 @@ public class PolicyAndPosterTest {
         assertTrue(seen.isEmpty());
     }
 
+    // ---- listening for an SOS ----
+
+    @Test
+    public void askingForAnSosIsAGetFromTheLastRevWithTheTokenAndNoBody() {
+        HttpResult r = new UrlConnectionPoster().getSos(base, "v1.tok.sig", 12, 25);
+        assertEquals(200, r.status);
+        assertEquals("GET /api/background/sos?after=12&wait=25 auth=Bearer v1.tok.sig type=null body=", seen.get(0));
+    }
+
+    @Test
+    public void aNegativeRevOrWaitIsAskedAsZero() {
+        new UrlConnectionPoster().getSos(base, "t", -5, -1);
+        assertEquals("GET /api/background/sos?after=0&wait=0 auth=Bearer t type=null body=", seen.get(0));
+    }
+
+    @Test
+    public void aListOfSosIsReadInFullEvenWhenLargerThanAReportsAnswer() {
+        StringBuilder big = new StringBuilder();
+        for (int i = 0; i < 10_000; i++) big.append('x');
+        reply = big.toString();
+        assertEquals(10_000, new UrlConnectionPoster().getSos(base, "t", 0, 1).body.length());
+    }
+
+    @Test
+    public void aHugeAnswerToAnSosQuestionIsStillCutOff() {
+        StringBuilder big = new StringBuilder();
+        for (int i = 0; i < 200_000; i++) big.append('x');
+        reply = big.toString();
+        assertEquals(UrlConnectionPoster.SOS_MAX_BODY_BYTES, new UrlConnectionPoster().getSos(base, "t", 0, 1).body.length());
+    }
+
+    @Test
+    public void aQuestionHeldOpenLongerThanTheShortTimeoutIsNotGivenUpOn() {
+        delayMs = 1_200; // longer than the 300 ms a report would be given...
+        long started = System.currentTimeMillis();
+        HttpResult r = new UrlConnectionPoster(300).getSos(base, "t", 0, 2); // ...but the read allows wait + 10 s
+        assertEquals(200, r.status);
+        assertTrue(System.currentTimeMillis() - started >= 1_200);
+    }
+
+    @Test(timeout = 8_000)
+    public void aQuestionHeldOpenCanBeCutOffFromAnotherThread() throws Exception {
+        delayMs = 5_000;
+        final UrlConnectionPoster poster = new UrlConnectionPoster();
+        final HttpResult[] result = new HttpResult[1];
+        Thread asker = new Thread(() -> result[0] = poster.getSos(base, "t", 0, 25));
+        asker.start();
+        Thread.sleep(300);
+        long cutting = System.currentTimeMillis();
+        poster.abort();
+        asker.join(3_000);
+        assertFalse(asker.isAlive());
+        assertTrue(System.currentTimeMillis() - cutting < 2_000);
+        assertTrue(result[0].networkError);
+    }
+
+    @Test
+    public void acknowledgingIsAPostWithJustTheId() {
+        HttpResult r = new UrlConnectionPoster().acknowledgeSos(base, "v1.tok.sig", "3f1c-aa");
+        assertEquals(200, r.status);
+        assertEquals("POST /api/background/sos/ack auth=Bearer v1.tok.sig type=application/json body={\"id\":\"3f1c-aa\"}", seen.get(0));
+    }
+
+    @Test
+    public void anIdThatCouldBreakTheBodyIsNeverSent() {
+        for (String id : new String[] {null, "", "a\"b", "a\\b", "x\",\"y\":\"z"}) {
+            assertTrue(String.valueOf(id), new UrlConnectionPoster().acknowledgeSos(base, "t", id).networkError);
+        }
+        StringBuilder long65 = new StringBuilder();
+        for (int i = 0; i < 65; i++) long65.append('a');
+        assertTrue(new UrlConnectionPoster().acknowledgeSos(base, "t", long65.toString()).networkError);
+        assertTrue(seen.isEmpty());
+    }
+
     @Test
     public void nothingAboutTheRequestIsLeftForALogToFind() {
         // The poster has no logging at all; this guards that nobody adds some.

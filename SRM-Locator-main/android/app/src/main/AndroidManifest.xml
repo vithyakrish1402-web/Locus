@@ -31,6 +31,11 @@
     <!-- Only to post "Tap to resume sharing with <Group>" after a restart (sharing/BootResumeReceiver.java).
          It never starts the location service. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- SOS alerts while LOCUS is closed (sharing/SosNotifications.java): lets the alert for a teammate's
+         SOS take over the screen of a locked phone like an incoming call. Android 14+ can take this away
+         from an app; the alert is then an ordinary heads-up notification, which still rings. It starts
+         nothing by itself: only a notification the service raises, and only for an SOS. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- navigator.vibrate() in the WebView. Without it every call silently did nothing: the
          SOS alarm's vibration (SosOverlay.jsx) never fired on a phone, and neither do the

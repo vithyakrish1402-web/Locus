@@ -34,6 +34,9 @@ export const LocusBackground = /*#__PURE__*/ registerPlugin('LocusBackground', {
     resume: unavailable,
     stop: () => Promise.resolve(),
     requestPermissions: unavailable,
+    setSosAlerts: unavailable,
+    sosShown: () => Promise.resolve(),
+    acknowledgeSos: () => Promise.resolve(),
     addListener: () => Promise.resolve({ remove: () => {} }),
   },
 });

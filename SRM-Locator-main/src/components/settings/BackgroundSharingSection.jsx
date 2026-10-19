@@ -23,7 +23,7 @@ export default function BackgroundSharingSection({ backgroundSharing, group, lay
   useEffect(() => { refresh?.(); }, [refresh]);
 
   if (!backgroundSharing?.available) return null;
-  const { on, status, consentOpen, requestChange, acceptConsent, declineConsent } = backgroundSharing;
+  const { on, status, consentOpen, requestChange, acceptConsent, declineConsent, sosAlerts } = backgroundSharing;
 
   return (
     <section className="mb-6" data-testid="background-sharing">
@@ -38,8 +38,28 @@ export default function BackgroundSharingSection({ backgroundSharing, group, lay
           checked={on}
           onChange={requestChange}
         />
+        {sosAlerts && (
+          // Heard by the same service, so it can only be on while sharing is: shown as off and locked
+          // otherwise, with the reason in words.
+          <div className="border-t border-border" data-testid="sos-alerts">
+            <Switch
+              label={COPY.sos.label}
+              description={COPY.sos.description}
+              checked={on && sosAlerts.on}
+              locked={!on}
+              onChange={sosAlerts.setOn}
+            />
+          </div>
+        )}
       </Card>
       <p className="mt-2 px-1 text-caption text-text-secondary">{COPY.help}</p>
+      {sosAlerts && <p className="mt-2 px-1 text-caption text-text-secondary" data-testid="sos-alerts-note">{COPY.sos.needsSharing}</p>}
+      {sosAlerts && on && sosAlerts.on && !sosAlerts.audible && (
+        <p className="mt-2 px-1 text-caption text-warning" data-testid="sos-alerts-silenced">{COPY.sos.notAudible}</p>
+      )}
+      {sosAlerts && on && sosAlerts.on && !sosAlerts.fullScreen && (
+        <p className="mt-2 px-1 text-caption text-text-secondary" data-testid="sos-alerts-no-fullscreen">{COPY.sos.noFullScreen}</p>
+      )}
 
       <Sheet open={consentOpen} onClose={declineConsent} label={COPY.consent.title} layer={layer}>
         <div data-testid="background-sharing-consent" className="px-5 flex flex-col gap-4">
