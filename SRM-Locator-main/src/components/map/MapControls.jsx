@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.span>, which this config can't see
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Flag, Layers, LocateFixed, MapPin, Settings, X } from 'lucide-react';
@@ -19,7 +19,28 @@ const ROUND = 'relative inline-flex items-center justify-center w-11 h-11 rounde
  *   onToggleSatellite: () => void, onSettings: () => void }} props
  *   onLocate: null until there is a fix to show
  */
+/**
+ * The gear opens Settings the moment the finger lands (pointerdown), not when it lifts and a
+ * click arrives. That same tap still sends a click afterwards, which must not toggle again;
+ * a click with no pointerdown before it (a keyboard or a screen reader) opens it as usual.
+ */
+function useOpenOnTouchDown(onOpen) {
+  const handledRef = useRef(false);
+  return {
+    onPointerDown: (e) => {
+      if (e.button !== 0) return;
+      handledRef.current = true;
+      onOpen();
+    },
+    onClick: () => {
+      if (handledRef.current) { handledRef.current = false; return; }
+      onOpen();
+    },
+  };
+}
+
 export function MapControls({ onCampus, onLocate = null, isSatellite, onToggleSatellite, onSettings }) {
+  const gear = useOpenOnTouchDown(onSettings);
   return (
     <div
       data-testid="map-controls"
@@ -39,7 +60,7 @@ export function MapControls({ onCampus, onLocate = null, isSatellite, onToggleSa
         <MapPin size={21} aria-hidden="true" />
       </button>
       <span className="w-6 h-px bg-[var(--glass-border-subtle)]" aria-hidden="true" />
-      <button type="button" className={ROUND} onClick={onSettings} aria-label={MAP_CONTROLS.settings} title={MAP_CONTROLS.settings}>
+      <button type="button" className={ROUND} {...gear} aria-label={MAP_CONTROLS.settings} title={MAP_CONTROLS.settings}>
         <Settings size={21} aria-hidden="true" />
       </button>
     </div>

@@ -359,3 +359,20 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
   background-color: rgb(255 255 255 / 0.7);
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
 }
+
+/* Settings: the screen's parts arrive one after another (title, then each section), each
+   rising a little as it fades in. A CSS animation of transform and opacity only, so it runs
+   off the main thread; --i is the part's place in the order (SettingsScreen.jsx). */
+.settings-reveal {
+  animation: settings-reveal 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 80ms);
+}
+@keyframes settings-reveal {
+  from { opacity: 0; transform: translate3d(0, 20px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-reveal { animation-name: settings-reveal-fade; animation-duration: 150ms; animation-delay: 0ms; }
+  @keyframes settings-reveal-fade { from { opacity: 0; } to { opacity: 1; } }
+}
+

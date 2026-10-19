@@ -27,7 +27,9 @@ import { Avatar, Button, Card, IconButton, InlineMessage, SegmentedControl, Text
 import PlaceCard from './components/PlaceCard';
 import MeetingPointConfirm from './components/MeetingPointConfirm';
 import { SETTINGS } from './copy/settings';
-import SettingsScreen, { SETTINGS_Z } from './components/settings/SettingsScreen';
+import { SETTINGS_Z } from './components/settings/SettingsScreen';
+import SettingsHost from './components/settings/SettingsHost';
+import { setSettingsOpen } from './utils/settingsOpen';
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
@@ -60,7 +62,7 @@ import MemberMarker from './components/MemberMarker';
 import { MARKERS } from './copy/map';
 import { distanceLabel } from './copy/place';
 import { useResolvedTheme } from './theme/useResolvedTheme';
-import { registerThemeSettle } from './theme/theme';
+import { registerThemeSettle, registerThemePrepare } from './theme/theme';
 import CameraExplainer from './components/CameraExplainer';
 import LocationExplainer from './components/LocationExplainer';
 import { locationKnownAllowed, locationPermissionGranted, rememberLocationAllowed } from './utils/locationPermission';
@@ -471,7 +473,6 @@ const App = () => {
   // --- TARGETING MODE (Two-step Rally Point) ---
   const [isTargetingMode, setIsTargetingMode] = useState(false);
   // --- SYS_CONFIG STATE ---
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAdminSettings, setShowAdminSettings] = useState(false);
   // The guide shows once, on first run, before sign-in; Skip and Get started both count, and
   // the phone remembers it (utils/guideSeen.js). It was shown on every cold start before.
@@ -2286,12 +2287,27 @@ const App = () => {
   // (theme.js registerThemeSettle): under the switch's cover, or veiled in the new theme
   // until then, so the map never shows the old theme under the new one. Satellite photos
   // and the backup map don't restyle that way.
+  // The restyle starts when the switch starts, under the cover's fade-in, rather than once the
+  // theme is swapped: the tiles then have ~180 ms more to arrive before the cover has to lift.
+  // The tiles-loaded wait is made here too, as the event may fire before the swap.
+  const preparedTilesRef = useRef(null);
+  useEffect(() => registerThemePrepare((theme) => {
+    preparedTilesRef.current = null;
+    const map = mapRef.current;
+    const events = window.google?.maps?.event;
+    if (!map || !events || isSatellite || mapEngineFailed) return;
+    preparedTilesRef.current = new Promise((resolve) => { events.addListenerOnce(map, 'tilesloaded', () => resolve()); });
+    map.setOptions({ styles: mapStylesFor(theme) });
+  }), [isSatellite, mapEngineFailed]);
+
   useEffect(() => registerThemeSettle(() => {
     const map = mapRef.current;
     const events = window.google?.maps?.event;
     if (!map || !events || isSatellite || mapEngineFailed) return null;
+    const prepared = preparedTilesRef.current;
+    preparedTilesRef.current = null;
     return {
-      ready: new Promise((resolve) => { events.addListenerOnce(map, 'tilesloaded', () => resolve()); }),
+      ready: prepared || new Promise((resolve) => { events.addListenerOnce(map, 'tilesloaded', () => resolve()); }),
       veil: map.getDiv?.() ?? null,
     };
   }), [isSatellite, mapEngineFailed]);
@@ -3199,7 +3215,7 @@ const App = () => {
         } : null}
         isSatellite={isSatellite}
         onToggleSatellite={() => setIsSatellite(!isSatellite)}
-        onSettings={() => setShowSettingsModal(true)}
+        onSettings={() => setSettingsOpen(true)}
       />
 
       {/* The place card (components/PlaceCard.jsx). On a phone it sits above the floating SOS
@@ -3280,44 +3296,31 @@ const App = () => {
         onClose={() => setShowTelemetryModal(false)}
       />
 
-      {/* --- SETTINGS (components/settings/SettingsScreen.jsx) --- */}
-      <AnimatePresence>
-        {showSettingsModal && (
-          <motion.div
-            key="settings"
-            initial={{ opacity: 0, scale: 0.98, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.98, y: 12 }}
-            transition={reduceMotion ? { duration: 0.15 } : { type: 'spring', stiffness: 420, damping: 36, mass: 0.8 }}
-          >
-            <SettingsScreen
-              onClose={() => setShowSettingsModal(false)}
-              polling={sysConfig.polling}
-              onPolling={(v) => toggleConfig('polling', v)}
-              arFidelity={sysConfig.arFidelity}
-              onArFidelity={(v) => toggleConfig('arFidelity', v)}
-              alertSounds={sysConfig.audio}
-              onAlertSounds={(on) => toggleConfig('audio', on)}
-              isSatellite={isSatellite}
-              onSatellite={setIsSatellite}
-              mapStatus={mapStatus}
-              arFeatureOverrides={sysConfig.arFeatureOverrides}
-              onArFeatureOverride={(feature, v) => toggleConfig(`arFeatureOverrides.${feature}`, v)}
-              update={{
-                installedVersion: appUpdate.installedVersion,
-                supported: appUpdate.supported,
-                status: appUpdate.status,
-                onCheck: () => appUpdate.check({ manual: true }),
-              }}
-              onOpenGuide={() => setGuideOpen(true)}
-              backgroundSharing={backgroundSharing}
-              group={squadCode}
-              onSignOut={() => { setShowSettingsModal(false); handleLogout(); }}
-              onAdmin={isAdmin ? () => { setShowSettingsModal(false); setShowAdminSettings(true); } : undefined}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* --- SETTINGS (components/settings/SettingsHost.jsx) --- its open flag is not App's state. */}
+      <SettingsHost
+        polling={sysConfig.polling}
+        onPolling={(v) => toggleConfig('polling', v)}
+        arFidelity={sysConfig.arFidelity}
+        onArFidelity={(v) => toggleConfig('arFidelity', v)}
+        alertSounds={sysConfig.audio}
+        onAlertSounds={(on) => toggleConfig('audio', on)}
+        isSatellite={isSatellite}
+        onSatellite={setIsSatellite}
+        mapStatus={mapStatus}
+        arFeatureOverrides={sysConfig.arFeatureOverrides}
+        onArFeatureOverride={(feature, v) => toggleConfig(`arFeatureOverrides.${feature}`, v)}
+        update={{
+          installedVersion: appUpdate.installedVersion,
+          supported: appUpdate.supported,
+          status: appUpdate.status,
+          onCheck: () => appUpdate.check({ manual: true }),
+        }}
+        onOpenGuide={() => setGuideOpen(true)}
+        backgroundSharing={backgroundSharing}
+        group={squadCode}
+        onSignOut={handleLogout}
+        onAdmin={isAdmin ? () => setShowAdminSettings(true) : undefined}
+      />
       {/* How LOCUS works, from Settings: the guide over Settings, until it is closed. */}
       {guideOpen && <Guide zIndex={SETTINGS_Z + 1} onDone={() => setGuideOpen(false)} />}
       {/* --- END OF MODALS --- */}

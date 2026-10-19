@@ -79,12 +79,12 @@ export default function SettingsScreen({
         <div className="pt-3 -ml-2 flex items-center justify-between">
           <IconButton label={SETTINGS.back} icon={ChevronLeft} size={26} onClick={onClose} />
         </div>
-        <h1 id={titleId} ref={headingRef} tabIndex={-1} className="mt-2 mb-6 text-display font-semibold outline-none tracking-tight">
+        <h1 id={titleId} ref={headingRef} tabIndex={-1} style={{ '--i': 1 }} className="settings-reveal mt-2 mb-6 text-display font-semibold outline-none tracking-tight">
           {SETTINGS.title}
         </h1>
 
         {/* 1. Interface & Experience */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 2 }}>
           <SectionLabel className="flex items-center gap-1.5">
             <Sun size={13} className="opacity-70" />
             {SETTINGS.appearance}
@@ -108,7 +108,7 @@ export default function SettingsScreen({
         </section>
 
         {/* 2. Map & Navigation Mode */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 3 }}>
           <SectionLabel className="flex items-center gap-1.5">
             <MapIcon size={13} className="opacity-70" />
             {SETTINGS.mapView}
@@ -128,7 +128,7 @@ export default function SettingsScreen({
         </section>
 
         {/* 3. Location Performance */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 4 }}>
           <SectionLabel id={`${titleId}-refresh`} className="flex items-center gap-1.5">
             <Radio size={13} className="opacity-70" />
             {SETTINGS.refresh}
@@ -144,10 +144,12 @@ export default function SettingsScreen({
         </section>
 
         {/* Background sharing: present only when this phone's app can do it and the server has it on. */}
-        <BackgroundSharingSection backgroundSharing={backgroundSharing} group={group} layer={SETTINGS_Z + 10} />
+        <div className="settings-reveal" style={{ '--i': 5 }}>
+          <BackgroundSharingSection backgroundSharing={backgroundSharing} group={group} layer={SETTINGS_Z + 10} />
+        </div>
 
         {/* 4. AR Scanner Fidelity */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 6 }}>
           <SectionLabel className="flex items-center gap-1.5">
             <Eye size={13} className="opacity-70" />
             {SETTINGS.arQuality}
@@ -164,7 +166,7 @@ export default function SettingsScreen({
         </section>
 
         {/* 5. Alerts & Audio */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 7 }}>
           <SectionLabel className="flex items-center gap-1.5">
             <Volume2 size={13} className="opacity-70" />
             {SETTINGS.notifications}
@@ -176,7 +178,7 @@ export default function SettingsScreen({
         </section>
 
         {/* 6. System & Application Info */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 8 }}>
           <SectionLabel className="flex items-center gap-1.5">
             <Info size={13} className="opacity-70" />
             {SETTINGS.about}
@@ -211,7 +213,7 @@ export default function SettingsScreen({
         </section>
 
         {/* 7. Collapsible Advanced & Sharing Controls */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 9 }}>
           <Card padded={false} className="shadow-sm overflow-hidden border border-border">
             <button
               type="button"
@@ -265,7 +267,7 @@ export default function SettingsScreen({
         {/* 8. Account. The redesigned map has no top-bar buttons, so signing out (and the
             owner's admin tools) live here. */}
         {(onSignOut || onAdmin) && (
-          <section className="mb-6">
+          <section className="settings-reveal mb-6" style={{ '--i': 10 }}>
             <SectionLabel className="flex items-center gap-1.5">
               <UserRound size={13} className="opacity-70" />
               {SETTINGS.account}
