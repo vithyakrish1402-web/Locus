@@ -22,7 +22,7 @@ import { Button, Card, IconButton, ListRow, RadioList, SectionLabel, SegmentedCo
 import SendApp from '../SendApp';
 import BackgroundSharingSection from './BackgroundSharingSection';
 import { SETTINGS } from '../../copy/settings';
-import { setThemePreference, subscribeTheme, getThemePreference, resolveTheme, systemPrefersDark } from '../../theme/theme';
+import { switchThemePreference, subscribeTheme, getThemePreference } from '../../theme/theme';
 import LocusMark from '../LocusMark';
 import { AR_FEATURE_OPTIONS } from '../../utils/arFeatures';
 import { MAP_STATUS_LABEL, MAP_STATUS_REASON_TEXT } from '../../utils/mapEngineStatus';
@@ -59,32 +59,9 @@ export default function SettingsScreen({
   useEffect(() => subscribeTheme(({ preference }) => setTheme(preference)), []);
   useEffect(() => { headingRef.current?.focus(); }, []);
 
-  const handleThemeChange = (next, event) => {
-    const from = resolveTheme(theme, systemPrefersDark());
-    const to = resolveTheme(next, systemPrefersDark());
-    if (from === to || typeof document === 'undefined') {
-      setThemePreference(next);
-      return;
-    }
-    if (document.startViewTransition && !document.documentElement.classList.contains('view-transition-active')) {
-      const rect = event?.currentTarget?.getBoundingClientRect();
-      const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
-      const y = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
-      const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
-      document.documentElement.classList.add('view-transition-active');
-      document
-        .startViewTransition(() => { setThemePreference(next); })
-        .ready.then(() =>
-          document.documentElement.animate(
-            { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
-            { duration: 480, easing: 'cubic-bezier(0.2, 0, 0, 1)', pseudoElement: '::view-transition-new(root)' },
-          ).finished.catch(() => {}),
-        )
-        .finally(() => { document.documentElement.classList.remove('view-transition-active'); });
-    } else {
-      setThemePreference(next);
-    }
-  };
+  // theme.js runs the switch (one effect per phone); the pressed option is where a
+  // circular reveal would start.
+  const handleThemeChange = (next, event) => switchThemePreference(next, event?.currentTarget ?? null);
 
   const checking = update.status === 'checking';
   const updateLine = update.supported ? SETTINGS.updateStatus[update.status] : SETTINGS.updatesWebOnly;
