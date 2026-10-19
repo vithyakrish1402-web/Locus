@@ -18,8 +18,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Bumped by scripts/release.mjs - do not hand-edit. versionName must stay valid
         // semver: the in-app updater compares it against the GitHub release tag.
-        versionCode 10
-        versionName "1.1.44"
+        versionCode 11
+        versionName "1.1.61"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Empty string (not null) so a missing key fails obviously inside Google Maps
         // (invalid key error) instead of Gradle throwing over an unresolved placeholder.
