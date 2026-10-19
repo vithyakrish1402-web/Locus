@@ -45,13 +45,13 @@ export function walkLabel(metres) {
 export const PLACE = {
   close: 'Close',
   navigate: 'Navigate',
-  // The second step without a GPS fix: the first place chosen became the start.
-  setDestination: 'Set as destination',
   arScan: 'AR Scan',
-  setMeetingPoint: 'Set as meeting point',
+  // Rally is the group's meeting point (the server calls it the Rally Point).
+  rally: 'Rally',
+  rallySet: 'Rally set',
+  rallyLabel: 'Set as rally point',
+  rallyClearLabel: 'Rally point set here. Clear it',
   more: 'More about this place',
-  less: 'Show less',
-  showOnMap: 'Show on map',
   departments: 'Departments',
   floors: 'Floors',
   facilities: 'Facilities',
@@ -64,6 +64,13 @@ export const MEETING_POINT_CONFIRM = {
   body: 'Everyone in your group sees it on their map and gets a notice.',
   confirm: 'Set meeting point',
   cancel: 'Cancel',
+};
+
+export const RALLY_CLEAR_CONFIRM = {
+  title: (place) => `Clear ${place} as the rally point?`,
+  body: 'It goes from everyone’s map in your group.',
+  confirm: 'Clear rally point',
+  cancel: 'Keep it',
 };
 
 export const ROUTE = {

@@ -169,9 +169,8 @@ const SCREENS = {
   },
   'buildings-list': { label: 'Nearby Places (Buildings list)', render: () => <BuildingsListDemo /> },
   'place-card': { label: 'Place card', render: () => <PlaceOnMap place={campusPlace(2)} /> },
-  'place-card-more': { label: 'Place card, more about this place', render: () => <PlaceOnMap place={campusPlace(2)} expanded /> },
-  'place-card-no-details': { label: 'Place card, no more details', render: () => <PlaceOnMap place={campusPlace(39)} expanded /> },
-  'place-card-second-step': { label: 'Place card, choosing a destination (no GPS)', render: () => <PlaceOnMap place={campusPlace(2)} me={null} choosingDestination /> },
+  'place-card-rally-set': { label: 'Place card, rally point set here', render: () => <PlaceOnMap place={campusPlace(2)} rallyActive /> },
+  'place-card-one-photo': { label: 'Place card, one photo', render: () => <PlaceOnMap place={campusPlace(39)} /> },
   'camera-explainer': {
     label: 'Allow the camera for AR Scan',
     render: () => (
@@ -293,24 +292,17 @@ const campusPlace = (id) => SRM_MASTER_DATABASE.find((b) => b.id === id);
 
 // The place card where the app puts it: above the Emergency button's spot, on the screen's
 // background (the map behind it is the Map batch's).
-function PlaceOnMap({ place, expanded = false, me = ME, choosingDestination = false }) {
-  const [open, setOpen] = useState(expanded);
+function PlaceOnMap({ place, rallyActive = false }) {
+  const [rally, setRally] = useState(rallyActive);
   return (
     <div style={{ position: 'absolute', inset: 0, background: 'var(--color-bg)' }}>
       <div style={{ position: 'absolute', left: 12, right: 12, bottom: 'calc(11rem)', maxHeight: '60vh', overflowY: 'auto', borderRadius: 16 }}>
         <PlaceCard
           place={place}
-          me={me}
-          heading={330}
-          headingLive
-          choosingDestination={choosingDestination}
-          expanded={open}
-          onToggleExpanded={() => setOpen((v) => !v)}
           onClose={() => {}}
           onNavigate={() => {}}
           onArScan={() => {}}
-          onSetMeetingPoint={() => {}}
-          onShowOnMap={() => {}}
+          rally={{ active: rally, onPress: () => setRally((v) => !v) }}
         />
       </div>
     </div>

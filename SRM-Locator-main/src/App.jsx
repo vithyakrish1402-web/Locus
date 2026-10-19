@@ -98,6 +98,8 @@ import { CodeTiles, CodeInput } from './components/SquadCode';
 import SquadMemberCard from './components/SquadMemberCard';
 import { locateTarget, sortByDistance } from './utils/direction';
 import { notify, dismiss as dismissNotice } from './utils/notify';
+import { logNavBuild } from './utils/navBuild';
+import { rallyAction, rallyIsAt } from './utils/rallyAction';
 import { mapEngineStatus } from './utils/mapEngineStatus';
 import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
@@ -545,9 +547,10 @@ const App = () => {
     [offlineNodes, ghostClockTick]
   );
 
-  const [showBuildingInfo, setShowBuildingInfo] = useState(false);
   // The place waiting on "Set as meeting point"'s confirmation, or null.
+  useEffect(() => { logNavBuild(); }, []);
   const [meetingPointToConfirm, setMeetingPointToConfirm] = useState(null);
+  const [rallyToClear, setRallyToClear] = useState(null); // the place whose rally point is being cleared
 
   // --- ADDED: ROUTING STATE ---
   const [routeStart, setRouteStart] = useState(null);
@@ -1917,19 +1920,7 @@ const App = () => {
 
   const handleBuildingTap = (building) => {
     if (!showBuildingOnMap(building)) return;
-    setShowBuildingInfo(false);
     setSelectedItem(building);
-  };
-
-  const handleMoreInfo = (building) => {
-    setActiveTab('buildings');
-    setBuildingCategoryFilter('ALL');
-    setSearchQuery(building?.name || '');
-    if (isMobile) {
-      setMobileView('matrix');
-      setPanelHeight('half');
-    }
-    setSelectedItem(null);
   };
 
   // The rally notice's tap. Looks the rally point up now, not from the notice: it may have
@@ -1950,7 +1941,6 @@ const App = () => {
 
   const handleFocus = (coords, item) => {
     setMapProps({ center: coords, zoom: 19 });
-    setShowBuildingInfo(false); // a new pin starts with its info closed
     if (item) setSelectedItem(item);
   };
 
@@ -2193,6 +2183,30 @@ const App = () => {
   const isTrackingSquadWaypoint = Boolean(
     routeEnd && activeWaypoint && routeEnd.lat === activeWaypoint.lat && routeEnd.lng === activeWaypoint.lng
   );
+
+  // The place card's Rally button. Any member can set the rally point (the server's rule); it is
+  // cleared by the Commander, or by the member who set it (canClearWaypoint above).
+  const rallyIsHere = (place) => rallyIsAt(activeWaypoint, place);
+  const onCardRally = (place) => {
+    const action = rallyAction({
+      inGroup: hasJoinedSquad && Boolean(squadCode),
+      isHere: rallyIsHere(place),
+      canClear: canClearWaypoint,
+    });
+    if (action === 'join-first') notify.info(NOTICES.rally.joinFirst);
+    else if (action === 'set') setMeetingPointToConfirm(place);
+    else if (action === 'clear') setRallyToClear(place);
+    else notify.info(NOTICES.rally.cannotClear);
+  };
+  // Navigate waits for a fix: a route from a made-up start is worse than none.
+  const onCardNavigate = (place) => {
+    if (!liveLocation) {
+      turnOnLocation();
+      notify.info(NOTICES.navigate.waitingForLocation);
+      return;
+    }
+    handleWaypointSelect(place);
+  };
 
   const displayedRouteData =
     (isNavigatingMode && navigationController.activeRoute)
@@ -3304,19 +3318,10 @@ const App = () => {
           >
             <PlaceCard
               place={selectedItem}
-              me={liveLocation}
-              heading={heading}
-              headingLive={hasHeadingReading}
-              choosingDestination={Boolean(routeStart && !routeEnd)}
-              expanded={showBuildingInfo}
-              onToggleExpanded={() => setShowBuildingInfo((open) => !open)}
               onClose={() => setSelectedItem(null)}
-              onMoreInfo={() => handleMoreInfo(selectedItem)}
-              onNavigate={() => handleWaypointSelect(selectedItem)}
+              onNavigate={() => onCardNavigate(selectedItem)}
               onArScan={() => setArTarget({ lat: selectedItem.lat, lng: selectedItem.lng, name: selectedItem.name })}
-              // Who may set one follows the server: any member of the group.
-              onSetMeetingPoint={hasJoinedSquad ? () => setMeetingPointToConfirm(selectedItem) : null}
-              onShowOnMap={() => showBuildingOnMap(selectedItem)}
+              rally={{ active: rallyIsHere(selectedItem), onPress: () => onCardRally(selectedItem) }}
             />
           </motion.div>
         )}
@@ -3327,9 +3332,20 @@ const App = () => {
         place={meetingPointToConfirm}
         onConfirm={() => {
           publishSquadWaypoint(meetingPointToConfirm);
+          notify.success(NOTICES.rally.set(meetingPointToConfirm.name));
           setMeetingPointToConfirm(null);
         }}
         onCancel={() => setMeetingPointToConfirm(null)}
+      />
+      <MeetingPointConfirm
+        clearing
+        place={rallyToClear}
+        onConfirm={() => {
+          socket.emit('clear-waypoint', squadCode);
+          notify.success(NOTICES.rally.cleared);
+          setRallyToClear(null);
+        }}
+        onCancel={() => setRallyToClear(null)}
       />
 
       {/* The Group Lead's join requests (components/group/JoinRequests.jsx): Waiting only. */}

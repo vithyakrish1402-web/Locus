@@ -1,48 +1,72 @@
 import React, { useState } from 'react';
 import {
-  ArrowRight,
   Building2,
   Camera,
   ChevronLeft,
   ChevronRight,
+  Flag,
   Layers,
+  Navigation,
+  ScanLine,
   X,
 } from 'lucide-react';
-import { Button } from './ui';
-import { categoryLabel } from '../copy/place';
+import { PLACE, categoryLabel } from '../copy/place';
 import { getBuildingAsset } from '../data/srmBuildingAssets';
 import CampusBuildingImage from './map/CampusBuildingImage';
 
+// The action row at the bottom of the card. The old "More Info" button was 44 px tall inside
+// this same footer; the three buttons are taller (about 56 px, never under 48) so an icon and
+// a short label stack comfortably. The radius is the old button's (rounded-xl).
+export const ACTION_BUTTON_HEIGHT = 56;
+export const ACTION_BUTTON_GAP = 10;
+export const ACTION_BUTTON_RADIUS = 12;
+
+// Flat and quiet: one solid colour for the primary action, hairline outlines for the others, no
+// glow and no movement on press.
+const PRIMARY_LOOK = 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white border border-blue-600';
+const SECONDARY_LOOK = 'bg-transparent hover:bg-white/[0.06] active:bg-white/10 text-slate-200 border border-white/15';
+const ACTIVE_LOOK = 'bg-blue-500/10 hover:bg-blue-500/15 active:bg-blue-500/20 text-blue-300 border border-blue-400/60';
+
+// eslint-disable-next-line no-unused-vars -- Icon is used as <Icon />, which this config can't see
+function ActionButton({ icon: Icon, label, look, ...props }) {
+  return (
+    <button
+      type="button"
+      style={{ height: ACTION_BUTTON_HEIGHT, borderRadius: ACTION_BUTTON_RADIUS }}
+      className={`min-w-0 px-1 flex flex-col items-center justify-center gap-1.5 font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${look}`}
+      {...props}
+    >
+      <Icon size={18} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
+      <span className="max-w-full truncate whitespace-nowrap text-xs leading-none">{label}</span>
+    </button>
+  );
+}
+
 /**
- * Minimalist Clickable Building Marker HUD Card.
- * Displays only the building image(s), tags, name, and a "More Info" button
- * that redirects to the Buildings tab.
+ * Clickable Building Marker HUD Card.
+ * The building image(s), tags and name, and three actions for the building: Navigate, Rally
+ * (the group's meeting point) and AR Scan.
  *
  * @param {{
  *   place: object,
  *   onClose: () => void,
- *   onMoreInfo?: () => void,
- *   onToggleExpanded?: () => void,
+ *   onNavigate: () => void,
+ *   onArScan: () => void,
+ *   rally: { active: boolean, onPress: () => void },
  * }} props
+ *   rally.active: the group's rally point is already this place; pressing it offers to clear it
  */
 export default function PlaceCard({
   place,
   onClose,
-  onMoreInfo,
-  onToggleExpanded,
+  onNavigate,
+  onArScan,
+  rally,
 }) {
   const category = categoryLabel(place?.category);
   const asset = getBuildingAsset(place);
   const photos = asset?.photos?.length > 0 ? asset.photos : asset?.image ? [asset.image] : ['/buildings/campus_main.jpg'];
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
-
-  const handleMoreInfoClick = () => {
-    if (onMoreInfo) {
-      onMoreInfo();
-    } else if (onToggleExpanded) {
-      onToggleExpanded();
-    }
-  };
 
   const handlePrevPhoto = (e) => {
     e.stopPropagation();
@@ -155,16 +179,37 @@ export default function PlaceCard({
         </div>
       </div>
 
-      {/* Bottom Action: More Info Button (Redirects to Buildings Tab) */}
-      <div className="p-3 bg-black/40 backdrop-blur-xl border-t border-white/10 flex flex-col gap-2 shrink-0">
-        <Button
-          onClick={handleMoreInfoClick}
-          className="w-full !rounded-xl !h-11 font-semibold text-xs tracking-wider uppercase bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] !text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] border border-blue-400/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
-          aria-label="More about this place"
+      {/* Bottom actions: Navigate (primary), Rally and AR Scan. Outside the photo, so the
+          photo arrows and the close button are never in their way. */}
+      <div className="p-3 bg-black/40 backdrop-blur-xl border-t border-white/10 shrink-0">
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: ACTION_BUTTON_GAP }}
         >
-          <span>More Info</span>
-          <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
-        </Button>
+          <ActionButton
+            icon={Navigation}
+            label={PLACE.navigate}
+            look={PRIMARY_LOOK}
+            onClick={onNavigate}
+            data-testid="place-navigate"
+          />
+          <ActionButton
+            icon={Flag}
+            label={rally.active ? PLACE.rallySet : PLACE.rally}
+            look={rally.active ? ACTIVE_LOOK : SECONDARY_LOOK}
+            onClick={rally.onPress}
+            aria-pressed={rally.active}
+            aria-label={rally.active ? PLACE.rallyClearLabel : PLACE.rallyLabel}
+            data-testid="place-rally"
+          />
+          <ActionButton
+            icon={ScanLine}
+            label={PLACE.arScan}
+            look={SECONDARY_LOOK}
+            onClick={onArScan}
+            data-testid="place-ar-scan"
+          />
+        </div>
       </div>
     </div>
   );

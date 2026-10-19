@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { PANEL_SPRING } from '../../utils/motion';
+import { NAV_BUILD } from '../../utils/navBuild';
 import {
   MapPin,
   CheckCircle2,
@@ -159,6 +160,7 @@ export function TurnInstructionCard({
   return (
     <div
       data-testid="turn-instruction-card"
+      data-nav-build={NAV_BUILD}
       className="w-full overflow-hidden rounded-card border border-border bg-surface text-text shadow-[var(--shadow-2)] font-ui pointer-events-auto"
       style={{ maxHeight: `${NAV_PANEL_MAX_HEIGHT_PCT}vh` }}
     >
