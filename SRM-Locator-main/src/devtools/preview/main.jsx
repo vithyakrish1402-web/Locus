@@ -23,6 +23,7 @@ import {
 import SosTrigger from '../../components/SosTrigger';
 import LocationsTable from '../../components/group/LocationsTable';
 import AdminTools, { RecordingBar } from '../../components/admin/AdminTools';
+import AddPlaceSheet, { PlacingBar } from '../../components/admin/AddPlace';
 import SosOverlay from '../../components/SosOverlay';
 import CommsFeed from '../../components/CommsFeed';
 import UpdateModal from '../../components/UpdateModal';
@@ -209,6 +210,22 @@ const SCREENS = {
   'admin-tools-recording': {
     label: 'Admin tools, recording a path',
     render: () => <AdminTools open email="owner@example.com" name="Krish" recording points={12} onRecord={() => {}} onPublish={() => {}} onAbort={() => {}} onClose={() => {}} />,
+  },
+  'admin-tools-places': {
+    label: 'Admin tools, with places already added',
+    render: () => <AdminTools open email="owner@example.com" name="Krish" recording={false} points={0} onRecord={() => {}} onPublish={() => {}} onAbort={() => {}} onClose={() => {}} added={[{ id: 'cp-a', name: 'DENTAL GROUND' }, { id: 'cp-b', name: 'SRM FABLAB' }]} onAddPlace={() => {}} onRemovePlace={() => {}} />,
+  },
+  'add-place': {
+    label: 'Add a place: the form for the chosen spot',
+    render: () => <AddPlaceSheet open lat={12.8212} lng={80.0452} saving={false} problem={null} onSave={() => {}} onCancel={() => {}} />,
+  },
+  'add-place-problem': {
+    label: 'Add a place: a name already used',
+    render: () => <AddPlaceSheet open lat={12.8212} lng={80.0452} saving={false} problem="A place with that name is already on the map." onSave={() => {}} onCancel={() => {}} />,
+  },
+  'placing-bar': {
+    label: 'Add a place: the bar on the map',
+    render: () => <div style={{ position: 'absolute', inset: 0, background: 'var(--color-map-land)' }}><PlacingBar onCancel={() => {}} /></div>,
   },
   'recording-bar': {
     label: 'Recording a path: the bar on the map',

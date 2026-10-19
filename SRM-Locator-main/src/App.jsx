@@ -39,6 +39,10 @@ import MemberOptions from './components/group/MemberOptions';
 import LeadTools from './components/group/LeadTools';
 import LocationsTable from './components/group/LocationsTable';
 import AdminTools, { RecordingBar } from './components/admin/AdminTools';
+import AddPlaceSheet, { PlacingBar } from './components/admin/AddPlace';
+import { ADD_PLACE_PROBLEMS } from './copy/addPlace';
+import { useCampusPlaces } from './hooks/useCampusPlaces';
+import { isGrounds, placeMatches } from './utils/campusPlaces';
 import JoinRequests from './components/group/JoinRequests';
 import PeekLines from './components/group/PeekLines';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
@@ -61,7 +65,6 @@ import { NOTICES, OS_NOTICES } from './copy/notices';
 import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
 import { authProblem } from './utils/authProblems';
 import ARCompass from './ARCompass';
-import { SRM_MASTER_DATABASE } from './srmDatabase';
 import { arTargetForMember, followArTarget } from './utils/arTags';
 import { arRoutePathFor } from './utils/arRoadLine';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
@@ -553,6 +556,13 @@ const App = () => {
   // --- ADMIN PATH RECORDER STATE ---
   const ADMIN_EMAIL = "vithyakrish1402@gmail.com"; //  REPLACE WITH YOUR EXACT GOOGLE LOGIN EMAIL
   const isAdmin = user?.email === ADMIN_EMAIL;
+  // Every place on the map: srmDatabase.js plus the ones the admin added in the app.
+  const { places: campusPlaces, added: addedPlaces, add: addCampusPlace, remove: removeAddedPlace } = useCampusPlaces(user);
+  // Add Place: the admin taps the map (placing), then fills the form for that spot (draftPlace).
+  const [isPlacing, setIsPlacing] = useState(false);
+  const [draftPlace, setDraftPlace] = useState(null);
+  const [savingPlace, setSavingPlace] = useState(false);
+  const [placeProblem, setPlaceProblem] = useState(null);
 
   // --- GREEN LIGHT PROTOCOL: Map readiness gate ---
   const [isMapReady, setIsMapReady] = useState(false);
@@ -612,6 +622,35 @@ const App = () => {
       socket.emit('publish-custom-route', { key: `${startName}_${endName}`, data: newRouteData, roomCode: squadCode });
       stopRecording();
       notify.success(NOTICES.routePublished(startName, endName));
+    }
+  };
+
+  // Add Place (components/admin/AddPlace.jsx): saved to Firestore, so every phone gets it.
+  const saveDraftPlace = async (fields) => {
+    setSavingPlace(true);
+    setPlaceProblem(null);
+    try {
+      const result = await addCampusPlace(fields);
+      if (!result.ok) {
+        setPlaceProblem(ADD_PLACE_PROBLEMS[result.reason] ?? ADD_PLACE_PROBLEMS.failed);
+        return;
+      }
+      setDraftPlace(null);
+      notify.success(NOTICES.placeAdded(String(fields.name).toUpperCase()));
+    } catch (err) {
+      setPlaceProblem(err?.code === 'permission-denied' ? ADD_PLACE_PROBLEMS.denied : ADD_PLACE_PROBLEMS.failed);
+    } finally {
+      setSavingPlace(false);
+    }
+  };
+  const cancelAddPlace = () => { setIsPlacing(false); setDraftPlace(null); setPlaceProblem(null); };
+  const removePlace = async (place) => {
+    try {
+      await removeAddedPlace(place.id);
+      if (selectedItem?.id === place.id) setSelectedItem(null);
+      notify.success(NOTICES.placeRemoved(place.name));
+    } catch {
+      notify.warning(NOTICES.placeNotRemoved);
     }
   };
 
@@ -1805,6 +1844,13 @@ const App = () => {
       }
       return; // Stop normal click behavior
     }
+
+    // 1b. If Admin is choosing the spot for a new place, the tap is that spot.
+    if (isAdmin && isPlacing) {
+      setDraftPlace({ lat, lng });
+      setIsPlacing(false);
+      setPlaceProblem(null);
+    }
   };
 
   // --- TACTICAL ROUTING ENGINE ---
@@ -2085,6 +2131,8 @@ const App = () => {
   );
   // The group panel's search, for members as for buildings (it used to filter buildings only).
   const matchesSearch = (name) => (name || '').toLowerCase().includes(searchQuery.trim().toLowerCase());
+  // A place matches on its name or any short name students use for it.
+  const matchesPlaceSearch = (place) => placeMatches(place, searchQuery);
   // "You're in" says live only once there is a fix to share (Map batch fixes).
   // Paused says no spot is shared when the pause took none (Map batch fixes, owner's wording).
   const youreInKey = telemetryMode === 'ACTIVE' && !liveLocation ? 'waiting'
@@ -2102,8 +2150,8 @@ const App = () => {
     // its own complete building database + marker/panel system, so Google's
     // built-in POI layer is pure UI collision here, not a needed feature.
     clickableIcons: false,
-    draggableCursor: (isAdmin && isRecordingPath) ? 'crosshair' : 'grab',
-  }), [isSatellite, resolvedTheme, isAdmin, isRecordingPath]);
+    draggableCursor: (isAdmin && (isRecordingPath || isPlacing)) ? 'crosshair' : 'grab',
+  }), [isSatellite, resolvedTheme, isAdmin, isRecordingPath, isPlacing]);
 
   // Incoming SOS (stays up until acknowledged). Built once here because two branches
   // render it: the map below, and the mandatory-update gate. It used to live only in
@@ -2433,11 +2481,12 @@ const App = () => {
                 { id: 'MEDICAL', label: 'Medical' },
                 { id: 'RESIDENTIAL', label: 'Hostels' },
                 { id: 'LOGISTICS', label: 'Cafes & Hubs' },
+                ...(campusPlaces.some(b => isGrounds(b)) ? [{ id: 'GROUNDS', label: 'Grounds' }] : []),
               ].map((cat) => {
                 const isSelected = buildingCategoryFilter === cat.id;
                 const count = cat.id === 'ALL'
-                  ? SRM_MASTER_DATABASE.length
-                  : SRM_MASTER_DATABASE.filter(b => b.category === cat.id).length;
+                  ? campusPlaces.length
+                  : campusPlaces.filter(b => b.category === cat.id).length;
                 return (
                   <button
                     key={cat.id}
@@ -2465,13 +2514,13 @@ const App = () => {
               <h3 className="text-sm font-semibold font-ui text-text flex items-center gap-2 tracking-tight">
                 <span>Nearby Places</span>
                 <span className="text-xs font-normal text-text-secondary">
-                  ({SRM_MASTER_DATABASE.filter(b => matchesSearch(b.name) && (buildingCategoryFilter === 'ALL' || b.category === buildingCategoryFilter)).length})
+                  ({campusPlaces.filter(b => matchesPlaceSearch(b) && (buildingCategoryFilter === 'ALL' || b.category === buildingCategoryFilter)).length})
                 </span>
               </h3>
             </div>
           )}
 
-          {activeTab === 'buildings' && searchQuery.trim() && !SRM_MASTER_DATABASE.some(b => matchesSearch(b.name)) && (
+          {activeTab === 'buildings' && searchQuery.trim() && !campusPlaces.some(b => matchesPlaceSearch(b)) && (
             <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="buildings-no-match">{GROUP_BUILDINGS_LIST.noMatch(searchQuery.trim())}</p>
           )}
           {/* The Group Lead's tools come first, before Your location (the design has them after):
@@ -2518,8 +2567,8 @@ const App = () => {
           )}
           <AnimatePresence mode="popLayout" initial={false}>
             {activeTab === 'buildings' ? (
-              SRM_MASTER_DATABASE
-                .filter(b => matchesSearch(b.name) && (buildingCategoryFilter === 'ALL' || b.category === buildingCategoryFilter))
+              campusPlaces
+                .filter(b => matchesPlaceSearch(b) && (buildingCategoryFilter === 'ALL' || b.category === buildingCategoryFilter))
                 .map((building, idx) => (
                   <motion.div
                     layout
@@ -2735,6 +2784,8 @@ const App = () => {
               blockedUserIds={blockedUserIds}
               ghostMembers={ghostMembers}
               activeTab={activeTab}
+              places={campusPlaces}
+              draftPlace={isAdmin ? draftPlace : null}
               activeWaypoint={activeWaypoint}
               walkingRoute={shownRoute}
               canClearWaypoint={canClearWaypoint}
@@ -2802,7 +2853,7 @@ const App = () => {
               from the ground footprint OSM actually traces, so the outline reads as
               "wrong" even when the underlying data is correct. A dot has no such
               failure mode. (TacticalLeafletMap.jsx renders the same way.) */}
-          {activeTab === 'buildings' && SRM_MASTER_DATABASE.map(b => (
+          {activeTab === 'buildings' && campusPlaces.map(b => (
             <div
               key={`building-${b.id}`}
               lat={b.lat}
@@ -2813,6 +2864,12 @@ const App = () => {
               <BuildingMarker highlighted={(activeTab === 'buildings' && selectedItem?.id === b.id) || routeEnd?.id === b.id} />
             </div>
           ))}
+          {/* Add Place: the spot the admin just chose, until it is saved or cancelled. */}
+          {isAdmin && draftPlace && (
+            <div lat={draftPlace.lat} lng={draftPlace.lng}>
+              <BuildingMarker highlighted />
+            </div>
+          )}
           {activeWaypoint && (
             <WaypointMarker
               lat={activeWaypoint.lat}
@@ -3044,7 +3101,24 @@ const App = () => {
         onPublish={publishRecordedRoute}
         onAbort={abortRecording}
         onClose={() => setShowAdminSettings(false)}
+        added={addedPlaces}
+        onAddPlace={() => { setIsPlacing(true); setShowAdminSettings(false); }}
+        onRemovePlace={removePlace}
       />
+      {/* Add Place: choose the spot on the map, then name it (components/admin/AddPlace.jsx). */}
+      {isAdmin && isPlacing && <PlacingBar onCancel={cancelAddPlace} />}
+      {isAdmin && (
+        <AddPlaceSheet
+          key={draftPlace ? `${draftPlace.lat},${draftPlace.lng}` : 'none'}
+          open={Boolean(draftPlace)}
+          lat={draftPlace?.lat}
+          lng={draftPlace?.lng}
+          saving={savingPlace}
+          problem={placeProblem}
+          onSave={(fields) => saveDraftPlace({ ...fields, lat: draftPlace.lat, lng: draftPlace.lng })}
+          onCancel={cancelAddPlace}
+        />
+      )}
 
       {/* ========== MOBILE BOTTOM BAR (src/components/BottomTabBar.jsx) ========== */}
       <BottomTabBar
@@ -3146,7 +3220,7 @@ const App = () => {
           liveLocation={liveLocation}
           speedMps={liveSpeed}
           squadMembers={users.filter(u => !blockedUserIds.includes(u.id))}
-          buildings={SRM_MASTER_DATABASE}
+          buildings={campusPlaces.filter(b => !isGrounds(b))}
           selfUid={user?.uid ?? null}
           routePath={arRoutePathFor(arTarget, { personalTarget, personalRoute, activeWaypoint, walkingRoute })}
           fidelity={sysConfig.arFidelity}
