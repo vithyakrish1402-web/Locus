@@ -14,7 +14,7 @@ vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => native.
 vi.mock('@capacitor/status-bar', () => ({ StatusBar: { setStyle: native.setStyle }, Style: { Dark: 'DARK', Light: 'LIGHT' } }));
 
 import {
-  __resetTheme, installTheme, getThemeTransitionTier, registerThemeSettle,
+  __resetTheme, installTheme, getThemeTransitionTier, registerThemeSettle, registerThemePrepare,
   switchThemePreference, toggleTheme, THEME_SLOW_APPLY_MS,
 } from '../src/theme/theme';
 
@@ -231,6 +231,13 @@ describe('the cover', () => {
     expect(map.querySelector('[data-theme-veil]')).toBeTruthy();
     await vi.waitFor(() => expect(map.querySelector('[data-theme-veil]')).toBeNull(), { timeout: 4500 });
   }, 8000);
+
+  it('tells preparers the new theme when the switch starts, before the theme is swapped', async () => {
+    const seen = [];
+    registerThemePrepare((theme) => seen.push({ theme, appliedYet: root.dataset.theme }));
+    await toggleTheme();
+    expect(seen).toEqual([{ theme: 'dark', appliedYet: 'light' }]);
+  });
 
   it('veils nothing a settler says has nothing to redraw', async () => {
     registerThemeSettle(() => null);

@@ -179,8 +179,12 @@ export function installTheme() {
 
 /** For device testing: 'full' | 'light' | 'instant' forces that effect (so does ?themeTier=). null picks per phone. */
 export const THEME_TRANSITION_FORCE_TIER = null;
-/** The cover's fade, in and out, each. 150-200 ms reads as one quick blink. */
-export const THEME_FALLBACK_OVERLAY_MS = 180;
+/**
+ * The cover's fade. In is quick, since the old theme is about to go anyway; out is slower and
+ * eased, so the new theme dissolves in where a same-length fade read as a blink.
+ */
+export const THEME_FALLBACK_OVERLAY_MS = 140;
+export const THEME_COVER_OUT_MS = 380;
 /**
  * A frame longer than this (five 60 Hz frames) is a stutter. It is the most the theme swap
  * may hold the main thread for a phone to count as fast enough for the circular reveal, and
@@ -210,7 +214,7 @@ const TRANSITION_STATE_KEY = 'locus.themeTransition';
 // How long the cover waits for the map to redraw. Past that the cover lifts and the map
 // alone stays veiled in the new theme's land colour until its tiles are in (first tiles of
 // a style can take seconds on a slow phone or network).
-const THEME_COVER_WAIT_MS = 250;
+const THEME_COVER_WAIT_MS = 500;
 const THEME_MAP_VEIL_MAX_MS = 3000;
 const THEME_REVEAL_MS = 450;
 const THEME_FAST_SWITCHES_FOR_FULL = 2;
@@ -233,6 +237,24 @@ const veils = new Set();
 export function registerThemeSettle(fn) {
   settlers.add(fn);
   return () => settlers.delete(fn);
+}
+
+const preparers = new Set();
+
+/**
+ * Things that can start redrawing in the new theme while the cover is still fading in, so
+ * the cover has less to wait for once the theme is swapped (the Google map's tiles took
+ * ~700 ms after the swap, which the cover could not wait for, so the map showed a flat veil
+ * and then popped in). `fn(theme)` is called the moment a switch starts. Returns an unregister.
+ */
+export function registerThemePrepare(fn) {
+  preparers.add(fn);
+  return () => preparers.delete(fn);
+}
+
+function prepareSettling(preference) {
+  const theme = resolveTheme(preference, systemPrefersDark());
+  preparers.forEach((fn) => { try { fn(theme); } catch { /* a preparer must never stop a switch */ } });
 }
 
 const within = (promise, ms) => new Promise((resolve) => {
@@ -422,11 +444,11 @@ function createCover(theme) {
   return cover;
 }
 
-function fadeCover(cover, from, to, easing) {
+function fadeCover(cover, from, to, easing, ms = THEME_FALLBACK_OVERLAY_MS) {
   const settle = () => { cover.style.opacity = String(to); };
   if (typeof cover.animate !== 'function') { settle(); return Promise.resolve(); }
-  const animation = cover.animate([{ opacity: from }, { opacity: to }], { duration: THEME_FALLBACK_OVERLAY_MS, easing, fill: 'forwards' });
-  return within(animation.finished, THEME_FALLBACK_OVERLAY_MS + 400).then(settle);
+  const animation = cover.animate([{ opacity: from }, { opacity: to }], { duration: ms, easing, fill: 'forwards' });
+  return within(animation.finished, ms + 400).then(settle);
 }
 
 // The one place a switch changes the theme: the switching class and the new theme land in
@@ -445,6 +467,7 @@ function suppressTransitionsBriefly() {
 }
 
 async function coverSwap(preference, cover, m) {
+  prepareSettling(preference);
   let stop = watchFrames();
   await fadeCover(cover, 0, 1, 'cubic-bezier(0.4, 0, 1, 1)');
   const fadeIn = stop();
@@ -465,7 +488,7 @@ async function coverSwap(preference, cover, m) {
   debugEvent('restored');
 
   stop = watchFrames();
-  await fadeCover(cover, 1, 0, 'cubic-bezier(0, 0, 0.2, 1)');
+  await fadeCover(cover, 1, 0, 'cubic-bezier(0.33, 0, 0.2, 1)', THEME_COVER_OUT_MS);
   const fadeOut = stop();
   m.visibleMaxFrameMs = Math.max(fadeIn.max, fadeOut.max);
   m.longFrames = fadeIn.long + fadeOut.long;
