@@ -26,6 +26,7 @@ import {
 } from './presence.js';
 import { chooseSource, PRESENCE } from './displaySource.js';
 import { createIdTokenVerifier } from './identity.js';
+import { createSosWatch } from './sosWatch.js';
 import {
   createBackgroundRouter, backgroundConfig, backgroundStartupLine, endSession, endAllSessions,
 } from './backgroundSharing.js';
@@ -56,8 +57,12 @@ const locationCache = {};
 // much smaller limit.
 const backgroundSettings = backgroundConfig();
 console.log(backgroundStartupLine(backgroundSettings));
+// Rung when an SOS is raised or updated in a Group, so a phone listening for it from the
+// background (GET /api/background/sos) hears at once instead of at its next question.
+const sosWatch = createSosWatch();
 app.use('/api/background', createBackgroundRouter({
   config: backgroundSettings,
+  sosWatch,
   verifyIdToken: createIdTokenVerifier().verifyIdToken,
   getSquad: (roomCode) => activeSquads[roomCode],
   accept: (roomCode, uid, report, now) => acceptBackgroundPosition(roomCode, uid, report, now),
@@ -987,6 +992,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const coalesced = coalesceSos(squad, details, now, SOS_COALESCE_SEC * 1000);
     const sos = coalesced ?? recordSos(squad, details, now);
     socket.to(roomCode).emit(coalesced ? 'sos-updated' : 'sos-received', toSosPayload(sos, now));
+    sosWatch.notify(roomCode); // and the phones listening from the background
     reportAlert(socket, squad, roomCode, 'sos', verdict, now, coalesced ? { coalesced: true } : {});
 
     // Someone pressing it again and again: tell the Group Lead, quietly (not an alarm).

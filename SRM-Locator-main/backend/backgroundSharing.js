@@ -7,6 +7,11 @@
 //                     -> { ok, leaseSec, serverTime }       renews the person's lease (presence.js)
 //   DELETE /session   Authorization: Bearer <device token>
 //                     -> { ok }                             the person stops sharing
+//   GET    /sos?after=<rev>&wait=<sec>   Authorization: Bearer <device token>
+//                     -> { sos: [...], rev, serverTime }    the SOS the Group has raised since `rev` that this person
+//                        has not acknowledged; held open up to `wait` seconds if there is none yet (a long poll)
+//   POST   /sos/ack   Authorization: Bearer <device token>, { id }
+//                     -> { ok }                             this person has dealt with that SOS
 //   GET    /status    no authorisation
 //                     -> { available }                      whether the above are switched on (answers 200 even when off)
 //
@@ -29,6 +34,7 @@ import express from 'express';
 import { randomBytes } from 'node:crypto';
 import { createDeviceTokens } from './deviceToken.js';
 import { createRateLimiter } from './rateLimit.js';
+import { ackSos, pendingSosSince, toBackgroundSosPayload } from './sosRelay.js';
 
 const number = (raw, fallback) => {
   const value = raw === undefined || raw === '' ? NaN : Number(raw);
@@ -49,6 +55,12 @@ export const backgroundConfig = (env = process.env) => ({
   postsPerMinutePerIp: number(env.LOCUS_BG_POSTS_PER_MIN_IP, 1500),
   mintsPerMinutePerIp: number(env.LOCUS_BG_MINTS_PER_MIN_IP, 60),
   mintsPerMinutePerUid: number(env.LOCUS_BG_MINTS_PER_MIN_UID, 10),
+  // A phone listening for an SOS asks again as soon as each answer comes back: about 3 a minute
+  // while nothing happens, a few more when something does.
+  sosPollsPerMinutePerToken: number(env.LOCUS_BG_SOS_POLLS_PER_MIN_TOKEN, 30),
+  // The longest the server holds one question open: well under the idle limit of the proxy in
+  // front of it (about a minute and a half on Render).
+  sosPollMaxWaitSec: number(env.LOCUS_BG_SOS_POLL_MAX_WAIT_SEC, 25),
 });
 
 /** { active, reason }: reason is 'off', 'no-secret' or 'weak-secret' when not active. */
@@ -156,9 +168,10 @@ const MAX_ROOM_CODE_LENGTH = 64;
  * @param {(roomCode: string) => object|undefined} deps.getSquad
  * @param {(roomCode: string, uid: string, report: object, now: number) => { ok: boolean, reason?: string, leaseUntil?: number }} deps.accept
  * @param {(roomCode: string, uid: string) => void} deps.endSharing takes them off the map, quietly
+ * @param {ReturnType<typeof import('./sosWatch.js').createSosWatch>} [deps.sosWatch] rung when an SOS is raised
  * @param {() => number} [deps.now]
  */
-export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept, endSharing, now = Date.now }) {
+export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept, endSharing, sosWatch, now = Date.now }) {
   const router = express.Router();
   const status = backgroundStatus(config);
   const tokens = status.active ? createDeviceTokens(config.secret, now) : null;
@@ -168,6 +181,7 @@ export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept
     postIp: createRateLimiter({ limit: config.postsPerMinutePerIp, windowMs: 60000, now }),
     mintIp: createRateLimiter({ limit: config.mintsPerMinutePerIp, windowMs: 60000, now }),
     mintUid: createRateLimiter({ limit: config.mintsPerMinutePerUid, windowMs: 60000, now }),
+    sosPollToken: createRateLimiter({ limit: config.sosPollsPerMinutePerToken, windowMs: 60000, now }),
   };
 
   const fail = (res, code, error, extra = {}) => res.status(code).json({ error, ...extra });
@@ -270,6 +284,76 @@ export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept
       endSharing(payload.room, payload.uid);
     }
     return res.status(200).json({ ok: true });
+  });
+
+  // --- SOS, for a phone whose app is closed ---------------------------------------------------------
+  //
+  // The phone has no socket then, so it asks. Everything a socket member is protected by applies
+  // here too, and is checked again whenever the question is answered (not only when it arrives):
+  //  - the device token: one person, one Group, the current session;
+  //  - that the person is still admitted to the Group and not blocked (a kick during a wait is
+  //    caught by the check after it);
+  //  - what is returned is the Group's own SOS list, which only holds SOS that the SOS guard
+  //    (alertRules.js) let through, minus this person's own and the ones they have acknowledged.
+  const memberOf = (squad, uid) => Boolean(squad.knownUids?.includes(uid)) && !squad.blockedUids?.includes(uid);
+  const whole = (raw, fallback) => {
+    const value = Number(raw);
+    return raw !== undefined && raw !== '' && Number.isInteger(value) && value >= 0 ? value : fallback;
+  };
+
+  router.get('/sos', async (req, res) => {
+    if (!bearer(req)) return fail(res, 401, 'missing-token');
+    const ipCheck = limiters.postIp.check(req.ip);
+    if (!ipCheck.ok) return limited(res, ipCheck);
+
+    const auth = authorise(req, res);
+    if (!auth) return undefined;
+    const { room, uid, sid } = auth.payload;
+    const tokenCheck = limiters.sosPollToken.check(sid);
+    if (!tokenCheck.ok) return limited(res, tokenCheck);
+
+    const after = whole(req.query.after, 0);
+    const waitSec = Math.min(whole(req.query.wait, 0), config.sosPollMaxWaitSec);
+
+    const answer = () => {
+      const squad = getSquad(room);
+      if (!squad) return fail(res, 410, 'no-group');
+      if (!sessionIsCurrent(squad, uid, sid)) return fail(res, 401, 'invalid-token', { reason: 'revoked' });
+      if (!memberOf(squad, uid)) return fail(res, 403, 'not-member');
+      const at = now();
+      const sos = pendingSosSince(squad, uid, after, at).map((item) => toBackgroundSosPayload(item, at));
+      res.set('Cache-Control', 'no-store');
+      return res.status(200).json({ sos, rev: squad.sosRev ?? 0, serverTime: at });
+    };
+
+    const squad = getSquad(room);
+    const nothingYet = !squad || pendingSosSince(squad, uid, after, now()).length === 0;
+    if (!sosWatch || waitSec === 0 || !nothingYet) return answer();
+
+    // Nothing yet: hold the question open. A phone that goes away (the connection closes) ends the
+    // wait at once; whatever wakes it, the answer is worked out afresh.
+    const waiting = sosWatch.wait(room, waitSec * 1000);
+    res.on('close', waiting.cancel);
+    const outcome = await waiting.done;
+    if (outcome === 'cancelled' || res.writableEnded || res.destroyed) return undefined;
+    return answer();
+  });
+
+  router.post('/sos/ack', (req, res) => {
+    if (!bearer(req)) return fail(res, 401, 'missing-token');
+    const ipCheck = limiters.postIp.check(req.ip);
+    if (!ipCheck.ok) return limited(res, ipCheck);
+
+    const auth = authorise(req, res);
+    if (!auth) return undefined;
+    const tokenCheck = limiters.sosPollToken.check(auth.payload.sid);
+    if (!tokenCheck.ok) return limited(res, tokenCheck);
+
+    const { uid } = auth.payload;
+    if (!memberOf(auth.squad, uid)) return fail(res, 403, 'not-member');
+    const id = req.body?.id;
+    if (typeof id !== 'string' || id.length === 0 || id.length > 64) return fail(res, 400, 'bad-request', { field: 'id' });
+    return res.status(200).json({ ok: ackSos(auth.squad, id, uid) });
   });
 
   // Whatever went wrong before a handler (a body that is not JSON, one that is too large, a
