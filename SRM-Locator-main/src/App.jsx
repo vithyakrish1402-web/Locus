@@ -104,6 +104,7 @@ import { rallyAction, rallyIsAt } from './utils/rallyAction';
 import { mapEngineStatus } from './utils/mapEngineStatus';
 import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
+import { useClosedAppSos } from './hooks/useClosedAppSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
@@ -414,9 +415,14 @@ const App = () => {
     pendingCount: pendingSosCount,
     position: sosPosition,
     total: sosTotal,
-    acknowledge: acknowledgeSos,
+    acknowledge: acknowledgeSosOnSocket,
     requestSync: requestSosSync,
+    receive: receiveSos,
   } = useIncomingSos(socket);
+  // SOS that was heard while the app was closed: a tapped notification arrives as an alert here,
+  // the notification goes once the overlay shows it, and acknowledging reaches the server even
+  // before this phone has rejoined its Group (hooks/useClosedAppSos.js).
+  const acknowledgeSos = useClosedAppSos({ current: incomingSos, pendingCount: pendingSosCount, receive: receiveSos, acknowledge: acknowledgeSosOnSocket });
 
   // An Emergency alert held for want of a connection (utils/sosOutbox.js): the button reads
   // "Waiting for connection", and a notice says so until it goes, or can't.
@@ -2459,9 +2465,19 @@ const App = () => {
     </>
   );
 
-  if (authLoading) return (
+  // Everything that sits over the screens before the map (boot, guide, sign-in, the lobby): the
+  // update overlays, and an incoming SOS. A tapped SOS notification starts LOCUS cold into one of
+  // these, and the alert must be the first thing seen there, not something waiting behind a lobby.
+  const beforeMapOverlay = (
     <>
       {updateOverlay}
+      {sosOverlay}
+    </>
+  );
+
+  if (authLoading) return (
+    <>
+      {beforeMapOverlay}
       <BootScreen />
     </>
   );
@@ -2470,14 +2486,14 @@ const App = () => {
     if (!hasSeenGuide) {
       return (
         <>
-          {updateOverlay}
+          {beforeMapOverlay}
           <Guide onDone={() => { rememberGuideSeen(); setHasSeenGuide(true); }} />
         </>
       );
     }
     return (
       <>
-        {updateOverlay}
+        {beforeMapOverlay}
         <AuthTerminal
           email={email}
           setEmail={setEmail}
@@ -2500,7 +2516,7 @@ const App = () => {
     if (deniedCode) {
       return (
         <>
-          {updateOverlay}
+          {beforeMapOverlay}
           <StatusScreen
             testId="not-approved"
             tone="warning"
@@ -2526,7 +2542,7 @@ const App = () => {
     if (resumeOffer) {
       return (
         <>
-          {updateOverlay}
+          {beforeMapOverlay}
           <StatusScreen
             testId="resume"
             icon={<Undo2 size={40} />}
@@ -2555,7 +2571,7 @@ const App = () => {
         className="min-h-[100dvh] bg-bg text-text font-ui px-5 flex flex-col"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 3rem)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
       >
-        {updateOverlay}
+        {beforeMapOverlay}
         <main className="w-full max-w-md mx-auto flex-1">
           <p className="text-body text-text-secondary">{LOBBY.hello(firstNameOf(user.displayName))}</p>
           <h1 className="mt-1 text-display">{LOBBY.title}</h1>

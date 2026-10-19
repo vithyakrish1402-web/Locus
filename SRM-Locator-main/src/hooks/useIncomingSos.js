@@ -31,21 +31,24 @@ export function useIncomingSos(socket) {
     queueRef.current = queue;
   }, [queue]);
 
+  // One way in for every beacon, whether it came over the socket or from a tapped notification
+  // (see useClosedAppSos): the same queue, the same de-duplication by id.
+  const receive = useCallback((payload) => {
+    const incoming = withId(payload);
+    setQueue((current) => {
+      if (current.some((sos) => sos.id === incoming.id)) return current;
+      const sameSender = current.findIndex((sos) => sos.senderId === incoming.senderId);
+      if (sameSender === -1) return [...current, incoming];
+      const next = current.slice();
+      next[sameSender] = incoming;
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
-    const onSosReceived = (payload) => {
-      const incoming = withId(payload);
-      setQueue((current) => {
-        if (current.some((sos) => sos.id === incoming.id)) return current;
-        const sameSender = current.findIndex((sos) => sos.senderId === incoming.senderId);
-        if (sameSender === -1) return [...current, incoming];
-        const next = current.slice();
-        next[sameSender] = incoming;
-        return next;
-      });
-    };
-    socket.on('sos-received', onSosReceived);
-    return () => socket.off('sos-received', onSosReceived);
-  }, [socket]);
+    socket.on('sos-received', receive);
+    return () => socket.off('sos-received', receive);
+  }, [socket, receive]);
 
   const acknowledge = useCallback(() => {
     const head = queueRef.current[0];
@@ -69,5 +72,6 @@ export function useIncomingSos(socket) {
     total: queue.length ? handled + queue.length : 0,
     acknowledge,
     requestSync,
+    receive,
   };
 }

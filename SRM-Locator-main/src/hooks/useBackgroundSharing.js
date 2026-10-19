@@ -22,6 +22,11 @@ import { giveConsent, hasConsent } from '../utils/backgroundConsent';
 //   bg.refresh()      ask the server again whether it is on
 //   bg.status         { state: 'off' | 'starting' | 'running' | 'paused' | 'refused' | 'stopped', reason? }
 //   bg.serviceState  'running' | 'paused' | null: what the service last said, in a Group or not
+//   bg.sosAlerts     null where this phone's app cannot raise SOS alerts while closed; otherwise
+//                     { on, audible, fullScreen, setOn(enabled) }: the person's "SOS alerts when the
+//                     app is closed" choice (on until they turn it off; it only does anything while
+//                     sharing is on), whether the phone lets that alert ring (audible), and whether
+//                     it may take over a locked screen (fullScreen). The service does the listening.
 //   bg.pause() / bg.resume()   the person paused or resumed in the app: the service follows, so the
 //                     notification, the app and the Group always agree (a pause from the
 //                     notification reaches the app through bg.status)
@@ -61,6 +66,8 @@ export function useBackgroundSharing({ inGroup, hidden = false, roomCode, groupN
   const [consentOpen, setConsentOpen] = useState(false);
   // What the last start attempt, or the service itself, said (cleared whenever sharing ends here).
   const [outcome, setOutcome] = useState(null);
+  // "SOS alerts when the app is closed": what the shell says (null while unknown or unsupported).
+  const [sosPrefs, setSosPrefs] = useState(null);
 
   // Read at call time, so a changing function identity never restarts sharing.
   const latest = useRef({});
@@ -76,11 +83,31 @@ export function useBackgroundSharing({ inGroup, hidden = false, roomCode, groupN
 
   const supported = Boolean(support?.supported);
 
+  // The shell's word on SOS alerts, from its capabilities (a shell that predates them says nothing).
+  const readSosPrefs = useCallback((capabilities) => {
+    if (!capabilities?.sosAlerts) return;
+    setSosPrefs({ on: capabilities.sosAlertsOn !== false, audible: capabilities.sosAudible !== false, fullScreen: capabilities.sosFullScreen !== false });
+  }, []);
+
+  useEffect(() => {
+    if (support?.supported) readSosPrefs(support.capabilities);
+  }, [support, readSosPrefs]);
+
   const refresh = useCallback(() => {
     if (!supported) return Promise.resolve();
     const { backendUrl: baseUrl, fetchImpl: fetcher } = latest.current;
+    // The phone's own notification settings can change while Settings is closed: ask again.
+    Promise.resolve(plugin.getCapabilities?.()).then(readSosPrefs).catch(() => {});
     return fetchServerStatus({ baseUrl, fetchImpl: fetcher }).then((result) => setServerStatus(result));
-  }, [supported]);
+  }, [supported, plugin, readSosPrefs]);
+
+  const setSosOn = useCallback((enabled) => {
+    setSosPrefs((previous) => (previous ? { ...previous, on: enabled } : previous));
+    Promise.resolve(plugin.setSosAlerts?.({ enabled })).catch(() => {
+      // The shell would not take it: show what is true.
+      setSosPrefs((previous) => (previous ? { ...previous, on: !enabled } : previous));
+    });
+  }, [plugin]);
 
   // Ask the server once the app can do it, and again each time the person joins a Group (a server
   // that was asleep or has just been switched on or off is noticed then).
@@ -202,5 +229,7 @@ export function useBackgroundSharing({ inGroup, hidden = false, roomCode, groupN
   // is paused, the app must be paused before it joins, or its first report would be a live one.
   const serviceState = outcome?.state === 'paused' || outcome?.state === 'running' ? outcome.state : null;
 
-  return { available, on: effectiveOn, status, serviceState, consentOpen, requestChange, acceptConsent, declineConsent, refresh, pause, resume };
+  const sosAlerts = sosPrefs ? { ...sosPrefs, setOn: setSosOn } : null;
+
+  return { available, on: effectiveOn, status, serviceState, sosAlerts, consentOpen, requestChange, acceptConsent, declineConsent, refresh, pause, resume };
 }

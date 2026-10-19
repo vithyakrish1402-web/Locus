@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent, within, waitFor } from '@testing-library/react';
 import { MotionGlobalConfig } from 'framer-motion';
 import { BACKGROUND_SHARING } from '../src/copy/settings.js';
+import { SOS_RECEIVED } from '../src/copy/emergency.js';
 import { consentFingerprint } from '../src/utils/backgroundConsent.js';
 
 MotionGlobalConfig.skipAnimations = true;
@@ -46,6 +47,9 @@ const plugin = vi.hoisted(() => {
     start: vi.fn(async () => { order.push('start'); return { started: true, persisted: true }; }),
     stop: vi.fn(async () => { order.push('stop'); }),
     acknowledgeStop: vi.fn(async () => {}),
+    sosShown: vi.fn(async () => {}),
+    acknowledgeSos: vi.fn(async () => {}),
+    setSosAlerts: vi.fn(async () => {}),
     addListener: vi.fn(async (_event, fn) => {
       listeners.push(fn);
       return { remove: () => { listeners.splice(listeners.indexOf(fn), 1); } };
@@ -145,7 +149,7 @@ beforeEach(() => {
   forgetLastStopForTests();
   fakeSocket.handlers.clear();
   fakeSocket.emit.mockClear();
-  for (const fn of [plugin.getCapabilities, plugin.getState, plugin.requestPermissions, plugin.start, plugin.stop, plugin.acknowledgeStop, plugin.addListener]) fn.mockClear();
+  for (const fn of [plugin.getCapabilities, plugin.getState, plugin.requestPermissions, plugin.start, plugin.stop, plugin.acknowledgeStop, plugin.addListener, plugin.sosShown, plugin.acknowledgeSos, plugin.setSosAlerts]) fn.mockClear();
   plugin.requestPermissions.mockImplementation(async () => { plugin.order.push('permissions'); });
   plugin.listeners.length = 0;
   plugin.order.length = 0;
@@ -534,5 +538,83 @@ describe('opening the app after the Group ended', () => {
     await flush();
     expect(screen.queryByText(MESSAGE)).toBeNull();
     expect(plugin.getState).not.toHaveBeenCalled();
+  });
+});
+
+describe('an SOS heard while the app was closed', () => {
+  const SOS_CAPS = { sosAlerts: true, sosAlertsOn: true, sosAudible: true, sosFullScreen: true };
+  const tap = (over = {}) => act(() => plugin.listeners.slice().forEach((fn) => fn({ id: 'sos-9', senderId: 'uA', senderName: 'Asha', lat: 12.8231, lng: 80.0442, ageMs: 4000, timestamp: 1, ...over })));
+  const sosSwitch = () => within(section()).getByRole('switch', { name: new RegExp(COPY.sos.label) });
+
+  it('opens straight to the SOS overlay when the notification is tapped, even before joining a Group', async () => {
+    plugin.caps = { ...plugin.caps, ...SOS_CAPS };
+    await renderApp();
+    await flush();
+    tap();
+    await flush();
+    expect(screen.getByText(SOS_RECEIVED.needsHelp('Asha'))).toBeTruthy();
+    expect(plugin.sosShown).toHaveBeenCalledWith({ id: 'sos-9' });
+  });
+
+  it('acknowledging it tells the server through the plugin, and clears it', async () => {
+    plugin.caps = { ...plugin.caps, ...SOS_CAPS };
+    await renderApp();
+    await flush();
+    tap();
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: SOS_RECEIVED.acknowledge }));
+    expect(plugin.acknowledgeSos).toHaveBeenCalledWith({ id: 'sos-9', more: false });
+    expect(fakeSocket.emit).toHaveBeenCalledWith('sos-ack', { id: 'sos-9' });
+    expect(screen.queryByText(SOS_RECEIVED.needsHelp('Asha'))).toBeNull();
+  });
+
+  it('is one overlay when the same beacon then arrives over the socket', async () => {
+    plugin.caps = { ...plugin.caps, ...SOS_CAPS };
+    await renderApp();
+    await intoGroup();
+    tap();
+    act(() => fakeSocket.receive('sos-received', { id: 'sos-9', senderId: 'sock-a', senderName: 'Asha', lat: 12.8231, lng: 80.0442, ageMs: 9000, timestamp: 1 }));
+    await flush();
+    expect(screen.getAllByText(SOS_RECEIVED.needsHelp('Asha'))).toHaveLength(1);
+    expect(screen.queryByText(SOS_RECEIVED.ofTotal(1, 2))).toBeNull();
+  });
+
+  it('the Settings switch is there, on, and locked until Keep sharing is turned on', async () => {
+    plugin.caps = { ...plugin.caps, ...SOS_CAPS };
+    await renderApp();
+    await intoGroup();
+    await openSettings();
+    await waitFor(() => section());
+    expect(within(section()).getByText(COPY.sos.description)).toBeTruthy();
+    expect(within(section()).getByText(COPY.sos.needsSharing)).toBeTruthy();
+    expect(sosSwitch().getAttribute('aria-checked')).toBe('false'); // sharing is off, so these are too
+    fireEvent.click(sosSwitch());
+    expect(plugin.setSosAlerts).not.toHaveBeenCalled();
+  });
+
+  it('turning it off and on again reaches the plugin once sharing is on', async () => {
+    plugin.caps = { ...plugin.caps, ...SOS_CAPS };
+    await renderApp();
+    await intoGroup();
+    await openSettings();
+    await waitFor(() => section());
+    fireEvent.click(within(section()).getByRole('switch', { name: new RegExp(COPY.switchLabel) }));
+    await waitFor(() => screen.getByTestId('background-sharing-consent'));
+    fireEvent.click(screen.getByRole('button', { name: COPY.consent.accept }));
+    await waitFor(() => expect(sosSwitch().getAttribute('aria-checked')).toBe('true'));
+    fireEvent.click(sosSwitch());
+    expect(plugin.setSosAlerts).toHaveBeenLastCalledWith({ enabled: false });
+    expect(sosSwitch().getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(sosSwitch());
+    expect(plugin.setSosAlerts).toHaveBeenLastCalledWith({ enabled: true });
+  });
+
+  it('a shell that predates it shows the old Settings, one switch', async () => {
+    await renderApp();
+    await intoGroup();
+    await openSettings();
+    await waitFor(() => section());
+    expect(within(section()).getAllByRole('switch')).toHaveLength(1);
+    expect(screen.queryByTestId('sos-alerts')).toBeNull();
   });
 });

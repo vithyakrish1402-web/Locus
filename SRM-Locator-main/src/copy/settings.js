@@ -98,6 +98,14 @@ export const BACKGROUND_SHARING = {
   section: 'Sharing when LOCUS is closed',
   switchLabel: 'Keep sharing when the app is closed',
   help: 'Needs a Group. It ends when you leave the Group. Pause or stop it from the notification, or here.',
+  // Under it, its own switch: hearing a teammate's SOS while the app is closed.
+  sos: {
+    label: 'SOS alerts when the app is closed',
+    description: "If a teammate sends an SOS, you'll be alerted even if you've closed the app.",
+    needsSharing: 'Works only while "Keep sharing when the app is closed" is on. If you turn that off, these alerts stop too.',
+    notAudible: "SOS alerts are turned off or silenced for LOCUS in your phone's notification settings. Turn them back on, or you won't hear one.",
+    noFullScreen: "Your phone won't let LOCUS take over a locked screen, so an SOS shows as a ringing banner instead.",
+  },
   // Under the switch: exactly one of these.
   sharing: (group) => `Sharing with ${group}`,
   paused: 'Paused',
