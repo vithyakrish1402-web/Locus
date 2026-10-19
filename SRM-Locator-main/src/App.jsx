@@ -12,7 +12,7 @@ import {
   Building2, MessageSquare, Send, Loader2,
   BrainCircuit, UserCheck, Ban, LogOut, LockKeyhole, Eye, EyeOff, ArrowRight, X,
   Wifi, WifiOff, Bluetooth, Radio, LocateFixed, Activity,
-  AlertCircle, Check, Sliders, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Layers, Undo2
+  AlertCircle, Check, Map, Battery, Zap, Bell, ShieldAlert, Terminal, Route, Crosshair, Trash2, Scan, RefreshCw, Layers, Undo2
 } from 'lucide-react';
 // ... your other imports (React, framer-motion, lucide-react, etc.)
 
@@ -53,6 +53,7 @@ import { useCampusPlaces } from './hooks/useCampusPlaces';
 import { isGrounds, placeMatches } from './utils/campusPlaces';
 import JoinRequests from './components/group/JoinRequests';
 import PeekLines from './components/group/PeekLines';
+import PanelStops from './components/group/PanelStops';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { panelStops, snapPanel } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
@@ -393,9 +394,10 @@ const App = () => {
   const sheetDragControls = useDragControls();
   const sheetRef = useRef(null);
   // The panel's resting height on a phone (utils/panelHeights.js): it opens at half.
-  const [panelHeight, setPanelHeight] = useState('half');
+  const [panelHeight, setPanelHeight] = useState('peek');
   const panelY = useMotionValue(0);
   const panelDragStartRef = useRef(0);
+  const listTouchRef = useRef(null);
   const [panelGeometry, setPanelGeometry] = useState(null);
   const panelHeaderRef = useRef(null);
   const peekWrapRef = useRef(null);
@@ -672,6 +674,8 @@ const App = () => {
 
   const [activeTab, setActiveTab] = useState('buildings');
   const [searchQuery, setSearchQuery] = useState('');
+  // The top bar's search: which buildings and places the Buildings list shows.
+  const [placeQuery, setPlaceQuery] = useState('');
   // The group panel's search box has focus, so on a phone the keyboard is up and the screen is
   // short: the panel's title and the Group Lead's buttons step aside until focus leaves, so the
   // box rises clear of the Emergency button (owner, Stop 2, keyboard option 1).
@@ -2244,6 +2248,17 @@ const App = () => {
       lost: ghostMembers.length,
     };
   })();
+  // Everyone, for the peek row: you first, then the members by distance, then those who lost signal.
+  const peekMembers = [
+    { id: 'self', name: user?.displayName || 'You', photo: user?.photoURL || null, self: true, state: telemetryMode === 'ACTIVE' ? 'live' : telemetryMode === 'FROZEN' ? 'paused' : 'hidden' },
+    ...sortByDistance(users.filter(u => !blockedUserIds.includes(u.id)), liveLocation).map(u => ({
+      id: u.id,
+      name: u.name || '?',
+      photo: u.photo || null,
+      state: !u.hasFix ? 'waiting' : u.status === 'FROZEN' ? 'paused' : 'live',
+    })),
+    ...ghostMembers.map(g => ({ id: g.id, name: g.name || '?', photo: g.photo || null, state: 'lost' })),
+  ];
   // Measures the heights: the panel at full height, and how much shows at peek, which is its
   // header with the peek lines plus room under them for the Emergency button (5 rem tall,
   // standing 5 rem above the tab bar's 4 rem, plus the gesture bar's inset), so the buttons
@@ -2304,14 +2319,14 @@ const App = () => {
       };
     })()
     : null;
-  // The group panel's search box: at the head of the buildings list, and above the members.
+  // The group panel's search box, above the members. (Buildings are searched from the top bar.)
   const groupSearch = (
     <label className="relative block">
       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" size={18} aria-hidden="true" />
       <input
         type="search"
-        aria-label={activeTab === 'buildings' ? GROUP_TABS.searchBuildings : GROUP_TABS.searchMembers}
-        placeholder={activeTab === 'buildings' ? "Search buildings, places, facilities..." : GROUP_TABS.searchMembers}
+        aria-label={GROUP_TABS.searchMembers}
+        placeholder={GROUP_TABS.searchMembers}
         className="w-full min-h-11 h-11 rounded-full glass-input pl-11 pr-10 font-ui text-[13px] text-text placeholder:text-text-secondary shadow-sm"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
@@ -2320,17 +2335,20 @@ const App = () => {
         onFocus={(e) => { const box = e.currentTarget; afterTap(() => document.activeElement === box, true); }}
         onBlur={(e) => { const box = e.currentTarget; afterTap(() => document.activeElement !== box, false); }}
       />
-      {activeTab === 'buildings' && (
-        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-secondary p-1 rounded-full pointer-events-none" aria-hidden="true">
-          <Sliders size={15} />
-        </span>
-      )}
     </label>
   );
-  // The group panel's search, for members as for buildings (it used to filter buildings only).
+  // The members search above.
   const matchesSearch = (name) => (name || '').toLowerCase().includes(searchQuery.trim().toLowerCase());
-  // A place matches on its name or any short name students use for it.
-  const matchesPlaceSearch = (place) => placeMatches(place, searchQuery);
+  // A place matches on its name or any short name students use for it. The top bar's search.
+  const matchesPlaceSearch = (place) => placeMatches(place, placeQuery);
+  // Typing in the top bar's search brings the places list up: the panel opens on Buildings at
+  // full height, where the results can be read.
+  const searchPlaces = (text) => {
+    setPlaceQuery(text);
+    if (!text.trim()) return;
+    setActiveTab('buildings'); setSelectedItem(null);
+    if (isMobile) { setMobileView('matrix'); setPanelHeight('full'); }
+  };
   // "You're in" says live only once there is a fix to share (Map batch fixes).
   // Paused says no spot is shared when the pause took none (Map batch fixes, owner's wording).
   const youreInKey = telemetryMode === 'ACTIVE' && !liveLocation ? 'waiting'
@@ -2610,6 +2628,10 @@ const App = () => {
       {!isNavigatingMode && (
         <TopBar
           isSatellite={isSatellite}
+          query={placeQuery}
+          onQuery={hasJoinedSquad ? searchPlaces : undefined}
+          // With the keyboard up the panel's header steps aside, so the results show above it.
+          onSearchFocus={setSearchFocused}
         />
       )}
 
@@ -2682,7 +2704,12 @@ const App = () => {
             }}
             ref={panelHeaderRef}
           >
-            <div className="md:hidden w-10 h-1 rounded-full bg-[var(--glass-border)] mx-auto mb-3" aria-hidden="true" />
+            {/* The three-point slider: peek shows the members, half the options, full everything. */}
+            {isMobile && sheetOpen ? (
+              <PanelStops height={panelHeight} onChange={setPanelHeight} />
+            ) : (
+              <div className="md:hidden w-10 h-1 rounded-full bg-[var(--glass-border)] mx-auto mb-3" aria-hidden="true" />
+            )}
             <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode}>
               {/* The peek height's lines: laid out always on a phone (so peek's height is known
                 at every height), shown only at peek. */}
@@ -2692,7 +2719,8 @@ const App = () => {
                     <PeekLines
                       requests={pendingRequests.length}
                       onRequests={squadRole === 'OWNER' ? () => setShowRequestsModal(true) : null}
-                      names={users.filter(u => !blockedUserIds.includes(u.id)).map(u => u.name || '?')}
+                      members={peekMembers}
+                      onMember={(id) => setOptionsMemberId(id)}
                       counts={peekCounts}
                     />
                   </div>
@@ -2709,7 +2737,26 @@ const App = () => {
             meeting point buttons: they stand 10 rem above the screen's bottom edge plus the
             gesture bar's inset, and this panel ends 4 rem up without that inset. 8 rem plus the
             inset leaves 2 rem between the last row and the buttons on any phone. */}
-          <div data-testid="group-panel-list" className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto p-4 pt-1 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}>
+          {/* At half, the first scroll through the list (members or places) lifts the panel to
+            full: there is little of the list to read through at half, so the panel makes room. */}
+          <div
+            data-testid="group-panel-list"
+            onTouchStart={(e) => { listTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+            onTouchMove={(e) => {
+              const from = listTouchRef.current;
+              if (!from || !isMobile || !sheetOpen || panelHeight !== 'half') return;
+              const dx = e.touches[0].clientX - from.x;
+              const dy = e.touches[0].clientY - from.y;
+              // A mostly vertical move; a finger dragging down only scrolls the list once it is
+              // below its top.
+              if (Math.abs(dy) < 8 || Math.abs(dy) < Math.abs(dx)) return;
+              if (dy > 0 && e.currentTarget.scrollTop <= 0) return;
+              listTouchRef.current = null;
+              setPanelHeight('full');
+            }}
+            onWheel={(e) => { if (isMobile && sheetOpen && panelHeight === 'half' && e.deltaY !== 0) setPanelHeight('full'); }}
+            className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto p-4 pt-1 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
+          >
             <SegmentedControl
               label={GROUP_TABS.label}
               value={activeTab === 'buildings' ? 'buildings' : 'users'}
@@ -2722,9 +2769,9 @@ const App = () => {
                 { value: 'buildings', label: GROUP_TABS.buildings },
               ]}
             />
-            {/* Buildings: the search heads the list. (Members: it sits above the members list,
-              under the controls, so a Group Lead's tools come higher at half height.) */}
-            {activeTab === 'buildings' && groupSearch}
+            {/* Buildings: no search box here; it is the search icon beside LOCUS in the top bar.
+              (Members: it sits above the members list, under the controls, so a Group Lead's
+              tools come higher at half height.) */}
 
             {/* Category Filter Pills (Minimalist Apple/Glass Design) */}
             {activeTab === 'buildings' && (
@@ -2774,8 +2821,8 @@ const App = () => {
               </div>
             )}
 
-            {activeTab === 'buildings' && searchQuery.trim() && !campusPlaces.some(b => matchesPlaceSearch(b)) && (
-              <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="buildings-no-match">{GROUP_BUILDINGS_LIST.noMatch(searchQuery.trim())}</p>
+            {activeTab === 'buildings' && placeQuery.trim() && !campusPlaces.some(b => matchesPlaceSearch(b)) && (
+              <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="buildings-no-match">{GROUP_BUILDINGS_LIST.noMatch(placeQuery.trim())}</p>
             )}
             {/* The Group Lead's tools come first, before Your location (the design has them after):
               at half height on a 360 px phone they would otherwise sit under the Emergency button,
@@ -3504,7 +3551,7 @@ const App = () => {
                 ? arTargetForMember(scanNode)
                 : { lat: SRM_KTR_COORDS.lat, lng: SRM_KTR_COORDS.lng, name: 'SRM_HQ' });
             } else {
-              setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); setPanelHeight('half');
+              setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); setPanelHeight('peek');
             }
           }}
         />

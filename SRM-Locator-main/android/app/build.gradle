@@ -77,6 +77,13 @@ android {
             versionNameSuffix "-rctest"
             matchingFallbacks = ['debug']
         }
+        // "LOCUS Panel" (src/paneltest/res): a further side-by-side test app for trying one change
+        // on a phone without replacing LOCUS or any other test app. Same rules as sidetest above.
+        paneltest {
+            initWith debug
+            applicationIdSuffix ".paneltest"
+            matchingFallbacks = ['debug']
+        }
     }
 }
 

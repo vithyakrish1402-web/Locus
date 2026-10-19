@@ -6,6 +6,10 @@ export const TOP_BAR = {
   mapView: 'Map view',
   satelliteView: 'Satellite view',
   signOut: 'Sign out',
+  // The search beside the name: find a building or place.
+  search: 'Search buildings and places',
+  searchPlaceholder: 'Search places…',
+  clearSearch: 'Close search',
 };
 
 // The sharing chip under the top bar, matching your own setting (owner, 2026-10-05). Never

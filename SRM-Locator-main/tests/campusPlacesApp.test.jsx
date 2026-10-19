@@ -110,7 +110,11 @@ const joinAsMember = async () => {
   act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'KTR7X9' }));
   await screen.findByTestId('map');
 };
-const search = (text) => fireEvent.change(screen.getByRole('searchbox'), { target: { value: text } });
+// The building search is the icon beside LOCUS in the top bar.
+const search = (text) => {
+  if (!screen.queryByTestId('top-bar-search')) fireEvent.click(screen.getByTestId('top-bar-search-open'));
+  fireEvent.change(screen.getByTestId('top-bar-search'), { target: { value: text } });
+};
 const rows = () => screen.queryAllByTestId('building-row');
 const rowNames = () => rows().map((r) => within(r).getByRole('heading').textContent);
 

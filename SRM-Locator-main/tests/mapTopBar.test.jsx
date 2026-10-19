@@ -124,9 +124,54 @@ describe('the top bar', () => {
     expect(bar().getByText(TOP_BAR.satelliteView)).toBeTruthy();
   });
 
-  it('signs out from Settings, under Account (the bar itself has no buttons)', async () => {
+  it('has a search icon beside the name, and nothing else to press', () => {
     onTheMap();
-    expect(bar().queryAllByRole('button')).toHaveLength(0);
+    expect(bar().getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([TOP_BAR.search]);
+    expect(screen.queryByTestId('top-bar-search')).toBeNull();
+  });
+
+  it('the search icon opens a box beside LOCUS; typing brings up the Buildings list, filtered, at full height; closing clears it', async () => {
+    onTheMap();
+    fireEvent.click(bar().getByRole('button', { name: TOP_BAR.search }));
+    const box = screen.getByTestId('top-bar-search');
+    expect(document.activeElement).toBe(box);
+    fireEvent.change(box, { target: { value: 'zzqx' } });
+    expect(screen.getByTestId('buildings-no-match').textContent).toBe('No building called "zzqx"');
+    fireEvent.change(box, { target: { value: '  tech park  ' } });
+    await act(async () => {});
+    expect(screen.queryByTestId('buildings-no-match')).toBeNull();
+    const names = screen.getAllByTestId('building-row').map((r) => r.textContent).join(' ');
+    expect(names).toMatch(/TECH PARK/);
+    fireEvent.click(bar().getByRole('button', { name: TOP_BAR.clearSearch }));
+    // The box folds back into the icon, then is gone.
+    await waitFor(() => expect(screen.queryByTestId('top-bar-search')).toBeNull());
+    expect(bar().getByRole('button', { name: TOP_BAR.search })).toBeTruthy();
+    expect(screen.queryByTestId('buildings-no-match')).toBeNull();
+    await act(async () => {});
+    expect(screen.getAllByTestId('building-row').length).toBeGreaterThan(5);
+  });
+
+  it('while the search box has the keyboard up the group panel steps its header aside, and brings it back on blur or close', async () => {
+    // On a phone (the keyboard only matters there).
+    const realMatchMedia = window.matchMedia;
+    window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
+    onTheMap();
+    fireEvent.click(bar().getByRole('button', { name: TOP_BAR.search }));
+    const box = screen.getByTestId('top-bar-search');
+    const hidden = () => /(^|\s)hidden(\s|$)/.test(screen.getByTestId('group-panel-header').className);
+    // The box takes focus as it opens (autoFocus), so the keyboard is up.
+    expect(hidden()).toBe(true);
+    fireEvent.blur(box);
+    expect(hidden()).toBe(false);
+    fireEvent.focus(box);
+    fireEvent.click(bar().getByRole('button', { name: TOP_BAR.clearSearch }));
+    expect(hidden()).toBe(false);
+    window.matchMedia = realMatchMedia;
+  });
+
+  it('signs out from Settings, under Account (the bar has no sign-out button)', async () => {
+    onTheMap();
+    expect(bar().queryByRole('button', { name: SETTINGS.signOut })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: SETTINGS.open }));
     const settings = within(screen.getByTestId('settings'));
     expect(settings.getByText(SETTINGS.account)).toBeTruthy();

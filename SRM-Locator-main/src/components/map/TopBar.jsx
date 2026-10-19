@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.button>, which this config can't see
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { Search, X } from 'lucide-react';
 import BrandMark from '../access/BrandMark';
 import { StatusDot } from '../ui';
 import { SHARING_CHIP, TOP_BAR } from '../../copy/map';
@@ -8,20 +9,98 @@ import { TOP_BAR_HEIGHT, TOP_BAR_TOP } from '../../utils/mapChrome';
 
 // The map screen's top bar: an ultra-clean, Apple-style floating island positioned on the
 // left side of the screen on mobile, displaying the crisp "L.O.C.U.S" mark and essential actions.
-export function TopBar({ isSatellite }) {
+/**
+ * @param {{ isSatellite: boolean, query?: string, onQuery?: (text: string) => void,
+ *   onSearchFocus?: (focused: boolean) => void }} props
+ *   query / onQuery: the building search beside the name; omit onQuery for no search
+ *   onSearchFocus: told when the search box gains or loses focus (the keyboard is up while it has it)
+ */
+export function TopBar({ isSatellite, query = '', onQuery, onSearchFocus }) {
+  // Open while it holds text too, so a search never hides behind the icon.
+  const [searching, setSearching] = useState(false);
+  const open = searching || query.trim() !== '';
+  // Unmounting the box fires no blur, so closing says the keyboard is gone itself.
+  const close = () => { setSearching(false); onQuery?.(''); onSearchFocus?.(false); };
+  const reduceMotion = useReducedMotion();
+  // The field grows out of the bar on a spring and folds back into it; the magnifier turns into
+  // the close mark as it goes. Only numbers are animated (a px width to 0), never a calc() or a
+  // gap that pops when the field goes: the bar has no gap of its own, each part carries its own
+  // spacing. With reduced motion it simply appears.
+  const spring = reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 38, mass: 0.9 };
+  const fieldWidth = Math.max(120, Math.min(208, (typeof window === 'undefined' ? 412 : window.innerWidth) - 232));
   return (
     <nav
       aria-label="Top bar"
       data-testid="top-bar"
-      className="absolute left-3 z-[1000] flex items-center gap-2 rounded-full glass-floating text-text font-ui px-3 py-1.5 pointer-events-auto transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[var(--glass-border)]"
-      style={{ top: TOP_BAR_TOP, minHeight: '44px' }}
+      className="absolute left-3 z-[1000] flex items-center rounded-full glass-floating text-text font-ui px-3 py-1.5 pointer-events-auto transition-[border-color] duration-200 focus-within:border-accent/50 shadow-[0_4px_20px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[var(--glass-border)]"
+      style={{ top: TOP_BAR_TOP, minHeight: '44px', maxWidth: 'calc(100vw - 1.5rem)' }}
     >
-      <div className="flex items-center gap-2 pl-0.5 pr-1 select-none">
+      <div className="flex items-center gap-2 pl-0.5 pr-1 select-none shrink-0">
         <BrandMark size="small" />
         <p className="text-[13px] font-bold tracking-[0.14em] text-text font-ui">{TOP_BAR.name}</p>
         {/* Hidden screen-reader context preserved for map view status */}
         <span className="sr-only">{isSatellite ? TOP_BAR.satelliteView : TOP_BAR.mapView}</span>
       </div>
+      {onQuery && (
+        <>
+          <AnimatePresence initial={false}>
+            {open && (
+              <motion.div
+                key="field"
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: fieldWidth, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={spring}
+                className="overflow-hidden shrink-0"
+              >
+                {/* Plain text in the bar, not a second box inside it: the bar itself shows the focus. */}
+                <input
+                  type="search"
+                  autoFocus
+                  data-testid="top-bar-search"
+                  aria-label={TOP_BAR.search}
+                  placeholder={TOP_BAR.searchPlaceholder}
+                  value={query}
+                  onChange={(e) => onQuery(e.target.value)}
+                  onFocus={() => onSearchFocus?.(true)}
+                  onBlur={() => onSearchFocus?.(false)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                  enterKeyHint="search"
+                  className="block h-9 border-0 bg-transparent p-0 pl-3 font-ui text-[14px] text-text placeholder:text-text-secondary outline-none focus:outline-none appearance-none [&::-webkit-search-cancel-button]:hidden"
+                  style={{ width: fieldWidth }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <button
+            type="button"
+            data-testid={open ? undefined : 'top-bar-search-open'}
+            aria-label={open ? TOP_BAR.clearSearch : TOP_BAR.search}
+            onClick={open ? close : () => setSearching(true)}
+            className="relative shrink-0 w-9 h-9 rounded-full text-text hover:bg-sunken cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            {/* Both marks stay in place and cross-fade, so nothing mounts or unmounts mid-turn. */}
+            <motion.span
+              aria-hidden="true"
+              className="absolute inset-0 flex items-center justify-center"
+              initial={false}
+              animate={{ opacity: open ? 0 : 1, rotate: open ? -90 : 0, scale: open ? 0.6 : 1 }}
+              transition={spring}
+            >
+              <Search size={18} />
+            </motion.span>
+            <motion.span
+              aria-hidden="true"
+              className="absolute inset-0 flex items-center justify-center text-text-secondary"
+              initial={false}
+              animate={{ opacity: open ? 1 : 0, rotate: open ? 0 : 90, scale: open ? 1 : 0.6 }}
+              transition={spring}
+            >
+              <X size={18} />
+            </motion.span>
+          </button>
+        </>
+      )}
     </nav>
   );
 }
