@@ -89,7 +89,7 @@ export function MeetingPointButton({ choosing, onToggle }) {
       aria-label={label}
       title={label}
       data-testid="meeting-point-button"
-      className={`md:hidden fixed bottom-20 right-4 z-[1050] inline-flex items-center justify-center w-14 h-14 rounded-full pointer-events-auto shadow-[var(--shadow-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${choosing ? 'bg-raised text-accent border-2 border-accent' : 'bg-accent text-accent-on'
+      className={`md:hidden fixed bottom-24 right-4 z-[1050] inline-flex items-center justify-center w-14 h-14 rounded-full pointer-events-auto shadow-[var(--shadow-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${choosing ? 'bg-raised text-accent border-2 border-accent' : 'bg-accent text-accent-on'
         }`}
       style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
     >
