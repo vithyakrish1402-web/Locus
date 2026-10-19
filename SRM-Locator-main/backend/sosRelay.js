@@ -45,6 +45,15 @@ export function sharedSquad(activeSquads, socketIdA, socketIdB) {
 // what lets an acknowledgement stick across reconnects. Socket id is the fallback.
 export const memberKey = (uid, socketId) => uid || socketId;
 
+// Every SOS carries `rev`, a counter that only goes up within its squad and moves again whenever
+// that SOS is created or updated. A phone listening from the background (the long poll in
+// backgroundSharing.js) has no socket to be pushed to: it asks for what is newer than the last
+// `rev` it saw. Never sent on the socket (toSosPayload leaves it out).
+const stamp = (squad, sos) => {
+  squad.sosRev = (squad.sosRev ?? 0) + 1;
+  sos.rev = squad.sosRev;
+};
+
 // --- SOS lifecycle -----------------------------------------------------------
 // An SOS is remembered on its squad (squad.sos, keyed by sender) until it expires,
 // so a member who was offline when it fired can be caught up when they're back in
@@ -71,6 +80,7 @@ export function recordSos(squad, { senderKey, senderId, senderName, lat, lng, ti
     // Why the server flagged it (alertRules.js): 'QUIET_ZONE' or 'LOCATION_UNKNOWN'.
     flag: flag ?? null,
   };
+  stamp(squad, sos);
   squad.sos[senderKey] = sos;
   return sos;
 }
@@ -90,6 +100,7 @@ export function coalesceSos(squad, { senderKey, senderId, lat, lng, timestamp, f
   }
   sos.timestamp = timestamp || now;
   if (flag) sos.flag = flag;
+  stamp(squad, sos);
   return sos;
 }
 
@@ -124,6 +135,19 @@ export function pendingSosFor(squad, memberKeyValue, now = Date.now()) {
     pending.push(sos);
   }
   return pending.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+// What a phone listening from the background is told about one SOS (backgroundSharing.js). The same
+// facts the socket carries, plus the sender's stable key (the Firebase uid: the socket id changes
+// on every reconnect, and a second press from the same person must replace the first alert) and
+// the `rev` to resume from.
+export function toBackgroundSosPayload(sos, now = Date.now()) {
+  return { ...toSosPayload(sos, now), senderUid: sos.senderKey, rev: sos.rev };
+}
+
+// SOS entries newer than `after` that `memberKeyValue` still owes an acknowledgement for.
+export function pendingSosSince(squad, memberKeyValue, after, now = Date.now()) {
+  return pendingSosFor(squad, memberKeyValue, now).filter((sos) => (sos.rev ?? 0) > after);
 }
 
 // Mark `sosId` as acknowledged by `memberKeyValue`. Returns false if there's no such
