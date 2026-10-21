@@ -1,342 +1,214 @@
 import React, { useState } from 'react';
 import {
-  ArrowLeft,
-  ArrowUp,
-  Bookmark,
   Building2,
-  Car,
-  Clock,
-  Coffee,
+  Camera,
+  ChevronLeft,
+  ChevronRight,
   Flag,
-  MapPin,
-  Monitor,
-  MoreHorizontal,
+  Layers,
   Navigation,
   ScanLine,
-  ShieldCheck,
-  Snowflake,
-  VolumeX,
-  Wifi,
   X,
-  BookOpen,
-  Camera
 } from 'lucide-react';
-import { Button, Chip, IconButton } from './ui';
-import BuildingInfo from './BuildingInfo';
-import { locateTarget } from '../utils/direction';
-import { PLACE, categoryLabel, directionLabel, distanceLabel, walkLabel } from '../copy/place';
+import { PLACE, categoryLabel } from '../copy/place';
 import { getBuildingAsset } from '../data/srmBuildingAssets';
 import CampusBuildingImage from './map/CampusBuildingImage';
 
-/**
- * Facility icon mapping for senior Google/Apple Maps aesthetic.
- */
-function getFacilityIcon(facility) {
-  const f = facility.toLowerCase();
-  if (f.includes('wi-fi') || f.includes('wifi') || f.includes('internet')) return Wifi;
-  if (f.includes('ac') || f.includes('air conditioning')) return Snowflake;
-  if (f.includes('study') || f.includes('reading') || f.includes('library')) return BookOpen;
-  if (f.includes('computer') || f.includes('lab') || f.includes('pc') || f.includes('terminal')) return Monitor;
-  if (f.includes('quiet') || f.includes('silent')) return VolumeX;
-  if (f.includes('security') || f.includes('safe')) return ShieldCheck;
-  if (f.includes('cafeteria') || f.includes('dining') || f.includes('mess') || f.includes('coffee') || f.includes('food')) return Coffee;
-  if (f.includes('parking') || f.includes('valet')) return Car;
-  return Building2;
+// The action row at the bottom of the card. The old "More Info" button was 44 px tall inside
+// this same footer; the three buttons are taller (about 56 px, never under 48) so an icon and
+// a short label stack comfortably. The radius is the old button's (rounded-xl).
+export const ACTION_BUTTON_HEIGHT = 56;
+export const ACTION_BUTTON_GAP = 10;
+export const ACTION_BUTTON_RADIUS = 12;
+
+// Flat and quiet, in the app's own accent (theme tokens, so it follows light and dark): one
+// solid colour for the primary action, hairline outlines for the others, no glow.
+const PRIMARY_LOOK = 'bg-accent hover:brightness-110 active:brightness-95 text-accent-on border border-accent';
+const SECONDARY_LOOK = 'bg-transparent hover:bg-white/[0.06] active:bg-white/10 text-slate-200 border border-white/15';
+const ACTIVE_LOOK = 'bg-accent-soft hover:brightness-110 text-accent border border-accent';
+
+// eslint-disable-next-line no-unused-vars -- Icon is used as <Icon />, which this config can't see
+function ActionButton({ icon: Icon, label, look, ...props }) {
+  return (
+    <button
+      type="button"
+      style={{ height: ACTION_BUTTON_HEIGHT, borderRadius: ACTION_BUTTON_RADIUS }}
+      className={`min-w-0 px-1 flex flex-col items-center justify-center gap-1.5 font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${look}`}
+      {...props}
+    >
+      <Icon size={18} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
+      <span className="max-w-full truncate whitespace-nowrap text-xs leading-4">{label}</span>
+    </button>
+  );
 }
 
 /**
- * Apple/Google Maps style Glassmorphic Place Detail Card.
- * Matches the inspiration design with full-bleed photo hero, facilities chips,
- * photo gallery, walk metrics, and sticky navigation bar.
+ * Clickable Building Marker HUD Card.
+ * The building image(s), tags and name, and three actions for the building: Navigate, Rally
+ * (the group's meeting point) and AR Scan.
  *
- * @param {{ place: object, me: {lat:number,lng:number}|null, heading?: number,
- *   headingLive?: boolean, choosingDestination?: boolean, expanded: boolean,
- *   onToggleExpanded: () => void, onClose: () => void, onNavigate: () => void,
- *   onArScan: () => void, onSetMeetingPoint?: (() => void) | null, onShowOnMap: () => void }} props
+ * @param {{
+ *   place: object,
+ *   onClose: () => void,
+ *   onNavigate: () => void,
+ *   onArScan: () => void,
+ *   rally: { active: boolean, onPress: () => void },
+ * }} props
+ *   rally.active: the group's rally point is already this place; pressing it offers to clear it
  */
 export default function PlaceCard({
   place,
-  me,
-  heading,
-  headingLive,
-  choosingDestination = false,
-  expanded,
-  onToggleExpanded,
   onClose,
   onNavigate,
   onArScan,
-  onSetMeetingPoint = null,
-  onShowOnMap,
+  rally,
 }) {
-  const where = locateTarget(me, place, { heading, headingLive });
-  const category = categoryLabel(place.category);
-  const direction = directionLabel(where);
-  const summary = where && !where.here
-    ? [direction, walkLabel(where.distance)].filter(Boolean).join(' · ')
-    : direction;
-
+  const category = categoryLabel(place?.category);
   const asset = getBuildingAsset(place);
-  const photos = asset?.photos || [asset?.image];
+  const photos = asset?.photos?.length > 0 ? asset.photos : asset?.image ? [asset.image] : ['/buildings/campus_main.jpg'];
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
-  const [isBookmarked, setIsBookmarked] = useState(false);
 
-  // Approximate walk time in minutes
-  const walkMinutes = where && !where.here ? Math.max(1, Math.round(where.distance / 75)) : 2;
+  const handlePrevPhoto = (e) => {
+    e.stopPropagation();
+    setActivePhotoIdx((prev) => (prev > 0 ? prev - 1 : photos.length - 1));
+  };
+
+  const handleNextPhoto = (e) => {
+    e.stopPropagation();
+    setActivePhotoIdx((prev) => (prev < photos.length - 1 ? prev + 1 : 0));
+  };
 
   return (
-    <div className="relative rounded-3xl glass-floating text-text font-ui flex flex-col overflow-hidden max-h-[85vh]">
+    <div className="relative rounded-2xl bg-[#0b0f19]/85 dark:bg-[#0b0f19]/90 backdrop-blur-2xl border border-white/15 dark:border-white/10 shadow-[0_24px_50px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.12)] text-slate-100 font-ui flex flex-col overflow-hidden w-full max-w-sm">
       {/* Top Hero Photo Gallery */}
-      <div className="relative w-full h-48 sm:h-56 bg-sunken shrink-0">
+      <div className="relative w-full h-44 sm:h-48 bg-black/50 shrink-0 overflow-hidden">
         <CampusBuildingImage
           src={photos[activePhotoIdx] || asset?.image}
-          alt={place.name}
+          alt={place?.name || 'Building'}
           aspectRatio="aspect-auto"
           containerClassName="w-full h-full"
         />
 
-        {/* Floating Controls Over Hero Banner */}
-        <div className="absolute inset-x-0 top-0 p-3 flex items-center justify-between bg-gradient-to-b from-black/50 via-black/20 to-transparent pointer-events-none">
+        {/* Cinematic gradient overlay blending photo into card */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0b0f19] via-[#0b0f19]/25 to-black/30 pointer-events-none" />
+
+        {/* Top Floating Controls */}
+        <div className="absolute inset-x-0 top-0 p-3 flex items-center justify-between pointer-events-none">
+          {/* Photo Counter Pill (when multiple photos) */}
+          {photos.length > 1 ? (
+            <div className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-white/90 text-[11px] font-semibold tracking-wider flex items-center gap-1.5 shadow-sm pointer-events-auto">
+              <Camera size={12} className="text-blue-400" />
+              <span>{activePhotoIdx + 1}/{photos.length}</span>
+            </div>
+          ) : <div />}
+
+          {/* Close Button */}
           <button
             type="button"
             onClick={onClose}
-            aria-label="Back"
-            className="w-9 h-9 rounded-full glass-pill text-text flex items-center justify-center shadow-md hover:scale-105 pointer-events-auto transition-transform active:scale-95"
+            aria-label="Close"
+            className="w-8 h-8 rounded-xl bg-black/60 hover:bg-black/85 backdrop-blur-md border border-white/15 text-white/90 hover:text-white flex items-center justify-center transition-all active:scale-95 shadow-md pointer-events-auto"
           >
-            <ArrowLeft size={18} />
+            <X size={16} />
           </button>
-
-          <div className="flex items-center gap-2 pointer-events-auto">
-            <button
-              type="button"
-              onClick={() => setIsBookmarked(!isBookmarked)}
-              aria-label="Bookmark"
-              className={`w-9 h-9 rounded-full glass-pill flex items-center justify-center shadow-md transition-[transform,opacity] active:scale-95 ${
-                isBookmarked
-                  ? '!bg-accent !text-accent-on !border-accent'
-                  : 'text-text hover:scale-105'
-              }`}
-            >
-              <Bookmark size={18} className={isBookmarked ? 'fill-current' : ''} />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label={PLACE.close}
-              className="w-9 h-9 rounded-full glass-pill text-text flex items-center justify-center shadow-md hover:scale-105 active:scale-95"
-            >
-              <X size={18} />
-            </button>
-          </div>
         </div>
 
-        {/* Photo Index Indicator */}
+        {/* Photo Navigation Arrows (when multiple photos) */}
         {photos.length > 1 && (
-          <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[11px] font-medium flex items-center gap-1.5 shadow-sm">
-            <Camera size={12} className="opacity-90" />
-            <span>{activePhotoIdx + 1}/{photos.length}</span>
-          </div>
+          <>
+            <button
+              type="button"
+              onClick={handlePrevPhoto}
+              aria-label="Previous photo"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/85 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all active:scale-95 shadow-md"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={handleNextPhoto}
+              aria-label="Next photo"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/85 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all active:scale-95 shadow-md"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </>
         )}
       </div>
 
-      {/* Scrollable Content Body */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-4 custom-scrollbar">
-        {/* Title & Category Header */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              {category && <Chip tone="neutral">{category}</Chip>}
-              {asset?.categoryDisplay && asset.categoryDisplay !== category && (
-                <span className="text-[11px] font-semibold text-accent bg-accent-soft px-2.5 py-1 rounded-full border border-accent/20">
-                  {asset.categoryDisplay}
-                </span>
-              )}
-            </div>
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-text break-words leading-snug">
-              {place.name}
-            </h2>
-            {asset?.floors && (
-              <p className="text-xs font-semibold text-text-secondary mt-1 tracking-normal">
-                {asset.floors} Floors
-              </p>
-            )}
-          </div>
-        </div>
+      {/* Card Content: Title & Tags */}
+      <div className="p-4 flex flex-col gap-2.5">
+        <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white leading-tight break-words">
+          {place?.name}
+        </h2>
 
-        {/* Quick Stat Chips (Apple Maps inspiration) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 py-1">
-          {/* Distance & Walk Time */}
-          {where && (
-            <div
-              data-testid="place-distance"
-              className="flex items-center gap-2.5 p-2.5 rounded-2xl glass-panel text-left"
-            >
-              <span className="w-8 h-8 rounded-xl bg-accent-soft text-accent flex items-center justify-center shrink-0">
-                <MapPin size={16} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-text leading-tight">
-                  {!where.here ? distanceLabel(where.shownDistance) : 'Here'}
-                </p>
-                <p className="text-[11px] font-medium text-text-secondary truncate">
-                  ~{walkMinutes} min walk
-                </p>
-              </div>
-            </div>
+        {/* Tags Section */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          {category && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold tracking-wide bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-sm">
+              <Building2 size={12} className="shrink-0" />
+              <span>{category}</span>
+            </span>
           )}
-
-          {/* Operating Hours */}
-          <div className="flex items-center gap-2.5 p-2.5 rounded-2xl glass-panel text-left">
-            <span className="w-8 h-8 rounded-xl bg-success-soft text-success flex items-center justify-center shrink-0">
-              <Clock size={16} />
+          {asset?.categoryDisplay && asset.categoryDisplay !== category && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/25">
+              {asset.categoryDisplay}
             </span>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-success leading-tight flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-success inline-block shrink-0 shadow-[0_0_6px_var(--color-success)]" />
-                <span>Open</span>
-              </p>
-              <p className="text-[11px] font-medium text-text-secondary truncate">
-                {asset?.hours?.replace('Open • ', '') || 'Campus Hours'}
-              </p>
-            </div>
-          </div>
-
-          {/* Quick AR Action */}
-          <button
-            type="button"
-            onClick={onArScan}
-            className="flex items-center gap-2.5 p-2.5 rounded-2xl glass-panel hover:bg-surface/80 text-left"
-          >
-            <span className="w-8 h-8 rounded-xl bg-accent-soft text-accent flex items-center justify-center shrink-0">
-              <ScanLine size={16} />
+          )}
+          {asset?.floors && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.06] text-slate-300 border border-white/10">
+              <Layers size={11} className="shrink-0 text-slate-400" />
+              <span>{asset.floors} Floors</span>
             </span>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-text leading-tight">
-                AR Scan
-              </p>
-              <p className="text-[11px] font-medium text-text-secondary truncate">
-                Camera Finder
-              </p>
-            </div>
-          </button>
+          )}
+          {asset?.isOpen !== undefined && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+              <span>{asset.isOpen ? 'Open' : 'Closed'}</span>
+            </span>
+          )}
+          {asset?.departments?.slice(0, 2).map((dept) => (
+            <span
+              key={dept}
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-normal bg-white/[0.04] text-slate-300 border border-white/5 truncate max-w-[140px]"
+              title={dept}
+            >
+              {dept}
+            </span>
+          ))}
         </div>
-
-        {/* Description */}
-        <div className="text-sm text-text-secondary leading-relaxed font-normal">
-          {asset?.description || place.info}
-        </div>
-
-        {/* Facilities Grid */}
-        {asset?.facilities && asset.facilities.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-text-secondary">
-              Facilities & Amenities
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {asset.facilities.map((fac) => {
-                const IconComponent = getFacilityIcon(fac);
-                return (
-                  <div
-                    key={fac}
-                    className="flex items-center gap-2 p-2 rounded-xl glass-panel text-xs font-medium text-text"
-                  >
-                    <IconComponent size={15} className="text-accent shrink-0" />
-                    <span className="truncate">{fac}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Photos Strip */}
-        {photos.length > 1 && (
-          <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-text-secondary">
-              Photos
-            </h3>
-            <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-              {photos.map((photoUrl, idx) => (
-                <button
-                  type="button"
-                  key={photoUrl}
-                  onClick={() => setActivePhotoIdx(idx)}
-                  className={`relative w-20 h-16 rounded-xl overflow-hidden shrink-0 transition-[transform,opacity] border-2 ${
-                    activePhotoIdx === idx
-                      ? 'border-accent scale-105 shadow-md'
-                      : 'border-transparent opacity-75 hover:opacity-100'
-                  }`}
-                >
-                  <CampusBuildingImage
-                    src={photoUrl}
-                    alt={`${place.name} ${idx + 1}`}
-                    aspectRatio="aspect-auto"
-                    containerClassName="w-full h-full"
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Expandable Building Info section */}
-        {expanded && (
-          <div className="border-t border-border pt-3">
-            <BuildingInfo building={place} me={me} heading={heading} headingLive={headingLive} />
-          </div>
-        )}
       </div>
 
-      {/* Sticky Bottom Actions Bar */}
-      <div className="p-3.5 sm:p-4 glass-panel !border-x-0 !border-b-0 border-t border-border/60 flex flex-col gap-2 shrink-0">
-        <div className="grid grid-cols-2 gap-2">
-          <Button
+      {/* Bottom actions: Navigate (primary), Rally and AR Scan. Outside the photo, so the
+          photo arrows and the close button are never in their way. */}
+      <div className="p-3 bg-black/40 backdrop-blur-xl border-t border-white/10 shrink-0">
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: ACTION_BUTTON_GAP }}
+        >
+          <ActionButton
             icon={Navigation}
+            label={PLACE.navigate}
+            look={PRIMARY_LOOK}
             onClick={onNavigate}
-            className="w-full !rounded-xl !h-11 !py-0 font-semibold !text-[13px] tracking-tight gap-1.5"
-          >
-            {choosingDestination ? PLACE.setDestination : PLACE.navigate}
-          </Button>
-          <Button
-            variant="tonal"
-            icon={ScanLine}
-            onClick={onArScan}
-            className="w-full !rounded-xl !h-11 !py-0 font-semibold !text-[13px] tracking-tight gap-1.5"
-          >
-            {PLACE.arScan}
-          </Button>
-        </div>
-
-        {onSetMeetingPoint && (
-          <Button
-            variant="secondary"
+            data-testid="place-navigate"
+          />
+          <ActionButton
             icon={Flag}
-            block
-            onClick={onSetMeetingPoint}
-            className="!rounded-xl !h-9 !py-0 font-medium !text-[12px] text-text-secondary hover:text-text gap-1.5 border-0"
-          >
-            {PLACE.setMeetingPoint}
-          </Button>
-        )}
-
-        <div className="flex justify-center items-center gap-3 pt-0.5">
-          <Button
-            variant="plain"
-            onClick={onToggleExpanded}
-            aria-expanded={expanded}
-            className="!text-[11.5px] font-medium !min-h-6 !py-0 px-2 text-text-secondary hover:text-text"
-          >
-            {expanded ? PLACE.less : PLACE.more}
-          </Button>
-          {expanded && (
-            <Button
-              variant="plain"
-              icon={MapPin}
-              onClick={onShowOnMap}
-              className="!text-[11.5px] font-medium !min-h-6 !py-0 px-2 text-text-secondary hover:text-text"
-            >
-              {PLACE.showOnMap}
-            </Button>
-          )}
+            label={rally.active ? PLACE.rallySet : PLACE.rally}
+            look={rally.active ? ACTIVE_LOOK : SECONDARY_LOOK}
+            onClick={rally.onPress}
+            aria-pressed={rally.active}
+            aria-label={rally.active ? PLACE.rallyClearLabel : PLACE.rallyLabel}
+            data-testid="place-rally"
+          />
+          <ActionButton
+            icon={ScanLine}
+            label={PLACE.arScan}
+            look={SECONDARY_LOOK}
+            onClick={onArScan}
+            data-testid="place-ar-scan"
+          />
         </div>
       </div>
     </div>

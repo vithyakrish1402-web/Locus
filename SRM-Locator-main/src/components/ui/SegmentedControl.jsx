@@ -22,9 +22,9 @@ export default function SegmentedControl({ label, value, onChange, options, clas
   const thumbId = useId();
   const buttons = useRef([]);
 
-  const choose = (index) => {
+  const choose = (index, event) => {
     const option = options[(index + options.length) % options.length];
-    onChange(option.value);
+    onChange(option.value, event);
     buttons.current[options.indexOf(option)]?.focus();
   };
 
@@ -32,14 +32,14 @@ export default function SegmentedControl({ label, value, onChange, options, clas
     const moves = { ArrowRight: index + 1, ArrowDown: index + 1, ArrowLeft: index - 1, ArrowUp: index - 1, Home: 0, End: options.length - 1 };
     if (!(event.key in moves)) return;
     event.preventDefault();
-    choose(moves[event.key]);
+    choose(moves[event.key], event);
   };
 
   return (
     <div
       role="radiogroup"
       aria-label={label}
-      className={`flex p-1 rounded-full bg-[var(--glass-sunken)] backdrop-blur-xl border border-[var(--glass-border-subtle)] font-ui shadow-inner ${className}`}
+      className={`flex p-1 rounded-full bg-[var(--glass-sunken)] border border-[var(--glass-border-subtle)] font-ui shadow-inner ${className}`}
     >
       {options.map((option, index) => {
         const selected = option.value === value;
@@ -52,9 +52,9 @@ export default function SegmentedControl({ label, value, onChange, options, clas
             role="radio"
             aria-checked={selected}
             tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(option.value)}
+            onClick={(event) => choose(index, event)}
             onKeyDown={(event) => onKeyDown(event, index)}
-            className={`relative flex-1 min-h-[var(--size-touch)] px-3 rounded-full text-label focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent select-none cursor-pointer duration-200 ${
+            className={`relative flex-1 min-h-[var(--size-touch)] px-3 rounded-full text-label focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent select-none cursor-pointer transition-colors duration-200 ${
               selected ? 'text-text font-semibold' : 'text-text-secondary hover:text-text'
             }`}
             data-no-press

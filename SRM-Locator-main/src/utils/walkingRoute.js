@@ -35,10 +35,32 @@ export const formatDurationMinutes = (minutes) =>
 export const buildStraightLineRoute = (from, to) => {
   const meters = haversineMeters(from, to);
   const minutes = Math.max(1, Math.round(meters / WALKING_SPEED_MPS / 60));
+  const destName = to?.name || 'Destination';
   return {
     path: [{ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }],
     distance: { text: formatDistanceMeters(meters) },
     duration: { text: formatDurationMinutes(minutes) },
+    distanceMeters: Math.round(meters),
+    durationSeconds: minutes * 60,
+    steps: [
+      {
+        id: 'straight-step-0',
+        instruction: `Head towards ${destName}`,
+        maneuver: 'straight',
+        distanceMeters: Math.round(meters),
+        startLocation: { lat: from.lat, lng: from.lng },
+        endLocation: { lat: to.lat, lng: to.lng },
+      },
+      {
+        id: 'straight-step-1',
+        instruction: `Arrive at ${destName}`,
+        maneuver: 'arrive',
+        distanceMeters: 0,
+        startLocation: { lat: to.lat, lng: to.lng },
+        endLocation: { lat: to.lat, lng: to.lng },
+      },
+    ],
     isRealRoute: false,
   };
 };
+

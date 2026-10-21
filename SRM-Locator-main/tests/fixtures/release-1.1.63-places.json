@@ -1,0 +1,852 @@
+{
+  "sourceRelease": "js-1.1.63",
+  "sha256": "03ef4f05c1842d0976e88cade6e141e0412e47d40531ccbef3d261e92c078398",
+  "places": [
+    {
+      "name": "UNIVERSITY BUILDING",
+      "category": "ACADEMIC",
+      "lat": 12.8234851,
+      "lng": 80.042357
+    },
+    {
+      "name": "TECH PARK",
+      "category": "ACADEMIC",
+      "lat": 12.8246325,
+      "lng": 80.0453585
+    },
+    {
+      "name": "TECH PARK 2",
+      "category": "ACADEMIC",
+      "lat": 12.8247035,
+      "lng": 80.0458793
+    },
+    {
+      "name": "C V RAMAN BLOCK",
+      "category": "ACADEMIC",
+      "lat": 12.8250609,
+      "lng": 80.0443539
+    },
+    {
+      "name": "MBA BLOCK",
+      "category": "ACADEMIC",
+      "lat": 12.8236698,
+      "lng": 80.0440245
+    },
+    {
+      "name": "VALLIAMMAI ENGINEERING COLLEGE",
+      "category": "ACADEMIC",
+      "lat": 12.82633,
+      "lng": 80.0425
+    },
+    {
+      "name": "SRM CENTRAL LIBRARY",
+      "category": "ACADEMIC",
+      "lat": 12.8236146,
+      "lng": 80.0424808
+    },
+    {
+      "name": "ELECTRICAL SCIENCES BLOCK (ESB)",
+      "category": "ENGINEERING",
+      "lat": 12.8199433,
+      "lng": 80.039149
+    },
+    {
+      "name": "MECHANICAL ENGINEERING BLOCK (MEB)",
+      "category": "ENGINEERING",
+      "lat": 12.8202737,
+      "lng": 80.0395859
+    },
+    {
+      "name": "BASIC ENGINEERING LAB (BEL)",
+      "category": "ENGINEERING",
+      "lat": 12.8236272,
+      "lng": 80.0435541
+    },
+    {
+      "name": "SCHOOL OF ARCHITECTURE",
+      "category": "ENGINEERING",
+      "lat": 12.8242029,
+      "lng": 80.0439978
+    },
+    {
+      "name": "HI-TECH BLOCK",
+      "category": "ENGINEERING",
+      "lat": 12.8208516,
+      "lng": 80.0391039
+    },
+    {
+      "name": "BIO-TECH BLOCK",
+      "category": "ENGINEERING",
+      "lat": 12.8247144,
+      "lng": 80.0439714
+    },
+    {
+      "name": "AEROSPACE BLOCK (HANGAR)",
+      "category": "ENGINEERING",
+      "lat": 12.8201719,
+      "lng": 80.0401625
+    },
+    {
+      "name": "SRM MEDICAL COLLEGE",
+      "category": "MEDICAL",
+      "lat": 12.8209398,
+      "lng": 80.0481385
+    },
+    {
+      "name": "SRM GLOBAL HOSPITALS",
+      "category": "MEDICAL",
+      "lat": 12.8229964,
+      "lng": 80.047993
+    },
+    {
+      "name": "SRM DENTAL COLLEGE",
+      "category": "MEDICAL",
+      "lat": 12.8252261,
+      "lng": 80.0476839
+    },
+    {
+      "name": "SCHOOL OF PUBLIC HEALTH",
+      "category": "MEDICAL",
+      "lat": 12.8203868,
+      "lng": 80.0477722
+    },
+    {
+      "name": "T.P. GANESAN AUDITORIUM",
+      "category": "LOGISTICS",
+      "lat": 12.8247646,
+      "lng": 80.0466801
+    },
+    {
+      "name": "JAVA GREEN (FOOD COURT)",
+      "category": "LOGISTICS",
+      "lat": 12.8233553,
+      "lng": 80.0444916
+    },
+    {
+      "name": "SRM HOTEL",
+      "category": "LOGISTICS",
+      "lat": 12.8238138,
+      "lng": 80.0415846
+    },
+    {
+      "name": "PAARI HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.8225133,
+      "lng": 80.0436345
+    },
+    {
+      "name": "KAARI HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.8221538,
+      "lng": 80.0436308
+    },
+    {
+      "name": "ADHIYAMAN HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.8214106,
+      "lng": 80.0436669
+    },
+    {
+      "name": "OORI HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.821803,
+      "lng": 80.0437284
+    },
+    {
+      "name": "NELSON MANDELA HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.8210064,
+      "lng": 80.0437122
+    },
+    {
+      "name": "AGASTHAYAR HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.8206614,
+      "lng": 80.0436621
+    },
+    {
+      "name": "SANNASI C BLOCK",
+      "category": "RESIDENTIAL",
+      "lat": 12.8218818,
+      "lng": 80.0441902
+    },
+    {
+      "name": "N BLOCK",
+      "category": "RESIDENTIAL",
+      "lat": 12.8206317,
+      "lng": 80.0465919
+    },
+    {
+      "name": "MEENAKSHI HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.8222759,
+      "lng": 80.0423615
+    },
+    {
+      "name": "KALPANA CHAWLA HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.8203606,
+      "lng": 80.0454129
+    },
+    {
+      "name": "SISTER NIVEDITA HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.8210819,
+      "lng": 80.0441384
+    },
+    {
+      "name": "STAFF QUARTERS",
+      "category": "RESIDENTIAL",
+      "lat": 12.8208814,
+      "lng": 80.0451905
+    },
+    {
+      "name": "M BLOCK (GIRLS HOSTEL)",
+      "category": "RESIDENTIAL",
+      "lat": 12.8205611,
+      "lng": 80.0460359
+    },
+    {
+      "name": "SEWAGE TREATMENT PLANT",
+      "category": "LOGISTICS",
+      "lat": 12.8209782,
+      "lng": 80.049707
+    },
+    {
+      "name": "SRM COLLEGE OF NURSING",
+      "category": "MEDICAL",
+      "lat": 12.8246332,
+      "lng": 80.0493918
+    },
+    {
+      "name": "SRM MEDICAL DEAN QUARTERS",
+      "category": "RESIDENTIAL",
+      "lat": 12.8236348,
+      "lng": 80.0497136
+    },
+    {
+      "name": "MANORANJITHAM",
+      "category": "RESIDENTIAL",
+      "lat": 12.8203817,
+      "lng": 80.0439878
+    },
+    {
+      "name": "SRM CHAPEL",
+      "category": "GROUNDS",
+      "lat": 12.8227747,
+      "lng": 80.0418216
+    },
+    {
+      "name": "HIGGINBOTHAMS BOOK STORE",
+      "category": "LOGISTICS",
+      "lat": 12.8237586,
+      "lng": 80.0456339
+    },
+    {
+      "name": "SRM MUSLIM PRAYER HALL",
+      "category": "GROUNDS",
+      "lat": 12.8227343,
+      "lng": 80.0436689
+    },
+    {
+      "name": "ARCH. GATE",
+      "category": "GROUNDS",
+      "lat": 12.8229634,
+      "lng": 80.0413214
+    },
+    {
+      "name": "POTHERI",
+      "category": "GROUNDS",
+      "lat": 12.8212941,
+      "lng": 80.037071
+    },
+    {
+      "name": "POTHERI RAILWAY STATION",
+      "category": "GROUNDS",
+      "lat": 12.8215643,
+      "lng": 80.0372443
+    },
+    {
+      "name": "RAJA RAJA CHOLAN STATUE",
+      "category": "GROUNDS",
+      "lat": 12.8229617,
+      "lng": 80.0427848
+    },
+    {
+      "name": "DURGASWAMY SUPERMARKET",
+      "category": "LOGISTICS",
+      "lat": 12.8230865,
+      "lng": 80.0443176
+    },
+    {
+      "name": "SHIVA TEMPLE SRM",
+      "category": "GROUNDS",
+      "lat": 12.8212956,
+      "lng": 80.0448532
+    },
+    {
+      "name": "SRM FABLAB",
+      "category": "ACADEMIC",
+      "lat": 12.8224083,
+      "lng": 80.0456111
+    },
+    {
+      "name": "SRM NCC TRAINING AREA",
+      "category": "GROUNDS",
+      "lat": 12.8225636,
+      "lng": 80.0453307
+    },
+    {
+      "name": "SRM PUNYA LAKE",
+      "category": "GROUNDS",
+      "lat": 12.8223646,
+      "lng": 80.0465727
+    },
+    {
+      "name": "ANNEXURE CAMPUS",
+      "category": "ACADEMIC",
+      "lat": 12.8216976,
+      "lng": 80.0465933
+    },
+    {
+      "name": "SRM MEDICAL STAFF QUARTERS D BLOCK",
+      "category": "RESIDENTIAL",
+      "lat": 12.821862,
+      "lng": 80.0490466
+    },
+    {
+      "name": "AARYTHRAA NATIYALAIYA",
+      "category": "ACADEMIC",
+      "lat": 12.8225957,
+      "lng": 80.0498343
+    },
+    {
+      "name": "SRM MEDICAL NEW STAFF QUARTERS BLOCK A",
+      "category": "RESIDENTIAL",
+      "lat": 12.8230307,
+      "lng": 80.049837
+    },
+    {
+      "name": "NIGHTINGALE GIRLS HOSTEL SRM",
+      "category": "RESIDENTIAL",
+      "lat": 12.8245771,
+      "lng": 80.0504321
+    },
+    {
+      "name": "APJ GIRLS HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.8239654,
+      "lng": 80.049208
+    },
+    {
+      "name": "SHUTTLE COURT",
+      "category": "GROUNDS",
+      "lat": 12.8246624,
+      "lng": 80.0487259
+    },
+    {
+      "name": "SRM INDOOR BADMINTON COURT",
+      "category": "GROUNDS",
+      "lat": 12.8251142,
+      "lng": 80.048867
+    },
+    {
+      "name": "GYM",
+      "category": "GROUNDS",
+      "lat": 12.8258268,
+      "lng": 80.0489779
+    },
+    {
+      "name": "DENTAL GROUND",
+      "category": "GROUNDS",
+      "lat": 12.8258629,
+      "lng": 80.0496193
+    },
+    {
+      "name": "DR. T. R. PAARIVENDHAR AQUATIC COMPLEX",
+      "category": "GROUNDS",
+      "lat": 12.8252584,
+      "lng": 80.0506932
+    },
+    {
+      "name": "PADMA BHUSHAN MAJOR. DHYAN CHAND INDOOR STADIUM",
+      "category": "GROUNDS",
+      "lat": 12.8261062,
+      "lng": 80.0510152
+    },
+    {
+      "name": "ESTANCIA TOWER 5",
+      "category": "RESIDENTIAL",
+      "lat": 12.8263308,
+      "lng": 80.051494
+    },
+    {
+      "name": "ESTANCIA TOWER 3",
+      "category": "RESIDENTIAL",
+      "lat": 12.8265722,
+      "lng": 80.0507589
+    },
+    {
+      "name": "ESTANCIA TOWER 1",
+      "category": "RESIDENTIAL",
+      "lat": 12.8267175,
+      "lng": 80.0500855
+    },
+    {
+      "name": "BANYAN TREE",
+      "category": "GROUNDS",
+      "lat": 12.8283594,
+      "lng": 80.0487076
+    },
+    {
+      "name": "KIDO INTERNATIONAL PRE SCHOOL",
+      "category": "ACADEMIC",
+      "lat": 12.828747,
+      "lng": 80.0491199
+    },
+    {
+      "name": "DR. B. C. ROY GIRLS HOSTEL",
+      "category": "RESIDENTIAL",
+      "lat": 12.8244232,
+      "lng": 80.0483223
+    },
+    {
+      "name": "ARKIOMICS",
+      "category": "GROUNDS",
+      "lat": 12.8242703,
+      "lng": 80.0476907
+    },
+    {
+      "name": "SRM BLOOD BANK",
+      "category": "MEDICAL",
+      "lat": 12.8235883,
+      "lng": 80.048171
+    },
+    {
+      "name": "FOOD EXO MADRAS CAFE",
+      "category": "LOGISTICS",
+      "lat": 12.8230322,
+      "lng": 80.0484259
+    },
+    {
+      "name": "SRM PHARMACY",
+      "category": "MEDICAL",
+      "lat": 12.8226351,
+      "lng": 80.047642
+    },
+    {
+      "name": "HOSPITAL PARK",
+      "category": "GROUNDS",
+      "lat": 12.8223575,
+      "lng": 80.0474547
+    },
+    {
+      "name": "SLICE OF LIFE",
+      "category": "LOGISTICS",
+      "lat": 12.8216771,
+      "lng": 80.0477098
+    },
+    {
+      "name": "SRM COLLEGE OF PHYSIOTHERAPY",
+      "category": "MEDICAL",
+      "lat": 12.8204431,
+      "lng": 80.0475362
+    },
+    {
+      "name": "SRM COLLEGE OF OCCUPATIONAL THERAPY",
+      "category": "MEDICAL",
+      "lat": 12.8205657,
+      "lng": 80.0477377
+    },
+    {
+      "name": "SRM MEDICAL AUDITORIUM",
+      "category": "MEDICAL",
+      "lat": 12.820653,
+      "lng": 80.0480925
+    },
+    {
+      "name": "HELPUS CHARITABLE TRUST",
+      "category": "MEDICAL",
+      "lat": 12.8208319,
+      "lng": 80.0478624
+    },
+    {
+      "name": "SRM DEPARTMENT OF COMMUNITY MEDICINE",
+      "category": "MEDICAL",
+      "lat": 12.8209907,
+      "lng": 80.0477403
+    },
+    {
+      "name": "CAR PARKING",
+      "category": "LOGISTICS",
+      "lat": 12.8216386,
+      "lng": 80.0485379
+    },
+    {
+      "name": "SRM HOSPITAL CANTEEN",
+      "category": "LOGISTICS",
+      "lat": 12.8230795,
+      "lng": 80.0491236
+    },
+    {
+      "name": "PF PARK",
+      "category": "GROUNDS",
+      "lat": 12.8255335,
+      "lng": 80.047562
+    },
+    {
+      "name": "PIERRE FAUCHARD (MENS HOSTEL)",
+      "category": "RESIDENTIAL",
+      "lat": 12.825912,
+      "lng": 80.047414
+    },
+    {
+      "name": "SRM CANTEEN 2",
+      "category": "LOGISTICS",
+      "lat": 12.8258099,
+      "lng": 80.0483125
+    },
+    {
+      "name": "SRM URBAN FARM CENTER",
+      "category": "ACADEMIC",
+      "lat": 12.8258099,
+      "lng": 80.0486693
+    },
+    {
+      "name": "SRMIST STP 3",
+      "category": "LOGISTICS",
+      "lat": 12.8264716,
+      "lng": 80.0486445
+    },
+    {
+      "name": "ESTANCIA TENNIS COURT",
+      "category": "GROUNDS",
+      "lat": 12.8270212,
+      "lng": 80.0488096
+    },
+    {
+      "name": "VIDHYA MANDIR ESTANCIA",
+      "category": "ACADEMIC",
+      "lat": 12.8277749,
+      "lng": 80.0481175
+    },
+    {
+      "name": "DR. G. RAMAMURTHY LAKSHMI ILLAM ESTANCIA",
+      "category": "RESIDENTIAL",
+      "lat": 12.8271892,
+      "lng": 80.0474209
+    },
+    {
+      "name": "SCIENCE AND HUMANITIES",
+      "category": "ACADEMIC",
+      "lat": 12.8252052,
+      "lng": 80.046167
+    },
+    {
+      "name": "SRM FACULTY OF SCIENCE AND HUMANITIES",
+      "category": "ACADEMIC",
+      "lat": 12.8253661,
+      "lng": 80.0464118
+    },
+    {
+      "name": "SRM NEW GENTS MEDICAL HOSTEL UG AND OG",
+      "category": "RESIDENTIAL",
+      "lat": 12.8259855,
+      "lng": 80.0465112
+    },
+    {
+      "name": "SRM SCHOOL OF LAW",
+      "category": "ACADEMIC",
+      "lat": 12.8257841,
+      "lng": 80.0458791
+    },
+    {
+      "name": "HDFC BANK",
+      "category": "LOGISTICS",
+      "lat": 12.8247871,
+      "lng": 80.0458929
+    },
+    {
+      "name": "IMAC LAB",
+      "category": "ENGINEERING",
+      "lat": 12.8247341,
+      "lng": 80.0447742
+    },
+    {
+      "name": "AUDITORIUM GROUND",
+      "category": "GROUNDS",
+      "lat": 12.8239426,
+      "lng": 80.0462271
+    },
+    {
+      "name": "TECH PARK GROUND",
+      "category": "GROUNDS",
+      "lat": 12.8236666,
+      "lng": 80.0466197
+    },
+    {
+      "name": "THE ROYAL INN LADIES PG",
+      "category": "RESIDENTIAL",
+      "lat": 12.8207878,
+      "lng": 80.0421407
+    },
+    {
+      "name": "SINGAPERUMAL KOVIL",
+      "category": "GROUNDS",
+      "lat": 12.820264,
+      "lng": 80.0425287
+    },
+    {
+      "name": "GOLDEN JUBILEE ARCH",
+      "category": "GROUNDS",
+      "lat": 12.8226748,
+      "lng": 80.0415081
+    },
+    {
+      "name": "OM SHRI SELVA VINAYAGAR TEMPLE",
+      "category": "GROUNDS",
+      "lat": 12.8232239,
+      "lng": 80.0429935
+    },
+    {
+      "name": "SRMIST KTR ACM SIGKDD STUDENT CHAPTER",
+      "category": "ACADEMIC",
+      "lat": 12.8232104,
+      "lng": 80.0419528
+    },
+    {
+      "name": "MAGIC LAUNDRY",
+      "category": "LOGISTICS",
+      "lat": 12.8231251,
+      "lng": 80.0418134
+    },
+    {
+      "name": "SRM ADMISSION OFFICE",
+      "category": "ACADEMIC",
+      "lat": 12.823427,
+      "lng": 80.0420308
+    },
+    {
+      "name": "HDFC SECURITIES",
+      "category": "LOGISTICS",
+      "lat": 12.8234459,
+      "lng": 80.0416437
+    },
+    {
+      "name": "PLATO STATUE",
+      "category": "GROUNDS",
+      "lat": 12.8233867,
+      "lng": 80.0412449
+    },
+    {
+      "name": "POTHERI PARK",
+      "category": "GROUNDS",
+      "lat": 12.8218744,
+      "lng": 80.0422786
+    },
+    {
+      "name": "SANNASI DINING HALL",
+      "category": "LOGISTICS",
+      "lat": 12.8212161,
+      "lng": 80.0445467
+    },
+    {
+      "name": "D MESS",
+      "category": "LOGISTICS",
+      "lat": 12.8208761,
+      "lng": 80.0443751
+    },
+    {
+      "name": "TAJ KING BIRIYANI",
+      "category": "LOGISTICS",
+      "lat": 12.820756,
+      "lng": 80.0445333
+    },
+    {
+      "name": "SRM BUS PARKING",
+      "category": "LOGISTICS",
+      "lat": 12.8218759,
+      "lng": 80.0455896
+    },
+    {
+      "name": "THURAGA MOTORS",
+      "category": "LOGISTICS",
+      "lat": 12.8223258,
+      "lng": 80.0457232
+    },
+    {
+      "name": "SRM STEPS BUILDING",
+      "category": "ACADEMIC",
+      "lat": 12.8237779,
+      "lng": 80.0452578
+    },
+    {
+      "name": "VENDHAR MUSEUM",
+      "category": "ACADEMIC",
+      "lat": 12.823963,
+      "lng": 80.0452103
+    },
+    {
+      "name": "VIP ROAD",
+      "category": "LOGISTICS",
+      "lat": 12.8235211,
+      "lng": 80.0455153
+    },
+    {
+      "name": "VIP ROAD PARKING",
+      "category": "LOGISTICS",
+      "lat": 12.8233727,
+      "lng": 80.0454479
+    },
+    {
+      "name": "SRM COLLEGE OF MANAGEMENT",
+      "category": "ACADEMIC",
+      "lat": 12.8236108,
+      "lng": 80.0439735
+    },
+    {
+      "name": "SRM INNOVATION AND INCUBATION CENTRE",
+      "category": "ACADEMIC",
+      "lat": 12.8234693,
+      "lng": 80.0435101
+    },
+    {
+      "name": "ASRL LAB",
+      "category": "ACADEMIC",
+      "lat": 12.823431,
+      "lng": 80.0433773
+    },
+    {
+      "name": "PARKING LOT 1",
+      "category": "LOGISTICS",
+      "lat": 12.823983,
+      "lng": 80.043141
+    },
+    {
+      "name": "SRM CHEMICAL BLOCK",
+      "category": "ENGINEERING",
+      "lat": 12.8241634,
+      "lng": 80.0429508
+    },
+    {
+      "name": "SRM SCHOOL OF INTERIOR DESIGN",
+      "category": "ACADEMIC",
+      "lat": 12.8241172,
+      "lng": 80.0437526
+    },
+    {
+      "name": "ARCHITECTURE PARK",
+      "category": "GROUNDS",
+      "lat": 12.8241145,
+      "lng": 80.0444199
+    },
+    {
+      "name": "SCHOOL OF BIOENGINEERING (SOBE)",
+      "category": "ACADEMIC",
+      "lat": 12.8247369,
+      "lng": 80.0437771
+    },
+    {
+      "name": "BIO ENGINEERING BLOCK SRM",
+      "category": "ACADEMIC",
+      "lat": 12.8248537,
+      "lng": 80.0438526
+    },
+    {
+      "name": "SRM BBA BLOCK",
+      "category": "ACADEMIC",
+      "lat": 12.8252644,
+      "lng": 80.044618
+    },
+    {
+      "name": "SRM POLYTECHNIC COLLEGE",
+      "category": "ACADEMIC",
+      "lat": 12.8256429,
+      "lng": 80.0447379
+    },
+    {
+      "name": "SRM COLLEGE OF AGRICULTURAL SCIENCES",
+      "category": "ACADEMIC",
+      "lat": 12.8256323,
+      "lng": 80.0454018
+    },
+    {
+      "name": "SVS LADIES PG",
+      "category": "RESIDENTIAL",
+      "lat": 12.8261327,
+      "lng": 80.0444233
+    },
+    {
+      "name": "SRM ARTS AND SCIENCE COLLEGE",
+      "category": "ACADEMIC",
+      "lat": 12.8257778,
+      "lng": 80.0435833
+    },
+    {
+      "name": "SRM ARTS AND SCIENCE COLLEGE GROUND",
+      "category": "GROUNDS",
+      "lat": 12.8247883,
+      "lng": 80.0421912
+    },
+    {
+      "name": "AXIS BANK - SRMIST",
+      "category": "LOGISTICS",
+      "lat": 12.8231502,
+      "lng": 80.0437403
+    },
+    {
+      "name": "THE INDIAN SCIENCE CONGRESS ASSOCIATION",
+      "category": "ACADEMIC",
+      "lat": 12.823042,
+      "lng": 80.0436589
+    },
+    {
+      "name": "CLOCK TOWER ROUNDABOUT",
+      "category": "GROUNDS",
+      "lat": 12.8229524,
+      "lng": 80.0448096
+    },
+    {
+      "name": "WUDU AREA MUSLIM PRAYER HALL",
+      "category": "GROUNDS",
+      "lat": 12.8220423,
+      "lng": 80.0436267
+    },
+    {
+      "name": "MOSQUE",
+      "category": "GROUNDS",
+      "lat": 12.8221405,
+      "lng": 80.0442809
+    },
+    {
+      "name": "BOYS GYM",
+      "category": "GROUNDS",
+      "lat": 12.8217903,
+      "lng": 80.0442836
+    },
+    {
+      "name": "SRM COLLEGE BOYS MESS",
+      "category": "LOGISTICS",
+      "lat": 12.8213476,
+      "lng": 80.0438805
+    },
+    {
+      "name": "PADMAM HALL BY SRM HOTEL",
+      "category": "LOGISTICS",
+      "lat": 12.8220875,
+      "lng": 80.0431739
+    },
+    {
+      "name": "AUTO CREED RACING",
+      "category": "ACADEMIC",
+      "lat": 12.822058,
+      "lng": 80.0428328
+    },
+    {
+      "name": "BADMINTON COURT 1",
+      "category": "GROUNDS",
+      "lat": 12.8225421,
+      "lng": 80.0431569
+    }
+  ]
+}

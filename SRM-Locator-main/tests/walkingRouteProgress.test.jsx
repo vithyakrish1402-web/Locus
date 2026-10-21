@@ -2,10 +2,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, waitFor, cleanup } from '@testing-library/react';
 import { useWalkingRoute } from '../src/hooks/useWalkingRoute';
-import { fetchOsrmWalkingRoute } from '../src/utils/routingProviders';
+import { fetchPedestrianRoute } from '../src/utils/routingProviders';
 
 vi.mock('../src/utils/routingProviders', () => ({
-  fetchOsrmWalkingRoute: vi.fn(), fetchGoogleWalkingRoute: vi.fn(),
+  fetchPedestrianRoute: vi.fn(),
 }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 const start = { lat: 12.82, lng: 80.04 };
@@ -14,7 +14,7 @@ const end = { lat: 12.8201, lng: 80.0401 };
 
 describe('walking route progress', () => {
   it('removes travelled segments on each fix without waiting for a new route request', async () => {
-    fetchOsrmWalkingRoute.mockResolvedValue({ path: [start, corner, end], isRealRoute: true });
+    fetchPedestrianRoute.mockResolvedValue({ path: [start, corner, end], isRealRoute: true });
     const { result, rerender } = renderHook(({ position }) => useWalkingRoute({
       engine: 'leaflet', liveLocation: position, activeWaypoint: end,
     }), { initialProps: { position: start } });
@@ -29,6 +29,6 @@ describe('walking route progress', () => {
     expect(result.current.path.slice(1)).toEqual([end]);
     expect(result.current.path).not.toContainEqual(start);
     expect(result.current.path).not.toContainEqual(corner);
-    expect(fetchOsrmWalkingRoute).toHaveBeenCalledTimes(1);
+    expect(fetchPedestrianRoute).toHaveBeenCalledTimes(1);
   });
 });

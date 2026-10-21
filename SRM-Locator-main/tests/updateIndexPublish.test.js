@@ -6,7 +6,12 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { publishUpdateIndex, reportUpdateIndex, UPDATE_INDEX_FIX_COMMAND } from '../scripts/lib/updateIndex.mjs';
+import {
+  publishUpdateIndex,
+  reportUpdateIndex,
+  UPDATE_INDEX_FIX_COMMAND,
+  updateIndexFixCommand,
+} from '../scripts/lib/updateIndex.mjs';
 import { parseUpdateIndex } from '../src/utils/updateIndex.js';
 
 const REPO = 'vithyakrish1402-web/Locus';
@@ -120,13 +125,40 @@ describe('a failure is reported, never thrown', () => {
     reportUpdateIndex(result, { log: (s) => lines.push(s) });
     expect(lines.join('\n')).toMatch(/Update index rebuilt: 2 releases, newest js-1\.1\.24, v1\.1\.21/);
   });
+
+  it('names the repo in the fix command when the release went somewhere else with --repo', () => {
+    const lines = [];
+    reportUpdateIndex({ ok: false, step: 'upload the file', error: 'HTTP 422' }, { log: (s) => lines.push(s), repo: 'someone/Fork' });
+    expect(lines.join('\n')).toContain('Fix it with:   npm run release:index -- --repo someone/Fork');
+    expect(updateIndexFixCommand(REPO)).toBe(UPDATE_INDEX_FIX_COMMAND);
+  });
+
+  it('lists, checks and uploads in the repo it is given, not the default one', () => {
+    const fork = 'someone/Fork';
+    const forkLink = (tag, name) => `https://github.com/${fork}/releases/download/${tag}/${name}`;
+    const listing = LISTING.map((r) => ({
+      ...r,
+      assets: r.assets.map((a) => ({ ...a, browser_download_url: forkLink(r.tag_name, a.name) })),
+    }));
+    const gh = fakeGh({ listing });
+    const result = publishUpdateIndex({ dir, repo: fork, run: gh.run, now: NOW });
+    expect(result.ok).toBe(true);
+    expect(gh.calls[0]).toEqual(['api', `repos/${fork}/releases?per_page=100`]);
+    expect(gh.calls[2]).toEqual(['release', 'upload', 'update-index', result.file, '--clobber', '--repo', fork]);
+  });
 });
 
 describe('both release scripts rebuild the file as their very last step', () => {
   it.each([['scripts/release.mjs'], ['scripts/release-bundle.mjs']])('%s', (path) => {
     const source = readFileSync(resolve(import.meta.dirname, '..', path), 'utf8');
-    const created = source.search(/run\('gh', \[\s*'release',\s*'create',/);
-    const rebuilt = source.indexOf("reportUpdateIndex(publishUpdateIndex({ dir: join(STAGING_DIR, 'update-index') }));");
+    // The design line builds the arguments first, so --repo can be added to them.
+    expect(source).toMatch(/const releaseArgs = \[\s*'release',\s*'create',/);
+    const created = source.indexOf("run('gh', releaseArgs);");
+    // In the repo the release just went to (--repo / LOCUS_RELEASE_REPO), and the fix command
+    // printed on a failure names that repo too.
+    const rebuilt = source.indexOf(
+      "reportUpdateIndex(publishUpdateIndex({ dir: join(STAGING_DIR, 'update-index'), repo: repoArg }), { repo: repoArg });"
+    );
     expect(created).toBeGreaterThan(0);
     // After the release is created, at the top level (not behind a dry run), and nothing after
     // it can fail or exit the script.
@@ -134,5 +166,13 @@ describe('both release scripts rebuild the file as their very last step', () => 
     expect(source.slice(rebuilt - 1, rebuilt)).toBe('\n');
     const after = source.slice(rebuilt);
     expect(after).not.toMatch(/\bdie\(|process\.exit|\brun\(|throw /);
+  });
+
+  it('release:index takes --repo and LOCUS_RELEASE_REPO the way the release scripts do', () => {
+    const source = readFileSync(resolve(import.meta.dirname, '..', 'scripts/release-index.mjs'), 'utf8');
+    expect(source).toMatch(/argv\.indexOf\('--repo'\)/);
+    expect(source).toContain('process.env.LOCUS_RELEASE_REPO || UPDATE_REPO');
+    expect(source).toContain("publishUpdateIndex({ dir: join(ROOT, 'dist-release', 'update-index'), repo })");
+    expect(source).toContain('reportUpdateIndex(result, { afterRelease: false, repo })');
   });
 });

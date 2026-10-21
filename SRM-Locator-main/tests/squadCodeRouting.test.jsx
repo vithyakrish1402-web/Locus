@@ -156,6 +156,7 @@ describe('what the app asks the server for', () => {
     expect(lastJoinRequest()).toMatchObject({ roomCode: code, intent: 'create', user: { uid: 'u-self' } });
 
     cleanup();
+    localStorage.removeItem('locus.group'); // reopened with no Group to go back to (tests/resumeGroup.test.jsx covers that)
     fakeSocket.handlers.clear();
     render(<App />);
     joinSquad('KTR7X9');
@@ -170,6 +171,7 @@ describe('what the app asks the server for', () => {
     expect(lastJoinRequest()).toMatchObject({ roomCode: code, intent: 'resume' });
 
     cleanup();
+    localStorage.removeItem('locus.group'); // reopened with no Group to go back to (tests/resumeGroup.test.jsx covers that)
     fakeSocket.handlers.clear();
     render(<App />);
     joinSquad('KTR7X9');

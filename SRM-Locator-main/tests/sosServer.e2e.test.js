@@ -7,12 +7,7 @@ import { e2eServer, sleep, waitFor, settle } from './helpers/e2eServer.js';
  * so this covers routing, replay and acknowledgement exactly as a phone would hit them.
  */
 
-// Coalescing off (a window of 0): these tests are about routing, replay and acknowledgement,
-// and press the button again straight away expecting a fresh alert each time. That a repeat
-// press within the window is an update instead is tested in alertGuard.e2e.test.js.
-const { connect, createSquad, admit, returnToSquad, squadOfThree, newRoom, serverIsAlive } = e2eServer({
-  env: { LOCUS_SOS_COALESCE_SEC: '0' },
-});
+const { connect, createSquad, admit, returnToSquad, squadOfThree, newRoom, serverIsAlive } = e2eServer();
 
 const fireSos = (socket, room, extra = {}) =>
   socket.emit('sos-broadcast', { senderName: 'Bravo', lat: 12.8231, lng: 80.0442, roomCode: room, timestamp: Date.now(), ...extra });

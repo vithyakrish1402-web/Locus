@@ -108,7 +108,7 @@ afterEach(() => {
   delete window.gm_authFailure;
 });
 
-describe("the map status line in Settings' Map view section", () => {
+describe("the map status line in Settings' More section", () => {
   it('says Google, with no reason, when the key is set and Google loads', async () => {
     const App = await loadApp('test-key');
     render(<App />);
@@ -124,7 +124,7 @@ describe("the map status line in Settings' Map view section", () => {
     render(<App />);
     enterMapScreen();
     expect(await screen.findByTestId('leaflet-map')).toBeTruthy();
-    expect(statusText()).toBe('Map: Backup (OpenStreetMap)· No Google Maps key in this build');
+    expect(statusText()).toBe('Map: Backup (OpenStreetMap)No Google Maps key in this build');
   });
 
   it('falls back after the 8 s watchdog when Google never loads, and says why', async () => {
@@ -137,7 +137,7 @@ describe("the map status line in Settings' Map view section", () => {
     expect(screen.queryByTestId('leaflet-map')).toBeNull();
     act(() => { vi.advanceTimersByTime(200); });
     expect(await screen.findByTestId('leaflet-map')).toBeTruthy();
-    expect(statusText()).toBe('Map: Backup (OpenStreetMap)· Google map could not load (slow or no connection)');
+    expect(statusText()).toBe('Map: Backup (OpenStreetMap)Google map could not load (slow or no connection)');
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('reason: timeout'));
   });
 
@@ -149,7 +149,7 @@ describe("the map status line in Settings' Map view section", () => {
     expect(typeof window.gm_authFailure).toBe('function');
     act(() => window.gm_authFailure());
     expect(await screen.findByTestId('leaflet-map')).toBeTruthy();
-    expect(statusText()).toBe('Map: Backup (OpenStreetMap)· Google rejected the map key');
+    expect(statusText()).toBe('Map: Backup (OpenStreetMap)Google rejected the map key');
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('reason: key-rejected'));
     // One-way, and the handler is gone with the Google map.
     expect(window.gm_authFailure).toBeUndefined();

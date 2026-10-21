@@ -12,6 +12,30 @@
 /* Light and dark design tokens (redesign). Screens move onto them one piece at a time. */
 @import "./theme/tokens.css";
 
+/* Theme switch (src/theme/theme.js, the one place it happens). While the theme is swapped,
+   nothing fades its own colours across and CSS animations hold still: the new theme lands
+   in one frame, out of sight. */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+  animation-play-state: paused !important;
+}
+
+/* The circular reveal, on a
+   phone proven fast for it, is the clip-path animation theme.js runs; the browser's own
+   cross-fade must stay off for the whole transition. Not tied to a class: when it was,
+   removing the class before the transition ended switched the cross-fade back on and the
+   old theme flashed back. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  z-index: 1;
+}
+
 /* ---------------------------------------------------------------- touch feel */
 
 /* The browser's grey tap flash fights the app's own feedback below. */
@@ -26,7 +50,7 @@
    transform and opacity move (the redesign's motion rule): colour, shadow and filter
    changes on a control are instant, never animated. */
 button, [role="button"], a[href], summary, label[for] {
-  transition-property: scale, transform, translate, opacity;
+  transition-property: scale, transform, translate, opacity, background-color, border-color, box-shadow;
   transition-duration: var(--duration-press-out);
   transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   touch-action: manipulation; /* no 300 ms double-tap-zoom wait */
@@ -229,16 +253,16 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
 
 .glass-panel {
   background: var(--glass-surface);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: var(--glass-blur, blur(28px));
+  -webkit-backdrop-filter: var(--webkit-glass-blur, blur(28px));
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow), var(--glass-specular);
 }
 
 .glass-pill {
   background: var(--glass-surface);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: var(--glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--webkit-glass-blur, blur(20px));
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow), var(--glass-specular);
   border-radius: 9999px;
@@ -246,8 +270,8 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
 
 .glass-floating {
   background: var(--glass-surface);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  backdrop-filter: var(--glass-blur, blur(32px));
+  -webkit-backdrop-filter: var(--webkit-glass-blur, blur(32px));
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-floating), var(--glass-specular);
 }
@@ -257,6 +281,7 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border-subtle);
+  transition: all 180ms var(--ease-standard);
 }
 
 .glass-input:focus, .glass-input:focus-within {
@@ -335,14 +360,22 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
 }
 
-/* Let the native view-transition snapshot reveal the next theme without a crossfade. */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-  mix-blend-mode: normal;
+/* Settings: the screen's parts arrive one after another (title, then each section), each
+   rising a little as it fades in. A CSS animation of transform and opacity only, so it runs
+   off the main thread; --i is the part's place in the order (SettingsScreen.jsx). */
+.settings-reveal {
+  animation: settings-reveal 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 80ms);
 }
+@keyframes settings-reveal {
+  from { opacity: 0; transform: translate3d(0, 20px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-reveal { animation-name: settings-reveal-fade; animation-duration: 150ms; animation-delay: 0ms; }
+  @keyframes settings-reveal-fade { from { opacity: 0; } to { opacity: 1; } }
+}
+
+
 ::view-transition-old(root) { z-index: 1; }
 ::view-transition-new(root) { z-index: 2; }
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(root) { animation-duration: 0s; }
-}

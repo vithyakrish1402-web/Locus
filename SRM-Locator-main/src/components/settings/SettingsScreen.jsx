@@ -6,17 +6,21 @@ import {
   ChevronRight,
   Eye,
   Info,
+  LogOut,
   Map as MapIcon,
   Moon,
   Radio,
   RefreshCw,
+  ShieldAlert,
   Sliders,
   Smartphone,
   Sun,
+  UserRound,
   Volume2
 } from 'lucide-react';
 import { Button, Card, IconButton, ListRow, RadioList, SectionLabel, SegmentedControl, Switch } from '../ui';
 import SendApp from '../SendApp';
+import BackgroundSharingSection from './BackgroundSharingSection';
 import { SETTINGS } from '../../copy/settings';
 import { subscribeTheme, getThemePreference } from '../../theme/theme';
 import LocusMark from '../LocusMark';
@@ -40,20 +44,26 @@ const THEME_ICONS = { system: Smartphone, light: Sun, dark: Moon };
  *   mapStatus: { engine: 'google'|'backup', reason: string },
  *   arFeatureOverrides: Record<string, string>, onArFeatureOverride: (feature: string, value: string) => void,
  *   update: { installedVersion: string|null, supported: boolean, status: string, onCheck: () => void },
- *   onOpenGuide: () => void, developerSlot?: React.ReactNode }} props
+ *   onOpenGuide: () => void,
+ *   backgroundSharing?: object, group?: string,
+ *   onSignOut?: () => void, onAdmin?: () => void }} props
  */
 export default function SettingsScreen({
   onClose, polling, onPolling, arFidelity, onArFidelity, alertSounds, onAlertSounds,
   isSatellite, onSatellite, mapStatus, arFeatureOverrides, onArFeatureOverride, update, onOpenGuide,
-  developerSlot = null, // the Developer mode row: given to admin accounts in the test build only
+  backgroundSharing, group, onSignOut, onAdmin,
 }) {
   const titleId = useId();
   const headingRef = useRef(null);
   const [theme, setTheme] = useState(getThemePreference);
-  const [moreExpanded, setMoreExpanded] = useState(false);
+  const [moreExpanded, setMoreExpanded] = useState(true);
 
   useEffect(() => subscribeTheme(({ preference }) => setTheme(preference)), []);
   useEffect(() => { headingRef.current?.focus(); }, []);
+
+  // theme.js runs the switch (one effect per phone); the pressed option is where a
+  // circular reveal would start.
+  const handleThemeChange = (next) => transitionTheme(next);
 
   const checking = update.status === 'checking';
   const updateLine = update.supported ? SETTINGS.updateStatus[update.status] : SETTINGS.updatesWebOnly;
@@ -63,7 +73,7 @@ export default function SettingsScreen({
       role="dialog"
       aria-labelledby={titleId}
       data-testid="settings"
-      className="fixed inset-0 overflow-y-auto bg-bg text-text font-ui pointer-events-auto"
+      className="fixed inset-0 overflow-y-auto bg-bg text-text font-ui pointer-events-auto overscroll-contain"
       style={{ zIndex: SETTINGS_Z, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(var(--emergency-clearance) + 1rem)' }}
     >
       <div className="max-w-xl mx-auto px-4 pb-8">
@@ -71,25 +81,25 @@ export default function SettingsScreen({
         <div className="pt-3 -ml-2 flex items-center justify-between">
           <IconButton label={SETTINGS.back} icon={ChevronLeft} size={26} onClick={onClose} />
         </div>
-        <h1 id={titleId} ref={headingRef} tabIndex={-1} className="mt-2 mb-6 text-display font-semibold outline-none tracking-tight">
+        <h1 id={titleId} ref={headingRef} tabIndex={-1} style={{ '--i': 1 }} className="settings-reveal mt-2 mb-6 text-display font-semibold outline-none tracking-tight">
           {SETTINGS.title}
         </h1>
 
         {/* 1. Interface & Experience */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 2 }}>
           <SectionLabel className="flex items-center gap-1.5">
             <Sun size={13} className="opacity-70" />
             {SETTINGS.appearance}
           </SectionLabel>
           <Card className="flex flex-col gap-3.5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-3"><AnimatedThemeToggleButton type="vertical" /><span className="text-body font-medium">{SETTINGS.theme}</span></span>
+              <span className="flex items-center gap-3"><AnimatedThemeToggleButton /><span className="text-body font-medium">{SETTINGS.theme}</span></span>
               <span className="text-caption text-text-secondary">{SETTINGS.themeHelp[theme]}</span>
             </div>
             <SegmentedControl
               label={SETTINGS.theme}
               value={theme}
-              onChange={(value) => transitionTheme(value, 'vertical')}
+              onChange={handleThemeChange}
               options={['system', 'light', 'dark'].map((v) => ({
                 value: v,
                 label: SETTINGS.themeOptions[v],
@@ -100,7 +110,7 @@ export default function SettingsScreen({
         </section>
 
         {/* 2. Map & Navigation Mode */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 3 }}>
           <SectionLabel className="flex items-center gap-1.5">
             <MapIcon size={13} className="opacity-70" />
             {SETTINGS.mapView}
@@ -120,7 +130,7 @@ export default function SettingsScreen({
         </section>
 
         {/* 3. Location Performance */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 4 }}>
           <SectionLabel id={`${titleId}-refresh`} className="flex items-center gap-1.5">
             <Radio size={13} className="opacity-70" />
             {SETTINGS.refresh}
@@ -135,8 +145,13 @@ export default function SettingsScreen({
           </Card>
         </section>
 
+        {/* Background sharing: present only when this phone's app can do it and the server has it on. */}
+        <div className="settings-reveal" style={{ '--i': 5 }}>
+          <BackgroundSharingSection backgroundSharing={backgroundSharing} group={group} layer={SETTINGS_Z + 10} />
+        </div>
+
         {/* 4. AR Scanner Fidelity */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 6 }}>
           <SectionLabel className="flex items-center gap-1.5">
             <Eye size={13} className="opacity-70" />
             {SETTINGS.arQuality}
@@ -153,7 +168,7 @@ export default function SettingsScreen({
         </section>
 
         {/* 5. Alerts & Audio */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 7 }}>
           <SectionLabel className="flex items-center gap-1.5">
             <Volume2 size={13} className="opacity-70" />
             {SETTINGS.notifications}
@@ -165,7 +180,7 @@ export default function SettingsScreen({
         </section>
 
         {/* 6. System & Application Info */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 8 }}>
           <SectionLabel className="flex items-center gap-1.5">
             <Info size={13} className="opacity-70" />
             {SETTINGS.about}
@@ -175,12 +190,12 @@ export default function SettingsScreen({
               <LocusMark className="w-12 h-12 shrink-0" title="LOCUS" />
               <div className="flex flex-col">
                 <p className="text-body font-semibold tracking-wide">LOCUS</p>
-                <p className="text-caption text-text-secondary">Find your group on campus</p>
+                <p className="text-caption text-text-secondary">Tactical Campus Navigation & Locator</p>
               </div>
             </div>
             <div className="flex items-center justify-between gap-4 px-4 py-3 min-h-12">
               <span className="text-body font-medium">{SETTINGS.version}</span>
-              <span className="text-body text-text-secondary tabular-nums" data-testid="settings-version">
+              <span className="text-body text-text-secondary font-mono text-sm" data-testid="settings-version">
                 {update.installedVersion ?? SETTINGS.versionUnknown}
               </span>
             </div>
@@ -199,20 +214,19 @@ export default function SettingsScreen({
           </Card>
         </section>
 
-        {developerSlot}
-
         {/* 7. Collapsible Advanced & Sharing Controls */}
-        <section className="mb-6">
+        <section className="settings-reveal mb-6" style={{ '--i': 9 }}>
           <Card padded={false} className="shadow-sm overflow-hidden border border-border">
             <button
               type="button"
               onClick={() => setMoreExpanded(!moreExpanded)}
-              className="w-full flex items-center justify-between px-4 py-3.5 text-left duration-150 hover:bg-sunken"
+              className="w-full flex items-center justify-between px-4 py-3.5 text-left transition-colors duration-150 hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
               aria-expanded={moreExpanded}
             >
               <div className="flex items-center gap-2.5">
                 <Sliders size={16} className="text-text-secondary" />
                 <span className="text-body font-medium">{SETTINGS.more}</span>
+                <span className="text-caption text-text-secondary font-normal">(Advanced & Share)</span>
               </div>
               <ChevronDown
                 size={18}
@@ -251,6 +265,34 @@ export default function SettingsScreen({
             )}
           </Card>
         </section>
+
+        {/* 8. Account. The redesigned map has no top-bar buttons, so signing out (and the
+            owner's admin tools) live here. */}
+        {(onSignOut || onAdmin) && (
+          <section className="settings-reveal mb-6" style={{ '--i': 10 }}>
+            <SectionLabel className="flex items-center gap-1.5">
+              <UserRound size={13} className="opacity-70" />
+              {SETTINGS.account}
+            </SectionLabel>
+            <Card padded={false} className="divide-y divide-border shadow-sm">
+              {onAdmin && (
+                <ListRow
+                  leading={<ShieldAlert size={18} className="text-text-secondary" />}
+                  title={SETTINGS.adminTools}
+                  trailing={<ChevronRight size={18} className="text-text-secondary" />}
+                  onClick={onAdmin}
+                />
+              )}
+              {onSignOut && (
+                <div className="px-4 py-3">
+                  <Button variant="secondary" icon={LogOut} block onClick={onSignOut}>
+                    {SETTINGS.signOut}
+                  </Button>
+                </div>
+              )}
+            </Card>
+          </section>
+        )}
       </div>
     </div>
   );

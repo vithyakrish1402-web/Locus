@@ -211,10 +211,10 @@ describe('a Rally Point leaving the map', () => {
     await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
 
     fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
-    expect(screen.getByTestId('route-card')).toBeTruthy();
+    expect(screen.getByTestId('turn-instruction-card')).toBeTruthy();
     act(() => fakeSocket.receive('new-waypoint', { ...RALLY, setBy: 'u-other' }));
     act(() => fakeSocket.receive('remove-waypoint'));
-    expect(screen.getByTestId('route-card')).toBeTruthy();
+    expect(screen.getByTestId('turn-instruction-card')).toBeTruthy();
   });
 });
 
@@ -242,7 +242,7 @@ describe('Navigate and the meeting point', () => {
     await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
 
     fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.navigate }));
-    expect(screen.getByTestId('route-card')).toBeTruthy();
+    expect(screen.getByTestId('turn-instruction-card')).toBeTruthy();
     expect(emitted('publish-waypoint')).toEqual([]);
     expect(leaflet.props.activeWaypoint).toBeNull();
   });
@@ -254,7 +254,7 @@ describe('Navigate and the meeting point', () => {
     await waitFor(() => expect(leaflet.props.liveLocation).toBeTruthy());
 
     fireEvent.click(screen.getAllByRole('button', { name: /^Navigate to / })[0]);
-    expect(screen.getByTestId('route-card')).toBeTruthy();
+    expect(screen.getByTestId('turn-instruction-card')).toBeTruthy();
     expect(emitted('publish-waypoint')).toEqual([]);
   });
 
@@ -268,18 +268,10 @@ describe('Navigate and the meeting point', () => {
     await waitFor(() => expect(leaflet.props.walkingRoute?.path.at(-1)).toMatchObject({ lat: building.lat, lng: building.lng }));
   });
 
-  it("without a fix it is two steps, and the second place's button says so", async () => {
-    render(<App />);
-    await joinAsMember();
-    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.navigate }));
-    fireEvent.click((await screen.findAllByText(SRM_MASTER_DATABASE[1].name))[0]);
-    expect(within(screen.getByTestId('location-card')).getByRole('button', { name: PLACE.setDestination })).toBeTruthy();
-  });
-
   it('"Set as meeting point" asks first, then sets it as before', async () => {
     render(<App />);
     await joinAsMember();
-    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.setMeetingPoint }));
+    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.rallyLabel }));
 
     const dialog = screen.getByRole('dialog', { name: MEETING_POINT_CONFIRM.title(building.name) });
     expect(emitted('publish-waypoint')).toEqual([]);
@@ -292,7 +284,7 @@ describe('Navigate and the meeting point', () => {
   it('Cancel sets nothing', async () => {
     render(<App />);
     await joinAsMember();
-    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.setMeetingPoint }));
+    fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.rallyLabel }));
     fireEvent.click(within(screen.getByRole('dialog', { name: MEETING_POINT_CONFIRM.title(building.name) })).getByRole('button', { name: MEETING_POINT_CONFIRM.cancel }));
     expect(emitted('publish-waypoint')).toEqual([]);
   });
@@ -306,7 +298,7 @@ describe('Navigate and the meeting point', () => {
 
     fireEvent.click(within(await openCard()).getByRole('button', { name: PLACE.navigate }));
     fireEvent.click(endRoute());
-    await waitFor(() => expect(screen.queryByTestId('route-card')).toBeNull());
+    await waitFor(() => expect(screen.queryByTestId('turn-instruction-card')).toBeNull());
     expect(emitted('clear-waypoint')).toEqual([]);
     expect(leaflet.props.activeWaypoint).toMatchObject({ lat: RALLY.lat, lng: RALLY.lng });
   });

@@ -27,9 +27,37 @@ describe('what background sharing asks the phone for', () => {
     expect(manifest).not.toMatch(/ACCESS_BACKGROUND_LOCATION/);
   });
 
-  it('asks for no wake lock, battery exemption or full-screen intent', () => {
-    for (const p of ['WAKE_LOCK', 'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'USE_FULL_SCREEN_INTENT']) {
+  it('asks for no wake lock, battery exemption or Do Not Disturb access', () => {
+    for (const p of ['WAKE_LOCK', 'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'ACCESS_NOTIFICATION_POLICY', 'SYSTEM_ALERT_WINDOW']) {
       expect(permissions).not.toContain(`android.permission.${p}`);
+    }
+  });
+
+  it('asks for the full-screen intent only for the SOS alert, and only the SOS notification code uses it', () => {
+    expect(permissions).toContain('android.permission.USE_FULL_SCREEN_INTENT');
+    const sharing = fs.readdirSync(path.join(javaDir, 'sharing')).filter((f) => f.endsWith('.java'));
+    const users = sharing.filter((f) => /setFullScreenIntent\(/.test(read('sharing', f)));
+    expect(users).toEqual(['SosNotifications.java']);
+    expect(read('sharing', 'SosNotifications.java')).toMatch(/fullScreenAllowed\(context\)\) builder\.setFullScreenIntent/);
+  });
+
+  it('shows the app over the lock screen only for an SOS launch, and takes that back when it leaves the screen', () => {
+    expect(manifest).not.toMatch(/showWhenLocked|turnScreenOn/);
+    const activity = read('MainActivity.java');
+    expect(activity).toMatch(/SosLaunch\.prepareWindow\(this, getIntent\(\)\)/);
+    expect(activity).toMatch(/onNewIntent[\s\S]*SosLaunch\.prepareWindow\(this, intent\)/);
+    expect(activity).toMatch(/onStop[\s\S]*SosLaunch\.releaseWindow\(this\)/);
+    expect(read('sharing', 'SosLaunch.java')).toMatch(/if \(!isSosIntent\(intent\)\) return;/);
+  });
+
+  it('hands a locked phone back to its lock screen once the SOS shown over it is acknowledged', () => {
+    expect(read('sharing', 'LocusBackgroundPlugin.java')).toMatch(/SosLaunch\.leaveIfStillLocked\(getActivity\(\)\)/);
+    expect(read('sharing', 'SosLaunch.java')).toMatch(/isLocked\(activity\)\) activity\.finishAndRemoveTask\(\)/);
+  });
+
+  it('never unlocks the phone or switches Do Not Disturb off', () => {
+    for (const f of fs.readdirSync(path.join(javaDir, 'sharing')).filter((name) => name.endsWith('.java'))) {
+      expect(read('sharing', f), f).not.toMatch(/requestDismissKeyguard|setBypassDnd|setInterruptionFilter|disableKeyguard/);
     }
   });
 
@@ -70,8 +98,10 @@ describe('how the service can be started', () => {
     const activity = read('MainActivity.java');
     expect(activity).toMatch(/public void onResume\(\)[\s\S]*SharingState\.activityResumed\(\)/);
     expect(activity).toMatch(/public void onPause\(\)[\s\S]*SharingState\.activityPaused\(\)/);
-    // ...and not onStop, which comes later (or, in split screen, never).
-    expect(activity).not.toMatch(/onStop|onStart/);
+    // ...and not onStop, which comes later (or, in split screen, never). (MainActivity does have an
+    // onStop, only to take the SOS lock-screen privilege back; it must not report liveness.)
+    expect(activity).not.toMatch(/onStart/);
+    expect(activity.match(/void onStop\(\)[^}]*\}/)?.[0] ?? '').not.toMatch(/SharingState/);
     // The pause is reported BEFORE super.onPause(), where Capacitor freezes the WebView.
     expect(activity.indexOf('SharingState.activityPaused()')).toBeLessThan(activity.indexOf('super.onPause()'));
   });

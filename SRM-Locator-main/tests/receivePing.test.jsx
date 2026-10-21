@@ -148,10 +148,9 @@ describe('receiving a member ping', () => {
     act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
     expect(within(screen.getByTestId('comms-feed')).getByRole('status')).toBeTruthy();
 
-    // Six seconds, as the old ping banner stayed.
-    act(() => vi.advanceTimersByTime(5000));
-    expect(screen.queryByText(/is pinging you/i)).toBeTruthy();
-    act(() => vi.advanceTimersByTime(2000));
+    // Six seconds, as the old ping banner stayed (its countdown line runs that long).
+    expect(within(screen.getByTestId('comms-feed')).getByRole('status').querySelector('.locus-drain').style.animationDuration).toBe('6000ms');
+    act(() => vi.advanceTimersByTime(7000));
     await waitFor(() => expect(screen.queryByText(/is pinging you/i)).toBeNull());
   });
 
@@ -175,6 +174,7 @@ describe('a member losing connection', () => {
     expect(notice.textContent).toContain(NOTICES.signalLost.body);
     expect(notice.className).not.toMatch(/danger|red-/);
     expect(alertSpy).not.toHaveBeenCalled();
+    expect(notice.querySelector('.locus-drain').style.animationDuration).toBe('6000ms');
 
     act(() => vi.advanceTimersByTime(5000));
     expect(screen.queryByText(NOTICES.signalLost.title('Aarav'))).toBeTruthy();

@@ -19,10 +19,21 @@ export const NOTICES = {
     body: 'Tap to see it on the map.',
     gone: 'That meeting point has been removed.',
   },
+  // The place card's Navigate and Rally buttons.
+  navigate: { waitingForLocation: 'Waiting for your location' },
+  rally: {
+    joinFirst: 'Join a group to set a rally point',
+    cannotClear: 'Only the Group Lead, or whoever set it, can clear the rally point.',
+    set: (place) => `${place} is now the rally point.`,
+    cleared: 'Rally point cleared.',
+  },
   leadIsBack: 'The Group Lead is back. You are a member again.',
   removedByLead: 'You were removed from the group.',
   removedByVote: "The group's members voted to remove you.",
   routePublished: (from, to) => `Route ${from} → ${to} published.`,
+  placeAdded: (name) => `${name} added for everyone.`,
+  placeRemoved: (name) => `${name} removed.`,
+  placeNotRemoved: 'Could not remove that place. Check your connection and try again.',
 };
 
 // Notifications from the operating system, shown only while LOCUS is in the background.

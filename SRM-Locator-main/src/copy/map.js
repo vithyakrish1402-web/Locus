@@ -6,6 +6,10 @@ export const TOP_BAR = {
   mapView: 'Map view',
   satelliteView: 'Satellite view',
   signOut: 'Sign out',
+  // The search beside the name: find a building or place.
+  search: 'Search buildings and places',
+  searchPlaceholder: 'Search places…',
+  clearSearch: 'Close search',
 };
 
 // The sharing chip under the top bar, matching your own setting (owner, 2026-10-05). Never
@@ -24,6 +28,8 @@ export const SHARING_CHIP = {
 export const MAP_CONTROLS = {
   satellite: 'Satellite view',
   locate: 'Show where you are',
+  autoOn: 'Auto-centre is on: tap to stop following you',
+  autoOff: 'Auto-centre is off: tap to keep the map on you',
   campus: 'Show the whole campus',
   settings: 'Settings',
   placeMeetingPoint: 'Place a meeting point',

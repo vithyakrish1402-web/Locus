@@ -23,6 +23,7 @@ import {
 import SosTrigger from '../../components/SosTrigger';
 import LocationsTable from '../../components/group/LocationsTable';
 import AdminTools, { RecordingBar } from '../../components/admin/AdminTools';
+import AddPlaceSheet, { PlacingBar } from '../../components/admin/AddPlace';
 import SosOverlay from '../../components/SosOverlay';
 import CommsFeed from '../../components/CommsFeed';
 import UpdateModal from '../../components/UpdateModal';
@@ -168,9 +169,8 @@ const SCREENS = {
   },
   'buildings-list': { label: 'Nearby Places (Buildings list)', render: () => <BuildingsListDemo /> },
   'place-card': { label: 'Place card', render: () => <PlaceOnMap place={campusPlace(2)} /> },
-  'place-card-more': { label: 'Place card, more about this place', render: () => <PlaceOnMap place={campusPlace(2)} expanded /> },
-  'place-card-no-details': { label: 'Place card, no more details', render: () => <PlaceOnMap place={campusPlace(39)} expanded /> },
-  'place-card-second-step': { label: 'Place card, choosing a destination (no GPS)', render: () => <PlaceOnMap place={campusPlace(2)} me={null} choosingDestination /> },
+  'place-card-rally-set': { label: 'Place card, rally point set here', render: () => <PlaceOnMap place={campusPlace(2)} rallyActive /> },
+  'place-card-one-photo': { label: 'Place card, one photo', render: () => <PlaceOnMap place={campusPlace(39)} /> },
   'camera-explainer': {
     label: 'Allow the camera for AR Scan',
     render: () => (
@@ -209,6 +209,22 @@ const SCREENS = {
   'admin-tools-recording': {
     label: 'Admin tools, recording a path',
     render: () => <AdminTools open email="owner@example.com" name="Krish" recording points={12} onRecord={() => {}} onPublish={() => {}} onAbort={() => {}} onClose={() => {}} />,
+  },
+  'admin-tools-places': {
+    label: 'Admin tools, with places already added',
+    render: () => <AdminTools open email="owner@example.com" name="Krish" recording={false} points={0} onRecord={() => {}} onPublish={() => {}} onAbort={() => {}} onClose={() => {}} added={[{ id: 'cp-a', name: 'DENTAL GROUND' }, { id: 'cp-b', name: 'SRM FABLAB' }]} onAddPlace={() => {}} onRemovePlace={() => {}} />,
+  },
+  'add-place': {
+    label: 'Add a place: the form for the chosen spot',
+    render: () => <AddPlaceSheet open lat={12.8212} lng={80.0452} saving={false} problem={null} onSave={() => {}} onCancel={() => {}} />,
+  },
+  'add-place-problem': {
+    label: 'Add a place: a name already used',
+    render: () => <AddPlaceSheet open lat={12.8212} lng={80.0452} saving={false} problem="A place with that name is already on the map." onSave={() => {}} onCancel={() => {}} />,
+  },
+  'placing-bar': {
+    label: 'Add a place: the bar on the map',
+    render: () => <div style={{ position: 'absolute', inset: 0, background: 'var(--color-map-land)' }}><PlacingBar onCancel={() => {}} /></div>,
   },
   'recording-bar': {
     label: 'Recording a path: the bar on the map',
@@ -265,6 +281,8 @@ function SettingsDemo({ scrollTo = null }) {
       onArFeatureOverride={(feature, v) => setOverrides((o) => ({ ...o, [feature]: v }))}
       update={{ installedVersion: '1.1.0', supported: true, status: 'up-to-date', onCheck: () => {} }}
       onOpenGuide={() => {}}
+      onSignOut={() => {}}
+      onAdmin={() => {}}
     />
   );
 }
@@ -274,24 +292,17 @@ const campusPlace = (id) => SRM_MASTER_DATABASE.find((b) => b.id === id);
 
 // The place card where the app puts it: above the Emergency button's spot, on the screen's
 // background (the map behind it is the Map batch's).
-function PlaceOnMap({ place, expanded = false, me = ME, choosingDestination = false }) {
-  const [open, setOpen] = useState(expanded);
+function PlaceOnMap({ place, rallyActive = false }) {
+  const [rally, setRally] = useState(rallyActive);
   return (
     <div style={{ position: 'absolute', inset: 0, background: 'var(--color-bg)' }}>
       <div style={{ position: 'absolute', left: 12, right: 12, bottom: 'calc(11rem)', maxHeight: '60vh', overflowY: 'auto', borderRadius: 16 }}>
         <PlaceCard
           place={place}
-          me={me}
-          heading={330}
-          headingLive
-          choosingDestination={choosingDestination}
-          expanded={open}
-          onToggleExpanded={() => setOpen((v) => !v)}
           onClose={() => {}}
           onNavigate={() => {}}
           onArScan={() => {}}
-          onSetMeetingPoint={() => {}}
-          onShowOnMap={() => {}}
+          rally={{ active: rally, onPress: () => setRally((v) => !v) }}
         />
       </div>
     </div>

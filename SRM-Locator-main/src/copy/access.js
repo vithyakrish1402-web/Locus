@@ -99,6 +99,7 @@ export const LOBBY = {
   joinHelp: 'Ask your Group Lead for the 6-character code. Letters and numbers only.',
   createButton: 'Create group',
   joinButton: 'Join group',
+  signOut: 'Sign out',
   shareTitle: 'LOCUS group',
   shareText: (code) => `Join my LOCUS group with code ${code}`,
   copyFailed: "Couldn't copy. Read the code out instead.",
@@ -106,6 +107,23 @@ export const LOBBY = {
   notFound: 'No group uses this code right now. Check it with your Group Lead and try again.',
   ended: (code) => `Group ${spacedCode(code)} has ended. Ask your Group Lead to create it again, or start a new group.`,
   codeTaken: "That code is already in use, so here's a new one to share.",
+  // Opening the app after background sharing ended because the server lost the Group.
+  groupEndedRestart: 'Your Group ended (the server restarted). Rejoin with the code.',
+};
+
+// Opening LOCUS again (after a swipe, or from the sharing notification) while this phone still
+// remembers the Group it was in. Nothing is joined until the person chooses.
+export const RESUME = {
+  title: 'Back to your Group?',
+  body: (code, role) => (role === 'OWNER'
+    ? `You are the Group Lead of ${spacedCode(code)}.`
+    : `You were in Group ${spacedCode(code)}.`),
+  freshHelp: 'Start fresh takes you to the lobby. You can still rejoin later with the code.',
+  sharingNote: 'Starting fresh also stops sharing your location while LOCUS is closed.',
+  returnButton: (code) => `Return to ${spacedCode(code)}`,
+  freshButton: 'Start fresh',
+  returningTitle: 'Returning to your Group',
+  returningBody: (code) => `Getting you back into ${spacedCode(code)}.`,
 };
 
 export const WAITING = {
