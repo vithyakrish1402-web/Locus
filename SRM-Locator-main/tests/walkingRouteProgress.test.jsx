@@ -19,6 +19,9 @@ describe('walking route progress', () => {
       engine: 'leaflet', liveLocation: position, activeWaypoint: end,
     }), { initialProps: { position: start } });
     await waitFor(() => expect(result.current.isRealRoute).toBe(true));
+    const unchangedRoute = result.current;
+    rerender({ position: { ...start } });
+    expect(result.current).toBe(unchangedRoute);
     const halfway = { lat: 12.82005, lng: 80.04 };
     rerender({ position: halfway });
     expect(result.current.path[0].lat).toBeCloseTo(halfway.lat, 8);
