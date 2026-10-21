@@ -39,7 +39,7 @@ vi.mock('google-map-react', async () => {
     default: function FakeGoogleMap({ onGoogleApiLoaded, options }) {
       google.options = options;
       React.useEffect(() => {
-        if (google.loads) onGoogleApiLoaded?.({ map: { setTilt() {}, getDiv() {}, getCenter: () => ({ lat: () => 0, lng: () => 0 }), getZoom: () => 17 } });
+        if (google.loads) onGoogleApiLoaded?.({ map: { setTilt() {}, addListener() { return { remove() {} }; }, getDiv() {}, getCenter: () => ({ lat: () => 0, lng: () => 0 }), getZoom: () => 17 } });
       // eslint-disable-next-line react-hooks/exhaustive-deps
       }, []);
       return <div data-testid="google-map" />;
@@ -84,7 +84,7 @@ const enterMapScreen = () => {
 };
 const statusText = () => {
   fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
-  return screen.getByTestId('map-engine-status').textContent;
+  return screen.getByTestId('map-engine-status').textContent.replace(/\s*·\s*/g, '');
 };
 
 let warnSpy;
@@ -210,32 +210,33 @@ describe('the Google map style', () => {
   });
 });
 
-// The walking line's colours come from the theme (Map batch fix 5): the line in the route
-// colour on a casing in the map's casing colour, so a dark map never gets a white casing.
+// The route stays blue with a white outline in both themes, independently of map tokens.
 describe('the walking line colours reaching the map', () => {
   afterEach(() => {
     document.documentElement.style.removeProperty('--color-map-route');
     document.documentElement.style.removeProperty('--color-map-casing');
   });
 
-  it("are the theme's route and casing colours", async () => {
+  it.each(['light', 'dark'])('stays blue with a white outline in the %s theme on Leaflet', async (theme) => {
+    localStorage.setItem('locus.theme', theme);
     document.documentElement.style.setProperty('--color-map-route', '#8FB1FF');
     document.documentElement.style.setProperty('--color-map-casing', '#0E1116');
     const App = await loadApp('');
     render(<App />);
     enterMapScreen();
     await screen.findByTestId('leaflet-map');
-    expect(leaflet.props.routeColor).toBe('#8FB1FF');
-    expect(leaflet.props.casingColor).toBe('#0E1116');
+    expect(leaflet.props.routeColor).toBe('#1A73E8');
+    expect(leaflet.props.casingColor).toBe('#FFFFFF');
   });
 
-  it('reach the Google line too', async () => {
+  it.each(['light', 'dark'])('stays blue with a white outline in the %s theme on Google', async (theme) => {
+    localStorage.setItem('locus.theme', theme);
     document.documentElement.style.setProperty('--color-map-route', '#8FB1FF');
     document.documentElement.style.setProperty('--color-map-casing', '#0E1116');
     const App = await loadApp('test-key');
     render(<App />);
     enterMapScreen();
     await screen.findByTestId('google-map');
-    expect(googleLine.args.slice(3)).toEqual(['#8FB1FF', '#0E1116']);
+    expect(googleLine.args.slice(3)).toEqual(['#1A73E8', '#FFFFFF']);
   });
 });

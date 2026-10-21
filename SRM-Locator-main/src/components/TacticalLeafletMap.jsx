@@ -13,7 +13,7 @@ import LeafletReactMarker from './LeafletReactMarker';
 import MemberMarker from './MemberMarker';
 import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
 import { registerMapDriver } from '../utils/mapFocus';
-import { ROUTE_CASING_WIDTH, ROUTE_WIDTH } from '../hooks/useWaypointNavigationLine';
+import { ROUTE_CASING_WIDTH, ROUTE_WIDTH, ROUTE_COLOR, ROUTE_CASING_COLOR, ROUTE_DASH_ARRAY, FALLBACK_DASH_ARRAY } from '../hooks/useWaypointNavigationLine';
 
 // This engine exists precisely because there is no Google Maps key (see App.jsx's
 // mapEngineFailed / the "keyless Leaflet/OSM engine" warning), so its own basemap must
@@ -165,8 +165,8 @@ const TacticalLeafletMap = ({
   routeSteps = null,
   // The theme's line colours (App.jsx reads them; Leaflet's path options take literals), a
   // member's distance for their plate, and what a lost-connection member's card says.
-  routeColor = '#1F4FB8',
-  casingColor = '#FFFFFF',
+  routeColor = ROUTE_COLOR,
+  casingColor = ROUTE_CASING_COLOR,
   lastKnownColor = '#8A94A3',
   memberDistance = () => null,
   ghostFocusItem = (ghost) => ({ name: ghost.name }),
@@ -237,36 +237,28 @@ const TacticalLeafletMap = ({
         </LeafletReactMarker>
       )}
 
-      {/* Live walking route to the active waypoint — Google Maps style thick blue on white casing */}
-      {walkingRoute?.path?.length > 0 && walkingRoute.isRealRoute && (
+      {/* Live walking route to the active waypoint — shared blue dashes and white outline in both themes */}
+      {walkingRoute?.path?.length > 1 && (
         <Polyline
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
           pathOptions={{
-            color: liveIsNavigating ? '#FFFFFF' : casingColor,
+            color: casingColor,
             weight: ROUTE_CASING_WIDTH,
-            dashArray: '0 16', lineCap: 'round',
+            dashArray: walkingRoute.isRealRoute ? ROUTE_DASH_ARRAY : FALLBACK_DASH_ARRAY, lineCap: 'round',
             opacity: 1,
           }}
         />
       )}
-      {walkingRoute?.path?.length > 0 && (
+      {walkingRoute?.path?.length > 1 && (
         <Polyline
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
-          pathOptions={
-            walkingRoute.isRealRoute
-              ? {
-                  color: liveIsNavigating ? '#1A73E8' : routeColor,
-                  weight: ROUTE_WIDTH,
-                  dashArray: '0 16', lineCap: 'round',
-                  opacity: 1,
-                }
-              : {
-                  color: liveIsNavigating ? '#1A73E8' : routeColor,
-                  dashArray: '2 12',
-                  weight: 4,
-                  opacity: 0.6,
-                }
-          }
+          pathOptions={{
+            color: routeColor,
+            weight: ROUTE_WIDTH,
+            dashArray: walkingRoute.isRealRoute ? ROUTE_DASH_ARRAY : FALLBACK_DASH_ARRAY,
+            lineCap: 'round',
+            opacity: 1,
+          }}
         />
       )}
 
