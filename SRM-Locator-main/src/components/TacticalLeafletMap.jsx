@@ -207,13 +207,11 @@ const TacticalLeafletMap = ({
           Polyline (see App.jsx's useWaypointNavigationLine). walkingRoute is
           computed once in App.jsx (useWalkingRoute) and shared with the
           Google engine so there's a single throttling clock, not two.
-          A real route is solid, 5 px on a 9 px casing, as the Google line;
-          the straight-line "best effort" fallback stays a sparse, light dash
-          with no casing, so it visually reads as less certain. */}
+          Real routes use round dots; the fallback stays a sparse, light dash. */}
       {walkingRoute && walkingRoute.isRealRoute && (
         <Polyline
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
-          pathOptions={{ color: casingColor, weight: ROUTE_CASING_WIDTH, opacity: 1 }}
+          pathOptions={{ color: casingColor, weight: ROUTE_CASING_WIDTH, opacity: 1, dashArray: '0 16', lineCap: 'round' }}
         />
       )}
       {walkingRoute && (
@@ -221,7 +219,7 @@ const TacticalLeafletMap = ({
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
           pathOptions={
             walkingRoute.isRealRoute
-              ? { color: routeColor, weight: ROUTE_WIDTH, opacity: 1 }
+              ? { color: routeColor, weight: ROUTE_WIDTH, opacity: 1, dashArray: '0 16', lineCap: 'round' }
               : { color: routeColor, dashArray: '2 12', weight: 4, opacity: 0.5 }
           }
         />

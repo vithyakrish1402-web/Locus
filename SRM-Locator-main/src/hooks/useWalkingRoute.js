@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchGoogleWalkingRoute, fetchOsrmWalkingRoute } from '../utils/routingProviders';
 import { DRIFT_THRESHOLD_M, RECOMPUTE_INTERVAL_MS, haversineMeters, buildStraightLineRoute } from '../utils/walkingRoute';
+import { remainingPath } from '../utils/arRoadLine';
 
 /**
  * Live walking route from the operative's position to the active squad
@@ -67,7 +68,11 @@ export function useWalkingRoute({ engine, liveLocation, activeWaypoint }) {
   }, [liveLocation, activeWaypoint, engine, waypointKey]);
 
   if (!liveLocation || !activeWaypoint) return null;
-  if (realRoute && realRoute.waypointKey === waypointKey) return realRoute;
+  if (realRoute && realRoute.waypointKey === waypointKey) {
+    // Rendering follows every fix, independently of the throttled route request.
+    // Project onto segments so progress also works between widely spaced vertices.
+    return { ...realRoute, path: remainingPath(realRoute.path, liveLocation) };
+  }
   // Recomputed fresh every render — cheap pure geometry, so it's fine to
   // track live position on every tick even though the real-route fetch above
   // is throttled. Also what covers a stale (wrong-waypoint) realRoute above.

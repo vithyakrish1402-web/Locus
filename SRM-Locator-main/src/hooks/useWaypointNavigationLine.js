@@ -9,18 +9,19 @@ import { useEffect, useRef } from 'react';
 // every GPS update while the operative is on the real-route fallback
 // (which redraws fresh every render — see useWalkingRoute.js).
 //
-// `isRealRoute` distinguishes a real routed path from the straight-line
-// "best effort" fallback. A real route is the design's line: solid, 5 px on a
-// 9 px casing (a second, wider Polyline under it in the map's casing colour).
-// The fallback stays a sparse, light dash with no casing, which reads as less
-// certain, per the fallback-behavior spec. Recreates the lines (rather than
-// just re-pathing them) whenever this or a colour changes.
-//
-// Leaflet-fallback rendering is separate — TacticalLeafletMap.jsx renders the
-// same path declaratively via react-leaflet's <Polyline>.
-// The design's widths (tokens.css --size-map-route / --size-map-route-casing).
+// Real routes use aligned circular symbols with a casing around each dot.
+// The uncertain straight-line fallback stays a sparse, light dash.
+// Leaflet mirrors this style in TacticalLeafletMap.jsx.
 export const ROUTE_WIDTH = 5;
 export const ROUTE_CASING_WIDTH = 9;
+
+const routeDots = (color, diameter) => [{
+  icon: {
+    path: window.google.maps.SymbolPath.CIRCLE,
+    fillColor: color, fillOpacity: 1, strokeOpacity: 0, scale: diameter / 2,
+  },
+  offset: '0', repeat: '16px',
+}];
 
 export function useWaypointNavigationLine(map, path, isRealRoute, color = '#1F4FB8', casingColor = '#FFFFFF') {
   const linesRef = useRef([]); // the casing (real routes only), then the line on top
@@ -44,8 +45,8 @@ export function useWaypointNavigationLine(map, path, isRealRoute, color = '#1F4F
       const { Polyline } = window.google.maps;
       linesRef.current = isRealRoute
         ? [
-          new Polyline({ path, map, strokeColor: casingColor, strokeOpacity: 1, strokeWeight: ROUTE_CASING_WIDTH, zIndex: 1 }),
-          new Polyline({ path, map, strokeColor: color, strokeOpacity: 1, strokeWeight: ROUTE_WIDTH, zIndex: 2 }),
+          new Polyline({ path, map, strokeColor: casingColor, strokeOpacity: 0, zIndex: 1, icons: routeDots(casingColor, ROUTE_CASING_WIDTH) }),
+          new Polyline({ path, map, strokeColor: color, strokeOpacity: 0, zIndex: 2, icons: routeDots(color, ROUTE_WIDTH) }),
         ]
         : [new Polyline({
           path,
