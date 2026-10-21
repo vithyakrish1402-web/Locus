@@ -105,6 +105,7 @@
 
 /* Values that are not Tailwind utilities: read with var(), in CSS or from code. */
 :root {
+  color-scheme: light;
   --color-bg: #F4F6F8;
   --color-surface: #FFFFFF;
   --color-raised: #FFFFFF;
@@ -184,6 +185,7 @@
 /* Dark. Two selectors for one set of values: the attribute when the theme script ran, and
    the phone's own setting when it could not (no attribute at all). */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --color-bg: #0E1116;
   --color-surface: #161A21;
   --color-raised: #1E232C;
@@ -242,6 +244,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
+    color-scheme: dark;
     --color-bg: #0E1116;
     --color-surface: #161A21;
     --color-raised: #1E232C;

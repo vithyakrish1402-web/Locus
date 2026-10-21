@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 //
-// The walking line on the Google map (Map batch fix 5): a real route is the design's solid
-// 5 px line on a 9 px casing; the straight-line "best effort" fallback stays a sparse, light
-// dash with no casing, so it reads as less certain.
+// Real routes use round dots with a casing; the fallback remains a sparse dash.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { renderHook, cleanup } from '@testing-library/react';
 import { useWaypointNavigationLine, ROUTE_WIDTH, ROUTE_CASING_WIDTH } from '../src/hooks/useWaypointNavigationLine.js';
@@ -25,7 +23,7 @@ const shown = () => lines.filter((l) => l.onMap);
 
 beforeEach(() => {
   lines = [];
-  window.google = { maps: { Polyline: FakePolyline } };
+  window.google = { maps: { Polyline: FakePolyline, SymbolPath: { CIRCLE: 0 } } };
 });
 afterEach(() => {
   cleanup();
@@ -33,14 +31,16 @@ afterEach(() => {
 });
 
 describe('a real route', () => {
-  it('is solid, 5 px, on a 9 px casing in the casing colour, the line on top', () => {
+  it('draws separated round dots with matching casing dots and no solid stroke', () => {
     renderHook(() => useWaypointNavigationLine(MAP, PATH, true, '#123456', '#ABCDEF'));
     const [casing, line] = shown();
     expect(shown()).toHaveLength(2);
-    expect([ROUTE_WIDTH, ROUTE_CASING_WIDTH]).toEqual([5, 9]);
-    expect(casing.options).toMatchObject({ strokeColor: '#ABCDEF', strokeWeight: 9, strokeOpacity: 1 });
-    expect(line.options).toMatchObject({ strokeColor: '#123456', strokeWeight: 5, strokeOpacity: 1 });
-    expect(line.options.icons).toBeUndefined();
+    for (const [polyline, color, diameter] of [[casing, '#ABCDEF', ROUTE_CASING_WIDTH], [line, '#123456', ROUTE_WIDTH]]) {
+      expect(polyline.options.strokeOpacity).toBe(0);
+      expect(polyline.options.icons[0]).toMatchObject({ offset: '0', repeat: '16px', icon: {
+        path: 0, fillColor: color, fillOpacity: 1, strokeOpacity: 0, scale: diameter / 2,
+      } });
+    }
     expect(line.options.zIndex).toBeGreaterThan(casing.options.zIndex);
   });
 
@@ -86,10 +86,10 @@ describe('the best-effort straight line', () => {
     expect(line.options.icons[0]).toMatchObject({ repeat: '22px', icon: { strokeColor: '#123456', strokeOpacity: 0.45 } });
   });
 
-  it('turning into a real route swaps the dash for the solid line on its casing', () => {
+  it('turning into a real route swaps the dash for round dots on their casing', () => {
     const { rerender } = renderHook(({ real }) => useWaypointNavigationLine(MAP, PATH, real, '#123456', '#ABCDEF'), { initialProps: { real: false } });
     rerender({ real: true });
     expect(shown()).toHaveLength(2);
-    expect(shown().every((l) => !l.options.icons)).toBe(true);
+    expect(shown().every((l) => l.options.icons[0].repeat === '16px')).toBe(true);
   });
 });
