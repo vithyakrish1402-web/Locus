@@ -2163,7 +2163,7 @@ const App = () => {
   const drawnRoute = useMemo(() => {
     if (!isNavigatingMode || !shownRoute?.path) return shownRoute;
     return { ...shownRoute, path: trimRouteBehind(shownRoute.path, liveLocation) };
-  }, [isNavigatingMode, shownRoute, liveLocation]);
+  }, [isNavigatingMode, shownRoute, liveLocation?.lat, liveLocation?.lng]);
 
   // Live navigation line from the operative's own position to the active
   // squad waypoint — same "no-op on Leaflet/before mount" gating as above.

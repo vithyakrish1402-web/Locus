@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { remainingPath } from '../utils/arRoadLine';
 import { fetchPedestrianRoute } from '../utils/routingProviders';
 import { DRIFT_THRESHOLD_M, RECOMPUTE_INTERVAL_MS, haversineMeters, buildStraightLineRoute } from '../utils/walkingRoute';
@@ -58,12 +58,12 @@ export function useWalkingRoute({ engine, liveLocation, activeWaypoint }) {
     });
   }, [liveLocation, activeWaypoint, engine, waypointKey]);
 
-  if (!liveLocation || !activeWaypoint) return null;
-  if (realRoute && realRoute.waypointKey === waypointKey) {
-    return { ...realRoute, path: remainingPath(realRoute.path, liveLocation) };
-  }
-  // Recomputed fresh every render — cheap pure geometry, so it's fine to
-  // track live position on every tick even though the real-route fetch above
-  // is throttled. Also what covers a stale (wrong-waypoint) realRoute above.
-  return buildStraightLineRoute(liveLocation, activeWaypoint);
+  // Compass/UI updates must not allocate a fresh path and redraw both map lines.
+  return useMemo(() => {
+    if (!liveLocation || !activeWaypoint) return null;
+    if (realRoute && realRoute.waypointKey === waypointKey) {
+      return { ...realRoute, path: remainingPath(realRoute.path, liveLocation) };
+    }
+    return buildStraightLineRoute(liveLocation, activeWaypoint);
+  }, [realRoute, waypointKey, liveLocation?.lat, liveLocation?.lng]);
 }

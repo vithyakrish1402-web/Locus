@@ -37,16 +37,24 @@ export function useNavigationController({
   const destinationRef = useRef(destination);
   destinationRef.current = destination;
 
-  // Track map camera animated state
-  const lastCameraHeadingRef = useRef(liveHeading || 0);
+  const activeRouteRef = useRef(activeRoute);
+  activeRouteRef.current = activeRoute;
+  const requestIdRef = useRef(0);
+  const sessionKeyRef = useRef(null);
+  const cameraFrameRef = useRef(null);
+
+  useEffect(() => () => {
+    requestIdRef.current += 1;
+  }, []);
 
   // Route calculation function
   const triggerRouteCalculation = useCallback(async (origin, dest) => {
     if (!origin || !dest) return;
     const now = Date.now();
-    if (now - lastRerouteTimeRef.current < MIN_REROUTE_INTERVAL_MS && activeRoute) return;
+    if (now - lastRerouteTimeRef.current < MIN_REROUTE_INTERVAL_MS && activeRouteRef.current) return;
     if (rerouteInFlightRef.current) return;
 
+    const requestId = ++requestIdRef.current;
     rerouteInFlightRef.current = true;
     setIsRerouting(true);
     setRerouteError(null);
@@ -56,7 +64,7 @@ export function useNavigationController({
       const route = await fetchPedestrianRoute(origin, dest, mapEngine);
 
       // Check if destination is still valid
-      if (destinationRef.current?.lat === dest.lat && destinationRef.current?.lng === dest.lng) {
+      if (requestId === requestIdRef.current && destinationRef.current?.lat === dest.lat && destinationRef.current?.lng === dest.lng) {
         if (route && route.path && route.path.length > 0) {
           setActiveRoute(route);
           setCurrentStepIndex(0);
@@ -67,15 +75,27 @@ export function useNavigationController({
         }
       }
     } catch {
-      setRerouteError('Routing service unavailable');
+      if (requestId === requestIdRef.current) setRerouteError('Routing service unavailable');
     } finally {
-      rerouteInFlightRef.current = false;
-      setIsRerouting(false);
+      if (requestId === requestIdRef.current) {
+        rerouteInFlightRef.current = false;
+        setIsRerouting(false);
+      }
     }
-  }, [mapEngine, activeRoute]);
+  }, [mapEngine]);
 
   // Reset session when navigation starts or destination changes
   useEffect(() => {
+    const sessionKey = isNavigating && destination ? `${mapEngine}:${destination.lat},${destination.lng}` : null;
+    if (sessionKeyRef.current !== sessionKey) {
+      sessionKeyRef.current = sessionKey;
+      requestIdRef.current += 1; // Invalidate responses for a stopped/replaced session.
+      rerouteInFlightRef.current = false;
+      lastRerouteTimeRef.current = 0;
+      activeRouteRef.current = null;
+      setActiveRoute(null);
+      hasInitialCenteredRef.current = false;
+    }
     if (!isNavigating || !destination) {
       setActiveRoute(null);
       setIsRerouting(false);
@@ -97,7 +117,7 @@ export function useNavigationController({
     if (liveLocation) {
       triggerRouteCalculation(liveLocation, destination);
     }
-  }, [isNavigating, destination?.lat, destination?.lng, triggerRouteCalculation]);
+  }, [isNavigating, destination?.lat, destination?.lng, mapEngine, triggerRouteCalculation]);
 
   // Automatically trigger route calculation as soon as liveLocation arrives
   useEffect(() => {
@@ -196,40 +216,32 @@ export function useNavigationController({
     }
   }, [isNavigating, liveLocation?.lat, liveLocation?.lng, mapInstance, handleRecenter]);
 
-  // Continuous Camera Auto-Follow: ONLY runs if user explicitly turns on autoFollow
+  // Animate the native map directly, without rerendering the app on every frame.
+  // A new GPS fix starts at the current view; cleanup cancels old animation on drag/stop.
   useEffect(() => {
     if (!isNavigating || !autoFollow || !liveLocation || !mapInstance) return;
-
-    const targetCenter = { lat: liveLocation.lat, lng: liveLocation.lng };
-    const targetZoom = 19; // Navigation perspective zoom
-
+    const target = { lat: liveLocation.lat, lng: liveLocation.lng };
     if (mapEngine === 'google' && typeof mapInstance.moveCamera === 'function') {
-      try {
-        const isMoving = (speedMps || 0) > 0.6;
-        const targetHeading = isMoving && liveHeading != null ? liveHeading : (mapInstance.getHeading?.() || 0);
-
-        const currentCamHeading = lastCameraHeadingRef.current || 0;
-        const smoothHeading = isMoving ? interpolateHeading(currentCamHeading, targetHeading, 0.25) : currentCamHeading;
-        lastCameraHeadingRef.current = smoothHeading;
-
+      const center = mapInstance.getCenter?.();
+      const from = { lat: center?.lat?.() ?? target.lat, lng: center?.lng?.() ?? target.lng };
+      const fromHeading = mapInstance.getHeading?.() || 0;
+      const toHeading = (speedMps || 0) > 0.6 && liveHeading != null ? liveHeading : fromHeading;
+      const started = performance.now();
+      const frame = (now) => {
+        const t = Math.min(1, Math.max(0, (now - started) / 400));
+        const eased = t * t * (3 - 2 * t);
         mapInstance.moveCamera({
-          center: targetCenter,
-          zoom: targetZoom,
-          heading: smoothHeading,
-          tilt: 35,
+          center: { lat: from.lat + (target.lat - from.lat) * eased, lng: from.lng + (target.lng - from.lng) * eased },
+          heading: interpolateHeading(fromHeading, toHeading, eased),
         });
-      } catch {
-        mapInstance.setCenter?.(targetCenter);
-      }
-    } else if (mapEngine === 'google' && typeof mapInstance.panTo === 'function') {
-      mapInstance.panTo(targetCenter);
-    } else if (mapEngine === 'leaflet') {
-      const currentZoom = mapInstance.getZoom?.() || 17;
-      if (currentZoom < targetZoom) {
-        mapInstance.flyTo?.([targetCenter.lat, targetCenter.lng], targetZoom, { duration: 0.8 });
-      } else if (typeof mapInstance.panTo === 'function') {
-        mapInstance.panTo([targetCenter.lat, targetCenter.lng], { animate: true, duration: 0.4 });
-      }
+        if (t < 1) cameraFrameRef.current = requestAnimationFrame(frame);
+      };
+      cameraFrameRef.current = requestAnimationFrame(frame);
+      return () => cancelAnimationFrame(cameraFrameRef.current);
+    }
+    if (typeof mapInstance.panTo === 'function') {
+      mapInstance.panTo(mapEngine === 'leaflet' ? [target.lat, target.lng] : target,
+        { animate: true, duration: 0.4 });
     }
   }, [isNavigating, autoFollow, liveLocation?.lat, liveLocation?.lng, liveHeading, speedMps, mapEngine, mapInstance]);
 
