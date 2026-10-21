@@ -1,7 +1,7 @@
 import React, { useId } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.div>, which this config can't see
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Crosshair, Route, ShieldAlert, Terminal, X } from 'lucide-react';
+import { Crosshair, MapPin, Route, ShieldAlert, Terminal, X } from 'lucide-react';
 import { Button, IconButton } from '../ui';
 import { modalBackdrop, modalCard } from '../../utils/motion';
 
@@ -35,9 +35,10 @@ export function RecordingBar({ points, onPublish, onAbort }) {
 /**
  * @param {{ open: boolean, email?: string|null, name?: string|null, recording: boolean,
  *   points: number, onRecord: () => void, onPublish: () => void, onAbort: () => void,
- *   onClose: () => void }} props
+ *   onClose: () => void, added?: object[], onAddPlace?: () => void,
+ *   onRemovePlace?: (place: object) => void }} props
  */
-export default function AdminTools({ open, email, name, recording, points, onRecord, onPublish, onAbort, onClose }) {
+export default function AdminTools({ open, email, name, recording, points, onRecord, onPublish, onAbort, onClose, added = [], onAddPlace = () => {}, onRemovePlace = () => {} }) {
   const reduceMotion = useReducedMotion();
   const titleId = useId();
   return (
@@ -94,6 +95,27 @@ export default function AdminTools({ open, email, name, recording, points, onRec
                       <Button block variant="secondary" icon={X} onClick={onAbort}>ABORT</Button>
                     </div>
                   </div>
+                )}
+              </section>
+
+              <section aria-labelledby={`${titleId}-places`} className="flex flex-col gap-3 mt-6">
+                <h4 id={`${titleId}-places`} className="flex items-center gap-2 text-label">
+                  <MapPin size={18} className="text-accent" aria-hidden="true" />
+                  SECTION_02 // ADD_PLACE
+                </h4>
+                <p className="text-secondary text-text-secondary">
+                  Tap the map to drop a new place. It is saved for everyone and shows up in the list, search and navigation.
+                </p>
+                <Button variant="tonal" block icon={MapPin} onClick={onAddPlace}>ADD_PLACE</Button>
+                {added.length > 0 && (
+                  <ul data-testid="added-places" className="flex flex-col gap-2">
+                    {added.map((place) => (
+                      <li key={place.id} className="flex items-center gap-2 rounded-card border border-border px-3 py-2">
+                        <span className="flex-1 min-w-0 break-words text-secondary">{place.name}</span>
+                        <Button variant="secondary" onClick={() => onRemovePlace(place)} aria-label={`Remove ${place.name}`} className="shrink-0">REMOVE</Button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </section>
             </div>

@@ -10,12 +10,13 @@ import React from 'react';
 export default function Card(allProps) {
   const { as: Tag = 'div', padded = true, glass = true, className = '', children, ...props } = allProps;
   const glassClasses = glass
-    ? 'backdrop-blur-2xl bg-[var(--glass-bg)] border border-[var(--glass-border)] shadow-[var(--glass-shadow)]'
+    ? 'backdrop-blur-sm bg-[var(--glass-bg)] border border-[var(--glass-border)] shadow-sm'
     : 'bg-surface border border-border shadow-[var(--shadow-1)]';
 
   return (
     <Tag
-      className={`shrink-0 text-text font-ui rounded-[20px] transition-[transform,opacity] duration-200 ${glassClasses} ${padded ? 'p-4' : 'overflow-hidden'} ${className}`}
+      data-card="true"
+      className={`shrink-0 text-text font-ui rounded-[20px] transition-colors duration-200 ${glassClasses} ${padded ? 'p-4' : 'overflow-hidden'} ${className}`}
       style={{
         boxShadow: glass ? 'var(--glass-shadow), var(--glass-specular)' : undefined,
         ...props.style,

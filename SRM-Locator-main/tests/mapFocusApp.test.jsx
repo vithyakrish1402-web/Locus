@@ -172,7 +172,7 @@ describe('a matrix building tap', () => {
       const sheet = () => container.querySelector('.fixed.inset-x-0.bottom-16');
       fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Group' })); // the bottom bar's: opens the sheet
       fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
-      await waitFor(() => expect(sheet().dataset.height).toBe('half'));
+      await waitFor(() => expect(sheet().dataset.height).toBe('peek')); // the Group tab opens it at peek
       fireEvent.click((await screen.findAllByText(SRM_MASTER_DATABASE[0].name))[0]);
       await waitFor(() => expect(sheet().dataset.height).toBe('closed'));
     } finally {

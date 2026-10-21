@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Copy, ShieldCheck } from 'lucide-react';
-import { Chip, IconButton } from '../ui';
+import { Chip, IconButton, AnimatedThemeToggler } from '../ui';
 import { copyText } from '../../utils/clipboard';
 import { GROUP_HEADER } from '../../copy/group';
-import { AnimatedThemeToggleButton } from '../ui/animated-theme-toggle-button';
 
 // The group panel's header (redesign Group panel batch): "Your group", your role, the group
 // code, Copy and light/dark mode switch.
@@ -29,7 +28,7 @@ export default function GroupHeader({ isLead, code, children }) {
       <div className="flex items-center gap-3">
         <h2 className="flex-1 min-w-0 text-title truncate">{GROUP_HEADER.title}</h2>
         <span className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-          <AnimatedThemeToggleButton />
+          <AnimatedThemeToggler className="w-10 h-10 rounded-xl bg-surface-raised border border-border-control/25 hover:border-accent/40 shadow-xs active:scale-95 transition-all text-text" />
           <IconButton
             variant="tonal"
             label={copied ? GROUP_HEADER.copied : GROUP_HEADER.copy}

@@ -146,6 +146,7 @@ describe('the location explainer', () => {
     await act(async () => {});
     expect(localStorage.getItem(LOCATION_ALLOWED_KEY)).toBe('1');
     cleanup();
+    localStorage.removeItem('locus.group'); // reopened with no Group to go back to (tests/resumeGroup.test.jsx covers that)
     await onTheMap();
     expect(explainer()).toBeNull();
     expect(geo.getCurrentPosition).toHaveBeenCalled();
@@ -198,6 +199,7 @@ describe('the location explainer', () => {
     await act(async () => {});
     expect(localStorage.getItem(LOCATION_ALLOWED_KEY)).toBe('1');
     cleanup();
+    localStorage.removeItem('locus.group'); // reopened with no Group to go back to (tests/resumeGroup.test.jsx covers that)
     await onTheMap();
     expect(explainer()).toBeNull();
   });

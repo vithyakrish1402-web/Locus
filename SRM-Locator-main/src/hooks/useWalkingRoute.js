@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchGoogleWalkingRoute, fetchOsrmWalkingRoute } from '../utils/routingProviders';
-import { DRIFT_THRESHOLD_M, RECOMPUTE_INTERVAL_MS, haversineMeters, buildStraightLineRoute } from '../utils/walkingRoute';
 import { remainingPath } from '../utils/arRoadLine';
+import { fetchPedestrianRoute } from '../utils/routingProviders';
+import { DRIFT_THRESHOLD_M, RECOMPUTE_INTERVAL_MS, haversineMeters, buildStraightLineRoute } from '../utils/walkingRoute';
 
 /**
  * Live walking route from the operative's position to the active squad
@@ -14,12 +14,6 @@ import { remainingPath } from '../utils/arRoadLine';
  * RECOMPUTE_INTERVAL_MS has elapsed — whichever comes first. Returns
  * { path, distance, duration, isRealRoute }, or null if there's no live
  * position or no active waypoint at all.
- *
- * Known data-quality limitation, not fixable here: campus interior footpaths
- * (courtyards, small inter-building lanes) often aren't mapped as walkable
- * ways in the base road data either provider routes against, so the result
- * can still look a little off in tightly-packed interior areas. Should still
- * be dramatically better than the straight line it replaces in most cases.
  */
 export function useWalkingRoute({ engine, liveLocation, activeWaypoint }) {
   // Tagged with the waypointKey it was computed for — lets a response that
@@ -57,20 +51,15 @@ export function useWalkingRoute({ engine, liveLocation, activeWaypoint }) {
     lastFetchFromRef.current = liveLocation;
     lastFetchWaypointKeyRef.current = waypointKey;
     const fetchedForKey = waypointKey;
-    const fetcher = engine === 'google' ? fetchGoogleWalkingRoute : fetchOsrmWalkingRoute;
 
-    fetcher(liveLocation, activeWaypoint).then((result) => {
+    fetchPedestrianRoute(liveLocation, activeWaypoint, engine).then((result) => {
       fetchInFlightRef.current = false;
       if (result) setRealRoute({ ...result, waypointKey: fetchedForKey });
-      // On failure, leave realRoute untouched — the fallback below covers a
-      // null/stale realRoute every render regardless of why it's missing.
     });
   }, [liveLocation, activeWaypoint, engine, waypointKey]);
 
   if (!liveLocation || !activeWaypoint) return null;
   if (realRoute && realRoute.waypointKey === waypointKey) {
-    // Rendering follows every fix, independently of the throttled route request.
-    // Project onto segments so progress also works between widely spaced vertices.
     return { ...realRoute, path: remainingPath(realRoute.path, liveLocation) };
   }
   // Recomputed fresh every render — cheap pure geometry, so it's fine to

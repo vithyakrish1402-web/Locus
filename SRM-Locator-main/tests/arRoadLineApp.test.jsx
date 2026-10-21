@@ -331,7 +331,6 @@ describe('the AR road line override, with the main dial on REALISTIC', () => {
     await onTheMapWithRally();
     fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
     fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.arQuality })).getByRole('radio', { name: SETTINGS.arQualityOptions.realistic }));
-    fireEvent.click(within(screen.getByTestId('settings')).getByRole('button', { name: SETTINGS.more })); // overrides sit behind the folded More
     fireEvent.click(within(screen.getByRole('radiogroup', { name: SETTINGS.arPartNames.roadLine })).getByRole('radio', { name: SETTINGS.arPartOptions[roadLine.toLowerCase()] }));
     fireEvent.click(screen.getByTitle('Find with AR Scan'));
     await grantAndFaceNorth();

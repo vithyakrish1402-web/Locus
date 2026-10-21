@@ -16,3 +16,4 @@ export { default as ListRow } from './ListRow';
 export { default as Sheet } from './Sheet';
 export { default as Skeleton } from './Skeleton';
 export { default as ProgressBar } from './ProgressBar';
+export { AnimatedThemeToggler } from './animated-theme-toggler.jsx';

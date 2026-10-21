@@ -158,10 +158,12 @@ describe('the Members and Buildings tabs, and search', () => {
     expect(document.body.textContent).not.toMatch(/MATRIX|SEARCH_/);
   });
 
-  it('search finds buildings by name', async () => {
+  it('the Buildings tab has no search box of its own: the search is in the top bar, and finds buildings by name', async () => {
     await inAGroup();
     tab(GROUP_TABS.buildings);
-    fireEvent.change(panel().getByRole('searchbox', { name: GROUP_TABS.searchBuildings }), { target: { value: 'tech park' } });
+    expect(panel().queryByRole('searchbox')).toBeNull();
+    fireEvent.click(screen.getByTestId('top-bar-search-open'));
+    fireEvent.change(screen.getByTestId('top-bar-search'), { target: { value: 'tech park' } });
     await waitFor(() => {
       const names = panel().getAllByTestId('building-row').map((r) => r.querySelector('h4').textContent);
       expect(names.length).toBeGreaterThan(0);
@@ -227,46 +229,47 @@ describe("a member's options", () => {
 
   it('Ping, Show on map and Find with AR Scan for anyone; Remove and block only for the Group Lead', async () => {
     await open(false);
-    expect(options('Meera Iyer').getByRole('button', { name: 'Ping Meera' })).toBeTruthy();
-    expect(options('Meera Iyer').getByRole('button', { name: 'Show on map' })).toBeTruthy();
-    expect(options('Meera Iyer').getByRole('button', { name: 'Find with AR Scan' })).toBeTruthy();
-    expect(options('Meera Iyer').queryByRole('button', { name: 'Remove and block' })).toBeNull();
-    expect(screen.getByRole('dialog', { name: 'Options for Meera Iyer' }).textContent).not.toMatch(/Vote|Navigate to/);
+    expect(options('Meera Iyer').getByRole('button', { name: /^Ping Meera/ })).toBeTruthy();
+    expect(options('Meera Iyer').getByRole('button', { name: /^Show on map/ })).toBeTruthy();
+    expect(options('Meera Iyer').getByRole('button', { name: /^Find with AR Scan/ })).toBeTruthy();
+    expect(options('Meera Iyer').queryByRole('button', { name: /^Remove and block/ })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Options for Meera Iyer' }).textContent).not.toMatch(/Vote/);
   });
 
   it("shows their battery and speed, which the row doesn't", async () => {
     await open(true, { battery: 64, speed: 4 });
-    expect(screen.getByTestId('member-options').textContent).toContain('Battery 64% · 4 km/h');
+    expect(within(screen.getByTestId('member-options')).getByText('64%')).toBeTruthy();
+    expect(within(screen.getByTestId('member-options')).getByText('4 km/h')).toBeTruthy();
   });
 
   it('Ping pings them', async () => {
     await open(false);
-    fireEvent.click(options('Meera Iyer').getByRole('button', { name: 'Ping Meera' }));
+    fireEvent.click(options('Meera Iyer').getByRole('button', { name: /^Ping Meera/ }));
     expect(emitted('ping-user')[0][1]).toMatchObject({ targetId: 'sock-Meera Iyer' });
   });
 
   it('with no fix: Ping only, nothing that would aim at nowhere', async () => {
     await open(false, { lat: null, lng: null });
-    expect(options('Meera Iyer').getByRole('button', { name: 'Ping Meera' })).toBeTruthy();
-    expect(options('Meera Iyer').queryByRole('button', { name: 'Show on map' })).toBeNull();
-    expect(options('Meera Iyer').queryByRole('button', { name: 'Find with AR Scan' })).toBeNull();
+    expect(options('Meera Iyer').getByRole('button', { name: /^Ping Meera/ })).toBeTruthy();
+    expect(options('Meera Iyer').queryByRole('button', { name: /^Show on map/ })).toBeNull();
+    expect(options('Meera Iyer').queryByRole('button', { name: /^Find with AR Scan/ })).toBeNull();
   });
 
   it('Remove and block asks first, in words that never mention unblocking, and only then blocks', async () => {
     await open(true);
-    fireEvent.click(options('Meera Iyer').getByRole('button', { name: 'Remove and block' }));
+    fireEvent.click(options('Meera Iyer').getByRole('button', { name: /^Remove and block/ }));
     expect(emitted('block-user')).toEqual([]);
     const confirm = screen.getByRole('dialog', { name: 'Remove and block Meera Iyer?' });
     expect(confirm.textContent).toContain("Meera is removed from your group straight away and can't ask to join again.");
     expect(confirm.textContent).not.toMatch(/unblock|Blocked/i);
-    fireEvent.click(within(confirm).getByRole('button', { name: 'Remove and block' }));
+    fireEvent.click(within(confirm).getByRole('button', { name: /^Remove and block/ }));
     expect(emitted('block-user')).toEqual([['block-user', { roomCode: code, targetId: 'sock-Meera Iyer' }]]);
     await waitFor(() => expect(panel().queryByText('Meera Iyer')).toBeNull());
   });
 
   it('Cancel on the confirmation blocks no one', async () => {
     await open(true);
-    fireEvent.click(options('Meera Iyer').getByRole('button', { name: 'Remove and block' }));
+    fireEvent.click(options('Meera Iyer').getByRole('button', { name: /^Remove and block/ }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Remove and block Meera Iyer?' })).getByRole('button', { name: 'Cancel' }));
     expect(emitted('block-user')).toEqual([]);
     expect(panel().getByText('Meera Iyer')).toBeTruthy();
@@ -276,7 +279,8 @@ describe("a member's options", () => {
     await open(true);
     const sheet = screen.getByTestId('member-options');
     const red = [...sheet.querySelectorAll('button')].filter((b) => /danger/.test(b.innerHTML + b.className));
-    expect(red.map((b) => b.textContent)).toEqual(['Remove and block']);
+    expect(red).toHaveLength(1);
+    expect(red[0].textContent).toMatch(/^Remove and block/);
   });
 });
 
@@ -289,6 +293,7 @@ describe("the Group Lead's tools", () => {
     tab(GROUP_TABS.members);
     expect(screen.queryByTestId('lead-tools')).toBeNull();
     cleanup();
+    localStorage.removeItem('locus.group'); // reopened with no Group to go back to (tests/resumeGroup.test.jsx covers that)
     await inAGroup();
     tab(GROUP_TABS.members);
     expect(tools().getByRole('button', { name: /^Join requests/ })).toBeTruthy();
@@ -458,7 +463,12 @@ describe('the three heights, on a phone', () => {
 
   const sheet = () => screen.getByTestId('group-panel-list').closest('[data-height]');
   const bar = () => within(screen.getByRole('navigation', { name: 'Main' }));
-  const openPanel = () => fireEvent.click(bar().getByRole('button', { name: 'Group' }));
+  // The Group tab opens the panel at peek (everyone in the group); most of these tests start at half.
+  const tapGroupTab = () => fireEvent.click(bar().getByRole('button', { name: 'Group' }));
+  const openPanel = () => {
+    tapGroupTab();
+    fireEvent.click(within(screen.getByTestId('panel-stops')).getByRole('button', { name: 'Show options' }));
+  };
   const handle = () => screen.getByTestId('group-header').parentElement;
   const sized = (el, px) => Object.defineProperty(el, 'offsetHeight', { configurable: true, value: px });
   const layOut = () => {
@@ -502,11 +512,28 @@ describe('the three heights, on a phone', () => {
     });
   };
 
-  it('the Group tab opens it at half', async () => {
-    await inAGroup();
+  it('the Group tab opens it at peek, with everyone in the group in a row: you first, then each member, then anyone who lost signal', async () => {
+    await inAGroup({ members: () => ({ ...member('Meera Iyer'), ...member('Aarav Shah', { status: 'FROZEN' }), ...member('Rohan Das', { lat: null, lng: null }) }) });
     expect(sheet().dataset.height).toBe('closed');
-    openPanel();
-    expect(sheet().dataset.height).toBe('half');
+    tapGroupTab();
+    expect(sheet().dataset.height).toBe('peek');
+    const row = within(screen.getByTestId('peek-members'));
+    const names = row.getAllByTestId('peek-member').map((b) => b.textContent);
+    expect(names).toHaveLength(4);
+    expect(names[0]).toMatch(/^.*You/);
+    expect(names.join('|')).toMatch(/Meera Iyer/);
+    expect(names.join('|')).toMatch(/Aarav Shahpaused/);
+    expect(names.join('|')).toMatch(/Rohan Daswaiting/);
+  });
+
+  it('a tap on someone in the peek row opens their options; you are not tappable', async () => {
+    await inAGroup({ members: () => member('Meera Iyer') });
+    tapGroupTab();
+    const buttons = within(screen.getByTestId('peek-members')).getAllByTestId('peek-member');
+    expect(buttons[0].disabled).toBe(true);
+    fireEvent.click(buttons[1]);
+    expect(screen.getByRole('dialog', { name: 'Options for Meera Iyer' })).toBeTruthy();
+    expect(sheet().dataset.height).toBe('peek');
   });
 
   it('a slow drag down from half rests at peek, and a tap on its header opens it to half again', async () => {
@@ -531,8 +558,8 @@ describe('the three heights, on a phone', () => {
     // Closed from full, it opens at half again next time.
     await tapHeader();
     expect(sheet().dataset.height).toBe('closed');
-    openPanel();
-    expect(sheet().dataset.height).toBe('half');
+    tapGroupTab();
+    expect(sheet().dataset.height).toBe('peek');
   });
 
   it('at half, the list has room to scroll its last rows up into view', async () => {
@@ -542,6 +569,58 @@ describe('the three heights, on a phone', () => {
     const list = screen.getByTestId('group-panel-list');
     // Half rests 325 px below full on this phone (its top at 45 % of 892 px).
     expect(list.lastElementChild.style.height).toBe('325px');
+  });
+
+  const swipe = (list, y0, y1, x1 = 200) => {
+    fireEvent.touchStart(list, { touches: [{ clientX: 200, clientY: y0 }] });
+    fireEvent.touchMove(list, { touches: [{ clientX: x1, clientY: y1 }] });
+  };
+
+  it('at half, the first scroll through the list lifts the panel to full', async () => {
+    await inAGroup();
+    openPanel();
+    layOut();
+    swipe(screen.getByTestId('group-panel-list'), 500, 400);
+    expect(sheet().dataset.height).toBe('full');
+  });
+
+  it('at half, a small wobble, a sideways swipe, or a pull down at the top does not lift it', async () => {
+    await inAGroup();
+    openPanel();
+    layOut();
+    const list = screen.getByTestId('group-panel-list');
+    swipe(list, 500, 497);
+    swipe(list, 500, 490, 100);
+    swipe(list, 500, 600);
+    expect(sheet().dataset.height).toBe('half');
+  });
+
+  it('at half, scrolling back up from below the top of the list lifts it too', async () => {
+    await inAGroup();
+    openPanel();
+    layOut();
+    const list = screen.getByTestId('group-panel-list');
+    list.scrollTop = 40;
+    swipe(list, 500, 600);
+    expect(sheet().dataset.height).toBe('full');
+  });
+
+  it('the handle shows three points: members, options, everything; the current one is marked and a tap goes straight to one', async () => {
+    await inAGroup();
+    openPanel();
+    const stops = within(screen.getByTestId('panel-stops'));
+    const marked = () => stops.getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.stop);
+    expect(stops.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Show members', 'Show options', 'Show everything']);
+    expect(marked()).toEqual(['half']);
+    fireEvent.click(stops.getByRole('button', { name: 'Show everything' }));
+    expect(sheet().dataset.height).toBe('full');
+    expect(marked()).toEqual(['full']);
+    fireEvent.click(stops.getByRole('button', { name: 'Show members' }));
+    expect(sheet().dataset.height).toBe('peek');
+    expect(marked()).toEqual(['peek']);
+    // A tap on a point is not a tap on the header (which would close the panel from half).
+    fireEvent.click(stops.getByRole('button', { name: 'Show options' }));
+    expect(sheet().dataset.height).toBe('half');
   });
 
   it('a tap on the header at half closes it, as the handle did', async () => {
@@ -588,7 +667,7 @@ describe('the three heights, on a phone', () => {
     await inAGroup();
     openPanel();
     layOut();
-    const sos = screen.getByRole('button', { name: /SOS beacon/ });
+    const sos = screen.getAllByRole('button', { name: /SOS beacon/ })[0];
     const z = (el) => Number(el.style.zIndex || /(?:^|\s)z-\[(\d+)\]/.exec(el.className)[1]);
     for (const [from, to, height] of [[400, 600, 'peek'], [600, 90, 'full'], [90, 400, 'half']]) {
       await drag(from, to);
@@ -676,7 +755,8 @@ describe('the members list: heading, loading, empty, no match', () => {
   it('a building search that finds nothing says so, and spaces around a name still find it', async () => {
     await inAGroup();
     tab(GROUP_TABS.buildings);
-    const box = panel().getByRole('searchbox', { name: GROUP_TABS.searchBuildings });
+    fireEvent.click(screen.getByTestId('top-bar-search-open'));
+    const box = screen.getByTestId('top-bar-search');
     fireEvent.change(box, { target: { value: 'zzqx' } });
     expect(screen.getByTestId('buildings-no-match').textContent).toBe('No building called "zzqx"');
     fireEvent.change(box, { target: { value: '  tech park  ' } });
@@ -716,11 +796,12 @@ describe("the order down the panel (so the Group Lead's tools come high at half)
     }
   });
 
-  it('buildings: the search heads the list', async () => {
+  it('buildings: the place filters head the list, with no search box in the panel', async () => {
     await inAGroup();
     tab(GROUP_TABS.buildings);
-    const search = screen.getByRole('searchbox', { name: GROUP_TABS.searchBuildings });
-    expect(search.compareDocumentPosition(screen.getAllByTestId('building-row')[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(panel().queryByRole('searchbox')).toBeNull();
+    const all = screen.getByRole('button', { name: /^All/ });
+    expect(all.compareDocumentPosition(screen.getAllByTestId('building-row')[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
@@ -754,7 +835,7 @@ describe('with the keyboard up, on a phone', () => {
     expect(header().className).toMatch(/(^| )hidden /);
     expect(leadTools()).toBeNull();
     // The Emergency button stays.
-    expect(screen.getByTestId('sos-button')).toBeTruthy();
+    expect(screen.getAllByTestId('sos-button')[0]).toBeTruthy();
     // Focus leaves: back once that tap is done.
     search().blur();
     fireEvent.blur(search());

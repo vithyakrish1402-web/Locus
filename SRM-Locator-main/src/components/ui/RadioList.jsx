@@ -35,10 +35,10 @@ export default function RadioList({ label, value, onChange, options, className =
             onClick={() => onChange(option.value)}
             onKeyDown={(event) => onKeyDown(event, index)}
             data-no-press
-            className="w-full flex items-center gap-4 px-4 py-3.5 min-h-14 text-left duration-150 hover:bg-sunken active:bg-black/[0.04] dark:active:bg-white/[0.04] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+            className="w-full flex items-center gap-4 px-4 py-3.5 min-h-14 text-left transition-colors duration-150 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:bg-black/[0.04] dark:active:bg-white/[0.04] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
           >
             <span
-              className={`shrink-0 flex items-center justify-center w-5 h-5 rounded-full border-2 transition-[transform,opacity] duration-200 ${selected ? 'border-accent bg-accent shadow-[0_0_8px_var(--color-accent-halo)]' : 'border-border-control/60'}`}
+              className={`shrink-0 flex items-center justify-center w-5 h-5 rounded-full border-2 transition-all duration-200 ${selected ? 'border-accent bg-accent shadow-[0_0_8px_var(--color-accent-halo)]' : 'border-border-control/60'}`}
               aria-hidden="true"
             >
               {selected && <span className="w-2 h-2 rounded-full bg-accent-on" />}

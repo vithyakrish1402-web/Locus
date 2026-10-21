@@ -60,6 +60,10 @@ export const SETTINGS = {
   arPartsHelp: 'Auto follows AR Scan quality. Set a part on its own, for example the road line off on an older phone.',
   arPartNames: { tags: 'Labels', roadLine: 'Road line', arrow: 'Arrow' },
   arPartOptions: { auto: 'Auto', off: 'Off', efficient: 'Efficient', realistic: 'Realistic' },
+
+  account: 'Account',
+  adminTools: 'Admin tools',
+  signOut: 'Sign out',
 };
 
 export const SEND_APP = {
@@ -86,4 +90,57 @@ export const SEND_APP = {
   copyLink: 'Copy link',
   copied: 'Link copied',
   copyFailed: "Couldn't copy",
+};
+
+// Background sharing: keeping a person on their Group's map while LOCUS is closed. Nothing about
+// it is shown unless the phone's app has the sharing service and the server says it is switched on.
+export const BACKGROUND_SHARING = {
+  section: 'Sharing when LOCUS is closed',
+  switchLabel: 'Keep sharing when the app is closed',
+  help: 'Needs a Group. It ends when you leave the Group. Pause or stop it from the notification, or here.',
+  // Under it, its own switch: hearing a teammate's SOS while the app is closed.
+  sos: {
+    label: 'SOS alerts when the app is closed',
+    description: "If a teammate sends an SOS, you'll be alerted even if you've closed the app.",
+    needsSharing: 'Works only while "Keep sharing when the app is closed" is on. If you turn that off, these alerts stop too.',
+    notAudible: "SOS alerts are turned off or silenced for LOCUS in your phone's notification settings. Turn them back on, or you won't hear one.",
+    noFullScreen: "Your phone won't let LOCUS take over a locked screen, so an SOS shows as a ringing banner instead.",
+  },
+  // Under the switch: exactly one of these.
+  sharing: (group) => `Sharing with ${group}`,
+  paused: 'Paused',
+  notSharing: 'Not sharing',
+  starting: 'Starting…',
+  refused: {
+    unsupported: 'Not available on this phone.',
+    'permission-denied': 'Location and notification permission are needed. Not sharing.',
+    'location-denied': 'Location permission is needed. Not sharing.',
+    'notifications-denied': 'Notifications must be allowed, so you can always see when sharing is on. Not sharing.',
+    'server-off': 'Switched off by the server. Not sharing.',
+    'no-group': 'The server has no Group with this code. Not sharing.',
+    blocked: 'The Group Lead has removed you from this Group. Not sharing.',
+    'not-member': 'You are not a member of this Group. Not sharing.',
+    'not-signed-in': 'Sign in again, then try again. Not sharing.',
+    busy: 'The server is busy. Try again in a minute. Not sharing.',
+    network: 'The server could not be reached. Not sharing.',
+    other: 'Could not start. Not sharing.',
+  },
+  // After it stopped by itself: why.
+  stopped: {
+    'group-gone': 'Your Group ended. Not sharing.',
+    revoked: 'Your Group ended. Not sharing.',
+    forbidden: 'You are no longer in this Group. Not sharing.',
+    disabled: 'Switched off by the server. Not sharing.',
+    'token-expired': 'Sharing ran out. Turn it on again. Not sharing.',
+    'server-unreachable': 'The server could not be reached. Not sharing.',
+    other: 'Stopped. Not sharing.',
+  },
+  // Asked once, before any permission request, the first time the switch is turned on. Changing
+  // any word of it asks everyone again (utils/backgroundConsent.js).
+  consent: {
+    title: 'Share your location when LOCUS is closed?',
+    body: 'LOCUS will share your live location with the members of your current Group, even when the app is closed or your screen is off. A notification stays visible while sharing is on. Your location goes only to your Group, and sharing ends when you leave the Group. You can pause it from the notification, or stop it at any time from the notification or from Settings. This can use more battery.',
+    accept: 'Turn on',
+    decline: 'Not now',
+  },
 };

@@ -10,9 +10,9 @@ import { PLACE, directionLabel, distanceLabel } from '../copy/place';
 
 function Row({ label, children }) {
   return (
-    <div className="grid grid-cols-[minmax(6.5rem,auto)_1fr] gap-x-4 py-1">
-      <dt className="text-body text-text-secondary">{label}</dt>
-      <dd className="text-body text-text">{children}</dd>
+    <div className="grid grid-cols-[minmax(6.5rem,auto)_1fr] gap-x-4 py-1.5 border-b border-white/5">
+      <dt className="text-xs text-slate-400 font-medium">{label}</dt>
+      <dd className="text-xs text-slate-200 font-medium">{children}</dd>
     </div>
   );
 }
@@ -24,10 +24,10 @@ export default function BuildingInfo({ building, me, heading, headingLive }) {
 
   return (
     <div data-testid="building-info" className="flex flex-col gap-2 font-ui">
-      <p className="text-label text-text-secondary">{PLACE.more}</p>
-      {details.description && <p className="text-body text-text">{details.description}</p>}
-      {!details.hasDetails && <p className="text-body text-text-secondary">{PLACE.noDetails}</p>}
-      <dl>
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{PLACE.more}</p>
+      {details.description && <p className="text-xs text-slate-300 leading-relaxed">{details.description}</p>}
+      {!details.hasDetails && <p className="text-xs text-slate-400">{PLACE.noDetails}</p>}
+      <dl className="mt-1">
         {details.departments.length > 0 && <Row label={PLACE.departments}>{details.departments.join(', ')}</Row>}
         {details.floors && <Row label={PLACE.floors}>{details.floors}</Row>}
         {details.facilities.length > 0 && <Row label={PLACE.facilities}>{details.facilities.join(', ')}</Row>}

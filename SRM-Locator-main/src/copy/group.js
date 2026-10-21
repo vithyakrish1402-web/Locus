@@ -15,6 +15,14 @@ export const GROUP_HEADER = {
   requests: (count) => (count === 1 ? '1 join request' : `${count} join requests`),
 };
 
+// The panel's three-point slider (components/group/PanelStops.jsx): each notch's name.
+export const PANEL_STOPS = {
+  label: 'Panel height',
+  peek: 'Show members',
+  half: 'Show options',
+  full: 'Show everything',
+};
+
 export const GROUP_TABS = {
   label: 'Group panel',
   members: 'Members',
@@ -57,6 +65,7 @@ export const MEMBERS = {
 };
 
 export const MEMBER_OPTIONS = {
+  navigate: (first) => `Navigate to ${first}`,
   ping: (first) => `Ping ${first}`,
   showOnMap: 'Show on map',
   arScan: 'Find with AR Scan',
@@ -126,6 +135,8 @@ export const JOIN_REQUESTS = {
 
 // The peek height's summary line under the header.
 export const PEEK = {
+  members: 'Everyone in the group',
+  you: 'You',
   justYou: 'Just you so far',
   summary: ({ live = 0, paused = 0, waiting = 0, lost = 0 }) => [
     live && `${live} live`,

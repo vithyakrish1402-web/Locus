@@ -32,7 +32,7 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
     <div
       data-testid="building-row"
       onClick={onOpen}
-      className="group relative rounded-2xl glass-panel hover:bg-surface/90 hover:scale-[1.01] transition-[transform,opacity] duration-200 p-3 sm:p-3.5 flex flex-col gap-2.5 cursor-pointer text-text font-ui shadow-sm"
+      className="group relative rounded-2xl glass-panel hover:bg-surface/90 hover:scale-[1.01] transition-all duration-200 p-3 sm:p-3.5 flex flex-col gap-2.5 cursor-pointer text-text font-ui shadow-sm"
     >
       {/* Horizontal Layout: 68px Thumbnail + Main Content + Chevron */}
       <div className="flex items-center gap-3">
@@ -62,7 +62,7 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
           </div>
 
           {/* Prominent Building Name */}
-          <h4 className="text-[15px] font-semibold text-text leading-tight truncate group-hover:text-accent">
+          <h4 className="text-[15px] font-semibold text-text leading-tight truncate group-hover:text-accent transition-colors">
             {building.name}
           </h4>
 
@@ -88,7 +88,7 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
         </div>
 
         {/* Subtle Chevron indicator */}
-        <div className="shrink-0 text-text-secondary group-hover:text-accent self-center p-0.5">
+        <div className="shrink-0 text-text-secondary group-hover:text-accent transition-colors self-center p-0.5">
           <ChevronRight size={18} className="stroke-[2]" />
         </div>
       </div>
