@@ -82,7 +82,7 @@ import { DEFAULT_AR_FEATURE_OVERRIDES } from './utils/arFeatures';
 
 import { useLiveHeading } from './hooks/useLiveHeading';
 import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
-import { useWaypointNavigationLine } from './hooks/useWaypointNavigationLine';
+import { useWaypointNavigationLine, ROUTE_COLOR, ROUTE_CASING_COLOR } from './hooks/useWaypointNavigationLine';
 import { useWalkingRoute } from './hooks/useWalkingRoute';
 import { formatDistanceMeters, formatDurationMinutes } from './utils/walkingRoute';
 import LiveLocationMarker, { NAVIGATING_SPEED_MPS } from './LiveLocationMarker';
@@ -2085,9 +2085,9 @@ const App = () => {
   // The theme on screen, and the colours the map's lines are drawn in: Google's Polyline and
   // Leaflet's path options take literal colours, so they are read from the theme here.
   const resolvedTheme = useResolvedTheme();
-  const routeColor = useMemo(() => cssColor('--color-map-route', '#1F4FB8'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+  const routeColor = ROUTE_COLOR;
   const lastKnownColor = useMemo(() => cssColor('--color-map-last-known', '#8A94A3'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
-  const casingColor = useMemo(() => cssColor('--color-map-casing', '#FFFFFF'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+  const casingColor = ROUTE_CASING_COLOR;
   // How far a member is from you, for their plate on the map ("Meera · 120 m").
   const memberDistance = (u) => {
     const where = locateTarget(liveLocation, u);
