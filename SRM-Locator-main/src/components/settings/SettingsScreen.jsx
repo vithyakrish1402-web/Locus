@@ -18,8 +18,10 @@ import {
 import { Button, Card, IconButton, ListRow, RadioList, SectionLabel, SegmentedControl, Switch } from '../ui';
 import SendApp from '../SendApp';
 import { SETTINGS } from '../../copy/settings';
-import { setThemePreference, subscribeTheme, getThemePreference } from '../../theme/theme';
+import { subscribeTheme, getThemePreference } from '../../theme/theme';
 import LocusMark from '../LocusMark';
+import { transitionTheme } from '../../theme/transition';
+import { AnimatedThemeToggleButton } from '../ui/animated-theme-toggle-button';
 import { AR_FEATURE_OPTIONS } from '../../utils/arFeatures';
 import { MAP_STATUS_LABEL, MAP_STATUS_REASON_TEXT } from '../../utils/mapEngineStatus';
 
@@ -81,13 +83,13 @@ export default function SettingsScreen({
           </SectionLabel>
           <Card className="flex flex-col gap-3.5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-body font-medium">{SETTINGS.theme}</span>
+              <span className="flex items-center gap-3"><AnimatedThemeToggleButton type="vertical" /><span className="text-body font-medium">{SETTINGS.theme}</span></span>
               <span className="text-caption text-text-secondary">{SETTINGS.themeHelp[theme]}</span>
             </div>
             <SegmentedControl
               label={SETTINGS.theme}
               value={theme}
-              onChange={setThemePreference}
+              onChange={(value) => transitionTheme(value, 'vertical')}
               options={['system', 'light', 'dark'].map((v) => ({
                 value: v,
                 label: SETTINGS.themeOptions[v],
