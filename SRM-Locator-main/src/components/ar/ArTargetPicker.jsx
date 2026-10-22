@@ -47,10 +47,18 @@ export default function ArTargetPicker({ open, onClose, me, target, members, bui
       .sort((a, b) => a.d - b.d),
   ];
 
+  // Closing lets go of the search field first, so the keyboard goes before the sheet does and the
+  // sheet is not dragged down the screen by the keyboard leaving under it.
+  const close = () => {
+    const field = document.activeElement;
+    if (field instanceof HTMLElement && field.closest('[data-testid="ar-target-picker"]')) field.blur();
+    onClose();
+  };
+
   const choose = (item) => {
     onChoose(item.target);
     setQuery('');
-    onClose();
+    close();
   };
 
   const row = (item) => {
@@ -79,7 +87,7 @@ export default function ArTargetPicker({ open, onClose, me, target, members, bui
   // The sheet ends its content 1 rem above the Emergency button (--emergency-clearance); the
   // list adds 1 rem more, so its last rows scroll 2 rem clear of it, like the buildings list.
   return (
-    <Sheet open={open} onClose={onClose} title={AR_PICKER.title} layer={LAYER.arScanSheet}>
+    <Sheet open={open} onClose={close} title={AR_PICKER.title} layer={LAYER.arScanSheet} panelClassName="glass-solid">
       <div data-testid="ar-target-picker" className="px-4 pb-4 flex flex-col">
         <label className="relative block mb-2">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" size={18} aria-hidden="true" />

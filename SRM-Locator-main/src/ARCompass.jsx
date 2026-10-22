@@ -37,6 +37,7 @@ import { resolveArFeatures } from './utils/arFeatures';
 import { LAYER } from './utils/layers';
 import ArTopBar from './components/ar/ArTopBar';
 import ArTargetPicker from './components/ar/ArTargetPicker';
+import { AR_TAG_TOP_SAFE_MARGIN_PX } from './utils/topInset';
 
 const ARROW_SPRING = { type: 'spring', damping: 15, stiffness: 100 };
 
@@ -53,6 +54,13 @@ const DECLINATION_GRID_DEG = 0.01;
 // (SosTrigger: bottom-20, h-20), on the gesture bar's inset. AR Scan's own bottom content (the
 // start screen's buttons, the readout) sits above it, with 1 rem to spare.
 export const CLEAR_OF_EMERGENCY_BUTTON = 'var(--emergency-clearance)';
+// While the target picker is up the HUD gives way to it: it fades out at once, and comes back only
+// after the picker's sheet has left (PICKER_LEAVE_MS), so the two are never on screen together.
+const HUD_FADE_MS = 150;
+const PICKER_LEAVE_MS = 300;
+// A transparent 1 px picture. The Android WebView draws its own big "play" placeholder over a video
+// with no poster until the camera's first frame arrives; a poster that shows nothing stops that.
+const NO_POSTER = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
 const fmtDeg = (v, digits = 1) => (Number.isFinite(v) ? `${v.toFixed(digits)}°` : '--');
 const fmtSigned = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}°`;
@@ -92,6 +100,8 @@ const sessionStore = () => {
 const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMembers = [], buildings = [], selfUid = null, routePath = null, fidelity = 'standard', overrides, onClose, onCameraStarted, onChooseTarget = null, meetingPoint = null }) => {
   const videoRef = useRef(null);
   const [cameraError, setCameraError] = useState(false);
+  // The camera's picture is shown only once it is playing (its first frame has arrived).
+  const [videoPlaying, setVideoPlaying] = useState(false);
   const features = resolveArFeatures(fidelity, overrides);
   const roadPath = features.roadLine === 'off' ? null : routePath;
   // Where the phone is: AR Scan's own accuracy-gated, filtered fix (useArPosition), or
@@ -144,6 +154,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play?.()?.catch?.(() => {});
       }
       setCameraError(false);
       onCameraStarted?.();
@@ -178,9 +189,10 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
 
   // The road line is drawn in real pixels (its widths are pixel widths), so it needs the
   // screen's size; AR Scan is full-screen, so that is the window's.
-  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  // The tags' top limit comes with it: the status bar's height plus a gap, read now (rotation moves it).
+  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight, topMarginPx: AR_TAG_TOP_SAFE_MARGIN_PX() }));
   useEffect(() => {
-    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight, topMarginPx: AR_TAG_TOP_SAFE_MARGIN_PX() });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -283,8 +295,8 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
     [engineLat, engineLng, gpsAccuracy],
   );
   const engineView = useMemo(
-    () => ({ q: orientation, hFovDeg: fovDeg, width: viewport.width, height: viewport.height, targetId: target ? 'target' : null }),
-    [orientation, fovDeg, viewport.width, viewport.height, target],
+    () => ({ q: orientation, hFovDeg: fovDeg, width: viewport.width, height: viewport.height, topMarginPx: viewport.topMarginPx, targetId: target ? 'target' : null }),
+    [orientation, fovDeg, viewport.width, viewport.height, viewport.topMarginPx, target],
   );
   const landmarkFrameRef = useRef(null);
 
@@ -414,10 +426,17 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
       <video 
         ref={videoRef}
         autoPlay
+        muted
         playsInline
+        controls={false}
+        disablePictureInPicture
+        poster={NO_POSTER}
+        data-testid="ar-video"
+        data-playing={videoPlaying ? 'true' : 'false'}
+        onPlaying={() => setVideoPlaying(true)}
         onLoadedMetadata={onVideoSize}
         onResize={onVideoSize}
-        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${cameraError ? 'opacity-0' : 'opacity-100'}`}
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${cameraError || !videoPlaying ? 'opacity-0' : 'opacity-100'}`}
       />
 
       {/* The route to the Rally Point, on the ground: under the HUD and the tags. */}
@@ -472,7 +491,22 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
           (z-25) one by one: the controls, notices and readout above them (z-30), so a label
           never covers words or a button; the arrow below them (z-22), as the labels have
           always been drawn over it. */}
-      <div data-testid="ar-ui" className="relative w-full h-full flex flex-col p-6" style={{ paddingBottom: CLEAR_OF_EMERGENCY_BUTTON }}>
+      <div
+        data-testid="ar-ui"
+        data-picker-open={pickerOpen ? 'true' : undefined}
+        inert={pickerOpen}
+        className="relative w-full h-full flex flex-col p-6"
+        // Clear of the status bar (the same strip Settings covers) and of the Emergency button. While
+        // the target picker is open the HUD is hidden and takes no touches, so nothing of it shows
+        // through the picker or is left under it as its sheet leaves.
+        style={{
+          paddingTop: 'calc(var(--top-cover-height) + 1.5rem)',
+          paddingBottom: CLEAR_OF_EMERGENCY_BUTTON,
+          opacity: pickerOpen ? 0 : 1,
+          pointerEvents: pickerOpen ? 'none' : undefined,
+          transition: `opacity ${HUD_FADE_MS}ms ease ${pickerOpen ? 0 : PICKER_LEAVE_MS}ms`,
+        }}
+      >
         <div data-testid="ar-top" className="relative z-[30] flex flex-col">
 
           {/* Close, what AR Scan is finding, and ALIGN (components/ar/ArTopBar.jsx). A long press

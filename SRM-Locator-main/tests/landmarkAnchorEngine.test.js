@@ -504,3 +504,39 @@ describe('engine edge cases', () => {
     expect(b.screenX).toBeGreaterThan(a.screenX);
   });
 });
+
+describe('the tags and the status bar', () => {
+  const t = (id, x, y, d, extra = {}) => ({ id, isTarget: false, name: `BLDG_${id}`, distanceM: d, distanceText: `${d} M`, offscreenSide: null, x, y, scale: 1, ...extra });
+  const top = (placed) => placed.y - placed.tickPx - TAG_LABEL_HEIGHT_PX; // the label's top edge
+
+  it('without a top margin, a tag may come up to TAG_SCREEN_MARGIN_PX from the top (as before)', () => {
+    const [p] = layoutTags([t('a', 200, -300, 50)], { width: W, height: H });
+    expect(top(p)).toBe(TAG_SCREEN_MARGIN_PX);
+  });
+
+  it('keeps every tag at or below topMarginPx when the status bar covers the top', () => {
+    const [p] = layoutTags([t('a', 200, -300, 50)], { width: W, height: H, topMarginPx: 38 });
+    expect(top(p)).toBe(38);
+  });
+
+  it('a tag whose row would rise into the status bar is stacked no higher than the margin, or dropped', () => {
+    const tags = Array.from({ length: 4 }, (_, i) => t(String(i), 200, -300, 50 + i));
+    const placed = layoutTags(tags, { width: W, height: H, topMarginPx: 38 });
+    expect(placed.length).toBeGreaterThan(0);
+    for (const p of placed) expect(top(p)).toBeGreaterThanOrEqual(38);
+  });
+
+  it('never goes below the usual margin, whatever it is given', () => {
+    for (const margin of [0, -20, NaN, undefined]) {
+      const [p] = layoutTags([t('a', 200, -300, 50)], { width: W, height: H, topMarginPx: margin });
+      expect(top(p)).toBe(TAG_SCREEN_MARGIN_PX);
+    }
+  });
+
+  it('the engine hands the topMarginPx of its frame to the layout', () => {
+    const e = engineWith([building('B', 0, 20)]);
+    const f = frame(e, { headingDeg: 0, pitchDeg: -35 }, { topMarginPx: 60 });
+    const tag = tagOf(f, 'B');
+    expect(tag.screenY - TAG_TICK_PX - TAG_LABEL_HEIGHT_PX).toBeGreaterThanOrEqual(60);
+  });
+});
