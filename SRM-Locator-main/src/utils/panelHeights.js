@@ -37,6 +37,16 @@ export function panelStops({ viewport, panelHeight, peekHeight, tabBar = 64 }) {
 }
 
 /**
+ * The panel's bottom padding on a phone, as a CSS length: one tab bar's height (SHEET_BOTTOM_PADDING_PX,
+ * the bar's measured height, in --tab-bar-height) plus how far the panel is slid down at its
+ * resting height. The panel is laid out at full height and slid down by `slideDown` px, so at
+ * half and peek that much of its scroll area lies below the screen; without it the last rows
+ * could never be scrolled into sight.
+ * @param {number} slideDown the resting height's y, in px
+ */
+export const sheetBottomPadding = (slideDown) => `calc(var(--tab-bar-height) + ${Math.max(0, Math.round(slideDown))}px)`;
+
+/**
  * Where a drag let go at `y` (px), moving at `velocityY` (px/s), comes to rest.
  * @returns {'full'|'half'|'peek'|'closed'}
  */

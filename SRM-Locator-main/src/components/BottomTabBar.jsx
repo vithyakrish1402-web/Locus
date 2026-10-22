@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.span>, which this config can't see
 import { motion, useReducedMotion } from 'framer-motion';
 import { INDICATOR_SPRING } from '../utils/motion';
@@ -64,8 +64,22 @@ function Tab({ tab, active, onSelect, reduceMotion }) {
  */
 export default function BottomTabBar({ tabs, activeId, onSelect, sosTrigger = null, keyboardUp = false }) {
   const reduceMotion = useReducedMotion();
+  // Says how tall the bar really is (--tab-bar-height, read by the group panel, which stands on
+  // it), and keeps saying so as it changes (the gesture bar's inset, a larger text size).
+  const barRef = useRef(null);
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return undefined;
+    const root = document.documentElement;
+    const say = () => { if (bar.offsetHeight) root.style.setProperty('--tab-bar-height', `${bar.offsetHeight}px`); };
+    say();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(say);
+    observer?.observe(bar);
+    return () => { observer?.disconnect(); root.style.removeProperty('--tab-bar-height'); };
+  }, []);
   return (
     <nav
+      ref={barRef}
       aria-label="Main"
       data-keyboard={keyboardUp ? 'up' : undefined}
       className="md:hidden fixed bottom-0 w-full bg-surface border-t border-border flex items-center justify-between px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto gap-2 shadow-[var(--shadow-2)]"

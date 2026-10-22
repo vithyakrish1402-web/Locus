@@ -55,7 +55,7 @@ import JoinRequests from './components/group/JoinRequests';
 import PeekLines from './components/group/PeekLines';
 import PanelStops from './components/group/PanelStops';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
-import { panelStops, snapPanel } from './utils/panelHeights';
+import { panelStops, snapPanel, sheetBottomPadding } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
 import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
@@ -2330,7 +2330,9 @@ const App = () => {
       if (!panel || !header || !panel.offsetHeight || !header.offsetHeight) return;
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       const inset = insetProbeRef.current?.offsetHeight ?? 0;
-      const tabBar = 4 * rem;
+      // The tab bar as tall as it really is: the group panel stands on it.
+      const bar = document.querySelector('nav[aria-label="Main"]');
+      const tabBar = bar?.offsetHeight || 5 * rem + inset;
       const room = 10 * rem + inset - tabBar + 0.5 * rem;
       const headerAtPeek = header.offsetHeight - (peekWrapRef.current?.offsetHeight ?? 0) + (peekLinesRef.current?.scrollHeight ?? 0);
       const next = panelStops({ viewport: window.innerHeight, panelHeight: panel.offsetHeight, peekHeight: headerAtPeek + room, tabBar });
@@ -2340,6 +2342,8 @@ const App = () => {
     window.addEventListener('resize', measure);
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(panelHeaderRef.current);
+    const bar = document.querySelector('nav[aria-label="Main"]');
+    if (bar) observer?.observe(bar);
     observer?.observe(sheetRef.current);
     return () => {
       window.removeEventListener('resize', measure);
@@ -2732,13 +2736,13 @@ const App = () => {
           }}
           ref={sheetRef}
           className={`${isMobile
-              ? `fixed inset-x-0 bottom-16 z-[900] flex flex-col glass-floating text-text rounded-t-[28px] ${sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
+              ? `fixed inset-x-0 z-[900] flex flex-col glass-solid text-text rounded-t-[28px] ${sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
               }`
               : 'hidden md:flex w-84 glass-floating text-text rounded-3xl fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
             }`}
           // Starts under the header instead of behind it (it used to start at the very top, so
           // its handle and MATRIX/SQUAD indicator were hidden under the header).
-          style={isMobile ? { top: BELOW_TOP_BAR, y: panelY } : undefined}
+          style={isMobile ? { top: BELOW_TOP_BAR, bottom: 'var(--tab-bar-height)', y: panelY } : undefined}
           onTouchStart={(e) => { e.currentTarget._touchStartX = e.touches[0].clientX; }}
           onTouchEnd={(e) => {
             const startX = e.currentTarget._touchStartX;
@@ -2801,10 +2805,10 @@ const App = () => {
 
 
           {/* List Content */}
-          {/* Room at the bottom on a phone to scroll the last rows clear of the Emergency and
-            meeting point buttons: they stand 10 rem above the screen's bottom edge plus the
-            gesture bar's inset, and this panel ends 4 rem up without that inset. 8 rem plus the
-            inset leaves 2 rem between the last row and the buttons on any phone. */}
+          {/* Room at the bottom on a phone to scroll the last rows into sight: one tab bar's
+            height (SHEET_BOTTOM_PADDING_PX, measured) plus how far the panel is slid down at
+            this height, because that much of this list lies below the screen (see
+            sheetBottomPadding). The panel itself ends at the top of the tab bar. */}
           {/* At half, the first scroll through the list (members or places) lifts the panel to
             full: there is little of the list to read through at half, so the panel makes room. */}
           <div
@@ -2823,7 +2827,8 @@ const App = () => {
               setPanelHeight('full');
             }}
             onWheel={(e) => { if (isMobile && sheetOpen && panelHeight === 'half' && e.deltaY !== 0) setPanelHeight('full'); }}
-            className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto p-4 pt-1 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
+            className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto p-4 pt-1 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
+            style={isMobile ? { paddingBottom: sheetBottomPadding(panelTarget) } : undefined}
           >
             <SegmentedControl
               label={GROUP_TABS.label}
@@ -3645,7 +3650,7 @@ const App = () => {
       )}
 
       {/* The meeting point button (two steps: tap it, then tap the map) */}
-      {!isNavigatingMode && !keyboardUp && !(selectedItem && activeTab === 'buildings') && (
+      {!isNavigatingMode && !keyboardUp && !(isMobile && sheetOpen && panelHeight !== 'peek') && !(selectedItem && activeTab === 'buildings') && (
         <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
       )}
 

@@ -203,6 +203,11 @@ body {
    is on screen (SosTrigger sets data-emergency-button on <html>); otherwise the usual 1 rem. In
    rem, so it grows with the text size exactly as the button does. */
 :root { --emergency-clearance: calc(1rem + env(safe-area-inset-bottom)); }
+/* The phone's bottom tab bar, as tall as it really is (its content, its padding and the gesture
+   bar's inset). BottomTabBar replaces this with the measured pixels; this is what stands in
+   until it has been measured: 5 rem is the bar's own height, plus the inset. The group panel
+   stands on it, so nothing of the panel ever sits under the bar. */
+:root { --tab-bar-height: calc(5rem + env(safe-area-inset-bottom)); }
 :root[data-emergency-button] { --emergency-clearance: calc(11rem + env(safe-area-inset-bottom)); }
 @media (min-width: 768px) {
   :root[data-emergency-button] { --emergency-clearance: calc(7.5rem + env(safe-area-inset-bottom)); }
@@ -272,6 +277,15 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
   background: var(--glass-surface);
   backdrop-filter: var(--glass-blur, blur(32px));
   -webkit-backdrop-filter: var(--webkit-glass-blur, blur(32px));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-floating), var(--glass-specular);
+}
+
+/* Like .glass-floating, for a surface that sits over busy content (the group panel over the map, a
+   sheet over AR Scan) and has to stay readable: the theme's own surface colour, fully opaque, no
+   blur. */
+.glass-solid {
+  background: var(--color-surface);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-floating), var(--glass-specular);
 }
