@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Real routes use visible dashes with an outline; the fallback is more widely spaced.
+// Both routed and fallback paths use continuous blue lines with a white outline.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { renderHook, cleanup } from '@testing-library/react';
 import { useWaypointNavigationLine, ROUTE_WIDTH, ROUTE_CASING_WIDTH } from '../src/hooks/useWaypointNavigationLine.js';
@@ -31,15 +31,13 @@ afterEach(() => {
 });
 
 describe('a real route', () => {
-  it('draws elongated dashes with a matching outline and no solid stroke', () => {
+  it('draws solid lines with a matching outline', () => {
     renderHook(() => useWaypointNavigationLine(MAP, PATH, true, '#123456', '#ABCDEF'));
     const [casing, line] = shown();
     expect(shown()).toHaveLength(2);
     for (const [polyline, color, diameter] of [[casing, '#ABCDEF', ROUTE_CASING_WIDTH], [line, '#123456', ROUTE_WIDTH]]) {
-      expect(polyline.options.strokeOpacity).toBe(0);
-      expect(polyline.options.icons[0]).toMatchObject({ offset: '0', repeat: '28px', icon: {
-        path: 'M 0,-6 0,6', strokeColor: color, strokeOpacity: 1, strokeWeight: diameter, scale: 1,
-      } });
+      expect(polyline.options).toMatchObject({ strokeOpacity: 1, strokeColor: color, strokeWeight: diameter });
+      expect(polyline.options.icons).toBeUndefined();
     }
     expect(line.options.zIndex).toBeGreaterThan(casing.options.zIndex);
   });
@@ -78,18 +76,18 @@ describe('a real route', () => {
 });
 
 describe('the best-effort straight line', () => {
-  it('uses a blue-visible sparse dash with an outline', () => {
+  it('uses a solid line with an outline', () => {
     renderHook(() => useWaypointNavigationLine(MAP, PATH, false, '#123456', '#ABCDEF'));
     expect(shown()).toHaveLength(2);
     const [, line] = shown();
-    expect(line.options.strokeOpacity).toBe(0);
-    expect(line.options.icons[0]).toMatchObject({ repeat: '32px', icon: { path: 'M 0,-4 0,4', strokeColor: '#123456', strokeOpacity: 1 } });
+    expect(line.options).toMatchObject({ strokeOpacity: 1, strokeColor: '#123456', strokeWeight: ROUTE_WIDTH });
+    expect(line.options.icons).toBeUndefined();
   });
 
-  it('turning into a real route changes the spacing while keeping the outlined dashes', () => {
+  it('turning into a real route keeps both outlined solid lines', () => {
     const { rerender } = renderHook(({ real }) => useWaypointNavigationLine(MAP, PATH, real, '#123456', '#ABCDEF'), { initialProps: { real: false } });
     rerender({ real: true });
     expect(shown()).toHaveLength(2);
-    expect(shown().every((l) => l.options.icons[0].repeat === '28px')).toBe(true);
+    expect(shown().every((l) => l.options.strokeOpacity === 1 && !l.options.icons)).toBe(true);
   });
 });

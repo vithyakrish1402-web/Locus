@@ -85,6 +85,8 @@ const onTheMapWithMembers = async (members) => {
   fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
   await act(async () => {});
+  // These markers are checked on the Google map, which is only built once satellite is asked for.
+  fireEvent.click(screen.getByRole('button', { name: 'Satellite view' }));
   act(() => fakeSocket.receive('users-update', members()));
 };
 const member = (id, extra) => ({ [id]: { uid: `u-${id}`, roomCode: code, lat: HERE.lat + 0.001, lng: HERE.lng, speed: 0, heading: 0, battery: 90, status: 'ACTIVE', ...extra } });

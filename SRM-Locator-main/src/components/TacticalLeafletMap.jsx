@@ -13,7 +13,7 @@ import LeafletReactMarker from './LeafletReactMarker';
 import MemberMarker from './MemberMarker';
 import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
 import { registerMapDriver } from '../utils/mapFocus';
-import { ROUTE_CASING_WIDTH, ROUTE_WIDTH, ROUTE_COLOR, ROUTE_CASING_COLOR, ROUTE_DASH_ARRAY, FALLBACK_DASH_ARRAY } from '../hooks/useWaypointNavigationLine';
+import { ROUTE_CASING_WIDTH, ROUTE_WIDTH, ROUTE_COLOR, ROUTE_CASING_COLOR } from '../hooks/useWaypointNavigationLine';
 
 // This engine exists precisely because there is no Google Maps key (see App.jsx's
 // mapEngineFailed / the "keyless Leaflet/OSM engine" warning), so its own basemap must
@@ -73,10 +73,14 @@ const ViewController = ({ center, zoom }) => {
 };
 
 // Hands the shared glide (utils/mapFocus.js) this map's own animated move.
-const FocusDriver = ({ onMapInstance, onUserInteraction }) => {
+const FocusDriver = ({ onMapInstance, onUserInteraction, active = true }) => {
   const map = useMap();
   useEffect(() => {
     onMapInstance?.(map);
+  }, [map, onMapInstance]);
+  // The camera driver belongs to the visible map: this one steps aside while Google shows.
+  useEffect(() => {
+    if (!active) return undefined;
     return registerMapDriver({
       element: map.getContainer(),
       getView: () => ({ ...map.getCenter(), zoom: map.getZoom() }),
@@ -87,7 +91,7 @@ const FocusDriver = ({ onMapInstance, onUserInteraction }) => {
         return () => { map.off('moveend', done); map.stop(); };
       },
     });
-  }, [map, onMapInstance]);
+  }, [map, active]);
 
   useMapEvents({
     dragstart() {
@@ -157,6 +161,8 @@ const TacticalLeafletMap = ({
   onClearWaypoint,
   onArTrack,
   isSatellite,
+  // False while the Google map is the one showing (App.jsx), so it owns the camera driver.
+  driverActive = true,
   highlightBuildingId,
   onSelectMember,
   onMapInstance,
@@ -189,7 +195,7 @@ const TacticalLeafletMap = ({
         maxZoom={21}
       />
       <ViewController center={center} zoom={zoom} />
-      <FocusDriver onMapInstance={onMapInstance} onUserInteraction={onUserInteraction} />
+      <FocusDriver onMapInstance={onMapInstance} onUserInteraction={onUserInteraction} active={driverActive} />
       <ClickHandler onMapClick={onMapClick} />
       <ZoomTracker onZoomChange={onZoomChange} />
 
@@ -237,14 +243,14 @@ const TacticalLeafletMap = ({
         </LeafletReactMarker>
       )}
 
-      {/* Live walking route to the active waypoint — shared blue dashes and white outline in both themes */}
+      {/* Live walking route to the active waypoint — shared solid blue route and white outline in both themes */}
       {walkingRoute?.path?.length > 1 && (
         <Polyline
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
           pathOptions={{
             color: casingColor,
             weight: ROUTE_CASING_WIDTH,
-            dashArray: walkingRoute.isRealRoute ? ROUTE_DASH_ARRAY : FALLBACK_DASH_ARRAY, lineCap: 'round',
+            lineCap: 'round',
             opacity: 1,
           }}
         />
@@ -255,7 +261,6 @@ const TacticalLeafletMap = ({
           pathOptions={{
             color: routeColor,
             weight: ROUTE_WIDTH,
-            dashArray: walkingRoute.isRealRoute ? ROUTE_DASH_ARRAY : FALLBACK_DASH_ARRAY,
             lineCap: 'round',
             opacity: 1,
           }}

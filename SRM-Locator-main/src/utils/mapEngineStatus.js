@@ -8,6 +8,7 @@
 export const MAP_STATUS_LABEL = {
   google: 'Map: Google',
   backup: 'Map: Backup (OpenStreetMap)',
+  free: 'Map: OpenStreetMap (Google on satellite)',
 };
 export const MAP_STATUS_REASON_TEXT = {
   'no-key': 'No Google Maps key in this build',
@@ -15,7 +16,12 @@ export const MAP_STATUS_REASON_TEXT = {
   'key-rejected': 'Google rejected the map key',
 };
 
-/** @returns {{engine: 'google'|'backup', reason: 'ok'|'no-key'|'timeout'|'key-rejected'}} */
-export function mapEngineStatus(failReason) {
-  return failReason ? { engine: 'backup', reason: failReason } : { engine: 'google', reason: 'ok' };
+/**
+ * `googleInUse` is whether the Google map is the one on screen. The free map is the normal map
+ * and Google is only for satellite, so Google being usable but not showing is just 'free'.
+ * @returns {{engine: 'google'|'backup'|'free', reason: 'ok'|'no-key'|'timeout'|'key-rejected'}}
+ */
+export function mapEngineStatus(failReason, googleInUse = true) {
+  if (failReason) return { engine: 'backup', reason: failReason };
+  return googleInUse ? { engine: 'google', reason: 'ok' } : { engine: 'free', reason: 'ok' };
 }

@@ -61,7 +61,9 @@ export function useNavigationController({
     lastRerouteTimeRef.current = now;
 
     try {
-      const route = await fetchPedestrianRoute(origin, dest, mapEngine);
+      // Routes do not depend on which map is showing: switching to satellite must not
+      // restart the route, so the engine is not part of the request or the session.
+      const route = await fetchPedestrianRoute(origin, dest, 'leaflet');
 
       // Check if destination is still valid
       if (requestId === requestIdRef.current && destinationRef.current?.lat === dest.lat && destinationRef.current?.lng === dest.lng) {
@@ -82,11 +84,11 @@ export function useNavigationController({
         setIsRerouting(false);
       }
     }
-  }, [mapEngine]);
+  }, []);
 
   // Reset session when navigation starts or destination changes
   useEffect(() => {
-    const sessionKey = isNavigating && destination ? `${mapEngine}:${destination.lat},${destination.lng}` : null;
+    const sessionKey = isNavigating && destination ? `${destination.lat},${destination.lng}` : null;
     if (sessionKeyRef.current !== sessionKey) {
       sessionKeyRef.current = sessionKey;
       requestIdRef.current += 1; // Invalidate responses for a stopped/replaced session.
@@ -117,7 +119,7 @@ export function useNavigationController({
     if (liveLocation) {
       triggerRouteCalculation(liveLocation, destination);
     }
-  }, [isNavigating, destination?.lat, destination?.lng, mapEngine, triggerRouteCalculation]);
+  }, [isNavigating, destination?.lat, destination?.lng, triggerRouteCalculation]);
 
   // Automatically trigger route calculation as soon as liveLocation arrives
   useEffect(() => {

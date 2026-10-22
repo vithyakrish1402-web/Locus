@@ -5,6 +5,7 @@
 // rejecting the key (window.gm_authFailure). Both engines are stood in for, so this
 // proves the switch and the wording, not what Google does in a WebView.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import React from 'react';
 import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
 
 const fakeSocket = vi.hoisted(() => ({
@@ -12,8 +13,8 @@ const fakeSocket = vi.hoisted(() => ({
   on: () => {}, off: () => {}, emit: vi.fn(),
 }));
 // Whether the stand-in Google map reports itself loaded.
-const google = vi.hoisted(() => ({ loads: true, options: null }));
-const leaflet = vi.hoisted(() => ({ props: null }));
+const google = vi.hoisted(() => ({ loads: true, options: null, mounts: 0 }));
+const leaflet = vi.hoisted(() => ({ props: null, mounts: 0 }));
 const googleLine = vi.hoisted(() => ({ args: null }));
 
 vi.mock('socket.io-client', () => ({ io: () => fakeSocket }));
@@ -38,6 +39,7 @@ vi.mock('google-map-react', async () => {
   return {
     default: function FakeGoogleMap({ onGoogleApiLoaded, options }) {
       google.options = options;
+      React.useEffect(() => { google.mounts += 1; }, []);
       React.useEffect(() => {
         if (google.loads) onGoogleApiLoaded?.({ map: { setTilt() {}, addListener() { return { remove() {} }; }, getDiv() {}, getCenter: () => ({ lat: () => 0, lng: () => 0 }), getZoom: () => 17 } });
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,6 +51,7 @@ vi.mock('google-map-react', async () => {
 vi.mock('../src/components/TacticalLeafletMap.jsx', () => ({
   default: (props) => {
     leaflet.props = props;
+    React.useEffect(() => { leaflet.mounts += 1; }, []);
     return <div data-testid="leaflet-map" />;
   },
 }));
@@ -82,6 +85,8 @@ const loadApp = async (key) => {
 const enterMapScreen = () => {
   fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
 };
+// The one thing that asks for Google. The same button turns satellite off again.
+const tapSatellite = () => fireEvent.click(screen.getByRole('button', { name: /satellite view|map view/i }));
 const statusText = () => {
   fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
   return screen.getByTestId('map-engine-status').textContent.replace(/\s*·\s*/g, '');
@@ -92,6 +97,8 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
   google.loads = true;
   google.options = null;
+  google.mounts = 0;
+  leaflet.mounts = 0;
   try { localStorage.removeItem('locus.theme'); } catch { /* no storage */ }
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
   Object.defineProperty(navigator, 'geolocation', {
@@ -109,13 +116,22 @@ afterEach(() => {
 });
 
 describe("the map status line in Settings' More section", () => {
-  it('says Google, with no reason, when the key is set and Google loads', async () => {
+  it('says the free map is in use, with no reason, until satellite is asked for', async () => {
     const App = await loadApp('test-key');
     render(<App />);
     enterMapScreen();
+    expect(await screen.findByTestId('leaflet-map')).toBeTruthy();
+    expect(screen.queryByTestId('google-map')).toBeNull();
+    expect(statusText()).toBe('Map: OpenStreetMap (Google on satellite)');
+  });
+
+  it('says Google, with no reason, when the key is set and satellite has loaded Google', async () => {
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    tapSatellite();
     expect(await screen.findByTestId('google-map')).toBeTruthy();
     act(() => { vi.advanceTimersByTime(9000); });
-    expect(screen.queryByTestId('leaflet-map')).toBeNull();
     expect(statusText()).toBe('Map: Google');
   });
 
@@ -127,28 +143,46 @@ describe("the map status line in Settings' More section", () => {
     expect(statusText()).toBe('Map: Backup (OpenStreetMap)No Google Maps key in this build');
   });
 
+  it('with no key, satellite is the free map on Esri imagery and Google is never built', async () => {
+    const App = await loadApp('');
+    render(<App />);
+    enterMapScreen();
+    await screen.findByTestId('leaflet-map');
+    tapSatellite();
+    expect(screen.queryByTestId('google-map')).toBeNull();
+    expect(leaflet.props.isSatellite).toBe(true);
+  });
+
   it('falls back after the 8 s watchdog when Google never loads, and says why', async () => {
     google.loads = false;
     const App = await loadApp('test-key');
     render(<App />);
     enterMapScreen();
+    // Nothing waits on Google until satellite asks for it.
+    act(() => { vi.advanceTimersByTime(20000); });
+    expect(statusText()).toBe('Map: OpenStreetMap (Google on satellite)');
+    tapSatellite();
     expect(await screen.findByTestId('google-map')).toBeTruthy();
     act(() => { vi.advanceTimersByTime(7900); });
-    expect(screen.queryByTestId('leaflet-map')).toBeNull();
+    expect(screen.queryByTestId('google-map')).toBeTruthy();
     act(() => { vi.advanceTimersByTime(200); });
-    expect(await screen.findByTestId('leaflet-map')).toBeTruthy();
+    expect(screen.queryByTestId('google-map')).toBeNull();
     expect(statusText()).toBe('Map: Backup (OpenStreetMap)Google map could not load (slow or no connection)');
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('reason: timeout'));
+    // Satellite is now the free map on Esri imagery.
+    expect(leaflet.props.isSatellite).toBe(true);
   });
 
   it('falls back when Google rejects the key (gm_authFailure), and says why', async () => {
     const App = await loadApp('test-key');
     render(<App />);
     enterMapScreen();
+    expect(window.gm_authFailure).toBeUndefined();
+    tapSatellite();
     expect(await screen.findByTestId('google-map')).toBeTruthy();
     expect(typeof window.gm_authFailure).toBe('function');
     act(() => window.gm_authFailure());
-    expect(await screen.findByTestId('leaflet-map')).toBeTruthy();
+    expect(screen.queryByTestId('google-map')).toBeNull();
     expect(statusText()).toBe('Map: Backup (OpenStreetMap)Google rejected the map key');
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('reason: key-rejected'));
     // One-way, and the handler is gone with the Google map.
@@ -160,6 +194,7 @@ describe("the map status line in Settings' More section", () => {
     const App = await loadApp('test-key');
     render(<App />);
     enterMapScreen();
+    tapSatellite();
     await screen.findByTestId('google-map');
     act(() => window.gm_authFailure());
     act(() => { vi.advanceTimersByTime(9000); });
@@ -172,6 +207,7 @@ describe("the map status line in Settings' More section", () => {
     const App = await loadApp('test-key');
     render(<App />);
     enterMapScreen();
+    tapSatellite();
     await screen.findByTestId('google-map');
     expect(window.gm_authFailure).not.toBe(theirs);
     act(() => window.gm_authFailure());
@@ -179,32 +215,86 @@ describe("the map status line in Settings' More section", () => {
   });
 });
 
-// The roadmap follows the app's theme (redesign Map batch, piece 4). The styles themselves
-// are untested against a live Google map; this checks the right set reaches it.
+// The satellite routing rule: the free map is the map; Google is built by the first satellite
+// tap and by nothing else, once, then only hidden and shown.
+describe('satellite routing', () => {
+  const layer = (id) => screen.getByTestId(id);
+  const visible = (id) => layer(id).style.visibility === 'visible';
+
+  it('cold start with a key present builds no Google map and shows the free one', async () => {
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    expect(await screen.findByTestId('leaflet-map')).toBeTruthy();
+    act(() => { vi.advanceTimersByTime(20000); });
+    expect(screen.queryByTestId('google-map')).toBeNull();
+    expect(screen.queryByTestId('google-map-layer')).toBeNull();
+    expect(google.mounts).toBe(0);
+    expect(window.google).toBeUndefined();
+    expect(window.gm_authFailure).toBeUndefined();
+    expect(leaflet.props.isSatellite).toBe(false);
+    expect(visible('free-map-layer')).toBe(true);
+  });
+
+  it('the first satellite tap builds Google once; five more round trips build nothing', async () => {
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    await screen.findByTestId('leaflet-map');
+    tapSatellite();
+    const googleNode = await screen.findByTestId('google-map');
+    expect(google.mounts).toBe(1);
+    expect(visible('google-map-layer')).toBe(true);
+    expect(visible('free-map-layer')).toBe(false);
+    // Google, not the free engine on other tiles, is what satellite shows.
+    expect(leaflet.props.isSatellite).toBe(false);
+
+    for (let i = 0; i < 5; i += 1) {
+      tapSatellite(); // back to the normal map
+      expect(visible('free-map-layer')).toBe(true);
+      expect(visible('google-map-layer')).toBe(false);
+      tapSatellite(); // satellite again
+      expect(visible('google-map-layer')).toBe(true);
+      expect(visible('free-map-layer')).toBe(false);
+    }
+    expect(google.mounts).toBe(1);
+    expect(screen.getByTestId('google-map')).toBe(googleNode);
+    // The free map was never torn down either.
+    expect(leaflet.mounts).toBe(1);
+  });
+
+  it('keeps showing the free map while Google is still loading, rather than a blank', async () => {
+    google.loads = false;
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    await screen.findByTestId('leaflet-map');
+    tapSatellite();
+    expect(visible('free-map-layer')).toBe(true);
+    expect(visible('google-map-layer')).toBe(false);
+  });
+
+  it('a hidden Google map cannot be touched', async () => {
+    const App = await loadApp('test-key');
+    render(<App />);
+    enterMapScreen();
+    await screen.findByTestId('leaflet-map');
+    tapSatellite();
+    await screen.findByTestId('google-map');
+    tapSatellite();
+    expect(layer('google-map-layer').style.pointerEvents).toBe('none');
+  });
+});
+
+// Google only ever shows satellite photos now, so no roadmap style reaches it; the free map
+// takes the theme through its tile filter.
 describe('the Google map style', () => {
-  it('is the light style in the light theme', async () => {
-    const { LIGHT_MAP_STYLES } = await import('../src/utils/mapStyles.js');
-    try { localStorage.setItem('locus.theme', 'light'); } catch { /* no storage */ }
+  it('is satellite photos with no style', async () => {
     const App = await loadApp('test-key');
     render(<App />);
     enterMapScreen();
-    expect(google.options.styles).toEqual(LIGHT_MAP_STYLES);
-  });
-
-  it('is the dark style in the dark theme', async () => {
-    const { DARK_MAP_STYLES } = await import('../src/utils/mapStyles.js');
-    try { localStorage.setItem('locus.theme', 'dark'); } catch { /* no storage */ }
-    const App = await loadApp('test-key');
-    render(<App />);
-    enterMapScreen();
-    expect(google.options.styles).toEqual(DARK_MAP_STYLES);
-  });
-
-  it('has no style over satellite photos', async () => {
-    const App = await loadApp('test-key');
-    render(<App />);
-    enterMapScreen();
-    fireEvent.click(screen.getByRole('button', { name: 'Satellite view' }));
+    tapSatellite();
+    await screen.findByTestId('google-map');
     expect(google.options.styles).toEqual([]);
     expect(google.options.mapTypeId).toBe('hybrid');
   });
@@ -236,6 +326,7 @@ describe('the walking line colours reaching the map', () => {
     const App = await loadApp('test-key');
     render(<App />);
     enterMapScreen();
+    tapSatellite();
     await screen.findByTestId('google-map');
     expect(googleLine.args.slice(3)).toEqual(['#1A73E8', '#FFFFFF']);
   });

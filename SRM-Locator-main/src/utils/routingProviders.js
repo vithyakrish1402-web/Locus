@@ -8,7 +8,43 @@ import { normalizeManeuverModifier, generateStepsFromPath, haversineMeters } fro
 import { findCampusPedestrianRoute } from '../data/campusPedestrianGraph';
 import { formatDistanceMeters, formatDurationMinutes } from './walkingRoute';
 
-// google.maps.DirectionsService — used on the primary engine.
+
+// --- ROUTING CONFIG ---------------------------------------------------------
+// Free routers first, Google only when both of them have nothing, and at most once per
+// route request. Everything that tunes that lives here.
+
+// Free walking routers, tried in this order. Both are public, volunteer-run servers with a
+// fair-use policy, not services the app pays for, so go easy on them.
+//  - routing.openstreetmap.de (FOSSGIS) runs a real foot profile. Its path says "driving"
+//    because that is what the service calls its one profile; the data behind it is foot.
+//  - router.project-osrm.org is the OSRM demo server. Assumption: it ignores the "foot" in
+//    the URL and routes for cars (its times on SRM pairs are driving speed), so it is the
+//    second choice: a road path is better than none.
+const FREE_ROUTER_ENDPOINTS = [
+  (o, d) => `https://routing.openstreetmap.de/routed-foot/route/v1/driving/${o};${d}?overview=full&geometries=geojson&steps=true`,
+  (o, d) => `https://router.project-osrm.org/route/v1/foot/${o};${d}?overview=full&geometries=geojson&steps=true`,
+];
+/** How long to wait for each free router before trying the next. */
+const FREE_ROUTER_TIMEOUT_MS = 6000;
+
+/** Decimal places endpoints are rounded to for the cache key: 4 is about 11 m. Moving less
+ *  than that never asks for a new route. */
+const ROUTE_CACHE_ROUNDING_DECIMALS = 4;
+/** How long a route from a real router (free or Google) is reused. Assumption: campus paths
+ *  do not change within a walk, and a person off the route is handled by the navigation
+ *  controller moving the origin, which changes the key. */
+const ROUTE_CACHE_TTL_MS = 10 * 60 * 1000;
+/** How long the offline campus-graph fallback is reused. Short, so the next call retries the
+ *  real routers once they are back, but long enough that a blocked service is not hammered. */
+const FALLBACK_ROUTE_TTL_MS = 30 * 1000;
+/** Minimum time between network lookups for the same destination. Inside it, a request for
+ *  that destination from a new spot gets the latest route back instead of a new request.
+ *  Assumption: the callers already re-ask every 6-20 s, so 8 s only stops bursts. */
+const ROUTE_MIN_GAP_MS = 8000;
+/** Most routes kept; the oldest is dropped first. */
+const ROUTE_CACHE_MAX_ENTRIES = 50;
+
+// google.maps.DirectionsService — kept for callers outside the route order below (unused there).
 export const fetchGoogleWalkingRoute = (origin, destination) =>
   new Promise((resolve) => {
     if (!window.google?.maps) {
@@ -104,14 +140,11 @@ export const fetchOsrmWalkingRoute = async (origin, destination) => {
     return null;
   }
 
-  const endpoints = [
-    `https://router.project-osrm.org/route/v1/foot/${oLng},${oLat};${dLng},${dLat}?overview=full&geometries=geojson&steps=true`,
-    `https://routing.openstreetmap.de/routed-foot/route/v1/driving/${oLng},${oLat};${dLng},${dLat}?overview=full&geometries=geojson&steps=true`,
-  ];
+  const endpoints = FREE_ROUTER_ENDPOINTS.map((url) => url(`${oLng},${oLat}`, `${dLng},${dLat}`));
 
   for (const url of endpoints) {
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      const res = await fetch(url, { signal: AbortSignal.timeout(FREE_ROUTER_TIMEOUT_MS) });
       if (!res.ok) continue;
       const data = await res.json();
       const route = data.code === 'Ok' ? data.routes?.[0] : null;
@@ -309,52 +342,49 @@ export const fetchGoogleRoutesApi = async (origin, destination) => {
   }
 };
 
-/**
- * Unified optimal walking route provider.
- * Follows real roads by priority:
- * 1. Google Routes API (v2 / New) — computes the direct, most suitable campus pedestrian path
- * 2. Legacy Google DirectionsService (if Maps JS is loaded)
- * 3. OpenStreetMap / OSRM foot router (contains all campus roads and walkways)
- * 4. Campus pedestrian graph fallback
- */
-export const fetchPedestrianRoute = async (origin, destination, preferredEngine = 'google') => {
-  if (!origin || !destination) return null;
+const roundCoord = (n) => Number(n).toFixed(ROUTE_CACHE_ROUNDING_DECIMALS);
+const pointKey = (p) => `${roundCoord(p.lat)},${roundCoord(p.lng)}`;
 
-  // 1. Google Routes API (New) — most suitable direct pedestrian path
+// Shared by every caller (navigation, the group walking line, your own walking line), so
+// three of them asking for the same route make one request.
+const routeCache = new Map();     // routeKey -> { route, expires }
+const routeInFlight = new Map();  // routeKey -> Promise
+const lastLookupByDest = new Map(); // destKey -> { at, promise }
+
+/** Forgets every cached route and lookup time (sign-out, and tests). */
+export const clearRouteCache = () => {
+  routeCache.clear();
+  routeInFlight.clear();
+  lastLookupByDest.clear();
+};
+
+const remember = (key, route, ttl) => {
+  routeCache.delete(key);
+  routeCache.set(key, { route, expires: Date.now() + ttl });
+  while (routeCache.size > ROUTE_CACHE_MAX_ENTRIES) routeCache.delete(routeCache.keys().next().value);
+};
+
+// The route itself, no cache: free routers in order, then Google once, then the campus graph.
+const lookUpRoute = async (origin, destination) => {
+  // 1-2. OpenStreetMap foot router, then the OSRM demo server.
+  try {
+    const free = await fetchOsrmWalkingRoute(origin, destination);
+    if (free?.path?.length >= 2) return { route: free, ttl: ROUTE_CACHE_TTL_MS };
+  } catch {
+    // Go on to Google
+  }
+
+  // 3. Google Routes API: one request, only because neither free router had a route.
   if (GOOGLE_MAPS_API_KEY) {
     try {
-      const routesApiRoute = await fetchGoogleRoutesApi(origin, destination);
-      if (routesApiRoute?.path?.length >= 2) {
-        return routesApiRoute;
-      }
+      const google = await fetchGoogleRoutesApi(origin, destination);
+      if (google?.path?.length >= 2) return { route: google, ttl: ROUTE_CACHE_TTL_MS };
     } catch {
-      // Proceed to legacy / fallback
+      // Go on to the campus graph
     }
   }
 
-  // 2. Legacy Google Directions (if Maps JS is enabled and available)
-  if (preferredEngine === 'google' && window.google?.maps) {
-    try {
-      const googleRoute = await fetchGoogleWalkingRoute(origin, destination);
-      if (googleRoute?.path?.length >= 2) {
-        return googleRoute;
-      }
-    } catch {
-      // Proceed to OSM road router
-    }
-  }
-
-  // 3. OpenStreetMap / OSRM foot router (follows Intra College Rd, campus avenues, paths)
-  try {
-    const osrmRoute = await fetchOsrmWalkingRoute(origin, destination);
-    if (osrmRoute?.path?.length >= 2) {
-      return osrmRoute;
-    }
-  } catch {
-    // Proceed to campus graph
-  }
-
-  // 4. Curated campus pedestrian graph fallback
+  // 4. Curated campus pedestrian graph fallback (offline).
   const campusPath = findCampusPedestrianRoute(origin, destination);
   if (campusPath && campusPath.length >= 2) {
     const steps = generateStepsFromPath(campusPath, destination?.name);
@@ -364,17 +394,55 @@ export const fetchPedestrianRoute = async (origin, destination, preferredEngine 
     }
     const mins = Math.max(1, Math.round(meters / 1.4 / 60));
     return {
-      path: campusPath,
-      steps,
-      distance: { text: formatDistanceMeters(meters) },
-      duration: { text: formatDurationMinutes(mins) },
-      distanceMeters: meters,
-      durationSeconds: mins * 60,
-      isRealRoute: true,
+      route: {
+        path: campusPath,
+        steps,
+        distance: { text: formatDistanceMeters(meters) },
+        duration: { text: formatDurationMinutes(mins) },
+        distanceMeters: meters,
+        durationSeconds: mins * 60,
+        isRealRoute: true,
+      },
+      ttl: FALLBACK_ROUTE_TTL_MS,
     };
   }
 
   return null;
 };
 
+/**
+ * Walking route between two points, shared and cached.
+ *   cache (rounded endpoints) -> a lookup already running -> the minimum gap for this
+ *   destination -> lookUpRoute(): OSM foot router, OSRM demo server, Google (once), campus graph.
+ * `preferredEngine` is accepted for the existing callers and ignored: the route does not
+ * depend on which map is showing.
+ */
+export const fetchPedestrianRoute = async (origin, destination) => {
+  if (!origin || !destination) return null;
+  if (![origin.lat, origin.lng, destination.lat, destination.lng].every((n) => Number.isFinite(Number(n)))) return null;
 
+  const destKey = pointKey(destination);
+  const key = `${pointKey(origin)}>${destKey}|${destination.name || ''}`;
+  const now = Date.now();
+
+  const cached = routeCache.get(key);
+  if (cached && cached.expires > now) return cached.route;
+
+  const running = routeInFlight.get(key);
+  if (running) return running;
+
+  // Too soon after the last lookup for this destination (running or done): its answer is
+  // this one's too, rather than another request.
+  const last = lastLookupByDest.get(destKey);
+  if (last && now - last.at < ROUTE_MIN_GAP_MS) return last.promise;
+
+  const lookup = lookUpRoute(origin, destination)
+    .then((found) => {
+      if (found) remember(key, found.route, found.ttl);
+      return found?.route ?? null;
+    })
+    .finally(() => routeInFlight.delete(key));
+  routeInFlight.set(key, lookup);
+  lastLookupByDest.set(destKey, { at: now, promise: lookup });
+  return lookup;
+};
