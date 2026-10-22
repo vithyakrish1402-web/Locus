@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.button>, which this config can't see
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Search, X } from 'lucide-react';
@@ -6,6 +6,17 @@ import BrandMark from '../access/BrandMark';
 import { StatusDot } from '../ui';
 import { SHARING_CHIP, TOP_BAR } from '../../copy/map';
 import { TOP_BAR_HEIGHT, TOP_BAR_TOP } from '../../utils/mapChrome';
+
+/** How long the sharing chip stays open on its text, once it has opened, before folding to its dot. */
+export const STATUS_PILL_EXPAND_HOLD_MS = 3500;
+/**
+ * How long a new state must last before the chip opens again to announce it. A state that
+ * comes and goes in less than this (a GPS fix lost and found again) is not an event worth
+ * announcing: it never opens the chip, so it cannot make it flicker.
+ */
+export const STATUS_PILL_EVENT_SETTLE_MS = 800;
+/** How long the label takes to fade; the chip changes width only while the label is fully faded. */
+const LABEL_FADE_MS = 140;
 
 // The map screen's top bar: an ultra-clean, Apple-style floating island positioned on the
 // left side of the screen on mobile, displaying the crisp "L.O.C.U.S" mark and essential actions.
@@ -113,15 +124,20 @@ export function TopBar({ isSatellite, query = '', onQuery, onSearchFocus }) {
 const DOT = { ACTIVE: 'live', FROZEN: 'paused', GHOST: 'hidden' };
 
 /**
- * The sharing chip under the top bar: displays the full text ("Sharing live with your group")
- * first, then smoothly slides/collapses to the side leaving only the pulsing green dot visible
- * across the map. Tapping the dot or chip toggles between the compact dot and the expanded label.
+ * The sharing chip under the top bar: opens on its text ("Sharing live with your group") when
+ * the map appears and whenever what it says changes for real, holds for STATUS_PILL_EXPAND_HOLD_MS,
+ * then folds to the pulsing dot. Tapping it toggles between the dot and the text.
  *
- * @param {{ mode: 'ACTIVE'|'FROZEN'|'GHOST', waiting?: boolean, pausedNoSpot?: boolean }} props
+ * It stays mounted when it is hidden (a banner is in its place): hiding it only draws nothing, so
+ * its state is not lost and it does not open afresh every time the banner goes. The label never
+ * shows cut off: it fades out before the chip narrows, and the chip widens before it fades in.
+ *
+ * @param {{ mode: 'ACTIVE'|'FROZEN'|'GHOST', waiting?: boolean, pausedNoSpot?: boolean, hidden?: boolean }} props
  */
-export function SharingChip({ mode, waiting = false, pausedNoSpot = false }) {
+export function SharingChip({ mode, waiting = false, pausedNoSpot = false, hidden = false }) {
   const reduceMotion = useReducedMotion();
-  const [collapsed, setCollapsed] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const firstRef = useRef(true);
 
   const key = waiting && mode === 'ACTIVE'
     ? 'waiting'
@@ -129,16 +145,33 @@ export function SharingChip({ mode, waiting = false, pausedNoSpot = false }) {
       ? 'pausedNoSpot'
       : mode;
 
-  // Auto-collapse to side dot after a 3.5s initial view
+  // Opens on the first view and on each real change of what it says, then folds after the hold.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setCollapsed(true);
-    }, 3500);
-    return () => clearTimeout(timer);
+    let hold;
+    const open = () => {
+      setExpanded(true);
+      hold = setTimeout(() => setExpanded(false), STATUS_PILL_EXPAND_HOLD_MS);
+    };
+    let settle;
+    if (firstRef.current) {
+      firstRef.current = false;
+      open();
+    } else {
+      settle = setTimeout(open, STATUS_PILL_EVENT_SETTLE_MS);
+    }
+    return () => { clearTimeout(settle); clearTimeout(hold); };
   }, [key]);
+
+  if (hidden) return null;
 
   const dotStatus = key === 'waiting' ? 'waiting' : DOT[mode] ?? 'live';
   const labelText = SHARING_CHIP[key] ?? SHARING_CHIP.ACTIVE;
+  const fade = reduceMotion ? 0 : LABEL_FADE_MS;
+  // Open: the room for the text appears at once, and the text fades in. Folding: the text fades
+  // out, and only then does the room go.
+  const labelStyle = expanded
+    ? { gridTemplateColumns: '1fr', opacity: 1, transition: `grid-template-columns 0s, opacity ${fade}ms ease` }
+    : { gridTemplateColumns: '0fr', opacity: 0, transition: `opacity ${fade}ms ease, grid-template-columns 0s linear ${fade}ms` };
 
   return (
     <div className="flex pointer-events-auto">
@@ -146,26 +179,16 @@ export function SharingChip({ mode, waiting = false, pausedNoSpot = false }) {
         type="button"
         data-testid="sharing-chip"
         data-mode={key}
+        data-expanded={expanded ? 'true' : 'false'}
         aria-label={labelText}
         title={labelText}
-        onClick={() => setCollapsed(!collapsed)}
-        layout={!reduceMotion}
-        initial={false}
-        animate={{
-          width: 'auto',
-          scale: 1,
-        }}
+        onClick={() => setExpanded((open) => !open)}
         whileTap={{ scale: 0.96 }}
-        transition={
-          reduceMotion
-            ? { duration: 0 }
-            : { type: 'spring', stiffness: 380, damping: 30 }
-        }
-        className={`group relative inline-flex items-center gap-2.5 min-h-11 rounded-[1.375rem] glass-pill font-ui shadow-sm transition-colors duration-200 cursor-pointer select-none ${
-          collapsed ? 'px-3.5 py-2.5' : 'px-4 py-2'
+        className={`group relative inline-flex items-center max-w-full min-h-11 rounded-[1.375rem] glass-pill font-ui shadow-sm transition-colors duration-200 cursor-pointer select-none ${
+          expanded ? 'px-4 py-2' : 'px-3.5 py-2.5'
         }`}
       >
-        <span className="relative flex items-center justify-center">
+        <span className="relative flex items-center justify-center shrink-0">
           <span
             className={`w-2.5 h-2.5 rounded-full transition-transform duration-200 group-hover:scale-110 ${
               dotStatus === 'live'
@@ -180,20 +203,11 @@ export function SharingChip({ mode, waiting = false, pausedNoSpot = false }) {
           />
         </span>
 
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.span
-              key="label"
-              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, width: 0, x: -8 }}
-              animate={{ opacity: 1, width: 'auto', x: 0 }}
-              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, width: 0, x: -8 }}
-              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="overflow-hidden whitespace-nowrap text-label text-text font-medium"
-            >
-              {labelText}
-            </motion.span>
-          )}
-        </AnimatePresence>
+        <span className="grid min-w-0" style={labelStyle}>
+          <span className="overflow-hidden min-w-0">
+            <span className="block pl-2.5 whitespace-nowrap truncate text-label text-text font-medium">{labelText}</span>
+          </span>
+        </span>
       </motion.button>
     </div>
   );

@@ -1,6 +1,6 @@
 // The group panel's three heights and closed (src/utils/panelHeights.js).
 import { describe, it, expect } from 'vitest';
-import { panelStops, snapPanel, sheetBottomPadding } from '../src/utils/panelHeights.js';
+import { panelStops, snapPanel, SHEET_BOTTOM_PADDING_PX } from '../src/utils/panelHeights.js';
 
 // A 412 × 892 phone: the panel runs from under the top bar (y 76) to the tab bar (64 px).
 const PHONE = { viewport: 892, panelHeight: 892 - 64 - 76, peekHeight: 240 };
@@ -77,12 +77,7 @@ describe('the panel standing on the real tab bar', () => {
 });
 
 describe('the bottom padding of the list', () => {
-  it('is one tab bar plus how far the panel is slid down', () => {
-    expect(sheetBottomPadding(0)).toBe('calc(var(--tab-bar-height) + 0px)');
-    expect(sheetBottomPadding(272.4)).toBe('calc(var(--tab-bar-height) + 272px)');
-  });
-
-  it('never goes negative (a rubber-banded panel)', () => {
-    expect(sheetBottomPadding(-12)).toBe('calc(var(--tab-bar-height) + 0px)');
+  it('is one measured tab bar plus 2 rem', () => {
+    expect(SHEET_BOTTOM_PADDING_PX).toBe('calc(var(--tab-bar-height) + 2rem)');
   });
 });

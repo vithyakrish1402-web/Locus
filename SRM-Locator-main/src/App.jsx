@@ -55,7 +55,7 @@ import JoinRequests from './components/group/JoinRequests';
 import PeekLines from './components/group/PeekLines';
 import PanelStops from './components/group/PanelStops';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
-import { panelStops, snapPanel, sheetBottomPadding } from './utils/panelHeights';
+import { panelStops, snapPanel, SHEET_BOTTOM_PADDING_PX } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
 import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
@@ -2805,10 +2805,10 @@ const App = () => {
 
 
           {/* List Content */}
-          {/* Room at the bottom on a phone to scroll the last rows into sight: one tab bar's
-            height (SHEET_BOTTOM_PADDING_PX, measured) plus how far the panel is slid down at
-            this height, because that much of this list lies below the screen (see
-            sheetBottomPadding). The panel itself ends at the top of the tab bar. */}
+          {/* Room at the bottom on a phone under the last row: SHEET_BOTTOM_PADDING_PX, one tab bar's
+            measured height and 2 rem (utils/panelHeights.js). The panel ends at the top of the tab
+            bar; the spacer at the end of the list is what makes room for the part of the panel
+            that lies below the screen at half and peek. */}
           {/* At half, the first scroll through the list (members or places) lifts the panel to
             full: there is little of the list to read through at half, so the panel makes room. */}
           <div
@@ -2828,7 +2828,7 @@ const App = () => {
             }}
             onWheel={(e) => { if (isMobile && sheetOpen && panelHeight === 'half' && e.deltaY !== 0) setPanelHeight('full'); }}
             className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto p-4 pt-1 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
-            style={isMobile ? { paddingBottom: sheetBottomPadding(panelTarget) } : undefined}
+            style={isMobile ? { paddingBottom: SHEET_BOTTOM_PADDING_PX } : undefined}
           >
             <SegmentedControl
               label={GROUP_TABS.label}
@@ -3105,7 +3105,14 @@ const App = () => {
           } md:-translate-x-1/2 pointer-events-none flex flex-col gap-2`}
         style={isNavigatingMode ? { top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' } : { top: BELOW_TOP_BAR }}
       >
-        {!isNavigatingMode && !(isTargetingMode && isMobile) && !locationError && !showDeclinedCard && <SharingChip mode={telemetryMode} waiting={!liveLocation} pausedNoSpot={!pausedHasSpot} />}
+        {/* Always mounted, only hidden while a banner stands in its place: coming and going with
+            every location hiccup made it open afresh each time (components/map/TopBar.jsx). */}
+        <SharingChip
+          mode={telemetryMode}
+          waiting={!liveLocation}
+          pausedNoSpot={!pausedHasSpot}
+          hidden={isNavigatingMode || (isTargetingMode && isMobile) || Boolean(locationError) || showDeclinedCard}
+        />
         <AnimatePresence initial={false}>
           {/* Choosing a meeting point (a phone's meeting point button). */}
           {isTargetingMode && (

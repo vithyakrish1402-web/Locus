@@ -37,14 +37,14 @@ export function panelStops({ viewport, panelHeight, peekHeight, tabBar = 64 }) {
 }
 
 /**
- * The panel's bottom padding on a phone, as a CSS length: one tab bar's height (SHEET_BOTTOM_PADDING_PX,
- * the bar's measured height, in --tab-bar-height) plus how far the panel is slid down at its
- * resting height. The panel is laid out at full height and slid down by `slideDown` px, so at
- * half and peek that much of its scroll area lies below the screen; without it the last rows
- * could never be scrolled into sight.
- * @param {number} slideDown the resting height's y, in px
+ * The room under the panel's last row on a phone (SHEET_BOTTOM_PADDING_PX): one tab bar's height,
+ * as the bar measured itself (--tab-bar-height, its content, padding and the gesture bar's
+ * inset), and 2 rem more. The panel ends at the top of the tab bar, so the last row comes to rest
+ * that far above it, clear of the buttons that stand over the map. (The list also ends in a
+ * spacer as tall as how far the panel is slid down, which is what lets that last row be scrolled
+ * up out of the part of the panel below the screen.)
  */
-export const sheetBottomPadding = (slideDown) => `calc(var(--tab-bar-height) + ${Math.max(0, Math.round(slideDown))}px)`;
+export const SHEET_BOTTOM_PADDING_PX = 'calc(var(--tab-bar-height) + 2rem)';
 
 /**
  * Where a drag let go at `y` (px), moving at `velocityY` (px/s), comes to rest.

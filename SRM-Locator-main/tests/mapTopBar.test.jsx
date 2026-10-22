@@ -333,27 +333,30 @@ describe('the group panel list on a phone', () => {
     return m ? Number(m[1]) / 4 : null;
   };
 
-  it('scrolls its last rows clear of the Emergency and meeting point buttons, gesture bar included', () => {
+  it('scrolls its last rows clear of the meeting point button, gesture bar included (the Emergency button lives in the tab bar)', () => {
     window.matchMedia = (q) => ({ matches: /max-width/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
     onTheMap();
     fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
     const list = screen.getByTestId('group-panel-list');
     const panel = list.parentElement;
-    const sos = screen.getByRole('button', { name: /SOS beacon/ });
     const flag = screen.getByTestId('meeting-point-button');
 
     // Both buttons stand on the gesture bar's inset (set inline, which jsdom drops, so read
     // from their source); the list's bottom room must count it too.
-    for (const src of ['SosTrigger.jsx', 'map/MapControls.jsx']) {
+    for (const src of ['map/MapControls.jsx']) {
       expect(readFileSync(new URL('../src/components/' + src, import.meta.url), 'utf8')).toContain("marginBottom: 'env(safe-area-inset-bottom)'");
     }
-    const pad = list.className.match(/(?:^| )pb-\[calc\((\d+)rem\+env\(safe-area-inset-bottom\)\)\]/);
+    // The room under the last row is one measured tab bar plus 2 rem; the panel stands on the bar.
+    const pad = list.style.paddingBottom.match(/^calc\(var\(--tab-bar-height\) \+ (\d+)rem\)$/);
     expect(pad).toBeTruthy();
+    expect(panel.style.bottom).toBe('var(--tab-bar-height)');
+    // Until the bar has measured itself (jsdom measures nothing), the variable is 5 rem plus the inset.
+    const tabBarRem = Number(readFileSync(`${process.cwd()}/src/index.css`, 'utf8').match(/--tab-bar-height: calc\((\d+)rem \+ env\(safe-area-inset-bottom\)\)/)[1]);
 
     // Where the last row can end, above the screen's bottom edge (inset aside), against the
     // top of the taller button: 2 rem between them.
-    const lastRowEnds = rem(panel.className, 'bottom') + Number(pad[1]);
-    const buttonsTop = Math.max(...[sos, flag].map((b) => rem(b.className, 'bottom') + rem(b.className, 'h')));
+    const lastRowEnds = tabBarRem + tabBarRem + Number(pad[1]); // the panel's end, plus the room under the last row
+    const buttonsTop = Math.max(...[flag].map((b) => rem(b.className, 'bottom') + rem(b.className, 'h')));
     expect(lastRowEnds - buttonsTop).toBeGreaterThanOrEqual(2);
     // A wider screen keeps its own small padding (no floating buttons over the list there).
     expect(list.className).toMatch(/(^| )md:pb-4( |$)/);

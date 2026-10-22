@@ -567,8 +567,9 @@ describe('the three heights, on a phone', () => {
     openPanel();
     layOut();
     const list = screen.getByTestId('group-panel-list');
-    // Half rests 325 px below full on this phone (its top at 45 % of 892 px).
-    expect(list.lastElementChild.style.height).toBe('325px');
+    // Half rests 341 px below full on this phone (its top at 45 % of 892 px, over an 80 px tab
+    // bar: the bar's own height, 5 rem here as jsdom measures nothing).
+    expect(list.lastElementChild.style.height).toBe('341px');
   });
 
   const swipe = (list, y0, y1, x1 = 200) => {
@@ -675,11 +676,11 @@ describe('the three heights, on a phone', () => {
       expect(z(sos)).toBeGreaterThan(z(sheet()));
       expect(sheet().contains(sos)).toBe(false);
     }
-    // At peek the header ends above the Emergency button's top (5 rem above the 4 rem tab bar,
-    // and 5 rem tall: 160 px from the bottom on this phone).
+    // At peek the header ends above the Emergency button's top (5 rem above the tab bar, which is
+    // 80 px tall, and 5 rem tall: 160 px from the bottom on this phone).
     await drag(400, 600);
     const shown = 752 - yOf();
-    expect(64 + shown - 120).toBeGreaterThanOrEqual(160);
+    expect(80 + shown - 120).toBeGreaterThanOrEqual(160);
   }, 20000); // four slow drags
 
   it('notices stay under the panel at peek too, taking no taps from it', async () => {

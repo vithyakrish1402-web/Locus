@@ -142,8 +142,6 @@ const groupAtPeek = async () => {
   sized(screen.getByTestId('group-panel-header'), 120);
   act(() => { window.dispatchEvent(new Event('resize')); });
 };
-const yOf = () => Number(/translateY\((-?[\d.]+)px\)/.exec(sheet().style.transform)?.[1] ?? 0);
-const slide = () => Number(/\+ (\d+)px\)/.exec(list().style.paddingBottom)?.[1]);
 
 describe('the group panel stands on the real tab bar', () => {
   it('the tab bar says how tall it is, and the panel stands on that', async () => {
@@ -163,23 +161,24 @@ describe('the panel is opaque', () => {
 });
 
 describe('the last rows can always be scrolled into sight', () => {
-  it('the list ends one tab bar plus however far the panel is slid down, at peek, half and full', async () => {
+  it('the list ends a tab bar and 2 rem above its end, and a spacer as tall as the slide-down, at every height', async () => {
     await groupAtPeek();
+    const spacer = () => list().lastElementChild;
     expect(sheet().dataset.height).toBe('peek');
-    const atPeek = slide();
+    expect(list().style.paddingBottom).toBe('calc(var(--tab-bar-height) + 2rem)');
+    const atPeek = parseFloat(spacer().style.height);
     expect(atPeek).toBeGreaterThan(0);
-    expect(list().style.paddingBottom).toBe(`calc(var(--tab-bar-height) + ${atPeek}px)`);
 
     fireEvent.click(screen.getByTestId('group-panel-header')); // peek -> half
     expect(sheet().dataset.height).toBe('half');
-    const atHalf = slide();
+    expect(list().style.paddingBottom).toBe('calc(var(--tab-bar-height) + 2rem)');
+    const atHalf = parseFloat(spacer().style.height);
     expect(atHalf).toBeGreaterThan(0);
     expect(atHalf).toBeLessThan(atPeek);
-    expect(yOf()).toBeGreaterThanOrEqual(0);
 
     fireEvent.wheel(list(), { deltaY: 40 }); // half -> full
     expect(sheet().dataset.height).toBe('full');
-    expect(list().style.paddingBottom).toBe('calc(var(--tab-bar-height) + 0px)');
+    expect(list().style.paddingBottom).toBe('calc(var(--tab-bar-height) + 2rem)');
   });
 });
 
