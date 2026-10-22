@@ -13,7 +13,7 @@ import LeafletReactMarker from './LeafletReactMarker';
 import MemberMarker from './MemberMarker';
 import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
 import { registerMapDriver } from '../utils/mapFocus';
-import { ROUTE_CASING_WIDTH, ROUTE_WIDTH, ROUTE_COLOR, ROUTE_CASING_COLOR, ROUTE_DASH_ARRAY, FALLBACK_DASH_ARRAY } from '../hooks/useWaypointNavigationLine';
+import { ROUTE_CASING_WIDTH, ROUTE_WIDTH, ROUTE_COLOR, ROUTE_CASING_COLOR } from '../hooks/useWaypointNavigationLine';
 
 // This engine exists precisely because there is no Google Maps key (see App.jsx's
 // mapEngineFailed / the "keyless Leaflet/OSM engine" warning), so its own basemap must
@@ -243,14 +243,14 @@ const TacticalLeafletMap = ({
         </LeafletReactMarker>
       )}
 
-      {/* Live walking route to the active waypoint — shared blue dashes and white outline in both themes */}
+      {/* Live walking route to the active waypoint — shared solid blue route and white outline in both themes */}
       {walkingRoute?.path?.length > 1 && (
         <Polyline
           positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
           pathOptions={{
             color: casingColor,
             weight: ROUTE_CASING_WIDTH,
-            dashArray: walkingRoute.isRealRoute ? ROUTE_DASH_ARRAY : FALLBACK_DASH_ARRAY, lineCap: 'round',
+            lineCap: 'round',
             opacity: 1,
           }}
         />
@@ -261,7 +261,6 @@ const TacticalLeafletMap = ({
           pathOptions={{
             color: routeColor,
             weight: ROUTE_WIDTH,
-            dashArray: walkingRoute.isRealRoute ? ROUTE_DASH_ARRAY : FALLBACK_DASH_ARRAY,
             lineCap: 'round',
             opacity: 1,
           }}

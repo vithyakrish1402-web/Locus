@@ -9,25 +9,14 @@ import { useEffect, useRef } from 'react';
 // every GPS update while the operative is on the real-route fallback
 // (which redraws fresh every render — see useWalkingRoute.js).
 //
-// Both map engines use the same blue dashes with a white outline in either theme.
-// The straight-line fallback has wider gaps to distinguish it from a routed path.
+// Both map engines use the same solid blue route with a white outline in either theme.
 export const ROUTE_COLOR = '#1A73E8';
 export const ROUTE_CASING_COLOR = '#FFFFFF';
 export const ROUTE_WIDTH = 5;
 export const ROUTE_CASING_WIDTH = 9;
-export const ROUTE_DASH_ARRAY = '12 16';
-export const FALLBACK_DASH_ARRAY = '8 24';
-
-const routeDashes = (color, width, isRealRoute) => [{
-  icon: {
-    path: isRealRoute ? 'M 0,-6 0,6' : 'M 0,-4 0,4',
-    strokeColor: color, strokeOpacity: 1, strokeWeight: width, scale: 1,
-  },
-  offset: '0', repeat: isRealRoute ? '28px' : '32px',
-}];
 
 export function useWaypointNavigationLine(map, path, isRealRoute, color = ROUTE_COLOR, casingColor = ROUTE_CASING_COLOR) {
-  const linesRef = useRef([]); // the outline, then the blue dashes on top
+  const linesRef = useRef([]); // the outline, then the blue route on top
   const styleRef = useRef(null); // which isRealRoute and colours the current lines were built with
 
   useEffect(() => {
@@ -47,8 +36,8 @@ export function useWaypointNavigationLine(map, path, isRealRoute, color = ROUTE_
     if (!linesRef.current.length) {
       const { Polyline } = window.google.maps;
       linesRef.current = [
-        new Polyline({ path, map, strokeColor: casingColor, strokeOpacity: 0, zIndex: 1, icons: routeDashes(casingColor, ROUTE_CASING_WIDTH, isRealRoute) }),
-        new Polyline({ path, map, strokeColor: color, strokeOpacity: 0, zIndex: 2, icons: routeDashes(color, ROUTE_WIDTH, isRealRoute) }),
+        new Polyline({ path, map, strokeColor: casingColor, strokeOpacity: 1, strokeWeight: ROUTE_CASING_WIDTH, zIndex: 1 }),
+        new Polyline({ path, map, strokeColor: color, strokeOpacity: 1, strokeWeight: ROUTE_WIDTH, zIndex: 2 }),
       ];
       styleRef.current = style;
     } else {
