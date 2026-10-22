@@ -74,8 +74,12 @@ export default function SettingsScreen({
       aria-labelledby={titleId}
       data-testid="settings"
       className="fixed inset-0 overflow-y-auto bg-bg text-text font-ui pointer-events-auto overscroll-contain"
-      style={{ zIndex: SETTINGS_Z, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(var(--emergency-clearance) + 1rem)' }}
+      style={{ zIndex: SETTINGS_Z, paddingBottom: 'calc(var(--emergency-clearance) + 1rem)' }}
     >
+      {/* The status bar's strip: opaque, and pinned, so the content scrolls under it and never
+          shows behind the clock and battery (it used to be padding on this scrolling box, which
+          scrolled away with the content). */}
+      <div data-testid="settings-top-cover" className="top-cover sticky top-0 z-20" aria-hidden="true" />
       <div className="max-w-xl mx-auto px-4 pb-8">
         {/* Header Bar */}
         <div className="pt-3 -ml-2 flex items-center justify-between">

@@ -5,6 +5,7 @@
 // context: when the fade sat on a wrapper with no z-index of its own, Settings' z-index
 // counted only inside that wrapper, and both bars drew over Settings until the fade ended.
 // So the layer that sits beside the bars must be opaque, above them, and never faded itself.
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 
@@ -100,6 +101,8 @@ const settingsLayer = () => {
 };
 
 beforeEach(() => {
+  localStorage.clear();
+  sessionStorage.clear();
   fakeSocket.handlers.clear();
   vi.spyOn(window, 'alert').mockImplementation(() => {});
   Object.defineProperty(navigator, 'geolocation', {
@@ -134,13 +137,34 @@ describe('Settings over the top and bottom bars', () => {
     expect(faded(layer)).toBe(false);
   });
 
-  it('still fades the screen in, inside that layer', () => {
+  it('is whole on its first frame: nothing in it is faded, in any theme', () => {
     onTheMap();
     openSettings();
-    const layer = settingsLayer();
-    const fading = [...layer.querySelectorAll('*')].filter(faded);
-    expect(fading.length).toBeGreaterThan(0);
-    expect(fading.some((el) => el.contains(screen.getByTestId('settings')))).toBe(true);
+    expect([...settingsLayer().querySelectorAll('*')].filter(faded)).toEqual([]);
+  });
+
+  it('has no part that starts invisible or waits on a delay (the stagger that read as a white flash)', () => {
+    const css = readFileSync(`${process.cwd()}/src/index.css`, 'utf8');
+    const rule = /\.settings-reveal \{[^}]*\}/.exec(css)[0];
+    const keyframes = /@keyframes settings-reveal \{[^}]*\}[^}]*\}/.exec(css)[0];
+    expect(rule).not.toMatch(/animation-delay/);
+    expect(keyframes).not.toMatch(/opacity/);
+  });
+
+  it('covers the status bar with an opaque strip that is pinned, while the content scrolls under it', () => {
+    onTheMap();
+    openSettings();
+    const screenEl = screen.getByTestId('settings');
+    const cover = screen.getByTestId('settings-top-cover');
+    expect(screenEl.firstElementChild).toBe(cover);
+    expect(cover.className).toMatch(/(^| )top-cover( |$)/);
+    expect(cover.className).toMatch(/(^| )sticky( |$)/);
+    expect(cover.className).toMatch(/(^| )top-0( |$)/);
+    // The strip is no longer padding on the scrolling box, which scrolled away with the content.
+    expect(screenEl.style.paddingTop).toBe('');
+    const css = readFileSync(`${process.cwd()}/src/index.css`, 'utf8');
+    expect(css).toMatch(/--top-cover-height: max\(env\(safe-area-inset-top, 0px\), var\(--safe-area-inset-top, 0px\)\)/);
+    expect(css).toMatch(/\.top-cover \{[^}]*background-color: var\(--color-bg\)/);
   });
 
   it('closing: the layer stays opaque and above the bars while the screen fades out, then goes', async () => {

@@ -203,6 +203,14 @@ body {
    is on screen (SosTrigger sets data-emergency-button on <html>); otherwise the usual 1 rem. In
    rem, so it grows with the text size exactly as the button does. */
 :root { --emergency-clearance: calc(1rem + env(safe-area-inset-bottom)); }
+/* How tall the status bar is: the top inset. Android's WebView does not always report it through
+   env() (older ones report 0), so the larger of that and the variable Capacitor's SystemBars
+   injects on <html> (--safe-area-inset-top). Settings covers this strip so scrolling content
+   never shows behind the clock and battery; AR Scan keeps its controls and tags below it. */
+:root { --top-cover-height: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)); }
+/* A strip of that height at the top of a screen, opaque in the theme's own colour. In a scrolling
+   screen make it sticky (the screen's content then scrolls under it). */
+.top-cover { height: var(--top-cover-height); background-color: var(--color-bg); }
 /* The phone's bottom tab bar, as tall as it really is (its content, its padding and the gesture
    bar's inset). BottomTabBar replaces this with the measured pixels; this is what stands in
    until it has been measured: 5 rem is the bar's own height, plus the inset. The group panel
@@ -374,20 +382,19 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
 }
 
-/* Settings: the screen's parts arrive one after another (title, then each section), each
-   rising a little as it fades in. A CSS animation of transform and opacity only, so it runs
-   off the main thread; --i is the part's place in the order (SettingsScreen.jsx). */
+/* Settings: the whole screen is there, in its final layout, from the first frame - every part
+   fully opaque, none waiting on a delay, so there is never an empty or faint frame in any theme.
+   The parts only settle the last few pixels into place. A CSS animation of transform alone, so it
+   runs off the main thread, and none at all with reduced motion. */
 .settings-reveal {
-  animation: settings-reveal 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--i, 0) * 80ms);
+  animation: settings-reveal 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes settings-reveal {
-  from { opacity: 0; transform: translate3d(0, 20px, 0); }
-  to { opacity: 1; transform: translate3d(0, 0, 0); }
+  from { transform: translate3d(0, 8px, 0); }
+  to { transform: translate3d(0, 0, 0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .settings-reveal { animation-name: settings-reveal-fade; animation-duration: 150ms; animation-delay: 0ms; }
-  @keyframes settings-reveal-fade { from { opacity: 0; } to { opacity: 1; } }
+  .settings-reveal { animation: none; }
 }
 
 
