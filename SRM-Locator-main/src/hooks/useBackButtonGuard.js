@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
+import { runBackHandler } from '../utils/backHandlers';
 
 /**
  * Owns the Android hardware/gesture Back button for the whole app.
@@ -35,6 +36,7 @@ export function useBackButtonGuard(blocked) {
 
     CapacitorApp.addListener('backButton', ({ canGoBack }) => {
       if (blockedRef.current) return;
+      if (runBackHandler()) return;
       if (canGoBack) window.history.back();
       else CapacitorApp.minimizeApp();
     }).then((registered) => {

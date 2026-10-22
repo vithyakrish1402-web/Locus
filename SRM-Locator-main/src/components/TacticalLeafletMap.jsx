@@ -151,6 +151,8 @@ const TacticalLeafletMap = ({
   blockedUserIds,
   ghostMembers,
   activeTab,
+  // Whether the campus dots show; without it, only for the Buildings tab.
+  showBuildings = undefined,
   // Every place to mark (the database plus the admin's additions), and the spot the admin
   // has just chosen for a new one.
   places = SRM_MASTER_DATABASE,
@@ -219,7 +221,7 @@ const TacticalLeafletMap = ({
         </LeafletReactMarker>
       )}
 
-      {activeTab === 'buildings' && places.map((b) => (
+      {(showBuildings ?? activeTab === 'buildings') && places.map((b) => (
         <LeafletReactMarker key={b.id} lat={b.lat} lng={b.lng} onClick={() => onFocus({ lat: b.lat, lng: b.lng }, b)}>
           <BuildingMarker highlighted={highlightBuildingId === b.id} />
         </LeafletReactMarker>

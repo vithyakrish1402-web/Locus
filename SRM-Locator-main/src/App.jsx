@@ -108,6 +108,7 @@ import { useClosedAppSos } from './hooks/useClosedAppSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
+import { pushBackHandler } from './utils/backHandlers';
 import { useWifiFusion } from './hooks/useWifiFusion';
 import { useBackgroundSharing } from './hooks/useBackgroundSharing';
 import { stopBackgroundSharing } from './utils/backgroundSharing';
@@ -465,6 +466,14 @@ const App = () => {
   // otherwise it behaves normally. See useBackButtonGuard.
   useBackButtonGuard(Boolean(incomingSos) || appUpdate.mandatory);
   const [arTarget, setArTarget] = useState(null);
+  // Back closes AR Scan (its permission screen and camera explainer too) and leaves the map
+  // showing; it claims the press only while AR Scan is open, so Back means what it always did
+  // everywhere else.
+  const arOpen = Boolean(arTarget);
+  useEffect(() => {
+    if (!arOpen) return undefined;
+    return pushBackHandler(() => { setArTarget(null); return true; });
+  }, [arOpen]);
   // The camera explainer (components/CameraExplainer.jsx) shows before AR Scan only until the
   // camera has been allowed: known from this phone's note or the Permissions API. Continue
   // lets AR Scan open this time; the note is made once the camera actually starts.
@@ -689,6 +698,10 @@ const App = () => {
 
   const [activeTab, setActiveTab] = useState('buildings');
   const [searchQuery, setSearchQuery] = useState('');
+  // The campus dots. On a phone they always show: the map has no Members/Buildings tab, so the
+  // dots used to vanish once the Group tab had set it to Members and never come back. On a
+  // larger screen the sidebar's Members tab still hides them.
+  const buildingDotsShown = isMobile || activeTab === 'buildings';
   // The top bar's search: which buildings and places the Buildings list shows.
   const [placeQuery, setPlaceQuery] = useState('');
   // The group panel's search box has focus, so on a phone the keyboard is up and the screen is
@@ -1978,7 +1991,12 @@ const App = () => {
 
   const handleFocus = (coords, item) => {
     setMapProps({ center: coords, zoom: 19 });
-    if (item) setSelectedItem(item);
+    if (item) {
+      // The place card shows for the Buildings tab; a dot tapped while Members was the tab
+      // (the dots show on a phone whatever the tab) must switch to it or no card appears.
+      setActiveTab('buildings');
+      setSelectedItem(item);
+    }
   };
 
   // ---  MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
@@ -3193,6 +3211,7 @@ const App = () => {
               blockedUserIds={blockedUserIds}
               ghostMembers={ghostMembers}
               activeTab={activeTab}
+              showBuildings={buildingDotsShown}
               places={campusPlaces}
               draftPlace={isAdmin ? draftPlace : null}
               activeWaypoint={activeWaypoint}
@@ -3281,7 +3300,7 @@ const App = () => {
               from the ground footprint OSM actually traces, so the outline reads as
               "wrong" even when the underlying data is correct. A dot has no such
               failure mode. (TacticalLeafletMap.jsx renders the same way.) */}
-            {activeTab === 'buildings' && campusPlaces.map(b => (
+            {buildingDotsShown && campusPlaces.map(b => (
               <div
                 key={`building-${b.id}`}
                 lat={b.lat}
@@ -3577,7 +3596,7 @@ const App = () => {
       {/* ========== MOBILE BOTTOM BAR (src/components/BottomTabBar.jsx) ========== */}
       {!isNavigatingMode && (
         <BottomTabBar
-          activeId={mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid'}
+          activeId={arTarget ? 'scan' : sheetOpen ? 'squad' : 'grid'}
           tabs={[
             // Map only navigates. It used to toggle satellite on every tap as well, so coming
             // back to the map from Group or Scan flipped the map style; satellite has its own
@@ -3601,7 +3620,7 @@ const App = () => {
             ) : null
           }
           onSelect={(id) => {
-            const current = mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid';
+            const current = arTarget ? 'scan' : sheetOpen ? 'squad' : 'grid';
             if (id !== current) haptic('select');
             if (id === 'grid') {
               setMobileView('grid');

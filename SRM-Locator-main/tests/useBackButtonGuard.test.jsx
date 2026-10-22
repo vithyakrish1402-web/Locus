@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, cleanup } from '@testing-library/react';
 import { useBackButtonGuard } from '../src/hooks/useBackButtonGuard.js';
+import { pushBackHandler } from '../src/utils/backHandlers.js';
 
 const cap = vi.hoisted(() => ({
   isNative: vi.fn(),
@@ -75,6 +76,34 @@ describe('useBackButtonGuard normally (not blocked)', () => {
     pressBack({ canGoBack: false });
     expect(cap.minimizeApp).toHaveBeenCalledTimes(1);
     expect(historyBack).not.toHaveBeenCalled();
+  });
+});
+
+describe('useBackButtonGuard with a surface that wants Back (AR Scan)', () => {
+  it('lets the newest handler take the press, and does nothing else with it', async () => {
+    const handler = vi.fn(() => true);
+    const off = pushBackHandler(handler);
+    renderHook(() => useBackButtonGuard(false));
+    await settle();
+
+    pressBack({ canGoBack: true });
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(historyBack).not.toHaveBeenCalled();
+    expect(cap.minimizeApp).not.toHaveBeenCalled();
+
+    off(); // the surface closed: Back is the app's again
+    pressBack({ canGoBack: false });
+    expect(cap.minimizeApp).toHaveBeenCalledTimes(1);
+  });
+
+  it('still swallows Back during an SOS, whatever handler is registered', async () => {
+    const handler = vi.fn(() => true);
+    const off = pushBackHandler(handler);
+    renderHook(() => useBackButtonGuard(true));
+    await settle();
+    pressBack({ canGoBack: false });
+    expect(handler).not.toHaveBeenCalled();
+    off();
   });
 });
 
