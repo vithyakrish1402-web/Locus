@@ -4,6 +4,8 @@
 //  - The campus dots vanished after a visit to Group and never came back (they were drawn only
 //    for the Members/Buildings tab the Group tab had switched away from).
 //  - The Scan tab stayed highlighted after AR Scan closed.
+//  - With the keyboard up (a search field focused) the tab bar and the meeting point button
+//    rode up on top of it; they step aside now, and the Emergency button stays.
 // Only the app's edges are stubbed (socket, Firebase, native plugins, the maps, update hooks).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
@@ -224,5 +226,36 @@ describe('the tab bar after AR Scan closes', () => {
     fireEvent.click(tabBar().getByRole('button', { name: 'Scan' }));
     fireEvent.click(within(screen.getByTestId('ar-start')).getByRole('button', { name: 'Cancel' }));
     expect(runBackHandler()).toBe(false); // the handler is gone with AR Scan
+  });
+});
+
+describe('with the keyboard up', () => {
+  const openSearch = async () => {
+    fireEvent.click(screen.getByTestId('top-bar-search-open'));
+    await act(async () => {});
+    return screen.getByTestId('top-bar-search');
+  };
+
+  it('hides the tabs and the meeting point button, keeps the Emergency button, and returns them after', async () => {
+    await onTheMap();
+    expect(screen.getByTestId('meeting-point-button')).toBeTruthy();
+    const box = await openSearch();
+    act(() => box.focus());
+    expect(screen.getByTestId('tab-bar-tabs').className).toContain('hidden');
+    expect(screen.queryByTestId('meeting-point-button')).toBeNull();
+    expect(tabBar().getByTestId('sos-button')).toBeTruthy();
+
+    act(() => box.blur());
+    expect(screen.getByTestId('tab-bar-tabs').className).not.toContain('hidden');
+    expect(screen.getByTestId('meeting-point-button')).toBeTruthy();
+  });
+
+  it('lets go of the search field when its close mark is pressed', async () => {
+    await onTheMap();
+    const box = await openSearch();
+    act(() => box.focus());
+    fireEvent.click(screen.getByRole('button', { name: 'Close search' }));
+    expect(document.activeElement).not.toBe(box);
+    expect(screen.getByTestId('meeting-point-button')).toBeTruthy();
   });
 });

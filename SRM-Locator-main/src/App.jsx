@@ -109,6 +109,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
 import { pushBackHandler } from './utils/backHandlers';
+import { useBlurOnKeyboardHide } from './hooks/useBlurOnKeyboardHide';
 import { useWifiFusion } from './hooks/useWifiFusion';
 import { useBackgroundSharing } from './hooks/useBackgroundSharing';
 import { stopBackgroundSharing } from './utils/backgroundSharing';
@@ -465,6 +466,8 @@ const App = () => {
   // button/gesture does nothing (ACKNOWLEDGE / UPDATE NOW is the only way out);
   // otherwise it behaves normally. See useBackButtonGuard.
   useBackButtonGuard(Boolean(incomingSos) || appUpdate.mandatory);
+  // A keyboard hidden with Back leaves its field focused, which can bring it back: let go of it.
+  useBlurOnKeyboardHide();
   const [arTarget, setArTarget] = useState(null);
   // Back closes AR Scan (its permission screen and camera explainer too) and leaves the map
   // showing; it claims the press only while AR Scan is open, so Back means what it always did
@@ -3596,6 +3599,7 @@ const App = () => {
       {/* ========== MOBILE BOTTOM BAR (src/components/BottomTabBar.jsx) ========== */}
       {!isNavigatingMode && (
         <BottomTabBar
+          keyboardUp={keyboardUp}
           activeId={arTarget ? 'scan' : sheetOpen ? 'squad' : 'grid'}
           tabs={[
             // Map only navigates. It used to toggle satellite on every tap as well, so coming
@@ -3641,7 +3645,7 @@ const App = () => {
       )}
 
       {/* The meeting point button (two steps: tap it, then tap the map) */}
-      {!isNavigatingMode && !(selectedItem && activeTab === 'buildings') && (
+      {!isNavigatingMode && !keyboardUp && !(selectedItem && activeTab === 'buildings') && (
         <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
       )}
 

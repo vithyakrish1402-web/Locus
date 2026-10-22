@@ -56,16 +56,21 @@ function Tab({ tab, active, onSelect, reduceMotion }) {
 
 /**
  * @param {{tabs: Array<{id:string, label:string, Icon:Function, flourish:'lift'|'turn'|'pop'}>,
- *   activeId: string|null, onSelect: (id:string) => void, sosTrigger?: React.ReactNode}} props
+ *   activeId: string|null, onSelect: (id:string) => void, sosTrigger?: React.ReactNode,
+ *   keyboardUp?: boolean}} props
+ *   keyboardUp: the on-screen keyboard is up. The WebView is then only as tall as what the keyboard
+ *   leaves, so the bar would ride up on top of it: its tabs step out of the way (nothing to tap
+ *   on the map while typing), but the Emergency button stays where it can be reached.
  */
-export default function BottomTabBar({ tabs, activeId, onSelect, sosTrigger = null }) {
+export default function BottomTabBar({ tabs, activeId, onSelect, sosTrigger = null, keyboardUp = false }) {
   const reduceMotion = useReducedMotion();
   return (
     <nav
       aria-label="Main"
+      data-keyboard={keyboardUp ? 'up' : undefined}
       className="md:hidden fixed bottom-0 w-full bg-surface border-t border-border flex items-center justify-between px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto gap-2 shadow-[var(--shadow-2)]"
     >
-      <div className="flex-1 flex items-stretch">
+      <div className={`flex-1 flex items-stretch ${keyboardUp ? 'hidden' : ''}`} data-testid="tab-bar-tabs">
         {tabs.map((tab) => (
           <Tab key={tab.id} tab={tab} active={tab.id === activeId} onSelect={onSelect} reduceMotion={reduceMotion} />
         ))}

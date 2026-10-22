@@ -20,12 +20,18 @@ export function TopBar({ isSatellite, query = '', onQuery, onSearchFocus }) {
   const [searching, setSearching] = useState(false);
   const open = searching || query.trim() !== '';
   // Unmounting the box fires no blur, so closing says the keyboard is gone itself.
-  const close = () => { setSearching(false); onQuery?.(''); onSearchFocus?.(false); };
+  const close = () => {
+    // Let go of the field first, so the keyboard goes with it and has nothing to come back for.
+    if (document.activeElement instanceof HTMLElement && document.activeElement.dataset.testid === 'top-bar-search') document.activeElement.blur();
+    setSearching(false); onQuery?.(''); onSearchFocus?.(false);
+  };
   const reduceMotion = useReducedMotion();
   // The field grows out of the bar on a spring and folds back into it; the magnifier turns into
   // the close mark as it goes. Only numbers are animated (a px width to 0), never a calc() or a
   // gap that pops when the field goes: the bar has no gap of its own, each part carries its own
-  // spacing. With reduced motion it simply appears.
+  // spacing. With reduced motion it simply appears. The field may be narrower than that on a
+  // narrow screen (it shrinks inside the bar's own width), and its text then ends in an ellipsis
+  // instead of running into the close mark.
   const spring = reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 38, mass: 0.9 };
   const fieldWidth = Math.max(120, Math.min(208, (typeof window === 'undefined' ? 412 : window.innerWidth) - 232));
   return (
@@ -51,7 +57,7 @@ export function TopBar({ isSatellite, query = '', onQuery, onSearchFocus }) {
                 animate={{ width: fieldWidth, opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
                 transition={spring}
-                className="overflow-hidden shrink-0"
+                className="overflow-hidden min-w-0"
               >
                 {/* Plain text in the bar, not a second box inside it: the bar itself shows the focus. */}
                 <input
@@ -66,8 +72,7 @@ export function TopBar({ isSatellite, query = '', onQuery, onSearchFocus }) {
                   onBlur={() => onSearchFocus?.(false)}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                   enterKeyHint="search"
-                  className="block h-9 border-0 bg-transparent p-0 pl-3 font-ui text-[14px] text-text placeholder:text-text-secondary outline-none focus:outline-none appearance-none [&::-webkit-search-cancel-button]:hidden"
-                  style={{ width: fieldWidth }}
+                  className="block h-9 w-full min-w-0 border-0 bg-transparent p-0 pl-3 pr-1 font-ui text-[14px] text-text text-ellipsis placeholder:text-text-secondary placeholder:text-ellipsis outline-none focus:outline-none appearance-none [&::-webkit-search-cancel-button]:hidden"
                 />
               </motion.div>
             )}
