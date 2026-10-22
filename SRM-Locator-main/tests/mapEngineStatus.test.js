@@ -6,13 +6,21 @@ describe('mapEngineStatus', () => {
     expect(mapEngineStatus(null)).toEqual({ engine: 'google', reason: 'ok' });
   });
 
+  it('is the free map, reason ok, while Google is usable but not the one showing', () => {
+    expect(mapEngineStatus(null, false)).toEqual({ engine: 'free', reason: 'ok' });
+  });
+
   it.each(['no-key', 'timeout', 'key-rejected'])('is the backup, with its reason, for %s', (reason) => {
     expect(mapEngineStatus(reason)).toEqual({ engine: 'backup', reason });
     expect(MAP_STATUS_REASON_TEXT[reason]).toBeTruthy();
   });
 
   it('words the status the way the owner asked', () => {
-    expect(MAP_STATUS_LABEL).toEqual({ google: 'Map: Google', backup: 'Map: Backup (OpenStreetMap)' });
+    expect(MAP_STATUS_LABEL).toEqual({
+      google: 'Map: Google',
+      backup: 'Map: Backup (OpenStreetMap)',
+      free: 'Map: OpenStreetMap (Google on satellite)',
+    });
     expect(MAP_STATUS_REASON_TEXT).toEqual({
       'no-key': 'No Google Maps key in this build',
       timeout: 'Google map could not load (slow or no connection)',

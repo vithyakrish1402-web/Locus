@@ -73,10 +73,14 @@ const ViewController = ({ center, zoom }) => {
 };
 
 // Hands the shared glide (utils/mapFocus.js) this map's own animated move.
-const FocusDriver = ({ onMapInstance, onUserInteraction }) => {
+const FocusDriver = ({ onMapInstance, onUserInteraction, active = true }) => {
   const map = useMap();
   useEffect(() => {
     onMapInstance?.(map);
+  }, [map, onMapInstance]);
+  // The camera driver belongs to the visible map: this one steps aside while Google shows.
+  useEffect(() => {
+    if (!active) return undefined;
     return registerMapDriver({
       element: map.getContainer(),
       getView: () => ({ ...map.getCenter(), zoom: map.getZoom() }),
@@ -87,7 +91,7 @@ const FocusDriver = ({ onMapInstance, onUserInteraction }) => {
         return () => { map.off('moveend', done); map.stop(); };
       },
     });
-  }, [map, onMapInstance]);
+  }, [map, active]);
 
   useMapEvents({
     dragstart() {
@@ -157,6 +161,8 @@ const TacticalLeafletMap = ({
   onClearWaypoint,
   onArTrack,
   isSatellite,
+  // False while the Google map is the one showing (App.jsx), so it owns the camera driver.
+  driverActive = true,
   highlightBuildingId,
   onSelectMember,
   onMapInstance,
@@ -189,7 +195,7 @@ const TacticalLeafletMap = ({
         maxZoom={21}
       />
       <ViewController center={center} zoom={zoom} />
-      <FocusDriver onMapInstance={onMapInstance} onUserInteraction={onUserInteraction} />
+      <FocusDriver onMapInstance={onMapInstance} onUserInteraction={onUserInteraction} active={driverActive} />
       <ClickHandler onMapClick={onMapClick} />
       <ZoomTracker onZoomChange={onZoomChange} />
 

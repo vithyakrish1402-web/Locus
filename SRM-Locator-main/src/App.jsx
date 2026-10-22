@@ -177,8 +177,8 @@ if (!GOOGLE_MAPS_API_KEY) {
   // rather than a missing build secret. The app uses the keyless Leaflet engine
   // instead; this line explains why the map looks different from the Google one.
   console.warn(
-    '[SYS_MAP] No VITE_GOOGLE_MAPS_API_KEY set — using the keyless Leaflet/OSM engine. ' +
-    'To use Google Maps, put a billing-enabled Maps JavaScript API key in SRM-Locator-main/.env (see .env.example).'
+    '[SYS_MAP] No VITE_GOOGLE_MAPS_API_KEY set — satellite will use the keyless Leaflet/Esri view. ' +
+    'For Google satellite, put a billing-enabled Maps JavaScript API key in SRM-Locator-main/.env (see .env.example).'
   );
 }
 
@@ -585,34 +585,43 @@ const App = () => {
 
   // --- GREEN LIGHT PROTOCOL: Map readiness gate ---
   const [isMapReady, setIsMapReady] = useState(false);
-  // --- MAP ENGINE FALLBACK: switch to the Leaflet map if Google's never loads ---
-  // Seeded true when no Maps API key is configured. Loading the Google Maps JS API
-  // without a key doesn't fail outright — it silently renders a degraded map plastered
-  // with "For development purposes only", and still fires onGoogleApiLoaded, so the
-  // 8s watchdog below never trips and the watermarked map just stays on screen.
-  // The Leaflet engine uses CARTO + Esri tiles, which need no key and carry no
-  // watermark, so with no key it is strictly the better engine — use it immediately
-  // rather than rendering a broken-looking Google map.
-  // The flag is now derived from the reason Google was given up on (null = still in use),
-  // so SYS_CONFIG can say why. First reason wins; the switch stays one-way per session.
+  // --- MAP ENGINE ROUTING ---
+  // The free Leaflet/OSM map is the map, every time the app opens. Google is loaded by one
+  // thing only: the first tap on satellite. Satellite is never drawn from Google tiles by the
+  // free engine (against Google's terms); it switches the visible engine to the Google map.
+  // Google bills per map created, so it is created once per session: hidden, not destroyed,
+  // when you go back to the normal map, and shown again (the same instance) on the next tap.
+  // mapFailReason is why Google was given up on (null = usable, or not yet asked for), so
+  // SYS_CONFIG can say why. First reason wins; one-way per session. With Google given up
+  // on, satellite falls back to Leaflet with Esri imagery.
   const [mapFailReason, setMapFailReason] = useState(GOOGLE_MAPS_API_KEY ? null : 'no-key');
-  const mapEngineFailed = mapFailReason !== null;
   const failMapEngine = (reason) => setMapFailReason((prev) => prev ?? reason);
-  const mapStatus = mapEngineStatus(mapFailReason);
+  const googleUsable = mapFailReason === null;
+  // Set by the first satellite tap, never cleared: it is what keeps the one Google map alive.
+  const [googleRequested, setGoogleRequested] = useState(false);
+  const googleMounted = googleUsable && (googleRequested || isSatellite);
   useEffect(() => {
-    if (import.meta.env.DEV && mapFailReason) console.warn(`[SYS_MAP] Backup map active, reason: ${mapFailReason}`);
+    if (googleUsable && isSatellite) setGoogleRequested(true);
+  }, [googleUsable, isSatellite]);
+  // Google is the visible engine only once its map is up; until then the free map stays put
+  // rather than going blank for the second Google takes to load.
+  const googleShown = googleMounted && isSatellite && isMapReady;
+  const mapEngineFailed = !googleShown; // i.e. Leaflet is the visible engine
+  const mapStatus = mapEngineStatus(mapFailReason, googleShown);
+  useEffect(() => {
+    if (import.meta.env.DEV && mapFailReason) console.warn(`[SYS_MAP] Google unavailable, reason: ${mapFailReason}`);
   }, [mapFailReason]);
   // Google calls window.gm_authFailure when it loaded but refused the key (website
-  // restriction, billing off, API not enabled). Listen only while Google is the engine.
+  // restriction, billing off, API not enabled). Listen only while Google is mounted.
   useEffect(() => {
-    if (mapEngineFailed) return;
+    if (!googleMounted) return;
     const previous = window.gm_authFailure;
     const handler = () => failMapEngine('key-rejected');
     window.gm_authFailure = handler;
     return () => {
       if (window.gm_authFailure === handler) window.gm_authFailure = previous;
     };
-  }, [mapEngineFailed]);
+  }, [googleMounted]);
 
   const [isRecordingPath, setIsRecordingPath] = useState(false);
   const [recordedCoords, setRecordedCoords] = useState([]);
@@ -789,17 +798,16 @@ const App = () => {
   // mount, so it fell back to Leaflet on every real session regardless of
   // whether Google Maps would've loaded fine.
   useEffect(() => {
-    // mapEngineFailed short-circuits the no-API-key case: Leaflet is already the
-    // active engine, so there is no Google map left to wait on.
-    if (!user || !hasJoinedSquad || isMapReady || mapEngineFailed) return;
+    // Google is only waited on once it has been asked for (a satellite tap).
+    if (!user || !hasJoinedSquad || isMapReady || !googleMounted) return;
     const timeoutId = setTimeout(() => {
       if (!isMapReady) {
-        console.warn('[SYS_MAP] Google Maps did not initialize in time — falling back to Leaflet.');
+        console.warn('[SYS_MAP] Google Maps did not initialize in time — satellite falls back to Leaflet.');
         failMapEngine('timeout');
       }
     }, 8000);
     return () => clearTimeout(timeoutId);
-  }, [user, hasJoinedSquad, isMapReady, mapEngineFailed]);
+  }, [user, hasJoinedSquad, isMapReady, googleMounted]);
 
   // Keep a code ready on the CREATE screen: on first load, on switching to CREATE, and on
   // coming back to the lobby after leaving (which clears the code). This used to be keyed
@@ -1946,8 +1954,27 @@ const App = () => {
   };
 
   // The google-map-react engine's driver for utils/mapFocus.js. Leaflet registers its own.
-  const googleDriverOffRef = useRef(null);
-  useEffect(() => () => googleDriverOffRef.current?.(), []);
+  const googleDriverRef = useRef(null);
+  useEffect(() => {
+    if (!googleShown || !googleDriverRef.current) return undefined;
+    return registerMapDriver(googleDriverRef.current);
+  }, [googleShown]);
+
+  // Both maps are driven by mapProps, but panning and pinching move only the visible one, so
+  // on a switch the map coming up is put where the map going away was left (zoom whole for
+  // Google, whose raster map takes no fraction). Nothing is rebuilt: markers and routes are
+  // drawn from the same state on both.
+  const wasGoogleShownRef = useRef(false);
+  useEffect(() => {
+    if (wasGoogleShownRef.current === googleShown) return;
+    wasGoogleShownRef.current = googleShown;
+    const from = googleShown ? leafletMapRef.current : mapRef.current;
+    if (!from) return;
+    const c = googleShown ? from.getCenter?.() : { lat: from.getCenter?.().lat?.(), lng: from.getCenter?.().lng?.() };
+    const zoom = from.getZoom?.();
+    if (!c || !Number.isFinite(c.lat) || !Number.isFinite(c.lng) || !Number.isFinite(zoom)) return;
+    setMapProps({ center: { lat: c.lat, lng: c.lng }, zoom: googleShown ? Math.round(zoom) : zoom });
+  }, [googleShown]);
 
   const handleFocus = (coords, item) => {
     setMapProps({ center: coords, zoom: 19 });
@@ -1972,7 +1999,11 @@ const App = () => {
       const newCoords = [...recordedCoords, { lat, lng }];
       setRecordedCoords(newCoords);
 
-      if (!recordingPolylineRef.current) {
+      // The recording line is drawn on the Google map; on the free map the points are still
+      // recorded (and published) without it, rather than throwing on a missing window.google.
+      if (!window.google?.maps || !mapRef.current) {
+        // no Google map to draw on
+      } else if (!recordingPolylineRef.current) {
         recordingPolylineRef.current = new window.google.maps.Polyline({
           path: newCoords, strokeColor: '#eab308', // Yellow for recording
           strokeOpacity: 1.0, strokeWeight: 4, map: mapRef.current
@@ -2119,8 +2150,8 @@ const App = () => {
     liveLocation,
     liveHeading,
     speedMps: liveSpeed,
-    mapEngine: mapEngineFailed ? 'leaflet' : 'google',
-    mapInstance: mapEngineFailed ? leafletMapRef.current : mapRef.current,
+    mapEngine: googleShown ? 'google' : 'leaflet',
+    mapInstance: googleShown ? mapRef.current : leafletMapRef.current,
   });
 
   const userInteractionHandlerRef = useRef(() => {});
@@ -2132,7 +2163,7 @@ const App = () => {
   // no-ops when the Leaflet fallback is active (mapRef only holds a Google
   // map instance) or before the map's finished mounting. TacticalLeafletMap
   // renders the Leaflet-engine equivalent itself, declaratively.
-  useGhostProjectionLines(!mapEngineFailed && isMapReady ? mapRef.current : null, ghostMembers, lastKnownColor);
+  useGhostProjectionLines(googleMounted && isMapReady ? mapRef.current : null, ghostMembers, lastKnownColor);
 
   // Live walking route to the active squad waypoint — real routed path from
   // Google Directions (or OSRM on the Leaflet fallback) when available,
@@ -2141,14 +2172,14 @@ const App = () => {
   // Google engine's imperative Polyline below and TacticalLeafletMap's
   // declarative one, so there's only one throttling clock, not two.
   const walkingRoute = useWalkingRoute({
-    engine: mapEngineFailed ? 'leaflet' : 'google',
+    engine: 'leaflet', // the route does not depend on which map is showing, or switching would redraw it
     liveLocation,
     activeWaypoint,
   });
   // The same walking route, to your own destination while you have one: the map shows that
   // line instead of the meeting point's, and so does AR Scan's road line (arRoutePathFor).
   const personalRoute = useWalkingRoute({
-    engine: mapEngineFailed ? 'leaflet' : 'google',
+    engine: 'leaflet', // the route does not depend on which map is showing, or switching would redraw it
     liveLocation,
     activeWaypoint: personalTarget,
   });
@@ -2168,7 +2199,7 @@ const App = () => {
   // Live navigation line from the operative's own position to the active
   // squad waypoint — same "no-op on Leaflet/before mount" gating as above.
   useWaypointNavigationLine(
-    !mapEngineFailed && isMapReady ? mapRef.current : null,
+    googleMounted && isMapReady ? mapRef.current : null,
     drawnRoute?.path,
     drawnRoute?.isRealRoute,
     routeColor,
@@ -3124,7 +3155,14 @@ const App = () => {
       />
       {/* FULLSCREEN MAP */}
       <div className="absolute inset-0 z-0 bg-[var(--color-map-land)]">
-        {mapEngineFailed ? (
+        {/* The free map is always mounted and is the normal map. Google, once asked for by a
+            satellite tap, stays mounted for the session and is only hidden and shown. */}
+        <div
+          className="absolute inset-0"
+          style={{ visibility: googleShown ? 'hidden' : 'visible' }}
+          aria-hidden={googleShown}
+          data-testid="free-map-layer"
+        >
           <Suspense
             fallback={
               <div className="w-full h-full flex items-center justify-center font-dot text-xs uppercase tracking-widest text-zinc-500">
@@ -3139,6 +3177,7 @@ const App = () => {
               onMapClick={handleMapClick}
               onFocus={handleFocus}
               onMapInstance={(map) => { leafletMapRef.current = map; }}
+              driverActive={!googleShown}
               onUserInteraction={() => {
                 if (isNavigatingMode) navigationController.handleUserMapInteraction();
               }}
@@ -3163,7 +3202,7 @@ const App = () => {
               onSelectMember={setOptionsMemberId}
               onClearWaypoint={() => socket.emit('clear-waypoint', squadCode)}
               onArTrack={setArTarget}
-              isSatellite={isSatellite}
+              isSatellite={isSatellite && !googleUsable}
               routeColor={routeColor}
               casingColor={casingColor}
               lastKnownColor={lastKnownColor}
@@ -3171,7 +3210,14 @@ const App = () => {
               ghostFocusItem={ghostFocusItem}
             />
           </Suspense>
-        ) : (
+        </div>
+        {googleMounted && (
+        <div
+          className="absolute inset-0"
+          style={{ visibility: googleShown ? 'visible' : 'hidden', pointerEvents: googleShown ? 'auto' : 'none' }}
+          aria-hidden={!googleShown}
+          data-testid="google-map-layer"
+        >
           <GoogleMapReact
             bootstrapURLKeys={{ key: GOOGLE_MAPS_API_KEY }}
             center={mapProps.center}
@@ -3186,8 +3232,9 @@ const App = () => {
             onGoogleApiLoaded={({ map }) => {
               mapRef.current = map;
               map.setTilt(0);
-              googleDriverOffRef.current?.();
-              googleDriverOffRef.current = registerMapDriver({
+              // Registered as the live camera driver only while Google is the visible map
+              // (the effect on googleShown); the free map owns it the rest of the time.
+              googleDriverRef.current = {
                 element: map.getDiv?.(),
                 getView: () => ({ lat: map.getCenter().lat(), lng: map.getCenter().lng(), zoom: map.getZoom() }),
                 // Fractional zoom only exists on vector maps (moveCamera); raster maps take whole levels.
@@ -3195,7 +3242,7 @@ const App = () => {
                   if (typeof map.moveCamera === 'function') map.moveCamera({ center: { lat, lng }, zoom });
                   else { map.setCenter({ lat, lng }); map.setZoom(Math.round(zoom)); }
                 },
-              });
+              };
 
               // Listen for user manual drag/zoom to disable automatic camera follow
               map.addListener('dragstart', () => userInteractionHandlerRef.current());
@@ -3330,6 +3377,7 @@ const App = () => {
 
             {/* ... Your existing users.filter map loop stays exactly the same below this ... */}
           </GoogleMapReact>
+        </div>
         )}
         {/* PHASE 3: Satellite toggle pill removed — function reassigned to Bottom HUD GRID button */}
       </div>
