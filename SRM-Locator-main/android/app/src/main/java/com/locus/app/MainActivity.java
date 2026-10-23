@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(LocusUpdaterPlugin.class);
         registerPlugin(WifiScanPlugin.class);
         registerPlugin(LocusBackgroundPlugin.class);
+        registerPlugin(AlertSoundPlugin.class);
         // The Floor 7 walk recorder exists only in the LOCUS Test build (src/sidetest/java);
         // every other build has no such class, so this finds nothing and registers nothing.
         try {

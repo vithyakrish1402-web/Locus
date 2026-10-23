@@ -13,11 +13,15 @@ import android.os.Build;
 
 import androidx.core.app.NotificationCompat;
 
+import com.locus.app.alerts.AlertVolumeReceiver;
+
 /**
  * The alert for an SOS heard while LOCUS is closed. Loud on purpose, and kept apart from the quiet
  * sharing notification: its own channel, so the person can still tune it in the phone's own
- * settings (sound, vibration, lock screen). Do Not Disturb is NOT overridden: bypassing it is a
- * permission the person must grant to the app themselves, and is left to them.
+ * settings (sound, vibration, lock screen). It plays on the alarm stream, and the service holds the
+ * alarm volume up while it rings (alerts/AlertVolume.java). The channel asks to bypass Do Not
+ * Disturb; Android honours that only once the person has given LOCUS Do Not Disturb access (the
+ * app explains and opens that screen), and the channel is re-applied when they have.
  *
  * Raised: highest importance, the alarm sound, a long strong vibration, visible on the lock screen
  * and, where the phone allows it, a full-screen alert like an incoming call that lights the screen.
@@ -26,8 +30,14 @@ import androidx.core.app.NotificationCompat;
  * One notification per sender (a slot), replaced in place when the same person sends again.
  */
 public final class SosNotifications {
-    /** The dedicated high-importance channel. Its settings are fixed once created: change the id to change them. */
-    public static final String SOS_ALERT_CHANNEL_ID = "locus_sos_alert";
+    /** The dedicated high-importance channel. Its settings are fixed once created: change the id to change them.
+     *  v2 (2026-10) adds the Do Not Disturb bypass; the first one, without it, is deleted. */
+    public static final String SOS_ALERT_CHANNEL_ID = "locus_sos_alert_v2";
+    private static final String[] OLD_SOS_ALERT_CHANNEL_IDS = {"locus_sos_alert"};
+    /** What holds the alarm volume up for the alert in a slot (alerts/AlertVolumeLedger.SERVICE + slot). */
+    public static String volumeHolder(int slot) {
+        return com.locus.app.alerts.AlertVolumeLedger.SERVICE + slot;
+    }
     /** Long, strong and repeating, nothing like a ping: 0.9 s on, 0.25 s off, three times, then a pause. */
     public static final long[] SOS_VIBRATION_PATTERN = {0, 900, 250, 900, 250, 900, 1200};
     /** How long the sound goes on before it is quietened (the notification stays). */
@@ -55,7 +65,12 @@ public final class SosNotifications {
         channel.enableLights(true);
         channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         channel.setShowBadge(true);
-        manager(context).createNotificationChannel(channel);
+        channel.setBypassDnd(true);
+        NotificationManager manager = manager(context);
+        manager.createNotificationChannel(channel);
+        for (String old : OLD_SOS_ALERT_CHANNEL_IDS) {
+            if (manager.getNotificationChannel(old) != null) manager.deleteNotificationChannel(old);
+        }
     }
 
     private static Uri alarmSound() {
@@ -110,6 +125,10 @@ public final class SosNotifications {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(open)
+            // Swiped away: the alarm volume held up for it goes back (alerts/AlertVolumeReceiver).
+            .setDeleteIntent(PendingIntent.getBroadcast(context, SOS_ID_BASE + slot,
+                AlertVolumeReceiver.releaseIntent(context, volumeHolder(slot)),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT))
             .setAutoCancel(true)
             .setOnlyAlertOnce(!loud);
         if (loud) {

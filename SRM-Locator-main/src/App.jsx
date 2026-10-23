@@ -31,6 +31,17 @@ import { SETTINGS_Z } from './components/settings/SettingsScreen';
 import SettingsHost from './components/settings/SettingsHost';
 import { setSettingsOpen, isSettingsOpen } from './utils/settingsOpen';
 import { sectionSwipe } from './utils/panelSwipe';
+import { isInAppDnd } from './utils/inAppDnd';
+import { playAlertSound, shareInAppDnd, dndAccessGranted, openDndAccessSettings } from './utils/alertSound';
+
+// The one-time explanation of Do Not Disturb access is shown once per phone.
+const DND_EXPLAINED_KEY = 'locus.dndExplained';
+const dndExplainedBefore = () => {
+  try { return window.localStorage?.getItem(DND_EXPLAINED_KEY) === '1'; } catch { return true; }
+};
+const rememberDndExplained = () => {
+  try { window.localStorage?.setItem(DND_EXPLAINED_KEY, '1'); } catch { /* shown again next time */ }
+};
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
@@ -1298,9 +1309,11 @@ const App = () => {
     // HUD; the OS notification only when the app isn't in view to show that notice.
     // The notice keeps the old ping banner's six seconds and, like it, doesn't buzz.
     socket.on('receive-ping', ({ senderName } = {}) => {
-      playSonarPing();
+      // LOCUS's Do Not Disturb (utils/inAppDnd.js): the ping still shows, without a sound.
+      const quiet = isInAppDnd();
+      if (!quiet) playIncomingPing();
 
-      if (document.hidden) {
+      if (document.hidden && !quiet) {
         triggerSystemNotification(OS_NOTICES.ping.title, OS_NOTICES.ping.body(senderName));
       }
 
@@ -1717,6 +1730,27 @@ const App = () => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [telemetryMode]);
+
+  // A ping someone sent this phone: on a phone, natively at full alarm volume (utils/alertSound.js),
+  // else the Web Audio blip below. Settings' Alert sounds switch silences it, as it always has.
+  const playIncomingPing = () => {
+    if (!alertSoundsRef.current) return;
+    playAlertSound('ping').then((played) => { if (!played) playSonarPing(); });
+  };
+
+  // LOCUS's Do Not Disturb, handed to native code once at start (it is kept on the phone), and the
+  // one-time word about letting an SOS ring through the phone's own Do Not Disturb.
+  useEffect(() => { shareInAppDnd(isInAppDnd()); }, []);
+  useEffect(() => {
+    if (accessStatus !== 'granted') return undefined;
+    let live = true;
+    dndAccessGranted().then((granted) => {
+      if (!live || granted !== false || dndExplainedBefore()) return;
+      rememberDndExplained();
+      notify.info(NOTICES.dndAccess.title, { body: NOTICES.dndAccess.body, duration: 0, onClick: openDndAccessSettings });
+    });
+    return () => { live = false; };
+  }, [accessStatus]);
 
   // --- PING SOUND ---
   // The short blip for a ping (sent or received) and for someone losing connection. Settings'

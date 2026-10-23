@@ -28,6 +28,11 @@ export const NOTICES = {
     cleared: 'Rally point cleared.',
   },
   leadIsBack: 'The Group Lead is back. You are a member again.',
+  // Once per phone, when the alerts can't ring through the phone's own Do Not Disturb yet (App.jsx).
+  dndAccess: {
+    title: 'Let an SOS ring through Do Not Disturb',
+    body: "Tap here, then allow LOCUS. An SOS from your group will then ring even when your phone is on Do Not Disturb. You can do this later in Settings.",
+  },
   // Android Back on the map (useBackButtonGuard): a second press within 2 s leaves the app.
   backToExit: 'Press back again to exit',
   removedByLead: 'You were removed from the group.',

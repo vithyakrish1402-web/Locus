@@ -24,6 +24,9 @@ import androidx.core.content.ContextCompat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import com.locus.app.alerts.AlertVolume;
+import com.locus.app.alerts.AlertVolumeLedger;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -100,6 +103,8 @@ public class LocationShareService extends Service implements LocationListener {
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         SharingNotifications.ensureChannels(this);
         SosNotifications.ensureChannel(this);
+        // A new service: anything an earlier one held the alarm volume up for is over.
+        AlertVolume.releaseAll(this, AlertVolumeLedger.SERVICE);
     }
 
     @Override
@@ -479,6 +484,8 @@ public class LocationShareService extends Service implements LocationListener {
             boolean loud = decision.verdict == SosLedger.Verdict.ALERT;
             alerting.put(decision.slot, alert);
             alertedAt.put(decision.slot, now); // when this version of the alert reached this phone
+            // Loud: the alarm volume is held up for it until it is quietened, dealt with or swiped away.
+            if (loud) AlertVolume.raise(this, SosNotifications.volumeHolder(decision.slot));
             SosNotifications.post(this, alert, decision.slot, loud, now);
             if (loud) scheduleQuiet(decision.slot);
         }
@@ -494,6 +501,7 @@ public class LocationShareService extends Service implements LocationListener {
         alerting.remove(slot);
         alertedAt.remove(slot);
         SosNotifications.cancel(this, slot);
+        AlertVolume.release(this, SosNotifications.volumeHolder(slot));
     }
 
     /** After SOS_ALERT_AUTO_TIMEOUT_MS the sound stops; the notification stays until it is dealt with. */
@@ -513,6 +521,7 @@ public class LocationShareService extends Service implements LocationListener {
         if (alert == null) return;
         SosNotifications.cancel(this, slot); // a ringing notification only stops when it is taken down
         SosNotifications.post(this, alert, slot, false, alertedAt.getOrDefault(slot, System.currentTimeMillis()));
+        AlertVolume.release(this, SosNotifications.volumeHolder(slot));
     }
 
     /** The service is going: no alert is left ringing with nobody to quieten it. */
