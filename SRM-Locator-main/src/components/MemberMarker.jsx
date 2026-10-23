@@ -3,6 +3,9 @@ import { initialsOf } from './ui/initials';
 import { MARKERS } from '../copy/map';
 import { useClearOfControls } from '../hooks/useClearOfControls';
 import FocusRing from './map/FocusRing';
+import { useNow } from '../hooks/useNow';
+import { memberStatus } from '../utils/memberStatus';
+import { GHOST_OPACITY } from '../utils/ghostProjection';
 
 // A group member on the map (redesign Map batch, piece 5): their initials in a 36 px disc, a
 // solid accent ring while they share live and a dashed grey one while Paused, and a plate
@@ -11,19 +14,28 @@ import FocusRing from './map/FocusRing';
 // heading, as the old dot's chevron did. Hidden members are never drawn (App.jsx filters them).
 //
 // Display only: the stored photo is still sent with every update, just not shown here.
+// `lastSeen` (when this phone last saw their position change): once it is old enough for their
+// card to say "Last update N min ago" (utils/memberStatus.js), the marker says so too and is
+// dimmed like a lost connection's. It stays where they were last reported; nothing moves it.
 // `highlighted`: the member being looked for (App.jsx's focusMember) gets a ring and is drawn
 // a little larger, above the other markers.
 
 const SIZE = 36;
 const RING = 2;
+// How often a marker looks again at whether its member's position has gone stale.
+const STALE_CHECK_MS = 15000;
 
 /**
  * @param {{ name?: string|null, paused?: boolean, heading?: number, isNavigating?: boolean,
- *   distance?: string|null, highlighted?: boolean }} props
+ *   distance?: string|null, highlighted?: boolean, lastSeen?: number|null }} props
  */
-export default function MemberMarker({ name, paused = false, heading = 0, isNavigating = false, distance = null, highlighted = false }) {
+export default function MemberMarker({ name, paused = false, heading = 0, isNavigating = false, distance = null, highlighted = false, lastSeen = null }) {
   const shown = (typeof name === 'string' && name.trim()) || MARKERS.someone;
-  const plate = paused ? MARKERS.memberPaused(shown) : MARKERS.memberPlate(shown, distance);
+  const now = useNow(STALE_CHECK_MS);
+  const stale = !paused && Number.isFinite(lastSeen) && memberStatus({ hasFix: true, status: 'ACTIVE', lastSeen }, now).dot === 'stale';
+  const plate = paused ? MARKERS.memberPaused(shown)
+    : stale ? MARKERS.memberStale(shown, Math.floor((now - lastSeen) / 60000))
+      : MARKERS.memberPlate(shown, distance);
   // The plate slides left, out from under the map controls, when the member is near them.
   const plateRef = useRef(null);
   useClearOfControls(plateRef);
@@ -32,8 +44,9 @@ export default function MemberMarker({ name, paused = false, heading = 0, isNavi
       data-testid="member-marker"
       data-paused={paused || undefined}
       data-highlighted={highlighted || undefined}
+      data-stale={stale || undefined}
       className="relative font-ui pointer-events-auto cursor-pointer transition-transform duration-150 select-none"
-      style={{ width: SIZE, height: SIZE, transform: `translate(-50%, -50%)${highlighted ? ' scale(1.25)' : ''}`, zIndex: highlighted ? 1 : undefined }}
+      style={{ width: SIZE, height: SIZE, transform: `translate(-50%, -50%)${highlighted ? ' scale(1.25)' : ''}`, zIndex: highlighted ? 1 : undefined, opacity: stale && !highlighted ? GHOST_OPACITY : undefined }}
     >
       {highlighted && <FocusRing />}
       {isNavigating && !paused && (

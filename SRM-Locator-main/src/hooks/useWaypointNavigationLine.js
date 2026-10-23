@@ -3,8 +3,7 @@ import { useEffect, useRef } from 'react';
 // Draws the live walking route to the active squad waypoint directly on the
 // native Google Maps instance — google-map-react's HTML overlays only ever
 // position single lat/lng points, so an actual route line needs the
-// imperative google.maps.Polyline API (same reasoning as
-// useGhostProjectionLines.js). The instance is kept and moved via .setPath()
+// imperative google.maps.Polyline API. The instance is kept and moved via .setPath()
 // rather than recreated on every position tick, since `path` can change on
 // every GPS update while the operative is on the real-route fallback
 // (which redraws fresh every render — see useWalkingRoute.js).

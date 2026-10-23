@@ -73,7 +73,6 @@ import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIS
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
-import { cssColor } from './utils/cssColor';
 import MemberMarker from './components/MemberMarker';
 import { MARKERS } from './copy/map';
 import { distanceLabel } from './copy/place';
@@ -93,7 +92,6 @@ import { useDeviceHeading } from './hooks/useDeviceHeading';
 import { DEFAULT_AR_FEATURE_OVERRIDES } from './utils/arFeatures';
 
 import { useLiveHeading } from './hooks/useLiveHeading';
-import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
 import { useWaypointNavigationLine, ROUTE_COLOR, ROUTE_CASING_COLOR } from './hooks/useWaypointNavigationLine';
 import { useWalkingRoute } from './hooks/useWalkingRoute';
 import { formatDistanceMeters, formatDurationMinutes } from './utils/walkingRoute';
@@ -140,7 +138,6 @@ import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { createSosOutbox } from './utils/sosOutbox';
 import { SOS_HELD, SOS_SENT, SOS_DROPPED, SOS_REFUSED } from './copy/emergency';
-import { PrecognitionFilter } from './utils/precognition';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -587,9 +584,6 @@ const App = () => {
     if (seconds < 300) return { text: `WARN (${Math.floor(seconds / 60)}m ago)`, color: "text-warning" };
     return { text: `STALE (> 5m)`, color: "text-warning" };
   };
-  // --- PRECOGNITION TRACKERS ---
-  const localPrecognition = useRef(new PrecognitionFilter());
-  const squadPrecognition = useRef({}); // Tracks separate Kalman math for every squad member
   const memberSeenRef = useRef({}); // id -> { server: lastSeen, local: when this phone saw it change }
 
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
@@ -905,7 +899,7 @@ const App = () => {
   const [pausedHasSpot, setPausedHasSpot] = useState(false);
   // WiFi Arc Stage 6: every update-location payload takes its lat/lng/positionSource from
   // positionFor(gps). Off by default (src/utils/positionSource.js), and then it is always
-  // the GPS fix with positionSource 'gps'. The Kalman filter and safety-ping stay on GPS.
+  // the GPS fix with positionSource 'gps'. Safety-ping stays on GPS.
   // Stable identity, so listing it in the telemetry effect's dependencies below never
   // re-runs that effect.
   //
@@ -1089,9 +1083,8 @@ const App = () => {
       // alone removes nobody and leaves the roster carrying a node the server has dropped.
       setUsers(prev => prev.filter(u => u.id !== targetId && !(uid && u.uid === uid)));
 
-      // Store the raw last-known fix, undisturbed — GhostMemberMarker/
-      // deriveGhostMembers re-projects from this every clock tick (up to the
-      // decay cap) rather than baking in a single one-shot guess here.
+      // Store the last-known fix, undisturbed: the marker stays exactly there, marked as lost,
+      // however long they are gone (deriveGhostMembers). Nothing guesses where they went.
       setOfflineNodes(prev => ({
         ...prev,
         [targetId]: {
@@ -1242,10 +1235,10 @@ const App = () => {
 
       // Pure: builds the new roster and nothing else. Reconciling ghosts against it used
       // to happen inline here, from inside the setUsers updater — but an updater has to be
-      // a pure function of the previous state (React is free to call it more than once),
-      // and firing another setState from within it also re-ran the Kalman filter below on
-      // the same coordinate. That reconciliation now lives in its own effect, keyed off
-      // the roster this produces.
+      // a pure function of the previous state (React is free to call it more than once).
+      // That reconciliation now lives in its own effect, keyed off the roster this produces.
+      // Positions are shown as reported: no smoothing (the GPS Kalman filter that lagged them
+      // behind, and moved them between reports, was removed in 2026-10).
       setUsers(() => {
         const formattedUsers = [];
         Object.entries(activeUsers).forEach(([id, data]) => {
@@ -1267,15 +1260,6 @@ const App = () => {
           // them outright here is what made them vanish from both views at once.
           const hasFix = Boolean(data.lat && data.lng);
 
-          // Run Kalman smoothing on every incoming coordinate
-          let smoothed = null;
-          if (hasFix) {
-            if (!squadPrecognition.current[id]) {
-              squadPrecognition.current[id] = new PrecognitionFilter();
-            }
-            smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
-          }
-
           formattedUsers.push({
             id,
             uid: data.uid || null,
@@ -1283,8 +1267,8 @@ const App = () => {
             photo: data.photo,
             role: data.role || 'Campus Node',
             hasFix,
-            lat: hasFix ? smoothed.lat : null,
-            lng: hasFix ? smoothed.lng : null,
+            lat: hasFix ? data.lat : null,
+            lng: hasFix ? data.lng : null,
             speed: data.speed || 0,
             heading: data.heading || 0,
             battery: data.battery || 0,
@@ -1383,15 +1367,6 @@ const App = () => {
       }, GHOST_FADE_MS);
     });
   }, [users, offlineNodes]);
-
-  // Retire the per-member Kalman filter of anyone off the roster. Keyed by socket id, so
-  // without this every reconnect strands the departed socket's filter for the session.
-  useEffect(() => {
-    const liveIds = new Set(users.map(u => u.id));
-    Object.keys(squadPrecognition.current).forEach(id => {
-      if (!liveIds.has(id)) delete squadPrecognition.current[id];
-    });
-  }, [users]);
 
   // Everything a squad session leaves on this client, cleared on the way back to the
   // lobby: by leaving, by logging out, or when the server turns the request down.
@@ -1557,6 +1532,11 @@ const App = () => {
     };
   }, [hasJoinedSquad, squadCode, user, requestSosSync, accessStatus, squadRole, endSquadSession]);
 
+  // What an update-location carries of where this phone is: nothing while Hidden. The status
+  // still goes, so the group (and the activity log) know this member is hidden; the position
+  // used to go too, every few seconds, and was relayed to everyone (2026-10 fix).
+  const sharedPosition = (fix) => (telemetryModeRef.current === 'GHOST' ? {} : positionFor(fix));
+
   /// 2. Broadcast your live GPS data to the network
   // 2. Broadcast your live GPS data to the network
   useEffect(() => {
@@ -1581,9 +1561,9 @@ const App = () => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
-        const smoothed = localPrecognition.current.filter(latitude, longitude);
-        setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
-        liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
+        const fix = { lat: latitude, lng: longitude };
+        setLiveLocation(fix);
+        liveLocationRef.current = fix;
         setLiveAccuracy(accuracy || null);
         setLocationError(null);
         noteRealFix();
@@ -1592,7 +1572,7 @@ const App = () => {
         if (telemetryModeRef.current === 'FROZEN') return;
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
-          ...positionFor(smoothed),
+          ...sharedPosition(fix),
           speed: 0, battery: 100,
           status: telemetryModeRef.current,
           roomCode: squadCode,
@@ -1626,7 +1606,7 @@ const App = () => {
       // paused position and the time it was taken, and no GPS report goes out at all. Both
       // used to carry the live fix every beat, so "FROZEN" never froze anything.
       const paused = telemetryModeRef.current === 'FROZEN' ? pausedPositionRef.current : null;
-      if (telemetryModeRef.current !== 'FROZEN' || paused) {
+      if (telemetryModeRef.current === 'ACTIVE' || paused) {
         socket.emit('safety-ping', {
           latitude: paused ? paused.position.lat : currentLoc.lat,
           longitude: paused ? paused.position.lng : currentLoc.lng,
@@ -1651,10 +1631,10 @@ const App = () => {
     const watchId = navigator.geolocation.watchPosition(
       async (position) => {
         const { latitude, longitude, speed, accuracy } = position.coords;
-        const smoothed = localPrecognition.current.filter(latitude, longitude);
+        const fix = { lat: latitude, lng: longitude };
 
-        setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
-        liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
+        setLiveLocation(fix);
+        liveLocationRef.current = fix;
         setLiveSpeed(speed || 0);
         setLiveAccuracy(accuracy || null);
         setLocationError(null);
@@ -1677,7 +1657,7 @@ const App = () => {
         // to override movement-based updates, you'd need to clear this watch and rely purely on the interval.
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
-          ...positionFor(smoothed),
+          ...sharedPosition(fix),
           speed: speed ? Math.round(speed * 3.6) : 0,
           battery: batteryLevel,
           status: telemetryModeRef.current,
@@ -1722,7 +1702,7 @@ const App = () => {
     setPausedHasSpot(pausedPositionRef.current !== null);
     socket.emit('update-location', {
       name: user.displayName, photo: user.photoURL,
-      ...position,
+      ...(telemetryMode === 'GHOST' ? {} : position),
       speed: 0, battery: 100,
       status: telemetryMode, // use state here — this effect re-runs when it changes
       roomCode: squadCode,
@@ -2245,7 +2225,6 @@ const App = () => {
   // Leaflet's path options take literal colours, so they are read from the theme here.
   const resolvedTheme = useResolvedTheme();
   const routeColor = ROUTE_COLOR;
-  const lastKnownColor = useMemo(() => cssColor('--color-map-last-known', '#8A94A3'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
   const casingColor = ROUTE_CASING_COLOR;
   // How far a member is from you, for their plate on the map ("Meera · 120 m").
   const memberDistance = (u) => {
@@ -2286,12 +2265,6 @@ const App = () => {
   userInteractionHandlerRef.current = () => {
     if (isNavigatingMode) navigationController.handleUserMapInteraction();
   };
-
-  // Native Google Maps polylines for each dark member's projection vector —
-  // no-ops when the Leaflet fallback is active (mapRef only holds a Google
-  // map instance) or before the map's finished mounting. TacticalLeafletMap
-  // renders the Leaflet-engine equivalent itself, declaratively.
-  useGhostProjectionLines(googleMounted && isMapReady ? mapRef.current : null, ghostMembers, lastKnownColor);
 
   // Live walking route to the active squad waypoint — real routed path from
   // Google Directions (or OSRM on the Leaflet fallback) when available,
@@ -3401,7 +3374,6 @@ const App = () => {
               isSatellite={isSatellite && !googleUsable}
               routeColor={routeColor}
               casingColor={casingColor}
-              lastKnownColor={lastKnownColor}
               memberDistance={memberDistance}
               ghostFocusItem={ghostFocusItem}
               focusedMemberId={focusedMemberId}
@@ -3542,6 +3514,7 @@ const App = () => {
                   heading={u.heading}
                   distance={memberDistance(u)}
                   highlighted={u.id === focusedMemberId}
+                  lastSeen={u.lastSeen}
                 />
                 {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
               </div>

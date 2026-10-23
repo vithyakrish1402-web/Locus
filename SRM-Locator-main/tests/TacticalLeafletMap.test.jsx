@@ -110,3 +110,27 @@ describe('the member being looked for, on the Leaflet engine', () => {
     expect((await screen.findByTestId('member-marker')).getAttribute('data-highlighted')).toBeNull();
   });
 });
+
+// Item 10 of the 2026-10 bug batch: nothing guesses where a member went.
+describe('a lost or quiet member on the Leaflet engine', () => {
+  it('has no projection line to a guessed position, just the marker at their last known location', async () => {
+    const ghost = { id: 'sock-G', name: 'Golf', position: { lat: 12.8233, lng: 80.0444 }, lastKnownLocation: { lat: 12.8233, lng: 80.0444 }, phase: 'lost', elapsedLabel: '0:30', speedKmh: 18, heading: 90 };
+    const { container } = renderMap({ activeWaypoint: null, ghostMembers: [ghost] });
+    await screen.findByTestId('ghost-marker');
+    expect(container.querySelectorAll('path.leaflet-interactive')).toHaveLength(0);
+  });
+
+  it('is dimmed with "last update N min ago" once their position is stale, and stays where it was', async () => {
+    const quiet = { id: 'sock-Q', name: 'Quebec', lat: 12.8232, lng: 80.0443, hasFix: true, status: 'ACTIVE', speed: 0, heading: 0, lastSeen: Date.now() - 3 * 60000 };
+    renderMap({ activeWaypoint: null, users: [quiet] });
+    const marker = await screen.findByTestId('member-marker');
+    expect(marker.getAttribute('data-stale')).toBe('true');
+    expect(marker.textContent).toContain('Quebec · last update 3 min ago');
+  });
+
+  it('is not dimmed while their position is fresh', async () => {
+    const live = { id: 'sock-L', name: 'Lima', lat: 12.8232, lng: 80.0443, hasFix: true, status: 'ACTIVE', speed: 0, heading: 0, lastSeen: Date.now() - 5000 };
+    renderMap({ activeWaypoint: null, users: [live] });
+    expect((await screen.findByTestId('member-marker')).getAttribute('data-stale')).toBeNull();
+  });
+});

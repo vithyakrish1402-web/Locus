@@ -11,7 +11,7 @@ import WaypointMarker from './WaypointMarker';
 import BuildingMarker from './BuildingMarker';
 import LeafletReactMarker from './LeafletReactMarker';
 import MemberMarker from './MemberMarker';
-import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
+import { GHOST_FADE_MS } from '../utils/ghostProjection';
 import { registerMapDriver } from '../utils/mapFocus';
 import { ROUTE_CASING_WIDTH, ROUTE_WIDTH, ROUTE_COLOR, ROUTE_CASING_COLOR } from '../hooks/useWaypointNavigationLine';
 
@@ -175,7 +175,6 @@ const TacticalLeafletMap = ({
   // member's distance for their plate, and what a lost-connection member's card says.
   routeColor = ROUTE_COLOR,
   casingColor = ROUTE_CASING_COLOR,
-  lastKnownColor = '#8A94A3',
   memberDistance = () => null,
   ghostFocusItem = (ghost) => ({ name: ghost.name }),
   // The member being looked for (App.jsx's focusMember): their marker is highlighted.
@@ -309,22 +308,12 @@ const TacticalLeafletMap = ({
                 heading={u.heading}
                 distance={memberDistance(u)}
                 highlighted={u.id === focusedMemberId}
+                lastSeen={u.lastSeen}
               />
               {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
             </div>
           </LeafletReactMarker>
         ))}
-
-      {ghostMembers.flatMap((ghost) => {
-        if (ghost.phase === 'expired') return [];
-        return getProjectionSegments(ghost.lastKnownLocation, ghost.position).map((segment, i) => (
-          <Polyline
-            key={`ghost-line-${ghost.id}-${i}`}
-            positions={[[segment.from.lat, segment.from.lng], [segment.to.lat, segment.to.lng]]}
-            pathOptions={{ color: lastKnownColor, opacity: segment.opacity, weight: 2, dashArray: '4 6' }}
-          />
-        ));
-      })}
 
       {ghostMembers.map((ghost) => (
         <LeafletReactMarker

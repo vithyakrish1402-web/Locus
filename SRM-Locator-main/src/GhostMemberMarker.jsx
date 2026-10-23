@@ -9,16 +9,11 @@ const SIZE = 36;
 
 /**
  * A group member whose connection was lost: their initials in a dashed grey ring at
- * GHOST_OPACITY (the handoff's "last known" look), with a live-updating "how long" plate.
- * The dead-reckoning projection *line* is drawn separately at the map layer
- * (it spans two geo-coordinates, not something a marker-local icon can
- * express) — this component only owns the point itself.
- *
- * `phase` ('projecting' | 'frozen' | 'expired') only changes the plate's
- * wording here — the position/line decay logic lives in ghostProjection.js,
- * driven by whichever lat/lng the caller positions this marker at.
+ * GHOST_OPACITY (the handoff's "last known" look), at their last known location, with a
+ * live-updating "how long" plate. `phase` ('lost' | 'expired', utils/ghostProjection.js) only
+ * changes the plate's wording.
  */
-const GhostMemberMarker = ({ name, phase = 'projecting', elapsedLabel = '0:00', highlighted = false }) => {
+const GhostMemberMarker = ({ name, phase = 'lost', elapsedLabel = '0:00', highlighted = false }) => {
   const shown = (typeof name === 'string' && name.trim()) || MARKERS.someone;
   const plate = phase === 'expired' ? MARKERS.lastSeen(shown, elapsedLabel) : MARKERS.lostConnection(shown, elapsedLabel);
   // The plate slides left, out from under the map controls, when the marker is near them.
