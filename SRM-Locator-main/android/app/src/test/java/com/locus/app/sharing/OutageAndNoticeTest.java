@@ -91,8 +91,13 @@ public class OutageAndNoticeTest {
     }
 
     @Test
+    public void theServerSwitchingItOffGetsItsOwnNotice() {
+        assertEquals(ReasonNotice.Kind.DISABLED, ReasonNotice.forStopReason("disabled"));
+    }
+
+    @Test
     public void endingsThePersonCausedAreSilent() {
-        for (String r : new String[] {"user-stop", "token-expired", "forbidden", "disabled", "rejected", null}) {
+        for (String r : new String[] {"user-stop", "token-expired", "forbidden", "rejected", null}) {
             assertEquals(r, ReasonNotice.Kind.NONE, ReasonNotice.forStopReason(r));
         }
     }

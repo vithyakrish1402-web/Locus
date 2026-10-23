@@ -12,6 +12,8 @@ import java.util.Locale;
 public final class Endpoint {
     public static final String LOCATION_PATH = "/api/background/location";
     public static final String SESSION_PATH = "/api/background/session";
+    public static final String SOS_PATH = "/api/background/sos";
+    public static final String SOS_ACK_PATH = "/api/background/sos/ack";
 
     private Endpoint() {}
 

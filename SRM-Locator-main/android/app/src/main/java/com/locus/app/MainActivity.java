@@ -1,10 +1,12 @@
 package com.locus.app;
 
+import android.content.Intent;
 import android.os.Bundle;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 import com.locus.app.sharing.LocusBackgroundPlugin;
 import com.locus.app.sharing.SharingState;
+import com.locus.app.sharing.SosLaunch;
 import com.getcapacitor.Plugin;
 
 public class MainActivity extends BridgeActivity {
@@ -23,7 +25,24 @@ public class MainActivity extends BridgeActivity {
         } catch (ClassNotFoundException ignored) {
         }
         SplashScreen.installSplashScreen(this);
+        // An SOS alert on a locked phone starts LOCUS like an incoming call: over the lock screen,
+        // screen on. Before super, so it holds from the first frame; the plugin takes the intent in
+        // super.onCreate, and only an SOS launch is ever treated this way.
+        SosLaunch.prepareWindow(this, getIntent());
         super.onCreate(savedInstanceState);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        SosLaunch.prepareWindow(this, intent); // before super, which hands the intent to the plugin
+        super.onNewIntent(intent);
+    }
+
+    @Override
+    public void onStop() {
+        // Off the screen: the next ordinary start of LOCUS is hidden behind the lock screen again.
+        SosLaunch.releaseWindow(this);
+        super.onStop();
     }
 
     // Background sharing reports at a light heartbeat while the app is live (in the foreground, its

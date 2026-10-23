@@ -13,20 +13,29 @@ public final class Backoff {
     public static final double JITTER = 0.2;
 
     private final DoubleSupplier random; // 0 (inclusive) to 1 (exclusive)
+    private final long baseMs;
+    private final long capMs;
     private int failures = 0;
 
     public Backoff(DoubleSupplier random) {
+        this(random, BASE_MS, CAP_MS);
+    }
+
+    /** The same doubling with its own start and ceiling (the SOS listener's is 2 s up to 30 s). */
+    public Backoff(DoubleSupplier random, long baseMs, long capMs) {
         this.random = random;
+        this.baseMs = baseMs;
+        this.capMs = capMs;
     }
 
     /** The wait after another failure. */
     public long next() {
-        long raw = BASE_MS;
-        for (int i = 0; i < failures && raw < CAP_MS; i++) raw *= 2;
-        raw = Math.min(raw, CAP_MS);
+        long raw = baseMs;
+        for (int i = 0; i < failures && raw < capMs; i++) raw *= 2;
+        raw = Math.min(raw, capMs);
         failures = Math.min(failures + 1, 30);
         double factor = 1 + JITTER * (2 * random.getAsDouble() - 1);
-        return Math.max(BASE_MS / 2, Math.round(raw * factor));
+        return Math.max(baseMs / 2, Math.round(raw * factor));
     }
 
     public void reset() {
