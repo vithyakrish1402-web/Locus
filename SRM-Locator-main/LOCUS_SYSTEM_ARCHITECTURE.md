@@ -92,7 +92,7 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
 - `users-update` (`{ [socketId]: userData }`): Broadcasted by server to all operatives inside the `roomCode`.
 - `safety-ping` (`{ latitude, longitude, timestamp, batteryLevel }`): Sent to server for Last Known Location (LKL) caching.
 - `request-telemetry` (`roomCode`, optional acknowledgement): The Commander's SYNC_TELEMETRY / FORCE_SYNC (also every 5 s while the matrix is open). Answered with `telemetry-sync-complete` (`{ [socketId]: { latitude, longitude, timestamp, batteryLevel } }`), each record normalised from the LKL cache (`backend/telemetry.js`); a member with no numeric position is left out. A client that passes an acknowledgement also gets `{ ok: true }` or `{ ok: false, reason: 'not-in-squad' | 'not-owner' }`, and shows the reason. It never reads the device's location.
-- `member-signal-lost`: Fired by server when an operative disconnects unexpectedly, packaging trajectory vector (`lastKnownLocation`, `heading`, `speed`, `timeDelta`) for Pre-Cog tracking.
+- `member-signal-lost`: Fired by server when an operative disconnects unexpectedly, packaging trajectory vector (`lastKnownLocation`, `heading`, `speed`, `timeDelta`) (the client now keeps the marker at `lastKnownLocation`; the Pre-Cog projection was removed in 2026-10).
 
 ### 4.3 Tactical Targeting & Waypoints
 - `publish-waypoint` (`{ roomCode, waypoint: { lat, lng, name } }`): Any squad member deploys a persistent rally point (the targeting FAB, the Commander's RALLY POINT button, or choosing a building destination). The server records who dropped it as `setBy` (their uid, or socket id without one), never taken from the payload.
