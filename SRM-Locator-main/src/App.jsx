@@ -29,7 +29,7 @@ import MeetingPointConfirm from './components/MeetingPointConfirm';
 import { SETTINGS } from './copy/settings';
 import { SETTINGS_Z } from './components/settings/SettingsScreen';
 import SettingsHost from './components/settings/SettingsHost';
-import { setSettingsOpen } from './utils/settingsOpen';
+import { setSettingsOpen, isSettingsOpen } from './utils/settingsOpen';
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
@@ -262,6 +262,12 @@ const AuthTerminal = ({
   const creating = screen === 'create';
   const problemField = problem ? PROBLEM_FIELD[problem] : undefined;
   const go = (next) => { setScreen(next); setProblem(null); };
+  // Back from Create account or "reset link sent" returns to Sign in (it used to leave the app).
+  const onSubScreen = screen !== 'sign-in';
+  useEffect(() => {
+    if (!onSubScreen) return undefined;
+    return pushBackHandler(() => { setScreen('sign-in'); setProblem(null); return true; });
+  }, [onSubScreen]);
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
@@ -2520,6 +2526,42 @@ const App = () => {
       <CommsFeed overArScan={Boolean(arTarget) && arScanReady} coveredBy={hasJoinedSquad && isMobile && sheetOpen ? sheetRef : null} />
     </>
   );
+
+  // --- ANDROID BACK: one ladder for the whole app (hooks/useBackButtonGuard.js runs it) ---
+  // Each press does the first of these that applies, top-most first: close an overlay (the
+  // guide, Settings, admin tools, a sheet, a confirmation, a dialog), then step back a level
+  // (choosing a meeting point, navigation, a place card, a route), then from any other tab or
+  // the open group panel back to the map. Only with none of them left does Back reach the
+  // "press again to exit" step. AR Scan registers its own handler above this one while it is
+  // open. While an SOS is on screen Back does nothing at all (useBackButtonGuard's `blocked`),
+  // so an alert can never be dismissed by an accidental Back.
+  const backLadderRef = useRef(null);
+  backLadderRef.current = () => {
+    const steps = [
+      [guideOpen, () => setGuideOpen(false)],
+      [isSettingsOpen(), () => setSettingsOpen(false)],
+      [showAdminSettings, () => setShowAdminSettings(false)],
+      [isPlacing || Boolean(draftPlace), cancelAddPlace],
+      [Boolean(optionsMemberId), () => setOptionsMemberId(null)],
+      [showLeaveConfirm, () => setShowLeaveConfirm(false)],
+      [Boolean(meetingPointToConfirm), () => setMeetingPointToConfirm(null)],
+      [Boolean(rallyToClear), () => setRallyToClear(null)],
+      [showRequestsModal, () => setShowRequestsModal(false)],
+      [showTelemetryModal, () => setShowTelemetryModal(false)],
+      [Boolean(deniedCode) && !hasJoinedSquad, () => { setSquadMode('join'); setSquadCode(deniedCode); setDeniedCode(null); }],
+      [justApproved, () => setJustApproved(false)],
+      [isTargetingMode, () => setIsTargetingMode(false)],
+      [isNavigatingMode, () => setIsNavigatingMode(false)],
+      [Boolean(selectedItem), () => setSelectedItem(null)],
+      [Boolean(routeStart || routeData), clearRoute],
+      [hasJoinedSquad && mobileView !== 'grid', () => setMobileView('grid')],
+    ];
+    const step = steps.find(([applies]) => applies);
+    if (!step) return false;
+    step[1]();
+    return true;
+  };
+  useEffect(() => pushBackHandler(() => backLadderRef.current()), []);
 
   // Everything that sits over the screens before the map (boot, guide, sign-in, the lobby): the
   // update overlays, and an incoming SOS. A tapped SOS notification starts LOCUS cold into one of

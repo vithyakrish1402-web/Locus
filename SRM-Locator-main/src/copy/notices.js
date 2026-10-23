@@ -28,6 +28,8 @@ export const NOTICES = {
     cleared: 'Rally point cleared.',
   },
   leadIsBack: 'The Group Lead is back. You are a member again.',
+  // Android Back on the map (useBackButtonGuard): a second press within 2 s leaves the app.
+  backToExit: 'Press back again to exit',
   removedByLead: 'You were removed from the group.',
   removedByVote: "The group's members voted to remove you.",
   routePublished: (from, to) => `Route ${from} → ${to} published.`,
