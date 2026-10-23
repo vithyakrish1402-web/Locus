@@ -36,8 +36,24 @@ describe('who may change a Group\'s settings', () => {
 describe('switches and mutes', () => {
   it('start with everything on, and reading them creates nothing', () => {
     const squad = {};
-    expect(settingsOf(squad)).toEqual({ sosEnabled: true, pingEnabled: true, mutedPingers: [] });
+    expect(settingsOf(squad)).toEqual({ sosEnabled: true, pingEnabled: true, sosCooldownMs: 180000, mutedPingers: [] });
     expect(squad.settings).toBeUndefined();
+  });
+
+  it('take an SOS cooldown only when it is one of the presets', () => {
+    const squad = {};
+    expect(updateSwitches(squad, { sosCooldownMs: 60000 })).toBe(true);
+    expect(updateSwitches(squad, { sosCooldownMs: 60000 })).toBe(false);
+    for (const bad of [0, -60000, 1234, '60000', null, Infinity, NaN]) {
+      expect(updateSwitches(squad, { sosCooldownMs: bad })).toBe(false);
+    }
+    expect(settingsOf(squad).sosCooldownMs).toBe(60000);
+  });
+
+  it('come back with the default cooldown when saved before there was one', () => {
+    const store = createSettingsStore({ ttlMs: 3600000 });
+    store.save('OLD', 'uA', { sosEnabled: false, pingEnabled: true, mutedPingers: [] });
+    expect(store.restore('OLD', 'uA').sosCooldownMs).toBe(180000);
   });
 
   it('change only for real booleans, and say whether anything changed', () => {
@@ -84,6 +100,7 @@ describe('what a member is told', () => {
   it('is the switches and whether you yourself are muted', () => {
     expect(settingsFor(squad, 'ROOM', { key: 'uB', isLead: false, keyOf })).toEqual({
       roomCode: 'ROOM', sosEnabled: true, pingEnabled: false, pingMuted: true,
+      sosCooldownMs: 180000, sosCooldownPresetsMs: [60000, 180000, 300000],
     });
     expect(settingsFor(squad, 'ROOM', { key: 'uC', isLead: false, keyOf }).pingMuted).toBe(false);
   });
@@ -103,7 +120,7 @@ describe('saved settings', () => {
     return path.join(dir, 'settings.json');
   };
   const HOUR = 3600000;
-  const custom = { sosEnabled: false, pingEnabled: true, mutedPingers: ['uB'] };
+  const custom = { sosEnabled: false, pingEnabled: true, sosCooldownMs: 300000, mutedPingers: ['uB'] };
 
   it('come back for the person who saved them, and for nobody else', () => {
     const store = createSettingsStore({ ttlMs: 24 * HOUR });

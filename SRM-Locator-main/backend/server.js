@@ -30,6 +30,12 @@ import { createSosWatch } from './sosWatch.js';
 import {
   createBackgroundRouter, backgroundConfig, backgroundStartupLine, endSession, endAllSessions,
 } from './backgroundSharing.js';
+import {
+  ROLE_ADMIN, ROLE_MODERATOR, roleOf, can, canActOn, canSetModerators, setModerator, dropModerator,
+  rememberBlocked, forgetBlocked, blockedList,
+} from './groupRoles.js';
+import { ACTIVITY, logActivity, activityOf, noteSharingMode, forgetSharingMode } from './activityLog.js';
+import { createJoinNotifier } from './joinNotify.js';
 
 const app = express();
 app.use(cors());
@@ -132,6 +138,7 @@ function deleteSquad(roomCode) {
   // listening, so a squad founded later under the same code broadcast its rally points
   // and SOS to the old squad's phones.
   io.in(roomCode).socketsLeave(roomCode);
+  joinNotifier.cancel(roomCode);
   delete activeSquads[roomCode];
 }
 
@@ -159,6 +166,53 @@ if (classClock() !== null) {
 const keyOf = (squad, socketId) =>
   memberKey(squad?.memberUids?.[socketId] || io.sockets.sockets.get(socketId)?.data?.uid, socketId);
 
+// --- ROLES (groupRoles.js has the permissions table) ---
+const uidOfSocket = (squad, socketId) => squad?.memberUids?.[socketId] || io.sockets.sockets.get(socketId)?.data?.uid || null;
+const roleOfSocket = (squad, socketId) => roleOf(squad, socketId, uidOfSocket(squad, socketId));
+// The connected sockets of everyone allowed `action` (the main admin and/or moderators).
+const socketsAllowed = (squad, action) =>
+  (squad?.members ?? []).filter((id) => io.sockets.sockets.has(id) && can(roleOfSocket(squad, id), action));
+
+// Each member is told their own role, and everyone who the moderators are (socket ids, as the
+// member list uses them), whenever it may have changed. The main admin is the role-less 'OWNER'
+// of access-granted, as before.
+function sendGroupRole(target, squad, roomCode) {
+  const moderatorIds = squad.members.filter((id) => roleOfSocket(squad, id) === ROLE_MODERATOR);
+  target.emit('group-role', { roomCode, role: roleOfSocket(squad, target.id), moderatorIds });
+}
+function broadcastGroupRoles(roomCode) {
+  const squad = activeSquads[roomCode];
+  if (!squad) return;
+  for (const id of squad.members) {
+    const member = io.sockets.sockets.get(id);
+    if (member) sendGroupRole(member, squad, roomCode);
+  }
+}
+
+// --- ACTIVITY LOG (activityLog.js) ---
+// Logged, and sent at once to whoever may read the log and is connected.
+function recordActivity(roomCode, entry) {
+  const squad = activeSquads[roomCode];
+  const logged = squad && logActivity(squad, entry);
+  if (!logged) return;
+  for (const id of socketsAllowed(squad, 'readActivityLog')) io.to(id).emit('activity-entry', { roomCode, entry: logged });
+}
+const nameOf = (squad, socketId) =>
+  io.sockets.sockets.get(socketId)?.data?.profile?.name ?? users[socketId]?.name ?? squad?.profiles?.[uidOfSocket(squad, socketId)]?.name ?? null;
+
+// --- JOIN REQUESTS WAITING (joinNotify.js) ---
+// One message per burst of requests to everyone who may admit, with how many are waiting then.
+// PUSH SEAM: `joinRequestsWaiting` below is where the phone-notification pipeline (being built
+// separately) is meant to hook in, for admitters whose app is closed. Until it does, only
+// connected admitters hear it, and the count waits for the others on squad.pending.
+function joinRequestsWaiting(roomCode) {
+  const squad = activeSquads[roomCode];
+  const count = Object.keys(squad?.pending ?? {}).length;
+  if (!squad || count === 0) return;
+  for (const id of socketsAllowed(squad, 'seeJoinQueue')) io.to(id).emit('join-requests-waiting', { roomCode, count });
+}
+const joinNotifier = createJoinNotifier({ deliver: joinRequestsWaiting });
+
 // Where the server last saw `socketId`, as alertRules.js wants it. accuracyM is only there
 // once phones send an accuracy; until then it is unknown, which is never held against them.
 function lastKnownLocation(socketId, now) {
@@ -177,7 +231,7 @@ function decideAlert({ type, squad, senderId, targetId = null, now }) {
     location: lastKnownLocation(senderId, now),
     history: type === 'ping'
       ? pingHistory(squad, senderKey, keyOf(squad, targetId), now, PING_WINDOW_MIN * 60 * 1000)
-      : undefined,
+      : { lastSosAt: squad.sosSentAt?.[senderKey] ?? null },
     now,
     classNow: classClock() ?? now,
   }, DEFAULT_RULES_CONFIG);
@@ -310,8 +364,12 @@ function broadcastSquadUpdate(roomCode) {
     // No position on this connection, one from the background: that one is shown below, never both.
     if (!telemetry && uid && fixless.has(uid)) return;
     const profile = live?.data?.profile || {};
+    // Hidden means hidden: a member sharing as GHOST is listed, but nobody is sent where they are.
+    const hidden = telemetry?.status === 'GHOST';
     roomUsers[id] = telemetry
-      ? { ...telemetry, uid, hasFix: true }
+      ? (hidden
+          ? { uid, roomCode, name: telemetry.name, photo: telemetry.photo, status: 'GHOST', speed: 0, heading: 0, battery: telemetry.battery, lastSeen: telemetry.lastSeen, hasFix: false, role: roleOf(squad, id, uid) }
+          : { ...telemetry, uid, hasFix: true, role: roleOf(squad, id, uid) })
       : {
           uid,
           roomCode,
@@ -322,6 +380,7 @@ function broadcastSquadUpdate(roomCode) {
           heading: 0,
           battery: 0,
           hasFix: false,
+          role: roleOf(squad, id, uid),
         };
   });
 
@@ -475,6 +534,10 @@ socket.on('check-ping', (clientTimestamp) => {
     io.to(roomCode).emit('mutiny-status', { targetId, votes: currentVotes, required: requiredVotes });
 
     if (currentVotes >= requiredVotes) {
+      const exiledUid = sharingUid || uidOfSocket(squad, targetId);
+      recordActivity(roomCode, { kind: ACTIVITY.KICKED, uid: exiledUid, name: nameOf(squad, targetId), byName: 'Group vote' });
+      dropModerator(squad, exiledUid);
+      forgetSharingMode(squad, exiledUid);
       io.to(targetId).emit('exiled');
       delete squad.kickVotes[targetId];
       if (targetIsSharing) {
@@ -493,12 +556,15 @@ socket.on('check-ping', (clientTimestamp) => {
       io.sockets.sockets.get(targetId)?.leave(roomCode);
       handleSquadSuccession(targetId);
       broadcastSquadUpdate(roomCode);
+      broadcastGroupRoles(roomCode);
     }
   });
 
   // --- SAFETY PING ENGINE (LKL) ---
   socket.on('safety-ping', (data) => {
     const { latitude, longitude, timestamp, batteryLevel } = data ?? {};
+    // Hidden (the last update-location said GHOST): an older app still sends its position here.
+    if (users[socket.id]?.status === 'GHOST') return;
     // Merge rather than overwrite: 'update-location' writes speed/heading/lastSeen
     // into this same cache entry, and clobbering it here would erase that trajectory data.
     locationCache[socket.id] = { ...locationCache[socket.id], latitude, longitude, timestamp, batteryLevel: batteryLevel || 'Unknown' };
@@ -608,6 +674,7 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.emit('access-granted', { role: 'OWNER', roomCode });
       sendRallyPoint(socket, activeSquads[roomCode]);
       sendGroupSettings(socket, activeSquads[roomCode], roomCode);
+      sendGroupRole(socket, activeSquads[roomCode], roomCode);
       return;
     }
 
@@ -657,6 +724,7 @@ socket.on('check-ping', (clientTimestamp) => {
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
       broadcastSquadUpdate(roomCode);
+      broadcastGroupRoles(roomCode);
       return;
     }
 
@@ -689,6 +757,7 @@ socket.on('check-ping', (clientTimestamp) => {
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
       broadcastSquadUpdate(roomCode);
+      broadcastGroupRoles(roomCode);
       return;
     }
 
@@ -709,10 +778,12 @@ socket.on('check-ping', (clientTimestamp) => {
       existing.lastActivity = Date.now();
       socket.join(roomCode);
       socket.emit('access-granted', { role: returning.role, roomCode });
-      if (returning.role === 'OWNER') sendJoinQueue(existing, roomCode, socket.id);
+      // A moderator is handed the queue on every return, as the admin is.
+      if (can(roleOfSocket(existing, socket.id), 'seeJoinQueue')) sendJoinQueue(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
       broadcastSquadUpdate(roomCode);
+      broadcastGroupRoles(roomCode);
       return;
     }
 
@@ -721,10 +792,14 @@ socket.on('check-ping', (clientTimestamp) => {
     addPendingRequest(existing, socket.id, { uid: requesterUid, name: user?.name ?? null, photo: user?.photo ?? null });
     // Every reply names its squad, so a client can ignore one about a squad it has left.
     socket.emit('access-pending', { roomCode });
+    joinNotifier.requested(roomCode);
+    const request = { targetId: socket.id, name: user?.name, photo: user?.photo, roomCode: roomCode };
+    // Moderators admit too, so each connected one sees the request as the admin does.
+    for (const id of socketsAllowed(existing, 'seeJoinQueue')) {
+      if (id !== existing.ownerId) io.to(id).emit('access-request', request);
+    }
     if (ownerIsLive) {
-      io.to(existing.ownerId).emit('access-request', {
-        targetId: socket.id, name: user?.name, photo: user?.photo, roomCode: roomCode
-      });
+      io.to(existing.ownerId).emit('access-request', request);
     } else {
       // Nobody holds command. A connected member stands in and is handed the queue; with
       // none connected, the request waits on file for whoever takes command next (the
@@ -742,7 +817,8 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.on('resolve-access', (payload) => {
     const { targetId, roomCode, approved } = payload ?? {};
     const squad = activeSquads[roomCode];
-    if (!squad || squad.ownerId !== socket.id) return;
+    // The main admin or a moderator, one request at a time (groupRoles.js: admitOne).
+    if (!squad || !can(roleOfSocket(squad, socket.id), 'admitOne')) return;
 
     // Only a request that is still open. This used to accept any socket id at all: a
     // joiner who had aborted, or had since created or joined another squad, was pulled in
@@ -753,7 +829,33 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.emit('access-request-withdrawn', { targetId, roomCode });
       return;
     }
+    // Everyone else who could have answered it: it is decided, so it leaves their queue too.
+    for (const id of socketsAllowed(squad, 'seeJoinQueue')) {
+      if (id !== socket.id) io.to(id).emit('access-request-withdrawn', { targetId, roomCode });
+    }
+    admitOrDeny(squad, roomCode, targetId, approved);
+  });
 
+  // Admit all: the main admin only (groupRoles.js). Every request still open is admitted whose
+  // joiner is still connected. Acknowledged with { ok, admitted } or { ok: false, reason }.
+  socket.on('admit-all', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!can(roleOfSocket(squad, socket.id), 'admitAll')) return reply({ ok: false, reason: 'not-allowed' });
+    let admitted = 0;
+    for (const targetId of Object.keys(squad.pending ?? {})) {
+      if (!takePendingRequest(squad, targetId)) continue;
+      for (const id of socketsAllowed(squad, 'seeJoinQueue')) io.to(id).emit('access-request-withdrawn', { targetId, roomCode });
+      if (admitOrDeny(squad, roomCode, targetId, true)) admitted += 1;
+    }
+    reply({ ok: true, admitted });
+  });
+
+  // Lets in (or turns away) one joiner whose request has already been taken off the queue.
+  // Returns whether they were admitted.
+  function admitOrDeny(squad, roomCode, targetId, approved) {
     if (approved) {
       const targetSocket = io.sockets.sockets.get(targetId);
       // Only add to the roster if the requester is still actually connected —
@@ -775,41 +877,124 @@ socket.on('check-ping', (clientTimestamp) => {
         // missing from the list for a polling interval (up to 15s in eco mode) — and
         // indefinitely if they never got a fix at all.
         broadcastSquadUpdate(roomCode);
+        sendGroupRole(targetSocket, squad, roomCode);
+        return true;
       }
-    } else {
-      io.to(targetId).emit('access-denied', { roomCode });
+      return false;
     }
-  });
+    io.to(targetId).emit('access-denied', { roomCode });
+    return false;
+  }
 
-  // --- 🚫 COMMANDER BLOCK (durable — survives the target's reconnects) ---
-  socket.on('block-user', (payload) => {
+  // --- 🚫 REMOVE / BLOCK (the main admin and moderators, groupRoles.js) ---
+  // Kick takes someone out (they must ask again to come back); block also keeps them out
+  // (squad.blockedUids, checked in request-join) until the main admin or a moderator unblocks
+  // them. Neither touches the main admin or the Group's own Commander, and a moderator never
+  // touches another moderator. Both answer an acknowledgement, if one is passed, with { ok } or
+  // { ok: false, reason }.
+  const removeMember = (payload, ack, { block }) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
     const { roomCode, targetId } = payload ?? {};
     const squad = activeSquads[roomCode];
-    if (!squad || squad.ownerId !== socket.id || targetId === socket.id) return;
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    const role = roleOfSocket(squad, socket.id);
+    if (!can(role, block ? 'block' : 'kick')) return reply({ ok: false, reason: 'not-allowed' });
+    if (typeof targetId !== 'string' || targetId === socket.id) return reply({ ok: false, reason: 'bad-target' });
 
-    const targetUid = squad.memberUids?.[targetId] || io.sockets.sockets.get(targetId)?.data?.uid || uidOfPresenceKey(targetId);
+    const sharingUid = uidOfPresenceKey(targetId);
+    // On the roster: a connection, or (by a 'bg:' key) an admitted person sharing from the
+    // background, whether or not their latest report is still fresh.
+    const onRoster = squad.members.includes(targetId) || Boolean(sharingUid && isKnownMember(squad, sharingUid));
+    if (!onRoster) return reply({ ok: false, reason: 'bad-target' });
+    const targetUid = squad.memberUids?.[targetId] || io.sockets.sockets.get(targetId)?.data?.uid || sharingUid;
     // A stand-in holds command only until the Commander returns. Blocking the Commander
     // (whose old connection is still on the roster while they're away) would turn
     // "temporarily" into "for good": a block is checked before the Commander's return.
-    if (targetUid && targetUid === commanderOf(squad)) return;
-    squad.blockedUids = squad.blockedUids || [];
-    if (targetUid && !squad.blockedUids.includes(targetUid)) squad.blockedUids.push(targetUid);
+    const target = {
+      isAdmin: squad.ownerId === targetId,
+      isCommander: Boolean(targetUid) && targetUid === commanderOf(squad),
+      isModerator: Boolean(targetUid) && Boolean(squad.moderatorUids?.includes(targetUid)),
+    };
+    if (!canActOn(role, target)) return reply({ ok: false, reason: 'not-allowed' });
+
+    const targetName = nameOf(squad, targetId) ?? presenceOf(squad, targetUid, Date.now())?.name ?? null;
+    if (block) rememberBlocked(squad, targetUid, targetName);
     forgetMember(squad, targetUid);
     removePresence(squad, targetUid);
     endSession(squad, targetUid);
+    dropModerator(squad, targetUid);
+    forgetSharingMode(squad, targetUid);
 
     squad.members = squad.members.filter(id => id !== targetId);
     if (squad.memberUids) delete squad.memberUids[targetId];
     delete users[targetId];
     delete locationCache[targetId];
 
-    console.log(`[🚫 BLOCK] Commander banned node ${targetId} from ${roomCode}`);
-    io.to(targetId).emit('exiled', { reason: 'blocked' });
+    console.log(`[🚫 ${block ? 'BLOCK' : 'KICK'}] ${role} removed node ${targetId} from ${roomCode}`);
+    recordActivity(roomCode, {
+      kind: block ? ACTIVITY.BLOCKED : ACTIVITY.KICKED, uid: targetUid, name: targetName,
+      byUid: socket.data?.uid, byName: socket.data?.profile?.name,
+    });
+    io.to(targetId).emit('exiled', { reason: block ? 'blocked' : 'kicked' });
     // Same as a mutiny exile: off the roster AND out of the room, without relying on the
-    // blocked client to leave when told. Otherwise a modified client stays subscribed to
-    // the squad it was banned from, and keeps receiving its locations and SOS alerts.
+    // removed client to leave when told. Otherwise a modified client stays subscribed to
+    // the squad it was removed from, and keeps receiving its locations and SOS alerts.
     io.sockets.sockets.get(targetId)?.leave(roomCode);
     broadcastSquadUpdate(roomCode);
+    broadcastGroupRoles(roomCode);
+    reply({ ok: true });
+  };
+  socket.on('block-user', (payload, ack) => removeMember(payload, ack, { block: true }));
+  socket.on('kick-member', (payload, ack) => removeMember(payload, ack, { block: false }));
+
+  // Who is blocked from this Group ([{ uid, name }]), for the main admin and moderators.
+  socket.on('get-blocked', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const squad = activeSquads[payload?.roomCode];
+    if (!squad || !can(roleOfSocket(squad, socket.id), 'unblock')) return reply({ ok: false, reason: 'not-allowed' });
+    reply({ ok: true, blocked: blockedList(squad) });
+  });
+
+  socket.on('unblock-user', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode, uid } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !can(roleOfSocket(squad, socket.id), 'unblock')) return reply({ ok: false, reason: 'not-allowed' });
+    if (typeof uid !== 'string') return reply({ ok: false, reason: 'bad-target' });
+    const name = squad.blockedNames?.[uid] ?? null;
+    if (!forgetBlocked(squad, uid)) return reply({ ok: false, reason: 'not-blocked' });
+    recordActivity(roomCode, { kind: ACTIVITY.UNBLOCKED, uid, name, byUid: socket.data?.uid, byName: socket.data?.profile?.name });
+    reply({ ok: true, blocked: blockedList(squad) });
+  });
+
+  // The Group's own Commander makes a member a moderator, or a moderator a member again.
+  socket.on('set-moderator', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode, targetId, moderator } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!can(roleOfSocket(squad, socket.id), 'setModerator') || !canSetModerators(squad, socket.id, socket.data?.uid, commanderOf(squad))) {
+      return reply({ ok: false, reason: 'not-allowed' });
+    }
+    const targetUid = uidOfSocket(squad, targetId);
+    if (typeof moderator !== 'boolean' || targetId === socket.id || !squad.members.includes(targetId) || !targetUid) {
+      return reply({ ok: false, reason: 'bad-target' });
+    }
+    if (setModerator(squad, targetUid, moderator)) {
+      broadcastSquadUpdate(roomCode);
+      broadcastGroupRoles(roomCode);
+      // A new moderator admits from now on: hand them the queue.
+      if (moderator) sendJoinQueue(squad, roomCode, targetId);
+    }
+    reply({ ok: true });
+  });
+
+  // The activity log (activityLog.js), for the main admin and moderators.
+  socket.on('get-activity-log', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const squad = activeSquads[payload?.roomCode];
+    if (!squad || !can(roleOfSocket(squad, socket.id), 'readActivityLog')) return reply({ ok: false, reason: 'not-allowed' });
+    reply({ ok: true, log: activityOf(squad) });
   });
 
   socket.on('publish-custom-route', (payload) => {
@@ -884,7 +1069,12 @@ socket.on('check-ping', (clientTimestamp) => {
     if (reporter) {
       squad.profiles ??= Object.create(null);
       squad.profiles[reporter] = { name: data.name ?? null, photo: data.photo ?? null };
+      // Going hidden, or coming back from it, goes in the activity log.
+      const changed = noteSharingMode(squad, { uid: reporter, name: data.name ?? null, status: data.status });
+      if (changed) recordActivity(newRoom, changed);
     }
+    // Hidden: no position is kept, whatever an older app still sends.
+    const hidden = data.status === 'GHOST';
 
     const oldRoom = users[socket.id]?.roomCode;
 
@@ -894,6 +1084,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // 👇 Armored Cache Assignment
     users[socket.id] = {
       ...data,
+      ...(hidden ? { lat: undefined, lng: undefined, building: undefined, floor: undefined } : {}),
       roomCode: newRoom,
       heading: heading || 0,       // Failsafe: Prevents NaN crashes on the frontend
       lastSeen: Date.now()         // Anchor: Records the exact millisecond of the last known ping
@@ -902,14 +1093,18 @@ socket.on('check-ping', (clientTimestamp) => {
     // Mirror the live trajectory into locationCache too (merged with whatever
     // safety-ping last wrote), so the disconnect handler's Dead Man's Switch
     // actually has real speed/heading/lastSeen instead of permanently-undefined fields.
-    locationCache[socket.id] = {
-      ...locationCache[socket.id],
-      lat, lng,
-      speed: speed || 0,
-      heading: heading || 0,
-      battery: battery || 0,
-      lastSeen: Date.now()
-    };
+    // Hidden: the position it had is dropped, so neither the Lead's table nor a lost-signal
+    // marker can show where a hidden person is.
+    locationCache[socket.id] = hidden
+      ? { battery: battery || 0, lastSeen: Date.now() }
+      : {
+          ...locationCache[socket.id],
+          lat, lng,
+          speed: speed || 0,
+          heading: heading || 0,
+          battery: battery || 0,
+          lastSeen: Date.now()
+        };
 
     broadcastSquadUpdate(newRoom);
   });
@@ -977,13 +1172,24 @@ socket.on('check-ping', (clientTimestamp) => {
     // SOS is only ever refused by the Group Lead's switch, or by the quiet-zone setting
     // when that is 'blocked'; otherwise at worst it goes out flagged.
     const verdict = decideAlert({ type: 'sos', squad, senderId: socket.id, now });
+    const senderKey = memberKey(socket.data?.uid, socket.id);
+    // Someone pressing it again and again: tell the Group Lead, quietly (not an alarm). Every
+    // press counts, including the ones the cooldown refuses; not while SOS is switched off.
+    if (verdict.reasonCode !== 'GROUP_DISABLED') {
+      const repeats = noteSosAttempt(squad, senderKey, now, SOS_REPEAT_WINDOW_MIN * 60 * 1000, SOS_REPEAT_FLAG_COUNT);
+      if (repeats.flag && squad.ownerId && squad.ownerId !== socket.id) {
+        io.to(squad.ownerId).emit('group-notice', {
+          roomCode, kind: 'sos-repeat', senderId: socket.id, senderName: senderName ?? null,
+          count: repeats.count, windowMin: SOS_REPEAT_WINDOW_MIN,
+        });
+      }
+    }
     if (!verdict.allowed) {
       console.log(`[🚨 SOS] Refused in ${roomCode}: ${verdict.reasonCode}`);
       reportAlert(socket, squad, roomCode, 'sos', verdict, now);
       return;
     }
     console.log(`[🚨 SOS] ${senderName} triggered a distress beacon in ${roomCode}`);
-    const senderKey = memberKey(socket.data?.uid, socket.id);
     const details = {
       senderKey, senderId: socket.id, senderName, lat, lng, timestamp,
       flag: verdict.mode === 'guarded' ? verdict.reasonCode : null,
@@ -991,18 +1197,14 @@ socket.on('check-ping', (clientTimestamp) => {
     // Pressing again while the last one is fresh updates it: no second alarm.
     const coalesced = coalesceSos(squad, details, now, SOS_COALESCE_SEC * 1000);
     const sos = coalesced ?? recordSos(squad, details, now);
+    // The per-person cooldown (alertRules.js) counts from each new alarm.
+    if (!coalesced) {
+      squad.sosSentAt ??= Object.create(null);
+      squad.sosSentAt[senderKey] = now;
+    }
     socket.to(roomCode).emit(coalesced ? 'sos-updated' : 'sos-received', toSosPayload(sos, now));
     sosWatch.notify(roomCode); // and the phones listening from the background
     reportAlert(socket, squad, roomCode, 'sos', verdict, now, coalesced ? { coalesced: true } : {});
-
-    // Someone pressing it again and again: tell the Group Lead, quietly (not an alarm).
-    const repeats = noteSosAttempt(squad, senderKey, now, SOS_REPEAT_WINDOW_MIN * 60 * 1000, SOS_REPEAT_FLAG_COUNT);
-    if (repeats.flag && squad.ownerId && squad.ownerId !== socket.id) {
-      io.to(squad.ownerId).emit('group-notice', {
-        roomCode, kind: 'sos-repeat', senderId: socket.id, senderName: senderName ?? null,
-        count: repeats.count, windowMin: SOS_REPEAT_WINDOW_MIN,
-      });
-    }
   });
 
   // --- GROUP SWITCHES AND MUTES ---
@@ -1036,7 +1238,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const request = settingsRequest(payload, ack, { leadOnly: true });
     if (!request) return;
     const { squad, roomCode } = request;
-    const { targetId, muted } = payload;
+    const { targetId, muted } = payload ?? {};
     if (targetId === socket.id || !squad.members.includes(targetId) || typeof muted !== 'boolean') {
       return request.reply({ ok: false, reason: 'bad-target' });
     }
@@ -1052,7 +1254,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const request = settingsRequest(payload, ack, { leadOnly: false });
     if (!request) return;
     const { squad } = request;
-    const { targetId, muted } = payload;
+    const { targetId, muted } = payload ?? {};
     if (targetId === socket.id || !squad.members.includes(targetId) || typeof muted !== 'boolean') {
       return request.reply({ ok: false, reason: 'bad-target' });
     }
@@ -1118,11 +1320,22 @@ socket.on('check-ping', (clientTimestamp) => {
       if (activeSquads[roomCode].members.includes(socket.id)) rooms.add(roomCode);
     }
 
+    // A deliberate Leave, in the log of each Group they were on (not a dropped connection).
+    rooms.forEach((roomCode) => {
+      const squad = activeSquads[roomCode];
+      if (!squad?.members.includes(socket.id)) return;
+      const uid = uidOfSocket(squad, socket.id);
+      recordActivity(roomCode, { kind: ACTIVITY.LEFT, uid, name: nameOf(squad, socket.id) });
+      dropModerator(squad, uid);
+      forgetSharingMode(squad, uid);
+    });
+
     delete users[socket.id];
     delete locationCache[socket.id];
     rooms.forEach(roomCode => socket.leave(roomCode));
 
     handleSquadSuccession(socket.id);
+    rooms.forEach(roomCode => broadcastGroupRoles(roomCode));
     rooms.forEach(roomCode => broadcastSquadUpdate(roomCode));
   });
 
@@ -1131,7 +1344,19 @@ socket.on('check-ping', (clientTimestamp) => {
     // A joiner who drops off while waiting has nothing left to approve. (Back on a new
     // socket, their client asks again, and that request is the one the Commander sees.)
     withdrawJoinRequests(null);
-    
+
+    // A connection lost, as opposed to a Leave: logged only when this was the person's
+    // connection to the Group (not one already replaced by a reconnect) and no other is live.
+    for (const roomCode in activeSquads) {
+      const squad = activeSquads[roomCode];
+      if (!squad.members.includes(socket.id)) continue;
+      const uid = uidOfSocket(squad, socket.id);
+      const otherLive = Boolean(uid) && squad.members.some(
+        (id) => id !== socket.id && squad.memberUids?.[id] === uid && io.sockets.sockets.has(id)
+      );
+      if (!otherLive) recordActivity(roomCode, { kind: ACTIVITY.CONNECTION_LOST, uid, name: nameOf(squad, socket.id) });
+    }
+
     if (users[socket.id]) {
       const room = users[socket.id].roomCode;
       const userData = users[socket.id];
@@ -1204,8 +1429,12 @@ socket.on('check-ping', (clientTimestamp) => {
   // their queue instead of waiting there for a GRANT that would pull in someone who left.
   function withdrawJoinRequests(uid) {
     for (const { roomCode, targetId } of withdrawPendingRequests(activeSquads, { socketId: socket.id, uid })) {
-      const ownerId = activeSquads[roomCode]?.ownerId;
+      const squad = activeSquads[roomCode];
+      const ownerId = squad?.ownerId;
       if (ownerId) io.to(ownerId).emit('access-request-withdrawn', { targetId, roomCode });
+      for (const id of socketsAllowed(squad, 'seeJoinQueue')) {
+        if (id !== ownerId) io.to(id).emit('access-request-withdrawn', { targetId, roomCode });
+      }
     }
   }
 

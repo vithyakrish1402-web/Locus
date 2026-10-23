@@ -19,10 +19,14 @@
 //                                                                  -> QUIET_ZONE, per mode setting
 //   3. (Ping only) too soon after the last ping to this person, or too many lately
 //                                                                  -> blocked COOLDOWN
+//      (SOS only) too soon after this person's last SOS, by the Group's SOS cooldown
+//                                                                  -> blocked COOLDOWN
 //   4. During class hours the sender's position is missing, old or too inaccurate
 //      to say where they are                                       -> SOS guarded / Ping blocked,
 //                                                                     LOCATION_UNKNOWN
-// An SOS is never blocked by 3 or 4: safety first for SOS, silence first for Ping.
+// An SOS is never blocked by 4, and by 3 only inside the cooldown the Group Lead chose
+// (settings.sosCooldownMs): a person's second alarm within a few minutes is refused, with the
+// time left, while their first always goes.
 // Outside class hours there are no quiet zones, so 2 and 4 do not apply at all. Nor do they
 // while the master switch is off (config.quietZonesEnabled, LOCUS_QUIET_ZONES_ENABLED):
 // then only 1 and 3 are in force.
@@ -30,7 +34,7 @@
 import {
   QUIET_ZONES_ENABLED, SOS_IN_QUIET_ZONE_MODE, PING_IN_QUIET_ZONE_MODE, QUIET_ZONE_BUFFER_M, POINT_ZONE_RADIUS_M,
   LOCATION_MAX_AGE_SEC, LOCATION_MAX_ACCURACY_M,
-  PING_COOLDOWN_SEC, PING_MAX_PER_WINDOW, PING_WINDOW_MIN,
+  PING_COOLDOWN_SEC, PING_MAX_PER_WINDOW, PING_WINDOW_MIN, SOS_COOLDOWN_DEFAULT_MS,
   CLASS_HOURS, CLASS_TIME_ZONE, FORCE_CLASS_HOURS, QUIET_ZONES,
 } from './alertConfig.js';
 
@@ -177,6 +181,16 @@ export function evaluateAlertPermission(input, config = DEFAULT_RULES_CONFIG) {
     return verdict('blocked', 'GROUP_DISABLED');
   }
   if (!isSos && senderMuted) return verdict('blocked', 'MEMBER_MUTED');
+
+  // 3, for an SOS: not again within the Group's cooldown. Checked before the quiet zone, so
+  // a refused second alarm says how long to wait wherever it was pressed.
+  if (isSos) {
+    const cooldownMs = Number.isFinite(settings.sosCooldownMs) ? settings.sosCooldownMs : SOS_COOLDOWN_DEFAULT_MS;
+    const sinceLast = history.lastSosAt == null ? Infinity : now - history.lastSosAt;
+    if (sinceLast < cooldownMs) {
+      return verdict('blocked', 'COOLDOWN', { retryAfterSec: Math.ceil((cooldownMs - sinceLast) / 1000) });
+    }
+  }
 
   // With quiet zones switched off there is no class-hours rule to apply, so none is judged.
   const inClass = config.quietZonesEnabled && isClassHours(input.classNow ?? now, config);

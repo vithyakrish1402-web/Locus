@@ -46,6 +46,8 @@ beforeAll(async () => {
     LOCUS_BG_SOS_POLLS_PER_MIN_TOKEN: '40',
     LOCUS_CLASS_CLOCK_ISO: '2026-01-04T10:00:00Z',
     LOCUS_FORCE_CLASS_HOURS: '',
+    // No SOS cooldown here: a second press from the same person is what some of these exercise.
+    LOCUS_SOS_COOLDOWN_DEFAULT_MS: '0',
   };
   for (const key of Object.keys(env)) saved[key] = process.env[key];
   Object.assign(process.env, env);

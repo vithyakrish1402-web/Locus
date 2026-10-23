@@ -56,8 +56,16 @@ export const PING_COOLDOWN_SEC = number('PING_COOLDOWN_SEC', 20);
 export const PING_MAX_PER_WINDOW = number('PING_MAX_PER_WINDOW', 8);
 export const PING_WINDOW_MIN = number('PING_WINDOW_MIN', 10);
 
-// --- SOS handling (never rate-limited, only coalesced and counted) --------------------
+// --- SOS handling ---------------------------------------------------------------------
+// Coalescing: a second press within this many seconds updates the first alarm instead of
+// raising another. The cooldown below now refuses any second alarm inside it, so this only
+// matters for a Group whose cooldown is shorter.
 export const SOS_COALESCE_SEC = number('SOS_COALESCE_SEC', 60);
+// The least time between two SOS alarms from the same person, enforced by the server
+// (alertRules.js), unless the Group Lead picks another of the presets below.
+export const SOS_COOLDOWN_DEFAULT_MS = number('SOS_COOLDOWN_DEFAULT_MS', 180000);
+// The cooldowns a Group Lead can choose from: 1, 3 or 5 minutes.
+export const SOS_COOLDOWN_PRESETS_MS = [60000, 180000, 300000];
 export const SOS_REPEAT_FLAG_COUNT = number('SOS_REPEAT_FLAG_COUNT', 3);
 export const SOS_REPEAT_WINDOW_MIN = number('SOS_REPEAT_WINDOW_MIN', 15);
 
