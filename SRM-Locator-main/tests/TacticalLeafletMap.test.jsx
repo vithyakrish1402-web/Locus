@@ -84,3 +84,29 @@ describe('the walking line on the Leaflet engine', () => {
     expect(container.querySelector('path[stroke="#EF4444"]')).toBeNull();
   });
 });
+
+// Item 6 of the 2026-10 bug batch: the member being looked for is ringed on this engine too,
+// remote members and lost-connection ones alike.
+describe('the member being looked for, on the Leaflet engine', () => {
+  const member = { id: 'sock-B', name: 'Bravo', lat: 12.8232, lng: 80.0443, hasFix: true, status: 'ACTIVE', speed: 0, heading: 0 };
+  const other = { ...member, id: 'sock-C', name: 'Charlie', lng: 80.0446 };
+
+  it('is highlighted, and nobody else is', async () => {
+    renderMap({ activeWaypoint: null, users: [member, other], focusedMemberId: 'sock-B' });
+    const markers = await screen.findAllByTestId('member-marker');
+    const lit = markers.filter((m) => m.getAttribute('data-highlighted') === 'true');
+    expect(lit).toHaveLength(1);
+    expect(lit[0].textContent).toContain('Bravo');
+  });
+
+  it('is highlighted when their connection was lost, too', async () => {
+    const ghost = { id: 'sock-G', name: 'Golf', position: { lat: 12.8233, lng: 80.0444 }, lastKnownLocation: { lat: 12.8233, lng: 80.0444 }, phase: 'expired', elapsedLabel: '5:00' };
+    renderMap({ activeWaypoint: null, ghostMembers: [ghost], focusedMemberId: 'sock-G' });
+    expect((await screen.findByTestId('ghost-marker')).getAttribute('data-highlighted')).toBe('true');
+  });
+
+  it('is nobody without a focus', async () => {
+    renderMap({ activeWaypoint: null, users: [member] });
+    expect((await screen.findByTestId('member-marker')).getAttribute('data-highlighted')).toBeNull();
+  });
+});

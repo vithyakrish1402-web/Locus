@@ -15,6 +15,10 @@ export const MAP_FOCUS_DURATION_MS = 1800;
 export const MAP_FOCUS_BUILDING_ZOOM = 19;
 /** Zoom when focusing a rally point. */
 export const MAP_FOCUS_RALLY_ZOOM = 19;
+/** Zoom when focusing a group member (a tapped member card, or an SOS sender). */
+export const FOCUS_ZOOM_LEVEL = 19;
+/** How long a focused member's marker stays highlighted (counted once no SOS is on screen). */
+export const FOCUS_HIGHLIGHT_MS = 10000;
 /** Cubic ease-in-out. */
 export const MAP_FOCUS_EASING = (t) => (t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2);
 /** The move used instead of the glide when the device asks for reduced motion. */

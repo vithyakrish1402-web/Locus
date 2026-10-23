@@ -178,6 +178,8 @@ const TacticalLeafletMap = ({
   lastKnownColor = '#8A94A3',
   memberDistance = () => null,
   ghostFocusItem = (ghost) => ({ name: ghost.name }),
+  // The member being looked for (App.jsx's focusMember): their marker is highlighted.
+  focusedMemberId = null,
 }) => {
   const tiles = isSatellite ? SATELLITE_TILES : DARK_TILES;
 
@@ -306,6 +308,7 @@ const TacticalLeafletMap = ({
                 isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
                 heading={u.heading}
                 distance={memberDistance(u)}
+                highlighted={u.id === focusedMemberId}
               />
               {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
             </div>
@@ -334,7 +337,7 @@ const TacticalLeafletMap = ({
           }}
         >
           <div style={{ opacity: ghost.fading ? 0 : 1, transition: `opacity ${GHOST_FADE_MS}ms ease` }}>
-            <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} />
+            <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} highlighted={ghost.id === focusedMemberId} />
           </div>
         </LeafletReactMarker>
       ))}

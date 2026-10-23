@@ -103,7 +103,7 @@ import { notify, dismiss as dismissNotice } from './utils/notify';
 import { logNavBuild } from './utils/navBuild';
 import { rallyAction, rallyIsAt } from './utils/rallyAction';
 import { mapEngineStatus } from './utils/mapEngineStatus';
-import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
+import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM, FOCUS_ZOOM_LEVEL, FOCUS_HIGHLIGHT_MS } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useClosedAppSos } from './hooks/useClosedAppSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
@@ -2035,6 +2035,34 @@ const App = () => {
     setMapProps({ center: { lat: c.lat, lng: c.lng }, zoom: googleShown ? Math.round(zoom) : zoom });
   }, [googleShown]);
 
+  // --- FOCUS A MEMBER: the person being looked for ---
+  // One action for a tapped member card (and its peek row, and "Show on map"), and for the sender
+  // of an incoming SOS: the panel gets out of the way on a phone, the map glides and zooms to them
+  // (utils/mapFocus.js drives whichever map engine is showing, and a touch on the map stops the
+  // glide, so the user's own pan is never pulled back), and their marker is ringed on both
+  // engines. The ring goes after FOCUS_HIGHLIGHT_MS, counted once no SOS is on screen, or on the
+  // next tap on the map. Nothing follows them afterwards: the camera stays where it ended.
+  const [focusedMemberId, setFocusedMemberId] = useState(null);
+  const focusMember = (member, at = member) => {
+    if (!member) return;
+    if (isMobile) setMobileView('grid');
+    setFocusedMemberId(member.id ?? null);
+    if (Number.isFinite(at?.lat) && Number.isFinite(at?.lng)) glideTo(at, FOCUS_ZOOM_LEVEL);
+  };
+  useEffect(() => {
+    if (!focusedMemberId || incomingSos) return undefined;
+    const timer = setTimeout(() => setFocusedMemberId(null), FOCUS_HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [focusedMemberId, incomingSos]);
+  // An SOS someone sends: their last position (sent with the alert) and their marker. Once per
+  // alert: useIncomingSos hands over a new object only for a new alert, never on a re-render.
+  useEffect(() => {
+    if (!incomingSos) return;
+    focusMember({ id: incomingSos.senderId }, { lat: incomingSos.lat, lng: incomingSos.lng });
+    // Keyed on the alert only: focusMember reads the rest at the time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingSos]);
+
   const handleFocus = (coords, item) => {
     setMapProps({ center: coords, zoom: 19 });
     if (item) {
@@ -2047,6 +2075,8 @@ const App = () => {
 
   // ---  MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
   const handleMapClick = ({ lat, lng }) => {
+    // A tap on the map lets go of the member being looked for.
+    setFocusedMemberId(null);
     // 0. TARGETING MODE RALLY POINT (Mobile two-step)
     if (isTargetingMode) {
       const waypoint = { lat, lng, name: "RALLY POINT" };
@@ -2878,7 +2908,11 @@ const App = () => {
                       requests={pendingRequests.length}
                       onRequests={squadRole === 'OWNER' ? () => setShowRequestsModal(true) : null}
                       members={peekMembers}
-                      onMember={(id) => setOptionsMemberId(id)}
+                      onMember={(id) => {
+                        const member = users.find((u) => u.id === id);
+                        if (member?.hasFix) focusMember(member);
+                        else setOptionsMemberId(id);
+                      }}
                       counts={peekCounts}
                     />
                   </div>
@@ -3078,7 +3112,7 @@ const App = () => {
                       key={`ghost-row-${ghost.id}`}
                       data-testid="lost-member-row"
                       onClick={() => {
-                        handleFocus(ghost.position, null);
+                        focusMember(ghost, ghost.position);
                         setOptionsMemberId(ghost.id);
                       }}
                       className="flex items-center gap-3 p-3 rounded-2xl glass-panel font-ui text-text cursor-pointer hover:bg-surface/90 transition-all duration-150"
@@ -3109,6 +3143,7 @@ const App = () => {
                         heading={heading}
                         headingLive={hasHeadingReading}
                         onOptions={(m) => setOptionsMemberId(m.id)}
+                        onFocus={focusMember}
                       />
                     </motion.div>
                   )),
@@ -3335,6 +3370,7 @@ const App = () => {
               lastKnownColor={lastKnownColor}
               memberDistance={memberDistance}
               ghostFocusItem={ghostFocusItem}
+              focusedMemberId={focusedMemberId}
             />
           </Suspense>
         </div>
@@ -3459,7 +3495,7 @@ const App = () => {
                 style={{
                   cursor: 'pointer',
                   pointerEvents: 'auto',
-                  zIndex: 45,
+                  zIndex: u.id === focusedMemberId ? 46 : 45,
                   animation: 'locus-member-fade-in 0.6s ease',
                   // Stage 7: on another floor of the building you're viewing - dimmed, never hidden.
                   ...(SHOW_INDOOR_POSITION_TO_SQUAD && isOnOtherFloor(u, indoorView) ? { opacity: 0.35 } : {}),
@@ -3471,6 +3507,7 @@ const App = () => {
                   isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
                   heading={u.heading}
                   distance={memberDistance(u)}
+                  highlighted={u.id === focusedMemberId}
                 />
                 {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
               </div>
@@ -3497,7 +3534,7 @@ const App = () => {
                   transition: `opacity ${GHOST_FADE_MS}ms ease`
                 }}
               >
-                <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} />
+                <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} highlighted={ghost.id === focusedMemberId} />
               </div>
             ))}
 
@@ -3780,9 +3817,8 @@ const App = () => {
         }}
         onPing={sendPing}
         onShowOnMap={(m) => {
-          handleFocus({ lat: m.lat, lng: m.lng }, null);
-          // On a phone the open panel covers the map: get out of the way, as a building does.
-          if (isMobile) setMobileView('grid');
+          setOptionsMemberId(null);
+          focusMember(m);
         }}
         onArScan={(m) => setArTarget(arTargetForMember(m))}
         onRemoveAndBlock={toggleBlock}

@@ -156,7 +156,7 @@ describe('Android Back', () => {
   it("closes a member's options first, then the Group panel", async () => {
     await onTheMap();
     fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
-    fireEvent.click(screen.getAllByTestId('member-row')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
     expect(await screen.findByRole('dialog', { name: /Bravo/ })).toBeTruthy();
     expect(back()).toBe(true);
     await act(async () => {});

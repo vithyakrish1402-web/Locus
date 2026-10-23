@@ -55,10 +55,13 @@ function PointingArrow({ angle, reduceMotion }) {
 }
 
 /**
+ * A tap on the card shows the member on the map (`onFocus`, App.jsx's focusMember); the ⋮
+ * button opens their options. Without `onFocus`, or with no position to show, the card opens
+ * the options as it always did.
  * @param {{ member: object, me: {lat:number,lng:number}|null, heading: number,
- *   headingLive: boolean, onOptions: (member: object) => void }} props
+ *   headingLive: boolean, onOptions: (member: object) => void, onFocus?: (member: object) => void }} props
  */
-export default function SquadMemberCard({ member, me, heading, headingLive, onOptions }) {
+export default function SquadMemberCard({ member, me, heading, headingLive, onOptions, onFocus }) {
   const reduceMotion = useReducedMotion();
   const now = useNow(5000);
   const status = memberStatus(member, now);
@@ -68,7 +71,7 @@ export default function SquadMemberCard({ member, me, heading, headingLive, onOp
   return (
     <div
       data-testid="member-row"
-      onClick={() => onOptions(member)}
+      onClick={() => (onFocus && member.hasFix ? onFocus(member) : onOptions(member))}
       className="flex items-center gap-3 p-3 rounded-2xl glass-panel font-ui text-text hover:bg-surface/90 cursor-pointer active:scale-[0.99] transition-all duration-150"
     >
       <Avatar name={name} dashed={member.status === 'FROZEN' || !member.hasFix} />
@@ -102,7 +105,7 @@ export default function SquadMemberCard({ member, me, heading, headingLive, onOp
         </div>
       )}
       {place && !place.where.here && <PointingArrow angle={place.angle} reduceMotion={reduceMotion} />}
-      <IconButton label={MEMBERS.options(name)} icon={MoreVertical} onClick={() => onOptions(member)} />
+      <IconButton label={MEMBERS.options(name)} icon={MoreVertical} onClick={(e) => { e?.stopPropagation?.(); onOptions(member); }} />
     </div>
   );
 }

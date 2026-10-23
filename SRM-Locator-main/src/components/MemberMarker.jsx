@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { initialsOf } from './ui/initials';
 import { MARKERS } from '../copy/map';
 import { useClearOfControls } from '../hooks/useClearOfControls';
+import FocusRing from './map/FocusRing';
 
 // A group member on the map (redesign Map batch, piece 5): their initials in a 36 px disc, a
 // solid accent ring while they share live and a dashed grey one while Paused, and a plate
@@ -10,15 +11,17 @@ import { useClearOfControls } from '../hooks/useClearOfControls';
 // heading, as the old dot's chevron did. Hidden members are never drawn (App.jsx filters them).
 //
 // Display only: the stored photo is still sent with every update, just not shown here.
+// `highlighted`: the member being looked for (App.jsx's focusMember) gets a ring and is drawn
+// a little larger, above the other markers.
 
 const SIZE = 36;
 const RING = 2;
 
 /**
  * @param {{ name?: string|null, paused?: boolean, heading?: number, isNavigating?: boolean,
- *   distance?: string|null }} props
+ *   distance?: string|null, highlighted?: boolean }} props
  */
-export default function MemberMarker({ name, paused = false, heading = 0, isNavigating = false, distance = null }) {
+export default function MemberMarker({ name, paused = false, heading = 0, isNavigating = false, distance = null, highlighted = false }) {
   const shown = (typeof name === 'string' && name.trim()) || MARKERS.someone;
   const plate = paused ? MARKERS.memberPaused(shown) : MARKERS.memberPlate(shown, distance);
   // The plate slides left, out from under the map controls, when the member is near them.
@@ -28,9 +31,11 @@ export default function MemberMarker({ name, paused = false, heading = 0, isNavi
     <div
       data-testid="member-marker"
       data-paused={paused || undefined}
+      data-highlighted={highlighted || undefined}
       className="relative font-ui pointer-events-auto cursor-pointer transition-transform duration-150 select-none"
-      style={{ width: SIZE, height: SIZE, transform: 'translate(-50%, -50%)' }}
+      style={{ width: SIZE, height: SIZE, transform: `translate(-50%, -50%)${highlighted ? ' scale(1.25)' : ''}`, zIndex: highlighted ? 1 : undefined }}
     >
+      {highlighted && <FocusRing />}
       {isNavigating && !paused && (
         <span
           className="absolute inset-0 transition-transform duration-200"
