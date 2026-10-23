@@ -95,6 +95,17 @@ export const LEAD_TOOLS = {
   removeMeetingPoint: 'Remove meeting point',
 };
 
+// The Group Lead's emergency alert controls (item 5): SOS on or off for the group, and the
+// least time between two alerts from one person.
+export const SOS_CONTROLS = {
+  switchLabel: 'Emergency alerts',
+  on: 'Anyone in the group can send an SOS.',
+  off: 'Off: nobody in the group can send an SOS.',
+  cooldownLabel: "Time between one person's alerts",
+  minutes: (ms) => `${Math.round(ms / 60000)} min`,
+  notCommander: 'Only the person who set up the group can change this.',
+};
+
 // Refresh locations that didn't work: an amber notice with Retry, never red.
 export const REFRESH_FAILED = {
   title: "Couldn't refresh locations.",

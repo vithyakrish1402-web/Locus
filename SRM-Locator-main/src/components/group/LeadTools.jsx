@@ -1,22 +1,25 @@
 import React from 'react';
 import { AlertCircle, Flag, Loader2, RefreshCw, UserPlus, X } from 'lucide-react';
-import { Badge, Button } from '../ui';
-import { LEAD_TOOLS, REFRESH_FAILED } from '../../copy/group';
+import { Badge, Button, SegmentedControl, Switch } from '../ui';
+import { LEAD_TOOLS, REFRESH_FAILED, SOS_CONTROLS } from '../../copy/group';
 
 // The Group Lead's tools (redesign Group panel batch, piece 4): Join requests with its count,
 // Refresh locations (the old SYNC_TELEMETRY, which also opens the location table as before)
 // and Meeting point (choose a spot on the map, as the map's own button does). A refresh that
 // didn't work says why in an amber notice with Retry. Remove meeting point stays a quiet
-// button while one is set.
+// button while one is set. With `sos` (the Group's settings, for its Commander) it also has the
+// Group's emergency alert switch and the time one person must wait between two alerts.
 
 const TILE = 'relative flex-1 min-w-0 min-h-[5.5rem] px-2 py-3 rounded-2xl glass-panel text-accent font-ui text-label flex flex-col items-center justify-center gap-1.5 text-center transition-all duration-150 hover:bg-surface/80 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50';
 
 /**
  * @param {{ requests: number, onRequests: () => void, refresh: { status: string, message: string|null },
  *   onRefresh: () => void, choosing: boolean, onMeetingPoint: () => void,
- *   hasMeetingPoint: boolean, onRemoveMeetingPoint: () => void }} props
+ *   hasMeetingPoint: boolean, onRemoveMeetingPoint: () => void,
+ *   sos?: { enabled: boolean, cooldownMs: number, presetsMs: number[],
+ *     onEnabled: (on: boolean) => void, onCooldown: (ms: number) => void } }} props
  */
-export default function LeadTools({ requests, onRequests, refresh, onRefresh, choosing, onMeetingPoint, hasMeetingPoint, onRemoveMeetingPoint }) {
+export default function LeadTools({ requests, onRequests, refresh, onRefresh, choosing, onMeetingPoint, hasMeetingPoint, onRemoveMeetingPoint, sos }) {
   const refreshing = refresh.status === 'pending';
   return (
     <section data-testid="lead-tools" className="pt-2 flex flex-col gap-3">
@@ -50,6 +53,28 @@ export default function LeadTools({ requests, onRequests, refresh, onRefresh, ch
 
       {hasMeetingPoint && (
         <Button variant="plain" icon={X} onClick={onRemoveMeetingPoint} className="self-start">{LEAD_TOOLS.removeMeetingPoint}</Button>
+      )}
+
+      {sos && (
+        <div data-testid="sos-controls" className="rounded-2xl glass-panel overflow-hidden">
+          <Switch
+            label={SOS_CONTROLS.switchLabel}
+            description={sos.enabled ? SOS_CONTROLS.on : SOS_CONTROLS.off}
+            checked={sos.enabled}
+            onChange={sos.onEnabled}
+          />
+          {sos.enabled && (
+            <div className="px-4 pb-3">
+              <p className="mb-2 font-ui text-secondary text-text-secondary">{SOS_CONTROLS.cooldownLabel}</p>
+              <SegmentedControl
+                label={SOS_CONTROLS.cooldownLabel}
+                value={String(sos.cooldownMs)}
+                onChange={(value) => sos.onCooldown(Number(value))}
+                options={sos.presetsMs.map((ms) => ({ value: String(ms), label: SOS_CONTROLS.minutes(ms) }))}
+              />
+            </div>
+          )}
+        </div>
       )}
     </section>
   );

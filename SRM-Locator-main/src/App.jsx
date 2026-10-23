@@ -58,7 +58,7 @@ import PanelStops from './components/group/PanelStops';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { panelStops, snapPanel, SHEET_BOTTOM_PADDING_PX } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED } from './copy/group';
+import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED, SOS_CONTROLS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -128,7 +128,7 @@ import { LAYER } from './utils/layers';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { createSosOutbox } from './utils/sosOutbox';
-import { SOS_HELD, SOS_SENT, SOS_DROPPED } from './copy/emergency';
+import { SOS_HELD, SOS_SENT, SOS_DROPPED, SOS_REFUSED } from './copy/emergency';
 import { PrecognitionFilter } from './utils/precognition';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
@@ -438,6 +438,7 @@ const App = () => {
   // "Waiting for connection", and a notice says so until it goes, or can't.
   const [sosHeld, setSosHeld] = useState(false);
   const heldNoticeRef = useRef(null);
+  const sentNoticeRef = useRef(null); // the "alert sent" notice, taken back if the server refuses
   useEffect(() => {
     sosOutbox.reset(); // a fresh app: nothing held, not in a group yet
     const unsubscribe = sosOutbox.subscribe(({ held, event, reason, late, withLocation }) => {
@@ -453,12 +454,38 @@ const App = () => {
         const mode = telemetryModeRef.current;
         const stillLine = mode === 'FROZEN' ? SOS_SENT.stillPaused : mode === 'GHOST' ? SOS_SENT.stillHidden : null;
         const body = [late ? SOS_SENT.late : null, withLocation ? SOS_SENT.withLocation : SOS_SENT.noLocation, stillLine].filter(Boolean).join(' ');
-        if (withLocation) notify.success(SOS_SENT.title, { body, haptic: false });
-        else notify.warning(SOS_SENT.noLocationTitle, { body, haptic: false });
+        sentNoticeRef.current = withLocation
+          ? notify.success(SOS_SENT.title, { body, haptic: false })
+          : notify.warning(SOS_SENT.noLocationTitle, { body, haptic: false });
       }
       if (event === 'dropped') notify.warning(reason === 'gone' ? SOS_DROPPED.gone : SOS_DROPPED.left, { duration: 0, safety: true });
     });
     return unsubscribe;
+  }, []);
+
+  // The Group's switches as the server last said (backend/groupSettings.js, 'group-settings'),
+  // and its answer to each SOS this phone sent ('alert-result'). A refused SOS takes back the
+  // "sent" notice and says why: the cooldown (with the time left), SOS switched off, or a class
+  // zone. Neither was listened for before, so a refused alert still read as sent.
+  const [groupSettings, setGroupSettings] = useState(null);
+  useEffect(() => {
+    const onSettings = (settings) => setGroupSettings(settings ?? null);
+    const onResult = (result) => {
+      if (result?.type !== 'sos' || result.allowed) return;
+      if (sentNoticeRef.current !== null) dismissNotice(sentNoticeRef.current);
+      sentNoticeRef.current = null;
+      const body = result.reasonCode === 'COOLDOWN' ? SOS_REFUSED.cooldown(result.retryAfterSec ?? 1)
+        : result.reasonCode === 'GROUP_DISABLED' ? SOS_REFUSED.disabled
+          : result.reasonCode === 'QUIET_ZONE' ? SOS_REFUSED.quietZone
+            : SOS_REFUSED.other;
+      notify.warning(SOS_REFUSED.title, { body, safety: true });
+    };
+    socket.on('group-settings', onSettings);
+    socket.on('alert-result', onResult);
+    return () => {
+      socket.off('group-settings', onSettings);
+      socket.off('alert-result', onResult);
+    };
   }, []);
   // --- IN-APP UPDATER (full-APK self-update; see src/hooks/useAppUpdate.js) ---
   // Checks GitHub Releases once per cold start. Held here rather than in a leaf
@@ -1911,6 +1938,14 @@ const App = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backgroundState]);
 
+  // The Group Lead's SOS switch and cooldown. The server sends everyone the new settings; a
+  // stand-in (not the Group's own Commander) is refused, and told so.
+  const changeGroupSettings = (change) => {
+    socket.emit('set-group-settings', { roomCode: squadCode, ...change }, (answer) => {
+      if (answer && !answer.ok) notify.warning(SOS_CONTROLS.notCommander);
+    });
+  };
+
   const sendPing = (targetId) => {
     socket.emit('ping-user', {
       targetId: targetId,
@@ -2966,6 +3001,13 @@ const App = () => {
                 }}
                 hasMeetingPoint={Boolean(activeWaypoint)}
                 onRemoveMeetingPoint={() => socket.emit('clear-waypoint', squadCode)}
+                sos={groupSettings?.roomCode === squadCode && Array.isArray(groupSettings.sosCooldownPresetsMs) ? {
+                  enabled: groupSettings.sosEnabled !== false,
+                  cooldownMs: groupSettings.sosCooldownMs,
+                  presetsMs: groupSettings.sosCooldownPresetsMs,
+                  onEnabled: (on) => changeGroupSettings({ sosEnabled: on }),
+                  onCooldown: (ms) => changeGroupSettings({ sosCooldownMs: ms }),
+                } : undefined}
               />
             )}
             {/* Your location: Live, Paused or Hidden (components/group/SharingControl.jsx). */}
