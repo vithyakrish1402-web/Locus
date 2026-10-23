@@ -30,6 +30,7 @@ import { SETTINGS } from './copy/settings';
 import { SETTINGS_Z } from './components/settings/SettingsScreen';
 import SettingsHost from './components/settings/SettingsHost';
 import { setSettingsOpen, isSettingsOpen } from './utils/settingsOpen';
+import { sectionSwipe } from './utils/panelSwipe';
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
@@ -407,6 +408,7 @@ const App = () => {
   const panelY = useMotionValue(0);
   const panelDragStartRef = useRef(0);
   const listTouchRef = useRef(null);
+  const panelSwipeRef = useRef(null); // where a finger went down on the panel, for sectionSwipe
   const [panelGeometry, setPanelGeometry] = useState(null);
   const panelHeaderRef = useRef(null);
   const peekWrapRef = useRef(null);
@@ -2785,16 +2787,23 @@ const App = () => {
           // Starts under the header instead of behind it (it used to start at the very top, so
           // its handle and MATRIX/SQUAD indicator were hidden under the header).
           style={isMobile ? { top: BELOW_TOP_BAR, bottom: 'var(--tab-bar-height)', y: panelY } : undefined}
-          onTouchStart={(e) => { e.currentTarget._touchStartX = e.touches[0].clientX; }}
+          // A clearly sideways swipe changes section (utils/panelSwipe.js); a scroll of the list,
+          // however it drifts sideways, never does.
+          onTouchStart={(e) => {
+            const list = e.currentTarget.querySelector('[data-testid="group-panel-list"]');
+            panelSwipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, scrollTop: list?.scrollTop ?? 0 };
+          }}
           onTouchEnd={(e) => {
-            const startX = e.currentTarget._touchStartX;
-            const endX = e.changedTouches[0].clientX;
-            const diff = startX - endX;
-            if (diff > 60) {
+            const start = panelSwipeRef.current;
+            panelSwipeRef.current = null;
+            const list = e.currentTarget.querySelector('[data-testid="group-panel-list"]');
+            const scrolled = Boolean(start) && (list?.scrollTop ?? 0) !== start.scrollTop;
+            const direction = sectionSwipe(start, { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }, scrolled);
+            if (direction === 'left') {
               // Swiped LEFT → go to Squad
               setActiveTab('users'); setSelectedItem(null);
               if (isMobile) setMobileView('squad');
-            } else if (diff < -60) {
+            } else if (direction === 'right') {
               // Swiped RIGHT → go to Matrix
               setActiveTab('buildings'); setSelectedItem(null);
               if (isMobile) setMobileView('matrix');
@@ -2869,7 +2878,7 @@ const App = () => {
               setPanelHeight('full');
             }}
             onWheel={(e) => { if (isMobile && sheetOpen && panelHeight === 'half' && e.deltaY !== 0) setPanelHeight('full'); }}
-            className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto p-4 pt-1 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
+            className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto overscroll-contain p-4 pt-1 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
             style={isMobile ? { paddingBottom: SHEET_BOTTOM_PADDING_PX } : undefined}
           >
             <SegmentedControl
