@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, Flag, Loader2, RefreshCw, UserPlus, X } from 'lucide-react';
+import { AlertCircle, Ban, Flag, History, Loader2, RefreshCw, UserPlus, X } from 'lucide-react';
 import { Badge, Button, SegmentedControl, Switch } from '../ui';
 import { LEAD_TOOLS, REFRESH_FAILED, SOS_CONTROLS } from '../../copy/group';
 
@@ -9,6 +9,8 @@ import { LEAD_TOOLS, REFRESH_FAILED, SOS_CONTROLS } from '../../copy/group';
 // didn't work says why in an amber notice with Retry. Remove meeting point stays a quiet
 // button while one is set. With `sos` (the Group's settings, for its Commander) it also has the
 // Group's emergency alert switch and the time one person must wait between two alerts.
+// A moderator (`moderatorOnly`) gets Join requests only, of the tiles. Everyone here gets the
+// Activity log and Blocked people (`onActivityLog`, `onBlocked`).
 
 const TILE = 'relative flex-1 min-w-0 min-h-[5.5rem] px-2 py-3 rounded-2xl glass-panel text-accent font-ui text-label flex flex-col items-center justify-center gap-1.5 text-center transition-all duration-150 hover:bg-surface/80 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50';
 
@@ -17,9 +19,10 @@ const TILE = 'relative flex-1 min-w-0 min-h-[5.5rem] px-2 py-3 rounded-2xl glass
  *   onRefresh: () => void, choosing: boolean, onMeetingPoint: () => void,
  *   hasMeetingPoint: boolean, onRemoveMeetingPoint: () => void,
  *   sos?: { enabled: boolean, cooldownMs: number, presetsMs: number[],
- *     onEnabled: (on: boolean) => void, onCooldown: (ms: number) => void } }} props
+ *     onEnabled: (on: boolean) => void, onCooldown: (ms: number) => void },
+ *   moderatorOnly?: boolean, onActivityLog?: () => void, onBlocked?: () => void }} props
  */
-export default function LeadTools({ requests, onRequests, refresh, onRefresh, choosing, onMeetingPoint, hasMeetingPoint, onRemoveMeetingPoint, sos }) {
+export default function LeadTools({ requests, onRequests, refresh, onRefresh, choosing, onMeetingPoint, hasMeetingPoint, onRemoveMeetingPoint, sos, moderatorOnly = false, onActivityLog, onBlocked }) {
   const refreshing = refresh.status === 'pending';
   return (
     <section data-testid="lead-tools" className="pt-2 flex flex-col gap-3">
@@ -29,6 +32,7 @@ export default function LeadTools({ requests, onRequests, refresh, onRefresh, ch
           {LEAD_TOOLS.joinRequests}
           <Badge count={requests} label={LEAD_TOOLS.waiting(requests)} className="absolute top-2 right-2" />
         </button>
+        {!moderatorOnly && (<>
         <button type="button" className={TILE} onClick={onRefresh} disabled={refreshing} aria-busy={refreshing}>
           {refreshing
             ? <Loader2 size={22} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -39,9 +43,17 @@ export default function LeadTools({ requests, onRequests, refresh, onRefresh, ch
           {choosing ? <X size={22} aria-hidden="true" /> : <Flag size={22} aria-hidden="true" />}
           {choosing ? LEAD_TOOLS.cancelMeetingPoint : LEAD_TOOLS.meetingPoint}
         </button>
+        </>)}
       </div>
 
-      {refresh.status === 'error' && (
+      {(onActivityLog || onBlocked) && (
+        <div className="flex gap-2">
+          {onActivityLog && <Button variant="secondary" block icon={History} onClick={onActivityLog}>{LEAD_TOOLS.activityLog}</Button>}
+          {onBlocked && <Button variant="secondary" block icon={Ban} onClick={onBlocked}>{LEAD_TOOLS.blocked}</Button>}
+        </div>
+      )}
+
+      {!moderatorOnly && refresh.status === 'error' && (
         <div role="alert" data-testid="refresh-failed" className="flex items-center gap-3 rounded-card bg-warning-soft px-4 py-3 font-ui text-text">
           <AlertCircle size={22} className="shrink-0 text-warning" aria-hidden="true" />
           <p className="flex-1 min-w-0 text-secondary">
@@ -51,7 +63,7 @@ export default function LeadTools({ requests, onRequests, refresh, onRefresh, ch
         </div>
       )}
 
-      {hasMeetingPoint && (
+      {!moderatorOnly && hasMeetingPoint && (
         <Button variant="plain" icon={X} onClick={onRemoveMeetingPoint} className="self-start">{LEAD_TOOLS.removeMeetingPoint}</Button>
       )}
 

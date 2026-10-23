@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useRef } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.span>, which this config can't see
 import { motion, useReducedMotion } from 'framer-motion';
 import { INDICATOR_SPRING } from '../utils/motion';
+import { Badge } from './ui';
 
 // The phone's bottom bar (redesign Map batch): Map, Scan and Group. One highlight slides between the tabs on a spring (a shared
 // layoutId), so changing tab reads as one object moving rather than two states swapping.
@@ -20,7 +21,8 @@ const ICON_ENTER = {
 };
 
 function Tab({ tab, active, onSelect, reduceMotion }) {
-  const { id, label, Icon, flourish } = tab;
+  // `badge`: { count, label }, a number on the icon (people waiting to join, on Group).
+  const { id, label, Icon, flourish, badge } = tab;
   return (
     <button
       type="button"
@@ -48,6 +50,7 @@ function Tab({ tab, active, onSelect, reduceMotion }) {
         >
           <Icon className="w-6 h-6" aria-hidden="true" />
         </motion.span>
+        {badge && <Badge count={badge.count} label={badge.label} className="absolute -top-1 right-1" />}
       </span>
       <span className={`relative text-caption ${active ? 'font-semibold' : ''}`}>{label}</span>
     </button>

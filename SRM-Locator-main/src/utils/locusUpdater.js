@@ -23,6 +23,7 @@ export const LocusUpdater = registerPlugin('LocusUpdater', {
     download: unavailable,
     install: unavailable,
     shareFile: unavailable,
+    shareTextFile: unavailable,
     cancelDownload: () => Promise.resolve(),
     clearCache: () => Promise.resolve(),
     addListener: () => Promise.resolve({ remove: () => {} }),

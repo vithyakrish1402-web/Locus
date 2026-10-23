@@ -7,7 +7,7 @@ import { continuousAngle } from '../utils/direction';
 import { PANEL_SPRING } from '../utils/motion';
 import { SHOW_INDOOR_POSITION_TO_SQUAD } from '../utils/positionSource';
 import { floorLabel, hasIndoorFloor } from '../utils/indoorView';
-import { MEMBERS } from '../copy/group';
+import { MEMBERS, ROLES } from '../copy/group';
 import { MEMBER_DOTS, memberStatus, memberWhere } from '../utils/memberStatus';
 
 // One member in the group panel (redesign Group panel batch, piece 3), built around the
@@ -76,6 +76,11 @@ export default function SquadMemberCard({ member, me, heading, headingLive, onOp
     >
       <Avatar name={name} dashed={member.status === 'FROZEN' || !member.hasFix} />
       <div className="flex-1 min-w-0">
+        {ROLES[member.role] && (
+          <span data-testid="member-role" className="inline-block mb-0.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-accent-soft text-accent">
+            {ROLES[member.role]}
+          </span>
+        )}
         <h4 className="text-heading break-words">
           {name}
           {/* Low battery, as the old row's bar warned below 25 %: amber, never red. 0 is no

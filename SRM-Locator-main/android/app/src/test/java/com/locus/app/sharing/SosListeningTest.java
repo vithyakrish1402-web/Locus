@@ -318,7 +318,8 @@ public class SosListeningTest {
 
     @Test
     public void theAssumedConstantsAreWhatTheBriefSuggested() {
-        assertEquals("locus_sos_alert", SosNotifications.SOS_ALERT_CHANNEL_ID);
+        // v2 (2026-10): the channel that may ring through Do Not Disturb; channels are fixed once made.
+        assertEquals("locus_sos_alert_v2", SosNotifications.SOS_ALERT_CHANNEL_ID);
         assertEquals(5 * 60 * 1000, SosNotifications.SOS_ALERT_AUTO_TIMEOUT_MS);
         assertEquals(30_000, SosLedger.SOS_DEDUPE_WINDOW_MS);
         assertEquals(2_000, SosListener.SOS_LISTENER_RECONNECT_BACKOFF_BASE_MS);

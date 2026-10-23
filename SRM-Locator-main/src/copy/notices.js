@@ -37,6 +37,9 @@ export const NOTICES = {
   backToExit: 'Press back again to exit',
   removedByLead: 'You were removed from the group.',
   removedByVote: "The group's members voted to remove you.",
+  removedKicked: 'You were removed from the group. You can ask to join again.',
+  // A burst of join requests, said once (backend/joinNotify.js), to the Group Lead and moderators.
+  joinWaiting: (count) => (count === 1 ? '1 person is waiting to join' : `${count} people are waiting to join`),
   routePublished: (from, to) => `Route ${from} → ${to} published.`,
   placeAdded: (name) => `${name} added for everyone.`,
   placeRemoved: (name) => `${name} removed.`,

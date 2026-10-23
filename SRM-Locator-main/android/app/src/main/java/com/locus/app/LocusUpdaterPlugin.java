@@ -377,6 +377,52 @@ public class LocusUpdaterPlugin extends Plugin {
     }
 
     /**
+     * Open Android's share sheet with a small text file the app made (the Group's activity log
+     * as CSV, src/utils/activityLogExport.js): saved to Files, sent in a chat or by mail. The
+     * file is written to the app's own cache (exports/), never anywhere else, under a plain name.
+     * Resolving means the share sheet opened.
+     */
+    @PluginMethod
+    public void shareTextFile(PluginCall call) {
+        String text = call.getString("text");
+        String name = call.getString("name", "locus-export.txt");
+        String mimeType = call.getString("mimeType", "text/plain");
+        if (text == null) {
+            call.reject("Missing 'text'");
+            return;
+        }
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("No activity available");
+            return;
+        }
+        // Letters, digits, dot, dash and underscore only: never a path.
+        String safeName = name.replaceAll("[^A-Za-z0-9._-]", "");
+        if (safeName.isEmpty() || safeName.startsWith(".")) safeName = "locus-export.txt";
+        try {
+            File dir = new File(getContext().getCacheDir(), "exports");
+            if (!dir.isDirectory() && !dir.mkdirs()) throw new java.io.IOException("Cannot make " + dir);
+            File file = new File(dir, safeName);
+            try (OutputStream out = new FileOutputStream(file)) {
+                out.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", file);
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType(mimeType);
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            send.setClipData(ClipData.newRawUri(safeName, uri));
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, call.getString("title", "Share"));
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            activity.startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) {
+            Log.e(TAG, "Share text file failed", e);
+            call.reject(e.getMessage() == null ? "Share failed" : e.getMessage(), "SHARE_FAILED", e);
+        }
+    }
+
+    /**
      * The APK at call's "path" if it exists and lies inside our update cache; otherwise
      * rejects the call and returns null.
      */

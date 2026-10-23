@@ -70,15 +70,67 @@ export const MEMBER_OPTIONS = {
   showOnMap: 'Show on map',
   arScan: 'Find with AR Scan',
   removeAndBlock: 'Remove and block',
+  remove: 'Remove from group',
+  makeModerator: 'Make moderator',
+  removeModerator: 'Remove as moderator',
   cancel: 'Cancel',
 };
 
-// The Group Lead's confirmation. It never mentions unblocking: there is no Unblock (owner).
+// The roles a member can have (backend/groupRoles.js), as their card shows them.
+export const ROLES = {
+  admin: 'Group Lead',
+  moderator: 'Moderator',
+};
+
+// Removing and blocking, confirmed. A blocked person can be unblocked from Blocked people.
 export const REMOVE_AND_BLOCK = {
   title: (name) => `Remove and block ${name}?`,
-  body: (first) => `${first} is removed from your group straight away and can't ask to join again.`,
+  body: (first) => `${first} is removed from your group straight away and can't ask to join again until you or a moderator unblock them.`,
   confirm: 'Remove and block',
   cancel: 'Cancel',
+};
+
+// Removing without blocking, confirmed: they can ask to join again.
+export const REMOVE_MEMBER = {
+  title: (name) => `Remove ${name}?`,
+  body: (first) => `${first} is removed from your group straight away. They can ask to join again, and you or a moderator decide.`,
+  confirm: 'Remove',
+  cancel: 'Cancel',
+};
+
+// Something the server would not let this person do (their role changed meanwhile, or the
+// person they acted on is the Group Lead or a moderator).
+export const ROLE_REFUSED = "That didn't work. Only the Group Lead and moderators can do this, and not to each other.";
+
+// The activity log (backend/activityLog.js): for the Group Lead and moderators.
+export const ACTIVITY_LOG = {
+  title: 'Activity log',
+  help: 'When people hid their location and came back, left, lost their connection, or were removed. It is kept on the server and is lost if the server restarts.',
+  empty: 'Nothing has happened yet.',
+  export: 'Export log',
+  exportFailed: "Couldn't export the log.",
+  copied: 'The log is copied. Paste it into a note or a message to keep it.',
+  kinds: {
+    'went-hidden': 'Hid their location',
+    'back-from-hidden': 'Showed their location again',
+    'left-group': 'Left the group',
+    'connection-lost': 'Lost connection',
+    kicked: 'Was removed',
+    blocked: 'Was removed and blocked',
+    unblocked: 'Was unblocked',
+  },
+  by: (name) => `by ${name}`,
+  someone: 'Someone',
+};
+
+// Blocked people, for the Group Lead and moderators to unblock.
+export const BLOCKED = {
+  title: 'Blocked people',
+  help: "They can't ask to join this group until they are unblocked. The list is kept on the server and is lost if the server restarts.",
+  empty: 'No one is blocked.',
+  unblock: 'Unblock',
+  unblockFor: (name) => `Unblock ${name}`,
+  someone: 'Someone',
 };
 
 /** A member's first name, for "Ping Meera" ("Someone" when they have no name). */
@@ -93,6 +145,8 @@ export const LEAD_TOOLS = {
   meetingPoint: 'Meeting point',
   cancelMeetingPoint: 'Cancel',
   removeMeetingPoint: 'Remove meeting point',
+  activityLog: 'Activity log',
+  blocked: 'Blocked people',
 };
 
 // The Group Lead's emergency alert controls (item 5): SOS on or off for the group, and the
@@ -139,6 +193,8 @@ export const JOIN_REQUESTS = {
   approve: 'Approve',
   decline: 'Decline',
   approveFor: (name) => `Approve ${name}`,
+  // The Group Lead only (backend/groupRoles.js: admitAll).
+  admitAll: (count) => `Admit all ${count}`,
   declineFor: (name) => `Decline ${name}`,
   emptyTitle: 'No one is waiting',
   emptyBody: (code) => `When someone asks to join with the code ${spacedCode(code)}, they show here for you to approve.`,

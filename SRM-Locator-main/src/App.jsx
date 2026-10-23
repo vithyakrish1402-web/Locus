@@ -32,7 +32,7 @@ import SettingsHost from './components/settings/SettingsHost';
 import { setSettingsOpen, isSettingsOpen } from './utils/settingsOpen';
 import { sectionSwipe } from './utils/panelSwipe';
 import { isInAppDnd } from './utils/inAppDnd';
-import { playAlertSound, shareInAppDnd, dndAccessGranted, openDndAccessSettings } from './utils/alertSound';
+import { hasNativeAlertSound, playAlertSound, shareInAppDnd, dndAccessGranted, openDndAccessSettings } from './utils/alertSound';
 
 // The one-time explanation of Do Not Disturb access is shown once per phone.
 const DND_EXPLAINED_KEY = 'locus.dndExplained';
@@ -64,12 +64,15 @@ import { ADD_PLACE_PROBLEMS } from './copy/addPlace';
 import { useCampusPlaces } from './hooks/useCampusPlaces';
 import { isGrounds, placeMatches } from './utils/campusPlaces';
 import JoinRequests from './components/group/JoinRequests';
+import ActivityLog from './components/group/ActivityLog';
+import BlockedList from './components/group/BlockedList';
+import { exportActivityLog } from './utils/activityLogExport';
 import PeekLines from './components/group/PeekLines';
 import PanelStops from './components/group/PanelStops';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { panelStops, snapPanel, SHEET_BOTTOM_PADDING_PX } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED, SOS_CONTROLS } from './copy/group';
+import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -879,6 +882,16 @@ const App = () => {
   const [accessStatus, setAccessStatus] = useState(null);
   const [squadRole, setSquadRole] = useState(null);
   const [pendingRequests, setPendingRequests] = useState([]);
+  // This person's role in the Group, as the server last said ('group-role', backend/groupRoles.js):
+  // { roomCode, role: 'admin' | 'moderator' | 'member', moderatorIds }. Whoever holds command
+  // (squadRole OWNER) is the admin; a Group made before roles makes everyone else a member.
+  const [groupRole, setGroupRole] = useState(null);
+  const myRole = squadRole === 'OWNER' ? 'admin'
+    : groupRole?.roomCode === squadCode && groupRole.role === 'moderator' ? 'moderator' : 'member';
+  // The main admin and moderators: join requests, removing and blocking, the activity log.
+  const canModerate = myRole === 'admin' || myRole === 'moderator';
+  const canModerateRef = useRef(false);
+  canModerateRef.current = canModerate;
   const liveLocationRef = useRef(null);
   // Shared with ARCompass.jsx (src/hooks/useDeviceHeading.js) so both the AR
   // targeting view and this device's own map marker read the compass the same way.
@@ -1132,6 +1145,7 @@ const App = () => {
     socket.on('exiled', ({ reason } = {}) => {
       // 1. Tell them why (a comms-feed notice; this used to be a blocking alert())
       if (reason === 'blocked') notify.error(NOTICES.removedByLead);
+      else if (reason === 'kicked') notify.error(NOTICES.removedKicked);
       else notify.error(NOTICES.removedByVote);
 
       // 2. Trigger your existing leave function to wipe local state and return to the join screen
@@ -1265,7 +1279,7 @@ const App = () => {
             uid: data.uid || null,
             name: data.name || 'Squad Node',
             photo: data.photo,
-            role: data.role || 'Campus Node',
+            role: data.role || null, // 'admin' | 'moderator' | 'member' (backend/groupRoles.js)
             hasFix,
             lat: hasFix ? data.lat : null,
             lng: hasFix ? data.lng : null,
@@ -1387,8 +1401,34 @@ const App = () => {
     ghostFadeTimersRef.current = {};
     setAccessStatus(null);
     setSquadRole(null);
+    setGroupRole(null);
     setPendingRequests([]);
     setJustApproved(false);
+  }, []);
+
+  // Roles, the waiting count and the activity log (backend/groupRoles.js, joinNotify.js,
+  // activityLog.js). Set up once: what they read of the moment comes through refs.
+  const [activityLog, setActivityLog] = useState([]);
+  const [showActivityLog, setShowActivityLog] = useState(false);
+  const [blockedPeople, setBlockedPeople] = useState([]);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const openRequestsRef = useRef(() => {});
+  useEffect(() => {
+    const onRole = (payload) => setGroupRole(payload ?? null);
+    const onEntry = ({ entry } = {}) => { if (entry) setActivityLog((log) => [...log, entry]); };
+    // A burst of requests, said once, to whoever may admit (one notice, not one per request).
+    const onWaiting = ({ count } = {}) => {
+      if (!canModerateRef.current || !(count > 0)) return;
+      notify.info(NOTICES.joinWaiting(count), { onClick: () => openRequestsRef.current() });
+    };
+    socket.on('group-role', onRole);
+    socket.on('activity-entry', onEntry);
+    socket.on('join-requests-waiting', onWaiting);
+    return () => {
+      socket.off('group-role', onRole);
+      socket.off('activity-entry', onEntry);
+      socket.off('join-requests-waiting', onWaiting);
+    };
   }, []);
 
   // --- GATEKEEPER PROTOCOL LISTENERS ---
@@ -1715,6 +1755,10 @@ const App = () => {
   // else the Web Audio blip below. Settings' Alert sounds switch silences it, as it always has.
   const playIncomingPing = () => {
     if (!alertSoundsRef.current) return;
+    if (!hasNativeAlertSound()) {
+      playSonarPing();
+      return;
+    }
     playAlertSound('ping').then((played) => { if (!played) playSonarPing(); });
   };
 
@@ -1770,14 +1814,56 @@ const App = () => {
   const [blockedUserIds, setBlockedUserIds] = useState([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
 
+  openRequestsRef.current = () => {
+    setShowRequestsModal(true);
+  };
+
   // Commander-only screens close when the role goes: a stand-in handing the squad back
   // to its returning Commander could otherwise be left looking at the join queue, or the
-  // telemetry matrix, with every action on them refused.
+  // telemetry matrix, with every action on them refused. A moderator keeps the join queue,
+  // the log and the blocked list; a member has none of them.
   useEffect(() => {
     if (squadRole === 'OWNER') return;
-    setShowRequestsModal(false);
     setShowTelemetryModal(false);
-  }, [squadRole]);
+    if (canModerate) return;
+    setShowRequestsModal(false);
+    setShowActivityLog(false);
+    setShowBlocked(false);
+  }, [squadRole, canModerate]);
+
+  // The Group Lead's and moderators' actions. Each is checked again by the server, which says
+  // when it refuses (the person acted on is the Group Lead or a moderator, or the role changed).
+  const refused = (answer) => { if (answer && !answer.ok) notify.warning(ROLE_REFUSED); };
+  const kickMember = (targetId) => socket.emit('kick-member', { roomCode: squadCode, targetId }, refused);
+  const setMemberModerator = (member, on) => socket.emit('set-moderator', { roomCode: squadCode, targetId: member.id, moderator: on }, refused);
+  const admitAll = () => socket.emit('admit-all', { roomCode: squadCode }, refused);
+  const openActivityLog = () => {
+    setShowActivityLog(true);
+    socket.emit('get-activity-log', { roomCode: squadCode }, (answer) => {
+      if (answer?.ok) setActivityLog(answer.log ?? []);
+      else refused(answer);
+    });
+  };
+  const openBlocked = () => {
+    setShowBlocked(true);
+    socket.emit('get-blocked', { roomCode: squadCode }, (answer) => {
+      if (answer?.ok) setBlockedPeople(answer.blocked ?? []);
+      else refused(answer);
+    });
+  };
+  const unblock = (uid) => socket.emit('unblock-user', { roomCode: squadCode, uid }, (answer) => {
+    if (answer?.ok) setBlockedPeople(answer.blocked ?? []);
+    else refused(answer);
+  });
+  const exportLog = async () => {
+    const outcome = await exportActivityLog(activityLog, squadCode);
+    if (outcome === 'copied') notify.info(ACTIVITY_LOG.copied);
+    else if (outcome === 'failed') notify.warning(ACTIVITY_LOG.exportFailed);
+  };
+  // Whether this person may remove `member` (the server has the same rule): the Group Lead
+  // anyone but themself, a moderator only members; nobody the Group Lead.
+  const mayRemove = (member) => Boolean(member) && member.role !== 'admin'
+    && (myRole === 'admin' || (myRole === 'moderator' && member.role !== 'moderator'));
 
   const [mapProps, setMapProps] = useState({ center: SRM_KTR_COORDS, zoom: 17 });
   const mapRef = useRef(null);
@@ -1975,7 +2061,7 @@ const App = () => {
       if (prev.includes(userId)) return prev.filter(id => id !== userId);
       // Tell the server too — this actually removes them from the squad and bans
       // their account from rejoining, not just hiding them on this screen.
-      if (squadRole === 'OWNER') {
+      if (canModerate) {
         socket.emit('block-user', { roomCode: squadCode, targetId: userId });
       }
       return [...prev, userId];
@@ -2621,6 +2707,8 @@ const App = () => {
       [Boolean(meetingPointToConfirm), () => setMeetingPointToConfirm(null)],
       [Boolean(rallyToClear), () => setRallyToClear(null)],
       [showRequestsModal, () => setShowRequestsModal(false)],
+      [showActivityLog, () => setShowActivityLog(false)],
+      [showBlocked, () => setShowBlocked(false)],
       [showTelemetryModal, () => setShowTelemetryModal(false)],
       [Boolean(deniedCode) && !hasJoinedSquad, () => { setSquadMode('join'); setSquadCode(deniedCode); setDeniedCode(null); }],
       [justApproved, () => setJustApproved(false)],
@@ -2628,7 +2716,7 @@ const App = () => {
       [isNavigatingMode, () => setIsNavigatingMode(false)],
       [Boolean(selectedItem), () => setSelectedItem(null)],
       [Boolean(routeStart || routeData), clearRoute],
-      [hasJoinedSquad && mobileView !== 'grid', () => setMobileView('grid')],
+      [hasJoinedSquad && sheetOpen, () => setMobileView('grid')],
     ];
     const step = steps.find(([applies]) => applies);
     if (!step) return false;
@@ -2913,7 +3001,7 @@ const App = () => {
                   <div ref={peekLinesRef} className="overflow-hidden min-h-0">
                     <PeekLines
                       requests={pendingRequests.length}
-                      onRequests={squadRole === 'OWNER' ? () => setShowRequestsModal(true) : null}
+                      onRequests={canModerate ? () => setShowRequestsModal(true) : null}
                       members={peekMembers}
                       onMember={(id) => {
                         const member = users.find((u) => u.id === id);
@@ -3027,8 +3115,11 @@ const App = () => {
             {/* The Group Lead's tools come first, before Your location (the design has them after):
               at half height on a 360 px phone they would otherwise sit under the Emergency button,
               which stays above the panel. */}
-            {activeTab === 'users' && squadRole === 'OWNER' && !keyboardUp && (
+            {activeTab === 'users' && canModerate && !keyboardUp && (
               <LeadTools
+                moderatorOnly={myRole !== 'admin'}
+                onActivityLog={openActivityLog}
+                onBlocked={openBlocked}
                 requests={pendingRequests.length}
                 onRequests={() => setShowRequestsModal(true)}
                 refresh={telemetrySync}
@@ -3632,15 +3723,30 @@ const App = () => {
 
       {/* The Group Lead's join requests (components/group/JoinRequests.jsx): Waiting only. */}
       <JoinRequests
-        open={showRequestsModal && squadRole === 'OWNER'}
+        open={showRequestsModal && canModerate}
         onClose={() => setShowRequestsModal(false)}
         requests={pendingRequests}
         code={squadCode}
+        onAdmitAll={myRole === 'admin' ? admitAll : undefined}
         onAnswer={(request, approved) => {
           // The squad the request was made to, not merely the one on screen.
           socket.emit('resolve-access', { targetId: request.targetId, roomCode: request.roomCode || squadCode, approved });
           setPendingRequests(prev => prev.filter(p => p.targetId !== request.targetId));
         }}
+      />
+
+      {/* The activity log and blocked people, for the Group Lead and moderators. */}
+      <ActivityLog
+        open={showActivityLog && canModerate}
+        onClose={() => setShowActivityLog(false)}
+        entries={activityLog}
+        onExport={exportLog}
+      />
+      <BlockedList
+        open={showBlocked && canModerate}
+        onClose={() => setShowBlocked(false)}
+        blocked={blockedPeople}
+        onUnblock={unblock}
       />
 
       {/* The Group Lead's locations table (components/group/LocationsTable.jsx). */}
@@ -3756,7 +3862,8 @@ const App = () => {
             // control on the map.
             { id: 'grid', label: TABS.map, Icon: Map, flourish: 'lift' },
             { id: 'scan', label: TABS.scan, Icon: Scan, flourish: 'turn' },
-            { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop' },
+            // The people waiting to join, on Group, for whoever may let them in.
+            { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop', badge: canModerate ? { count: pendingRequests.length, label: LEAD_TOOLS.waiting(pendingRequests.length) } : undefined },
           ]}
           sosTrigger={
             accessStatus === 'granted' ? (
@@ -3815,7 +3922,11 @@ const App = () => {
         me={liveLocation}
         heading={heading}
         headingLive={hasHeadingReading}
-        isLead={squadRole === 'OWNER'}
+        isLead={mayRemove(optionsMember)}
+        onRemove={kickMember}
+        moderator={myRole === 'admin' && optionsMember?.role && optionsMember.role !== 'admin' && optionsMember.status !== 'GHOST'
+          ? { is: optionsMember.role === 'moderator', onChange: setMemberModerator }
+          : undefined}
         onClose={() => setOptionsMemberId(null)}
         onNavigate={(m) => {
           handleWaypointSelect({ lat: m.lat, lng: m.lng, name: m.name, id: m.id });
