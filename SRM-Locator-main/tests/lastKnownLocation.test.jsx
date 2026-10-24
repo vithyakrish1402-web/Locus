@@ -211,7 +211,7 @@ describe("the dead man's switch", () => {
       }));
       expect(shown('data-users')).toEqual([]);
       fireEvent.click(tabBar().getByRole('button', { name: /Group/ }));
-      expect(rowText()).toMatch(/Lost connection 0:4[45] ago/); // the shared 1 s clock tick
+      expect(rowText()).toMatch(/Lost connection 0:4[56] ago/); // 45 s, or 46 with the 1 s clock tick
       // Past every timer the switch has (the 120 s "last seen" switch-over), and far beyond.
       for (const seconds of [1, 10, 30, 74, 1, 300, 3600]) {
         act(() => { vi.advanceTimersByTime(seconds * 1000); });

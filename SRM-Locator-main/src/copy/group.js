@@ -76,6 +76,27 @@ export const MEMBER_OPTIONS = {
   cancel: 'Cancel',
 };
 
+// Trusted friends (utils/friends.js): only they, the Group Lead and moderators hear your SOS.
+export const FRIENDS = {
+  badge: 'Trusted friend',
+  add: 'Add as trusted friend',
+  addHelp: 'Trusted friends hear your SOS. The Group Lead and moderators always do.',
+  sent: 'Cancel friend request',
+  accept: 'Accept',
+  acceptRequest: 'Accept friend request',
+  decline: 'Decline',
+  remove: 'Remove trusted friend',
+  acceptFor: (name) => `Accept ${name}`,
+  declineFor: (name) => `Decline ${name}`,
+  requestsButton: (count) => (count === 1 ? '1 friend request' : `${count} friend requests`),
+  requestsTitle: 'Friend requests',
+  requestsHelp: 'A trusted friend hears your SOS, and you hear theirs. Either of you can end it at any time.',
+  wants: 'Wants to be trusted friends',
+  noRequests: 'No requests are waiting.',
+  someone: 'Someone',
+  failed: "That didn't go through. Check your connection and try again.",
+};
+
 // The roles a member can have (backend/groupRoles.js), as their card shows them.
 export const ROLES = {
   admin: 'Group Lead',

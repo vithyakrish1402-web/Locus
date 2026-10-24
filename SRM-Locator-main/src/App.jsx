@@ -66,13 +66,15 @@ import { isGrounds, placeMatches } from './utils/campusPlaces';
 import JoinRequests from './components/group/JoinRequests';
 import ActivityLog from './components/group/ActivityLog';
 import BlockedList from './components/group/BlockedList';
+import FriendRequests from './components/group/FriendRequests';
+import { useFriends } from './hooks/useFriends';
 import { exportActivityLog } from './utils/activityLogExport';
 import PeekLines from './components/group/PeekLines';
 import PanelStops from './components/group/PanelStops';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { panelStops, snapPanel, SHEET_BOTTOM_PADDING_PX } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS } from './copy/group';
+import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -595,12 +597,15 @@ const App = () => {
   // ids change on every reconnect; this doesn't, so it's what "is this me?" is answered with.
   const myUidRef = useRef(null);
 
-  // Shared 1Hz clock so every ghost's elapsed-time tag / projection decay
-  // recomputes together instead of each running its own interval.
+  // Shared 1Hz clock so every ghost's elapsed-time tag recomputes together instead of each
+  // running its own interval. It only ticks while someone is lost, so it is set to now the moment
+  // the first one is: it used to keep the time of the last tick (or of app start) until a second
+  // later, and a fresh "lost connection" read short, or 0:00.
   const [ghostClockTick, setGhostClockTick] = useState(() => Date.now());
   const hasGhosts = Object.keys(offlineNodes).length > 0;
   useEffect(() => {
     if (!hasGhosts) return;
+    setGhostClockTick(Date.now());
     const id = setInterval(() => setGhostClockTick(Date.now()), 1000);
     return () => clearInterval(id);
   }, [hasGhosts]);
@@ -1854,6 +1859,18 @@ const App = () => {
     if (answer?.ok) setBlockedPeople(answer.blocked ?? []);
     else refused(answer);
   });
+  // Trusted friends (hooks/useFriends.js): who hears this person's SOS, and whose they hear.
+  const friends = useFriends(user, socket);
+  const [showFriendRequests, setShowFriendRequests] = useState(false);
+  const friendAction = (done) => done.then((ok) => { if (!ok) notify.warning(FRIENDS.failed); });
+  // A member someone can be trusted friends with: signed in (a uid), and not a lost connection.
+  const friendFor = (member) => (member?.uid && member.status !== 'GHOST' ? {
+    status: friends.statusOf(member.uid),
+    onAdd: (m) => friendAction(friends.ask(m)),
+    onAccept: (m) => friendAction(friends.accept(m.uid)),
+    onRemove: (m) => friendAction(friends.remove(m.uid)),
+  } : undefined);
+
   const exportLog = async () => {
     const outcome = await exportActivityLog(activityLog, squadCode);
     if (outcome === 'copied') notify.info(ACTIVITY_LOG.copied);
@@ -2708,6 +2725,7 @@ const App = () => {
       [showRequestsModal, () => setShowRequestsModal(false)],
       [showActivityLog, () => setShowActivityLog(false)],
       [showBlocked, () => setShowBlocked(false)],
+      [showFriendRequests, () => setShowFriendRequests(false)],
       [showTelemetryModal, () => setShowTelemetryModal(false)],
       [Boolean(deniedCode) && !hasJoinedSquad, () => { setSquadMode('join'); setSquadCode(deniedCode); setDeniedCode(null); }],
       [justApproved, () => setJustApproved(false)],
@@ -3155,6 +3173,12 @@ const App = () => {
             {activeTab === 'users' && (
               <MembersHeading count={users.filter(u => !blockedUserIds.includes(u.id)).length + ghostMembers.length + 1} updatedAt={rosterAt} />
             )}
+            {/* Friend requests waiting for this person, above the members (FriendRequests.jsx). */}
+            {activeTab === 'users' && friends.incoming.length > 0 && (
+              <Button variant="secondary" block onClick={() => setShowFriendRequests(true)}>
+                {FRIENDS.requestsButton(friends.incoming.length)}
+              </Button>
+            )}
             {activeTab === 'users' && groupSearch}
             {activeTab === 'users' && rosterAt === null && <MembersLoading />}
             {activeTab === 'users' && rosterAt !== null && !users.some(u => !blockedUserIds.includes(u.id)) && ghostMembers.length === 0 && (
@@ -3241,6 +3265,7 @@ const App = () => {
                         headingLive={hasHeadingReading}
                         onOptions={(m) => setOptionsMemberId(m.id)}
                         onFocus={focusMember}
+                        isFriend={Boolean(user.uid) && friends.friends.has(user.uid)}
                       />
                     </motion.div>
                   )),
@@ -3734,6 +3759,14 @@ const App = () => {
         }}
       />
 
+      <FriendRequests
+        open={showFriendRequests}
+        onClose={() => setShowFriendRequests(false)}
+        requests={friends.incoming}
+        onAccept={(uid) => friendAction(friends.accept(uid))}
+        onDecline={(uid) => friendAction(friends.remove(uid))}
+      />
+
       {/* The activity log and blocked people, for the Group Lead and moderators. */}
       <ActivityLog
         open={showActivityLog && canModerate}
@@ -3923,6 +3956,7 @@ const App = () => {
         headingLive={hasHeadingReading}
         isLead={mayRemove(optionsMember)}
         onRemove={kickMember}
+        friend={friendFor(optionsMember)}
         moderator={myRole === 'admin' && optionsMember?.role && optionsMember.role !== 'admin' && optionsMember.status !== 'GHOST'
           ? { is: optionsMember.role === 'moderator', onChange: setMemberModerator }
           : undefined}

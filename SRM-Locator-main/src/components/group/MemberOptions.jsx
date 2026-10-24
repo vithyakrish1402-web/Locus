@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Ban, MapPin, Navigation, Radio, ScanLine, ShieldCheck, ShieldOff, UserMinus } from 'lucide-react';
+import { Ban, Heart, HeartOff, MapPin, Navigation, Radio, ScanLine, ShieldCheck, ShieldOff, UserMinus } from 'lucide-react';
 import { Avatar, Button, ListRow, Sheet } from '../ui';
 import { memberStatus, memberWhere } from '../../utils/memberStatus';
-import { MEMBERS, MEMBER_OPTIONS, REMOVE_AND_BLOCK, REMOVE_MEMBER, firstName } from '../../copy/group';
+import { FRIENDS, MEMBERS, MEMBER_OPTIONS, REMOVE_AND_BLOCK, REMOVE_MEMBER, firstName } from '../../copy/group';
 
 // A member's options: solid opaque bottom sheet without glassmorphism.
 // Provides their live info, Navigate to them, Ping, Show on map, Find with AR Scan, and, for
@@ -14,12 +14,14 @@ import { MEMBERS, MEMBER_OPTIONS, REMOVE_AND_BLOCK, REMOVE_MEMBER, firstName } f
  *   isLead: boolean, onClose: () => void, onNavigate?: (member: object) => void, onPing: (id: string) => void,
  *   onShowOnMap: (member: object) => void, onArScan: (member: object) => void,
  *   onRemoveAndBlock: (id: string) => void, onRemove?: (id: string) => void,
- *   moderator?: { is: boolean, onChange: (member: object, on: boolean) => void } }} props
+ *   moderator?: { is: boolean, onChange: (member: object, on: boolean) => void },
+ *   friend?: { status: 'none'|'sent'|'asked'|'friends', onAdd: Function, onAccept: Function, onRemove: Function } }} props
  *   member: whose options are open, or null when closed
  *   isLead: whether this person may remove `member` (the Group Lead, or a moderator for a member)
  *   moderator: only for the Group Lead, about someone who can be made a moderator
+ *   friend: trusted friends with this member (utils/friends.js), when they can be
  */
-export default function MemberOptions({ member, me, heading, headingLive, isLead, onClose, onNavigate, onPing, onShowOnMap, onArScan, onRemoveAndBlock, onRemove, moderator }) {
+export default function MemberOptions({ member, me, heading, headingLive, isLead, onClose, onNavigate, onPing, onShowOnMap, onArScan, onRemoveAndBlock, onRemove, moderator, friend }) {
   // { member, block }: the removal waiting on its confirmation.
   const [confirmingRemoval, setConfirming] = useState(null);
   const confirming = confirmingRemoval?.member ?? null;
@@ -114,6 +116,18 @@ export default function MemberOptions({ member, me, heading, headingLive, isLead
                   onClick={act(onArScan)}
                 />
               </>
+            )}
+            {friend && friend.status === 'none' && (
+              <ListRow leading={<Heart size={20} />} title={FRIENDS.add} description={FRIENDS.addHelp} onClick={act(friend.onAdd)} />
+            )}
+            {friend && friend.status === 'asked' && (
+              <ListRow leading={<Heart size={20} />} title={FRIENDS.acceptRequest} onClick={act(friend.onAccept)} />
+            )}
+            {friend && friend.status === 'sent' && (
+              <ListRow leading={<HeartOff size={20} />} title={FRIENDS.sent} onClick={act(friend.onRemove)} />
+            )}
+            {friend && friend.status === 'friends' && (
+              <ListRow leading={<HeartOff size={20} />} title={FRIENDS.remove} onClick={act(friend.onRemove)} />
             )}
             {moderator && (
               <ListRow

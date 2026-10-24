@@ -65,7 +65,10 @@ const stamp = (squad, sos) => {
 // The store has no prototype because senderKey is the client-sent uid: on a plain {},
 // a uid of '__proto__' replaced the prototype instead of adding an entry, so the SOS
 // went out live but was never replayed or acknowledgeable.
-export function recordSos(squad, { senderKey, senderId, senderName, lat, lng, timestamp, flag }, now = Date.now()) {
+//
+// `audience` is who may hear it (friends.js sosAudience: member keys), or null for everyone in the
+// Group. It decides the live relay, the catch-up (pendingSosFor) and the closed-app poll alike.
+export function recordSos(squad, { senderKey, senderId, senderName, lat, lng, timestamp, flag, audience = null }, now = Date.now()) {
   squad.sos = squad.sos || Object.create(null);
   const sos = {
     id: randomUUID(),
@@ -79,6 +82,7 @@ export function recordSos(squad, { senderKey, senderId, senderName, lat, lng, ti
     ackedBy: [],
     // Why the server flagged it (alertRules.js): 'QUIET_ZONE' or 'LOCATION_UNKNOWN'.
     flag: flag ?? null,
+    audience: audience ? [...audience] : null,
   };
   stamp(squad, sos);
   squad.sos[senderKey] = sos;
@@ -90,7 +94,7 @@ export function recordSos(squad, { senderKey, senderId, senderName, lat, lng, ti
 // acknowledged it is asked again. Its location and time become the newest. Returns the
 // updated SOS, or null when there is none fresh enough, in which case the caller records
 // a new one (and that is the alarm).
-export function coalesceSos(squad, { senderKey, senderId, lat, lng, timestamp, flag }, now, windowMs) {
+export function coalesceSos(squad, { senderKey, senderId, lat, lng, timestamp, flag, audience = null }, now, windowMs) {
   const sos = squad?.sos?.[senderKey];
   if (!sos || now - sos.createdAt >= windowMs) return null;
   sos.senderId = senderId;
@@ -100,6 +104,7 @@ export function coalesceSos(squad, { senderKey, senderId, lat, lng, timestamp, f
   }
   sos.timestamp = timestamp || now;
   if (flag) sos.flag = flag;
+  sos.audience = audience ? [...audience] : null;
   stamp(squad, sos);
   return sos;
 }
@@ -120,8 +125,11 @@ export function toSosPayload(sos, now = Date.now()) {
   };
 }
 
+/** Whether the person `memberKeyValue` may hear this SOS (its audience, or everyone). */
+export const mayHear = (sos, memberKeyValue) => !sos.audience || sos.audience.includes(memberKeyValue);
+
 // SOS entries `memberKey` still owes an acknowledgement for, oldest first: not their
-// own, not already acknowledged by them, not expired. Expired entries are dropped.
+// own, ones they may hear, not already acknowledged by them, not expired. Expired entries are dropped.
 export function pendingSosFor(squad, memberKeyValue, now = Date.now()) {
   if (!squad?.sos) return [];
   const pending = [];
@@ -131,6 +139,7 @@ export function pendingSosFor(squad, memberKeyValue, now = Date.now()) {
       continue;
     }
     if (sos.senderKey === memberKeyValue) continue;
+    if (!mayHear(sos, memberKeyValue)) continue;
     if (sos.ackedBy.includes(memberKeyValue)) continue;
     pending.push(sos);
   }

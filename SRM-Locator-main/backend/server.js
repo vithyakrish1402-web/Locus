@@ -3,7 +3,7 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { resolveSosRoom, recordSos, coalesceSos, toSosPayload, pendingSosFor, ackSos, memberKey, sharedSquad } from './sosRelay.js';
+import { resolveSosRoom, recordSos, coalesceSos, toSosPayload, pendingSosFor, ackSos, memberKey, sharedSquad, mayHear } from './sosRelay.js';
 import {
   rememberMember, forgetMember, rebindReturningMember, collectStaleSocketIds,
   refuseJoin, addPendingRequest, takePendingRequest, withdrawPendingRequests, pendingRequestsOf,
@@ -36,6 +36,7 @@ import {
 } from './groupRoles.js';
 import { ACTIVITY, logActivity, activityOf, noteSharingMode, forgetSharingMode } from './activityLog.js';
 import { createJoinNotifier } from './joinNotify.js';
+import { createFriendsStore, friendsLoaderFromEnv, friendsStartupLine, sosAudience } from './friends.js';
 
 const app = express();
 app.use(cors());
@@ -212,6 +213,21 @@ function joinRequestsWaiting(roomCode) {
   for (const id of socketsAllowed(squad, 'seeJoinQueue')) io.to(id).emit('join-requests-waiting', { roomCode, count });
 }
 const joinNotifier = createJoinNotifier({ deliver: joinRequestsWaiting });
+
+// --- TRUSTED FRIENDS (friends.js): who hears a person's SOS ---
+const friendsLoader = friendsLoaderFromEnv();
+console.log(friendsStartupLine(friendsLoader));
+const friendsStore = createFriendsStore({ load: friendsLoader });
+// The sender's trusted friends, the Group's main admin (command now, and its own Commander) and
+// moderators; null for everyone in the Group (see sosAudience).
+function audienceOf(squad, senderUid) {
+  return sosAudience({
+    senderUid,
+    friends: senderUid ? friendsStore.friendsOf(senderUid) : null,
+    adminUids: [uidOfSocket(squad, squad.ownerId), commanderOf(squad)],
+    moderatorUids: squad.moderatorUids ?? [],
+  });
+}
 
 // Where the server last saw `socketId`, as alertRules.js wants it. accuracyM is only there
 // once phones send an accuracy; until then it is unknown, which is never held against them.
@@ -623,6 +639,8 @@ socket.on('check-ping', (clientTimestamp) => {
     // squad" and let them straight back in, no race, no vote required.
     const requesterUid = user?.uid || null;
     socket.data.uid = requesterUid;
+    // Their trusted friends, ready for an SOS (friends.js): never fetched while one is raised.
+    if (requesterUid) friendsStore.prefetch(requesterUid);
     // Remember who this socket is independently of their telemetry. broadcastSquadUpdate
     // needs a name and photo for members who haven't got a GPS fix yet (indoors, location
     // permission denied, just joined) — they're on the roster, so they must be nameable
@@ -989,6 +1007,18 @@ socket.on('check-ping', (clientTimestamp) => {
     reply({ ok: true });
   });
 
+  // A friendship this person is part of changed (their phone wrote it to Firestore): fetch their
+  // trusted friends again, and the other person's, when they share a Group with this one.
+  socket.on('friends-changed', (payload) => {
+    const own = socket.data?.uid;
+    if (!own) return;
+    friendsStore.refresh(own);
+    const other = payload?.uid;
+    if (typeof other !== 'string' || other === own) return;
+    const shares = Object.values(activeSquads).some((squad) => squad.members.includes(socket.id) && Object.values(squad.memberUids ?? {}).includes(other));
+    if (shares) friendsStore.refresh(other);
+  });
+
   // The activity log (activityLog.js), for the main admin and moderators.
   socket.on('get-activity-log', (payload, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {};
@@ -1190,9 +1220,13 @@ socket.on('check-ping', (clientTimestamp) => {
       return;
     }
     console.log(`[🚨 SOS] ${senderName} triggered a distress beacon in ${roomCode}`);
+    // Only the sender's trusted friends, the main admin and moderators hear it (friends.js);
+    // everyone, as before, when that cannot be told.
+    const audience = audienceOf(squad, socket.data?.uid);
     const details = {
       senderKey, senderId: socket.id, senderName, lat, lng, timestamp,
       flag: verdict.mode === 'guarded' ? verdict.reasonCode : null,
+      audience,
     };
     // Pressing again while the last one is fresh updates it: no second alarm.
     const coalesced = coalesceSos(squad, details, now, SOS_COALESCE_SEC * 1000);
@@ -1202,7 +1236,9 @@ socket.on('check-ping', (clientTimestamp) => {
       squad.sosSentAt ??= Object.create(null);
       squad.sosSentAt[senderKey] = now;
     }
-    socket.to(roomCode).emit(coalesced ? 'sos-updated' : 'sos-received', toSosPayload(sos, now));
+    for (const id of squad.members) {
+      if (id !== socket.id && mayHear(sos, keyOf(squad, id))) io.to(id).emit(coalesced ? 'sos-updated' : 'sos-received', toSosPayload(sos, now));
+    }
     sosWatch.notify(roomCode); // and the phones listening from the background
     reportAlert(socket, squad, roomCode, 'sos', verdict, now, coalesced ? { coalesced: true } : {});
   });
