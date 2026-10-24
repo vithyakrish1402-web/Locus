@@ -463,12 +463,16 @@ public class LocationShareService extends Service implements LocationListener {
         // People waiting to join (for the Group's admitters): shown while the app is not on screen,
         // where its own badge and notice say it; taken down when nobody is waiting.
         @Override
+        public void deliverPing(PingNotice notice) {
+            if (!SharingState.isAppLive()) PingNotifications.show(LocationShareService.this, notice);
+        }
+
+        @Override
         public void deliverJoin(JoinNotice notice) {
             if (notice.count <= 0) {
                 JoinNotifications.cancel(LocationShareService.this);
                 return;
             }
-            if (SharingState.isAppLive()) return;
             Session session = SharingState.session();
             JoinNotifications.show(LocationShareService.this, notice.count, session == null ? null : session.groupName);
         }
@@ -476,7 +480,7 @@ public class LocationShareService extends Service implements LocationListener {
 
     /** Listening runs exactly while sharing runs and the person has not turned these alerts off. */
     private void updateSosListening() {
-        boolean want = started && SosPrefs.enabled(this);
+        boolean want = started; // Pings and join notices do not depend on the SOS sound switch.
         if (want && sosListener == null) {
             sosListener = new SosListener(sosHost, main::post, Math::random);
             sosListener.start();

@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-rotate';
 import { SRM_MASTER_DATABASE } from '../srmDatabase';
 import LiveLocationMarker, { NAVIGATING_SPEED_MPS } from '../LiveLocationMarker';
 import { ConfidenceHalo, FloorTag } from './IndoorMarkers';
@@ -56,6 +57,13 @@ const SATELLITE_TILES = {
   maxNativeZoom: 19,
 };
 
+// Leaflet keeps marker labels upright; only the directional arrow follows map bearing.
+function BearingTracker({ onBearing }) {
+  const map = useMap();
+  useMapEvents({ rotate: () => onBearing(map.getBearing?.() || 0) });
+  return null;
+}
+
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
 
 // MapContainer only applies `center`/`zoom` on the initial mount — it won't
@@ -97,9 +105,7 @@ const FocusDriver = ({ onMapInstance, onUserInteraction, active = true }) => {
     dragstart() {
       onUserInteraction?.();
     },
-    zoomstart() {
-      onUserInteraction?.();
-    },
+
   });
 
   return null;
@@ -185,12 +191,16 @@ const TacticalLeafletMap = ({
   // (smoothFactor 0) and unclipped, so they stay on the roads and under the markers while the
   // map is zoomed or panned (js-1.1.72).
   const routePositions = useMemo(() => walkingRoute?.path?.map((p) => [p.lat, p.lng]) || [], [walkingRoute?.path]);
+  const [bearing, setBearing] = useState(0);
 
   return (
     <MapContainer
       center={[center?.lat || SRM_KTR_COORDS.lat, center?.lng || SRM_KTR_COORDS.lng]}
       zoom={zoom || 17}
       zoomControl={false}
+      rotate={true}
+      rotateControl={false}
+      touchRotate={false}
       className="w-full h-full bg-[var(--color-map-land)]"
     >
       <TileLayer
@@ -200,8 +210,13 @@ const TacticalLeafletMap = ({
         className={tiles.className}
         maxNativeZoom={tiles.maxNativeZoom}
         maxZoom={21}
+        updateWhenIdle={false}
+        updateWhenZooming={true}
+        updateInterval={100}
+        keepBuffer={3}
       />
       <ViewController center={center} zoom={zoom} />
+      <BearingTracker onBearing={setBearing} />
       <FocusDriver onMapInstance={onMapInstance} onUserInteraction={onUserInteraction} active={driverActive} />
       <ClickHandler onMapClick={onMapClick} />
       <ZoomTracker onZoomChange={onZoomChange} />
@@ -219,7 +234,7 @@ const TacticalLeafletMap = ({
             <LiveLocationMarker
               zoom={currentZoom}
               isNavigating={liveIsNavigating}
-              heading={liveHeading}
+              heading={(liveHeading || 0) + bearing}
               roadName={currentRoadName}
             />
           </div>
@@ -241,7 +256,7 @@ const TacticalLeafletMap = ({
       {activeWaypoint && (
         <LeafletReactMarker lat={activeWaypoint.lat} lng={activeWaypoint.lng}>
           <WaypointMarker
-            name={activeWaypoint.name}
+            name={activeWaypoint.name} description={activeWaypoint.description}
             onClick={() => onFocus(activeWaypoint, null)}
             canClear={canClearWaypoint}
             onClear={onClearWaypoint}

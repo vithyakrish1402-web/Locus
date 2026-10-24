@@ -1,11 +1,11 @@
 import { io } from "socket.io-client";
 import { Capacitor } from '@capacitor/core';
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 // `motion` is used throughout via <motion.div>/<motion.nav> JSX member expressions.
 // This project's eslint config has no eslint-plugin-react (only react-hooks/react-refresh),
 // so core no-unused-vars can't see through JSXMemberExpression tag names — false positive.
 // eslint-disable-next-line no-unused-vars
-import { motion, AnimatePresence, useDragControls, useReducedMotion, useMotionValue, animate as animateMotion } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
 import {
   Users, Search, Settings, Navigation, ShieldCheck,
@@ -30,7 +30,6 @@ import { SETTINGS } from './copy/settings';
 import { SETTINGS_Z } from './components/settings/SettingsScreen';
 import SettingsHost from './components/settings/SettingsHost';
 import { setSettingsOpen, isSettingsOpen } from './utils/settingsOpen';
-import { sectionSwipe } from './utils/panelSwipe';
 import { isInAppDnd } from './utils/inAppDnd';
 import { hasNativeAlertSound, playAlertSound, shareInAppDnd, dndAccessGranted, openDndAccessSettings } from './utils/alertSound';
 
@@ -69,10 +68,7 @@ import BlockedList from './components/group/BlockedList';
 import FriendRequests from './components/group/FriendRequests';
 import { useFriends } from './hooks/useFriends';
 import { exportActivityLog } from './utils/activityLogExport';
-import PeekLines from './components/group/PeekLines';
-import PanelStops from './components/group/PanelStops';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
-import { panelStops, snapPanel, SHEET_BOTTOM_PADDING_PX } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
 import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
@@ -137,7 +133,7 @@ import FloorPicker from './components/FloorPicker';
 import WifiReadout from './components/WifiReadout';
 import { useIsMobile } from './hooks/useIsMobile';
 import { haptic } from './utils/haptics';
-import { SHEET_SPRING, PANEL_SPRING, fade } from './utils/motion';
+import { PANEL_SPRING, fade } from './utils/motion';
 import { LAYER } from './utils/layers';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
@@ -232,6 +228,7 @@ const batteryReading = (cacheData) => {
 // component made every render look like an options change and triggered a full
 // map.setOptions() restyle each time.
 const BASE_MAP_OPTIONS = {
+  renderingType: 'VECTOR',
   zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
   mapTypeId: 'roadmap',
   tilt: 0,
@@ -239,6 +236,7 @@ const BASE_MAP_OPTIONS = {
 };
 
 const SATELLITE_MAP_OPTIONS = {
+  renderingType: 'VECTOR',
   zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
   mapTypeId: 'hybrid', // This triggers the real satellite imagery
   tilt: 0,
@@ -414,20 +412,7 @@ const App = () => {
   const isMobile = useIsMobile();
   const reduceMotion = useReducedMotion();
   const sheetOpen = mobileView === 'matrix' || mobileView === 'squad';
-  const sheetDragControls = useDragControls();
   const sheetRef = useRef(null);
-  // The panel's resting height on a phone (utils/panelHeights.js): it opens at half.
-  const [panelHeight, setPanelHeight] = useState('peek');
-  const panelY = useMotionValue(0);
-  const panelDragStartRef = useRef(0);
-  const listTouchRef = useRef(null);
-  const panelSwipeRef = useRef(null); // where a finger went down on the panel, for sectionSwipe
-  const [panelGeometry, setPanelGeometry] = useState(null);
-  const panelHeaderRef = useRef(null);
-  const peekWrapRef = useRef(null);
-  const peekLinesRef = useRef(null);
-  const insetProbeRef = useRef(null);
-  const sheetDraggedRef = useRef(false);
   // --- TACTICAL WAYPOINT STATE ---
   const [activeWaypoint, setActiveWaypoint] = useState(null);
   // Squad-wide SOS beacons this client hasn't acknowledged yet: a queue, one overlay
@@ -2266,7 +2251,7 @@ const App = () => {
   // when it was the only way to share a place); since the redesign (P5c) it starts only
   // your own route.
   const publishSquadWaypoint = (destination) => {
-    const waypoint = { lat: destination.lat, lng: destination.lng, name: destination.name };
+    const waypoint = { lat: destination.lat, lng: destination.lng, name: destination.name, description: destination.description || '' };
     setActiveWaypoint(waypoint);
     if (squadCode) {
       socket.emit('publish-waypoint', { roomCode: squadCode, waypoint });
@@ -2499,79 +2484,7 @@ const App = () => {
   // "Location is off" after the explainer's Not now, until location is turned on or the card
   // is dismissed.
   const showDeclinedCard = locationDeclined && !locationReady && !declinedCardDismissed;
-  // The group panel's heights (utils/panelHeights.js). Until it has been measured (and in
-  // tests, with no layout) closed is the screen's height and every open height is full.
-  const atPeek = isMobile && sheetOpen && panelHeight === 'peek';
-  // On a phone, a focused search box means the keyboard is up (see searchFocused).
   const keyboardUp = isMobile && searchFocused;
-  const panelStopsNow = panelGeometry ?? { full: 0, half: 0, peek: 0, closed: typeof window === 'undefined' ? 1000 : window.innerHeight };
-  const panelTarget = !isMobile ? 0 : sheetOpen ? panelStopsNow[panelHeight] : panelStopsNow.closed;
-  // The peek line's counts: who is live, paused, waiting for a location, or lost.
-  const peekCounts = (() => {
-    const listed = users.filter(u => !blockedUserIds.includes(u.id));
-    return {
-      live: listed.filter(u => u.status !== 'FROZEN' && u.hasFix).length,
-      paused: listed.filter(u => u.status === 'FROZEN' && u.hasFix).length,
-      waiting: listed.filter(u => !u.hasFix).length,
-      lost: ghostMembers.length,
-    };
-  })();
-  // Everyone, for the peek row: you first, then the members by distance, then those who lost signal.
-  const peekMembers = [
-    { id: 'self', name: user?.displayName || 'You', photo: user?.photoURL || null, self: true, state: telemetryMode === 'ACTIVE' ? 'live' : telemetryMode === 'FROZEN' ? 'paused' : 'hidden' },
-    ...sortByDistance(users.filter(u => !blockedUserIds.includes(u.id)), liveLocation).map(u => ({
-      id: u.id,
-      name: u.name || '?',
-      photo: u.photo || null,
-      state: !u.hasFix ? 'waiting' : u.status === 'FROZEN' ? 'paused' : 'live',
-    })),
-    ...ghostMembers.map(g => ({ id: g.id, name: g.name || '?', photo: g.photo || null, state: 'lost' })),
-  ];
-  // Measures the heights: the panel at full height, and how much shows at peek, which is its
-  // header with the peek lines plus room under them for the Emergency button (5 rem tall,
-  // standing 5 rem above the tab bar's 4 rem, plus the gesture bar's inset), so the buttons
-  // that float above the panel never cover any of it.
-  useLayoutEffect(() => {
-    if (!isMobile || !hasJoinedSquad) return undefined;
-    const measure = () => {
-      const panel = sheetRef.current;
-      const header = panelHeaderRef.current;
-      // The header steps aside while the search box has focus: keep the heights it gave.
-      if (!panel || !header || !panel.offsetHeight || !header.offsetHeight) return;
-      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-      const inset = insetProbeRef.current?.offsetHeight ?? 0;
-      // The tab bar as tall as it really is: the group panel stands on it.
-      const bar = document.querySelector('nav[aria-label="Main"]');
-      const tabBar = bar?.offsetHeight || 5 * rem + inset;
-      const room = 10 * rem + inset - tabBar + 0.5 * rem;
-      const headerAtPeek = header.offsetHeight - (peekWrapRef.current?.offsetHeight ?? 0) + (peekLinesRef.current?.scrollHeight ?? 0);
-      const next = panelStops({ viewport: window.innerHeight, panelHeight: panel.offsetHeight, peekHeight: headerAtPeek + room, tabBar });
-      setPanelGeometry((prev) => (prev && ['full', 'half', 'peek', 'closed'].every((k) => prev[k] === next[k]) ? prev : next));
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(panelHeaderRef.current);
-    const bar = document.querySelector('nav[aria-label="Main"]');
-    if (bar) observer?.observe(bar);
-    observer?.observe(sheetRef.current);
-    return () => {
-      window.removeEventListener('resize', measure);
-      observer?.disconnect();
-    };
-  }, [isMobile, hasJoinedSquad]);
-  // Moves the panel to its resting height on the sheet spring (placed at once the first time,
-  // and with reduced motion).
-  const panelPlacedRef = useRef(false);
-  useEffect(() => {
-    if (!panelPlacedRef.current || reduceMotion) {
-      panelY.set(panelTarget);
-      panelPlacedRef.current = true;
-      return undefined;
-    }
-    const controls = animateMotion(panelY, panelTarget, SHEET_SPRING);
-    return () => controls.stop();
-  }, [panelTarget, panelY, reduceMotion]);
   // Whose options sheet is open: an id, so it follows their live updates and closes if they go.
   const optionsMember = optionsMemberId
     ? users.find((u) => u.id === optionsMemberId) ??
@@ -2619,7 +2532,7 @@ const App = () => {
     setPlaceQuery(text);
     if (!text.trim()) return;
     setActiveTab('buildings'); setSelectedItem(null);
-    if (isMobile) { setMobileView('matrix'); setPanelHeight('full'); }
+    if (isMobile) { setMobileView('matrix'); }
   };
   // "You're in" says live only once there is a fix to share (Map batch fixes).
   // Paused says no spot is shared when the pause took none (Map batch fixes, owner's wording).
@@ -2960,110 +2873,25 @@ const App = () => {
           mobileView is 'matrix' or 'squad' and can be dragged down by its handle strip. */}
       {!isNavigatingMode && (
         <motion.div
-          // Its y is panelY, moved to the resting height by the effect on panelTarget, and by
-          // the finger while dragged (the handle strip and header start the drag).
-          data-height={isMobile ? (sheetOpen ? panelHeight : 'closed') : undefined}
-          drag={isMobile && sheetOpen ? 'y' : false}
-          dragListener={false}
-          dragControls={sheetDragControls}
-          dragConstraints={{ top: 0, bottom: panelStopsNow.closed }}
-          // Follows the finger almost 1:1 between the heights, and rubber-bands above full.
-          dragElastic={{ top: 0.06, bottom: 0.2 }}
-          dragMomentum={false}
-          onDragStart={() => { sheetDraggedRef.current = true; panelDragStartRef.current = panelTarget; }}
-          onDragEnd={(_event, info) => {
-            // Decide from where the throw is GOING, not where the finger let go: project the
-            // release velocity forward (Apple's scroll-deceleration projection), and settle at
-            // the nearest height to that: peek, half, full, or closed. Where it was let go is
-            // where the drag started plus how far it went, kept on the panel.
-            const letGo = Math.min(panelStopsNow.closed, Math.max(0, panelDragStartRef.current + info.offset.y));
-            const next = snapPanel(letGo, info.velocity.y, panelStopsNow);
-            haptic('snap');
-            animateMotion(panelY, panelStopsNow[next], reduceMotion ? { duration: 0 } : SHEET_SPRING);
-            if (next === 'closed') setMobileView('grid');
-            else setPanelHeight(next);
-          }}
+          data-testid="section-page"
+          data-section={activeTab}
+          drag={false}
           ref={sheetRef}
           className={`${isMobile
-              ? `fixed inset-x-0 z-[900] flex flex-col glass-solid text-text rounded-t-[28px] ${sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
+              ? `fixed inset-x-0 z-[900] flex flex-col bg-surface text-text ${sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
               }`
               : 'hidden md:flex w-84 glass-floating text-text rounded-3xl fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
             }`}
           // Starts under the header instead of behind it (it used to start at the very top, so
           // its handle and MATRIX/SQUAD indicator were hidden under the header).
-          style={isMobile ? { top: BELOW_TOP_BAR, bottom: 'var(--tab-bar-height)', y: panelY } : undefined}
-          // A clearly sideways swipe changes section (utils/panelSwipe.js); a scroll of the list,
-          // however it drifts sideways, never does.
-          onTouchStart={(e) => {
-            const list = e.currentTarget.querySelector('[data-testid="group-panel-list"]');
-            panelSwipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, scrollTop: list?.scrollTop ?? 0 };
-          }}
-          onTouchEnd={(e) => {
-            const start = panelSwipeRef.current;
-            panelSwipeRef.current = null;
-            const list = e.currentTarget.querySelector('[data-testid="group-panel-list"]');
-            const scrolled = Boolean(start) && (list?.scrollTop ?? 0) !== start.scrollTop;
-            const direction = sectionSwipe(start, { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }, scrolled);
-            if (direction === 'left') {
-              // Swiped LEFT → go to Squad
-              setActiveTab('users'); setSelectedItem(null);
-              if (isMobile) setMobileView('squad');
-            } else if (direction === 'right') {
-              // Swiped RIGHT → go to Matrix
-              setActiveTab('buildings'); setSelectedItem(null);
-              if (isMobile) setMobileView('matrix');
-            }
-          }}
+          style={isMobile ? { top: BELOW_TOP_BAR, bottom: 'var(--tab-bar-height)', y: 0 } : undefined}
+
         >
-          {/* The header (components/group/GroupHeader.jsx): "Your group", your role, the code and
-            Copy. On a phone it is the panel's drag handle too: pressing anywhere on it starts the
-            drag, and a plain tap still closes the panel, as the handle did. */}
-          <div
-            className={`${keyboardUp ? 'hidden ' : ''}shrink-0 select-none pt-3 md:pt-4 touch-none md:touch-auto cursor-grab active:cursor-grabbing md:cursor-auto`}
-            data-testid="group-panel-header"
-            data-no-ping
-            onPointerDown={(e) => { if (!isMobile) return; sheetDraggedRef.current = false; sheetDragControls.start(e); }}
-            // A drag that snapped back still ends in a click; only a real tap closes.
-            // At peek a tap opens it to half; at half or full it closes, as the handle did.
-            onClick={() => {
-              if (!isMobile || sheetDraggedRef.current) return;
-              if (panelHeight === 'peek') setPanelHeight('half');
-              else setMobileView('grid');
-            }}
-            ref={panelHeaderRef}
-          >
-            {/* The three-point slider: peek shows the members, half the options, full everything. */}
-            {isMobile && sheetOpen ? (
-              <PanelStops height={panelHeight} onChange={setPanelHeight} />
-            ) : (
-              <div className="md:hidden w-10 h-1 rounded-full bg-[var(--glass-border)] mx-auto mb-3" aria-hidden="true" />
-            )}
-            <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode}>
-              {/* The peek height's lines: laid out always on a phone (so peek's height is known
-                at every height), shown only at peek. */}
-              {isMobile && (
-                <div ref={peekWrapRef} className="grid" style={{ gridTemplateRows: atPeek ? '1fr' : '0fr' }} inert={!atPeek} aria-hidden={!atPeek}>
-                  <div ref={peekLinesRef} className="overflow-hidden min-h-0">
-                    <PeekLines
-                      requests={pendingRequests.length}
-                      onRequests={canModerate ? () => setShowRequestsModal(true) : null}
-                      members={peekMembers}
-                      onMember={(id) => {
-                        const member = users.find((u) => u.id === id);
-                        if (member?.hasFix) focusMember(member);
-                        else setOptionsMemberId(id);
-                      }}
-                      counts={peekCounts}
-                    />
-                  </div>
-                </div>
-              )}
-            </GroupHeader>
-            {/* Measures the gesture bar's inset, for the room left under the buttons at peek. */}
-            <div ref={insetProbeRef} aria-hidden="true" className="absolute w-0 invisible pointer-events-none" style={{ height: 'env(safe-area-inset-bottom)' }} />
-          </div>
-
-
+          <header className="shrink-0 px-4 py-4 flex items-center justify-between">
+            <h1 className="text-xl font-semibold">{activeTab === 'buildings' ? 'Buildings' : 'Your group'}</h1>
+            {isMobile && <button type="button" onClick={() => setMobileView('grid')} className="p-3" aria-label="Back to map"><X size={20} /></button>}
+          </header>
+          {activeTab === 'users' && <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode} />}
           {/* List Content */}
           {/* Room at the bottom on a phone under the last row: SHEET_BOTTOM_PADDING_PX, one tab bar's
             measured height and 2 rem (utils/panelHeights.js). The panel ends at the top of the tab
@@ -3073,24 +2901,10 @@ const App = () => {
             full: there is little of the list to read through at half, so the panel makes room. */}
           <div
             data-testid="group-panel-list"
-            onTouchStart={(e) => { listTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
-            onTouchMove={(e) => {
-              const from = listTouchRef.current;
-              if (!from || !isMobile || !sheetOpen || panelHeight !== 'half') return;
-              const dx = e.touches[0].clientX - from.x;
-              const dy = e.touches[0].clientY - from.y;
-              // A mostly vertical move; a finger dragging down only scrolls the list once it is
-              // below its top.
-              if (Math.abs(dy) < 8 || Math.abs(dy) < Math.abs(dx)) return;
-              if (dy > 0 && e.currentTarget.scrollTop <= 0) return;
-              listTouchRef.current = null;
-              setPanelHeight('full');
-            }}
-            onWheel={(e) => { if (isMobile && sheetOpen && panelHeight === 'half' && e.deltaY !== 0) setPanelHeight('full'); }}
-            className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto overscroll-contain p-4 pt-1 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
-            style={isMobile ? { paddingBottom: SHEET_BOTTOM_PADDING_PX } : undefined}
+            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pt-1 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
+            style={isMobile ? { paddingBottom: 24 } : undefined}
           >
-            <SegmentedControl
+            {!isMobile && <SegmentedControl
               label={GROUP_TABS.label}
               value={activeTab === 'buildings' ? 'buildings' : 'users'}
               onChange={(tab) => {
@@ -3101,7 +2915,7 @@ const App = () => {
                 { value: 'users', label: GROUP_TABS.members },
                 { value: 'buildings', label: GROUP_TABS.buildings },
               ]}
-            />
+            />}
             {/* Buildings: no search box here; it is the search icon beside LOCUS in the top bar.
               (Members: it sits above the members list, under the controls, so a Group Lead's
               tools come higher at half height.) */}
@@ -3303,7 +3117,7 @@ const App = () => {
             {activeTab === 'users' && <LeaveGroupButton onClick={() => setShowLeaveConfirm(true)} />}
             {/* The panel rests lower than full by this much: room to scroll the last rows up into
               view at half. */}
-            {isMobile && sheetOpen && panelStopsNow[panelHeight] > 0 && <div aria-hidden="true" style={{ height: panelStopsNow[panelHeight] }} />}
+            
           </div>
         </motion.div>
       )}
@@ -3579,6 +3393,7 @@ const App = () => {
               >
                 {selfIndoor && <ConfidenceHalo confidence={selfIndoor.confidence} color="#10B981" />}
                 <LiveLocationMarker
+                  map={mapRef.current}
                   zoom={currentZoom}
                   isNavigating={isNavigating || isNavigatingMode}
                   heading={liveHeading}
@@ -3614,7 +3429,7 @@ const App = () => {
               <WaypointMarker
                 lat={activeWaypoint.lat}
                 lng={activeWaypoint.lng}
-                name={activeWaypoint.name}
+                name={activeWaypoint.name} description={activeWaypoint.description}
                 onClick={() => handleFocus(activeWaypoint, null)}
                 canClear={canClearWaypoint}
                 onClear={() => socket.emit('clear-waypoint', squadCode)}
@@ -3723,6 +3538,10 @@ const App = () => {
         } : null}
         isSatellite={isSatellite}
         onToggleSatellite={() => setIsSatellite(!isSatellite)}
+        onScan={() => {
+          const scanNode = users.find(u => u.hasFix);
+          setArTarget(scanNode ? arTargetForMember(scanNode) : { ...SRM_KTR_COORDS, name: 'SRM_HQ' });
+        }}
         onSettings={() => setSettingsOpen(true)}
         autoFollow={navigationController.autoFollow}
         onToggleAutoFollow={isNavigatingMode ? navigationController.toggleAutoFollow : null}
@@ -3755,8 +3574,8 @@ const App = () => {
       {/* "Set as meeting point" asks first: it moves the meeting point on everyone's map. */}
       <MeetingPointConfirm
         place={meetingPointToConfirm}
-        onConfirm={() => {
-          publishSquadWaypoint(meetingPointToConfirm);
+        onConfirm={(description) => {
+          publishSquadWaypoint({ ...meetingPointToConfirm, description });
           notify.success(NOTICES.rally.set(meetingPointToConfirm.name));
           setMeetingPointToConfirm(null);
         }}
@@ -3915,13 +3734,13 @@ const App = () => {
       {!isNavigatingMode && (
         <BottomTabBar
           keyboardUp={keyboardUp}
-          activeId={arTarget ? 'scan' : sheetOpen ? 'squad' : 'grid'}
+          activeId={sheetOpen ? mobileView : 'grid'}
           tabs={[
             // Map only navigates. It used to toggle satellite on every tap as well, so coming
             // back to the map from Group or Scan flipped the map style; satellite has its own
             // control on the map.
             { id: 'grid', label: TABS.map, Icon: Map, flourish: 'lift' },
-            { id: 'scan', label: TABS.scan, Icon: Scan, flourish: 'turn' },
+            { id: 'matrix', label: 'Buildings', Icon: Building2, flourish: 'lift' },
             // The people waiting to join, on Group, for whoever may let them in.
             { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop', badge: canModerate ? { count: pendingRequests.length, label: LEAD_TOOLS.waiting(pendingRequests.length) } : undefined },
           ]}
@@ -3940,28 +3759,19 @@ const App = () => {
             ) : null
           }
           onSelect={(id) => {
-            const current = arTarget ? 'scan' : sheetOpen ? 'squad' : 'grid';
+            const current = sheetOpen ? mobileView : 'grid';
             if (id !== current) haptic('select');
             if (id === 'grid') {
               setMobileView('grid');
-            } else if (id === 'scan') {
-              setMobileView('scan');
-              // First member with an actual fix — users can include members who are on the
-              // roster but haven't reported coordinates yet, and aiming the AR compass at a
-              // null coordinate points it nowhere. No one with a fix: scan toward campus.
-              const scanNode = users.find(u => u.hasFix);
-              setArTarget(scanNode
-                ? arTargetForMember(scanNode)
-                : { lat: SRM_KTR_COORDS.lat, lng: SRM_KTR_COORDS.lng, name: 'SRM_HQ' });
             } else {
-              setMobileView('squad'); setActiveTab('users'); setSelectedItem(null); setPanelHeight('peek');
+              setMobileView(id); setActiveTab(id === 'matrix' ? 'buildings' : 'users'); setSelectedItem(null);
             }
           }}
         />
       )}
 
       {/* The meeting point button (two steps: tap it, then tap the map) */}
-      {!isNavigatingMode && !keyboardUp && !(isMobile && sheetOpen && panelHeight !== 'peek') && !(selectedItem && activeTab === 'buildings') && (
+      {!isNavigatingMode && !keyboardUp && !(isMobile && sheetOpen) && !(selectedItem && activeTab === 'buildings') && (
         <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
       )}
 

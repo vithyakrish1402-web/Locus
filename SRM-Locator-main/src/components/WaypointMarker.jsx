@@ -10,7 +10,7 @@ import { useClearOfControls } from '../hooks/useClearOfControls';
 // Redesign (Map batch, piece 5): an ink pin with a flag (--color-map-meeting), a plate
 // "Meeting point · {place}", and its two small round buttons: Find with AR Scan, for every
 // member, and Remove, only for who may remove it (the Group Lead, or whoever set it).
-const WaypointMarker = ({ name, onClick, onClear, canClear, onTrack }) => {
+const WaypointMarker = ({ name, description, onClick, onClear, canClear, onTrack }) => {
   // The plate slides left, out from under the map controls, when the pin is near them.
   const plateRef = useRef(null);
   useClearOfControls(plateRef);
@@ -27,6 +27,7 @@ const WaypointMarker = ({ name, onClick, onClear, canClear, onTrack }) => {
       </div>
       <div ref={plateRef} data-testid="meeting-point-plate" className="absolute top-full mt-1 whitespace-nowrap rounded-full bg-[var(--color-map-plate)] px-2.5 py-0.5 text-caption font-semibold text-text shadow-[var(--shadow-1)] pointer-events-none transition-opacity duration-200">
         {MARKERS.meetingPointPlate(name)}
+        {description && <span className="block max-w-60 whitespace-normal break-words font-normal">{description}</span>}
       </div>
       {/* Find with AR Scan: every member (not just whoever set it) gets a bearing to it. */}
       {onTrack && (

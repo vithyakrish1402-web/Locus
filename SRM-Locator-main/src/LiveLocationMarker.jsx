@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 // Tunable knobs for the state machine below — kept here as named constants
 // (rather than inlined) so a threshold that feels wrong on real usage is a
@@ -79,7 +79,21 @@ const LiveLocationMarker = ({
   accuracy = null,
   color = 'var(--color-map-self)',
   roadName = null,
+  map = null,
 }) => {
+  const [cameraHeading, setCameraHeading] = useState(0);
+  useEffect(() => {
+    if (!map) { setCameraHeading(0); return undefined; }
+    const update = () => setCameraHeading(map.getHeading?.() || 0);
+    update();
+    const listener = map.addListener?.('heading_changed', update);
+    return () => listener?.remove?.();
+  }, [map]);
+  const lastHeading = useRef(0);
+  const target = (Number.isFinite(heading) ? heading : 0) - cameraHeading;
+  const turn = ((target - lastHeading.current + 540) % 360 + 360) % 360 - 180;
+  const displayHeading = lastHeading.current + turn;
+  useEffect(() => { lastHeading.current = displayHeading; }, [displayHeading]);
   const isNear = zoom >= NEAR_ZOOM_THRESHOLD;
 
   const dotSize = isNear ? DOT_SIZE.idleNear : DOT_SIZE.idleFar;
@@ -100,14 +114,13 @@ const LiveLocationMarker = ({
                 edge keeps both readable on any map. */}
             <g
               style={{
-                transform: `rotate(${heading}deg)`,
+                transform: `rotate(${displayHeading}deg)`,
                 transformOrigin: `${CENTER}px ${CENTER}px`,
                 transition: 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)',
               }}
             >
-              <path d={navChevron} fill="none" style={{ stroke: 'var(--color-map-casing)' }} strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" />
-              <path d={navChevron} fill="none" style={{ stroke: color }} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx={CENTER} cy={CENTER} r={NAV_DOT_R} style={{ fill: color, stroke: 'var(--color-map-casing)' }} strokeWidth={3} />
+              <path d="M28 7 L44 43 L28 35 L12 43 Z" fill="#1A73E8" stroke="white" strokeWidth="3" strokeLinejoin="round" />
+              <path d="M28 10 L28 34 L14 41 Z" fill="#5A9CFF" />
             </g>
           </>
         ) : (
@@ -116,7 +129,7 @@ const LiveLocationMarker = ({
             <circle cx={CENTER} cy={CENTER} r={isNear ? RING_DIAMETER / 2 : RING_DIAMETER / 2.6} style={{ fill: 'var(--color-accent-halo)' }} />
             <g
               style={{
-                transform: `rotate(${heading}deg)`,
+                transform: `rotate(${displayHeading}deg)`,
                 transformOrigin: `${CENTER}px ${CENTER}px`,
                 transition: 'transform 0.25s ease',
               }}

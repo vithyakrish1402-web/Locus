@@ -30,7 +30,7 @@ describe('navigation stability', () => {
       liveHeading: 10, speedMps: 1, mapInstance: map,
     }), { initialProps: { position: origin } });
     await waitFor(() => expect(result.current.activeRoute).toBe(route));
-    act(() => result.current.toggleAutoFollow());
+    expect(result.current.autoFollow).toBe(true);
     rerender({ position: turn });
     map.moveCamera.mockClear();
     act(() => frames.get(id)(performance.now() + 200));

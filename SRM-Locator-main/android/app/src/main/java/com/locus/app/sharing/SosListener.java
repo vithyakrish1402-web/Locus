@@ -41,6 +41,7 @@ final class SosListener {
 
         /** A new number of people waiting to join. Always called on the main thread. */
         default void deliverJoin(JoinNotice notice) {}
+        default void deliverPing(PingNotice notice) {}
     }
 
     private final Host host;
@@ -124,6 +125,8 @@ final class SosListener {
     private void loop(Object run, UrlConnectionPoster poster) {
         Backoff backoff = new Backoff(random, backoffBaseMs, backoffCapMs);
         long after = 0;
+        long pingAfter = 0;
+        String sessionToken = null;
         long joinAfter = 0; // the last join rev heard; a phone that has just started hears the current one
         while (alive(run)) {
             Session session = host.session();
@@ -131,13 +134,26 @@ final class SosListener {
                 pause(run, NO_SESSION_WAIT_MS);
                 continue;
             }
+            if (!session.deviceToken.equals(sessionToken)) {
+                sessionToken = session.deviceToken;
+                after = 0; joinAfter = 0; pingAfter = 0;
+            }
             long asked = System.currentTimeMillis();
-            HttpResult result = poster.getSos(session.baseUrl, session.deviceToken, after, waitSec, joinAfter);
+            HttpResult result = poster.getSos(session.baseUrl, session.deviceToken, after, waitSec, joinAfter, pingAfter);
             if (!alive(run)) return;
             SosPollHandler.Next next = SosPollHandler.forPoll(result, backoff);
             switch (next.action) {
                 case DELIVER:
                     after = next.rev;
+                    for (PingNotice ping : PingNotice.parse(result.body)) {
+                        if (ping.rev <= pingAfter) continue;
+                        pingAfter = ping.rev;
+                        final String token = session.deviceToken;
+                        main.execute(() -> {
+                            Session latest = host.session();
+                            if (alive(run) && latest != null && token.equals(latest.deviceToken)) host.deliverPing(ping);
+                        });
+                    }
                     JoinNotice join = JoinNotice.parse(result.body);
                     if (join != null && join.rev != joinAfter) {
                         joinAfter = join.rev;

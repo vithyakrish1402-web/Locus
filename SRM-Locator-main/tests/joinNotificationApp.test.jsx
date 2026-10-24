@@ -169,3 +169,22 @@ describe('tapping "people waiting to join"', () => {
     expect(screen.queryByTestId('join-requests')).toBeNull();
   });
 });
+
+describe('dedicated mobile sections', () => {
+  it('switches Buildings, Group and Map without a draggable panel; AR is above Settings', async () => {
+    await onTheMap();
+    expect(tabBar().queryByRole('button', { name: /Scan/ })).toBeNull();
+    fireEvent.click(tabBar().getByRole('button', { name: 'Buildings' }));
+    expect(currentTab()).toBe('Buildings');
+    expect(screen.getByTestId('section-page').dataset.section).toBe('buildings');
+    expect(screen.queryByTestId('group-panel-header')).toBeNull();
+    fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
+    expect(screen.getByTestId('section-page').dataset.section).toBe('users');
+    fireEvent.click(screen.getByRole('button', { name: 'Back to map' }));
+    expect(currentTab()).toBe('Map');
+    const controls = within(screen.getByTestId('map-controls')).getAllByRole('button');
+    const scan = controls.findIndex(b => b.getAttribute('aria-label') === 'AR Scan');
+    expect(scan).toBeGreaterThanOrEqual(0);
+    expect(controls[scan+1].getAttribute('aria-label')).toMatch(/Settings/i);
+  });
+});

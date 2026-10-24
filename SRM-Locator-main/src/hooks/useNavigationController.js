@@ -47,6 +47,13 @@ export function useNavigationController({
     requestIdRef.current += 1;
   }, []);
 
+  useEffect(() => {
+    if (!isNavigating) {
+      if (mapEngine === 'leaflet') mapInstance?.setBearing?.(0);
+      else mapInstance?.setHeading?.(0);
+    }
+  }, [isNavigating, mapEngine, mapInstance]);
+
   // Route calculation function
   const triggerRouteCalculation = useCallback(async (origin, dest) => {
     if (!origin || !dest) return;
@@ -97,6 +104,7 @@ export function useNavigationController({
       activeRouteRef.current = null;
       setActiveRoute(null);
       hasInitialCenteredRef.current = false;
+      setAutoFollow(Boolean(sessionKey));
     }
     if (!isNavigating || !destination) {
       setActiveRoute(null);
@@ -183,6 +191,7 @@ export function useNavigationController({
   const handleRecenter = useCallback(() => {
     if (!liveLocation || !mapInstance) return;
 
+    setAutoFollow(true);
     const targetCenter = { lat: liveLocation.lat, lng: liveLocation.lng };
     const targetHeading = liveHeading || 0;
 
@@ -199,6 +208,7 @@ export function useNavigationController({
         mapInstance.setZoom?.(19);
       }
     } else if (mapEngine === 'leaflet') {
+      mapInstance.setBearing?.(-targetHeading);
       if (typeof mapInstance.flyTo === 'function') {
         mapInstance.flyTo([targetCenter.lat, targetCenter.lng], 19, { duration: 0.8 });
       } else if (typeof mapInstance.panTo === 'function') {
@@ -241,10 +251,22 @@ export function useNavigationController({
       cameraFrameRef.current = requestAnimationFrame(frame);
       return () => cancelAnimationFrame(cameraFrameRef.current);
     }
+    let bearingFrame;
+    if (mapEngine === 'leaflet' && Number.isFinite(liveHeading) && mapInstance.setBearing) {
+      const from = mapInstance.getBearing?.() || 0;
+      const started = performance.now();
+      const rotate = now => {
+        const t = Math.min(1, (now - started) / 300);
+        mapInstance.setBearing(interpolateHeading(from, -liveHeading, t));
+        if (t < 1) bearingFrame = requestAnimationFrame(rotate);
+      };
+      bearingFrame = requestAnimationFrame(rotate);
+    }
     if (typeof mapInstance.panTo === 'function') {
       mapInstance.panTo(mapEngine === 'leaflet' ? [target.lat, target.lng] : target,
         { animate: true, duration: 0.4 });
     }
+    return () => { if (bearingFrame) cancelAnimationFrame(bearingFrame); };
   }, [isNavigating, autoFollow, liveLocation?.lat, liveLocation?.lng, liveHeading, speedMps, mapEngine, mapInstance]);
 
   // Handle user manual interaction to disable continuous auto-centering

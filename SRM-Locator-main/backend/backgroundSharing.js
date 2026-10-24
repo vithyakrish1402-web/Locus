@@ -1,3 +1,4 @@
+import { pendingBackgroundPings } from './pingRelay.js';
 // Sharing a position while LOCUS is closed: the three HTTPS endpoints the Android background
 // service talks to (Stage 3b), mounted at /api/background.
 //
@@ -319,6 +320,7 @@ export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept
     const waitSec = Math.min(whole(req.query.wait, 0), config.sosPollMaxWaitSec);
     // People waiting to join, for an admitter's phone that asks (joinAfter: the last join rev it
     // has). A phone that does not ask (v1.1.61) gets exactly the answer it always did.
+    const pingAfter = whole(req.query.pingAfter, -1);
     const joinAfter = whole(req.query.joinAfter, -1);
     const joinNews = () => {
       if (joinAfter < 0) return null;
@@ -335,11 +337,11 @@ export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept
       const sos = pendingSosSince(squad, uid, after, at).map((item) => toBackgroundSosPayload(item, at));
       const join = joinNews();
       res.set('Cache-Control', 'no-store');
-      return res.status(200).json({ sos, rev: squad.sosRev ?? 0, serverTime: at, ...(join ? { join } : {}) });
+      return res.status(200).json({ sos, rev: squad.sosRev ?? 0, serverTime: at, ...(join ? { join } : {}), ...(pingAfter >= 0 ? { pings: pendingBackgroundPings(squad, uid, pingAfter, at), pingRev: squad.pingRev || 0 } : {}) });
     };
 
     const squad = getSquad(room);
-    const nothingYet = !squad || (pendingSosSince(squad, uid, after, now()).length === 0 && !joinNews());
+    const nothingYet = !squad || (pendingSosSince(squad, uid, after, now()).length === 0 && !joinNews() && pendingBackgroundPings(squad, uid, pingAfter, now()).length === 0);
     if (!sosWatch || waitSec === 0 || !nothingYet) return answer();
 
     // Nothing yet: hold the question open. A phone that goes away (the connection closes) ends the
