@@ -127,7 +127,7 @@ import { pushBackHandler } from './utils/backHandlers';
 import { useBlurOnKeyboardHide } from './hooks/useBlurOnKeyboardHide';
 import { useWifiFusion } from './hooks/useWifiFusion';
 import { useBackgroundSharing } from './hooks/useBackgroundSharing';
-import { stopBackgroundSharing } from './utils/backgroundSharing';
+import { stopBackgroundSharing, LocusBackground } from './utils/backgroundSharing';
 import { rememberGroup, rememberedGroup, forgetGroup } from './utils/rememberedGroup';
 import { useIndoorView } from './hooks/useIndoorView';
 import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD } from './utils/positionSource';
@@ -1821,6 +1821,29 @@ const App = () => {
   openRequestsRef.current = () => {
     setShowRequestsModal(true);
   };
+
+  // A tapped "N people waiting to join" notification (raised while the app was closed, by the
+  // sharing service: android/.../JoinNotifications.java) opens the Group tab and, for whoever may
+  // let them in, Join requests.
+  const openGroupFromNotificationRef = useRef(() => {});
+  openGroupFromNotificationRef.current = () => {
+    setActiveTab('users');
+    setSelectedItem(null);
+    setMobileView('squad');
+    if (canModerate) setShowRequestsModal(true);
+  };
+  useEffect(() => {
+    let handle = null;
+    let gone = false;
+    try {
+      Promise.resolve(LocusBackground.addListener('groupOpened', () => openGroupFromNotificationRef.current()))
+        .then((h) => { if (gone) h?.remove?.(); else handle = h; })
+        .catch(() => {});
+    } catch {
+      // not available in this shell
+    }
+    return () => { gone = true; handle?.remove?.(); };
+  }, []);
 
   // Commander-only screens close when the role goes: a stand-in handing the squad back
   // to its returning Commander could otherwise be left looking at the join queue, or the

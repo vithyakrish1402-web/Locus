@@ -169,9 +169,12 @@ const MAX_ROOM_CODE_LENGTH = 64;
  * @param {(roomCode: string, uid: string, report: object, now: number) => { ok: boolean, reason?: string, leaseUntil?: number }} deps.accept
  * @param {(roomCode: string, uid: string) => void} deps.endSharing takes them off the map, quietly
  * @param {ReturnType<typeof import('./sosWatch.js').createSosWatch>} [deps.sosWatch] rung when an SOS is raised
+ *   (and when the Group's waiting joiners change, for its admitters)
+ * @param {(roomCode: string, uid: string) => { rev: number, count: number } | null} [deps.joinNoticeFor]
+ *   how many wait to join, for the Group's main admin and moderators only (server.js)
  * @param {() => number} [deps.now]
  */
-export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept, endSharing, sosWatch, now = Date.now }) {
+export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept, endSharing, sosWatch, joinNoticeFor = () => null, now = Date.now }) {
   const router = express.Router();
   const status = backgroundStatus(config);
   const tokens = status.active ? createDeviceTokens(config.secret, now) : null;
@@ -314,6 +317,14 @@ export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept
 
     const after = whole(req.query.after, 0);
     const waitSec = Math.min(whole(req.query.wait, 0), config.sosPollMaxWaitSec);
+    // People waiting to join, for an admitter's phone that asks (joinAfter: the last join rev it
+    // has). A phone that does not ask (v1.1.61) gets exactly the answer it always did.
+    const joinAfter = whole(req.query.joinAfter, -1);
+    const joinNews = () => {
+      if (joinAfter < 0) return null;
+      const join = joinNoticeFor(room, uid);
+      return join && join.rev > joinAfter ? join : null;
+    };
 
     const answer = () => {
       const squad = getSquad(room);
@@ -322,12 +333,13 @@ export function createBackgroundRouter({ config, verifyIdToken, getSquad, accept
       if (!memberOf(squad, uid)) return fail(res, 403, 'not-member');
       const at = now();
       const sos = pendingSosSince(squad, uid, after, at).map((item) => toBackgroundSosPayload(item, at));
+      const join = joinNews();
       res.set('Cache-Control', 'no-store');
-      return res.status(200).json({ sos, rev: squad.sosRev ?? 0, serverTime: at });
+      return res.status(200).json({ sos, rev: squad.sosRev ?? 0, serverTime: at, ...(join ? { join } : {}) });
     };
 
     const squad = getSquad(room);
-    const nothingYet = !squad || pendingSosSince(squad, uid, after, now()).length === 0;
+    const nothingYet = !squad || (pendingSosSince(squad, uid, after, now()).length === 0 && !joinNews());
     if (!sosWatch || waitSec === 0 || !nothingYet) return answer();
 
     // Nothing yet: hold the question open. A phone that goes away (the connection closes) ends the

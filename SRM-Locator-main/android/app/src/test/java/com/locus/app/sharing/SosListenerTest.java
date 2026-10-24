@@ -106,6 +106,7 @@ public class SosListenerTest {
 
     private Script server;
     private final List<SosAlert> heard = new CopyOnWriteArrayList<>();
+    private final List<JoinNotice> joins = new CopyOnWriteArrayList<>();
     private volatile Session session;
     private SosListener listener;
 
@@ -131,6 +132,11 @@ public class SosListenerTest {
             public void deliver(List<SosAlert> alerts) {
                 heard.addAll(alerts);
             }
+
+            @Override
+            public void deliverJoin(JoinNotice notice) {
+                joins.add(notice);
+            }
         }, Runnable::run, () -> 0.5, 30, 120, 7, 40);
     }
 
@@ -155,12 +161,34 @@ public class SosListenerTest {
         };
         listener.start();
         waitUntil(() -> server.asked.size() >= 3, 5_000);
-        assertEquals("GET /api/background/sos?after=0&wait=7 HTTP/1.1", server.asked.get(0));
-        assertEquals("GET /api/background/sos?after=3&wait=7 HTTP/1.1", server.asked.get(1));
-        assertEquals("GET /api/background/sos?after=3&wait=7 HTTP/1.1", server.asked.get(2));
+        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=0 HTTP/1.1", server.asked.get(0));
+        assertEquals("GET /api/background/sos?after=3&wait=7&joinAfter=0 HTTP/1.1", server.asked.get(1));
+        assertEquals("GET /api/background/sos?after=3&wait=7&joinAfter=0 HTTP/1.1", server.asked.get(2));
         assertEquals("Bearer v1.dev.tok", server.auth.get(0));
         assertEquals(1, heard.size());
         assertEquals("s1", heard.get(0).id);
+    }
+
+    // Item 13 (2026-10-24): the same question asks how many wait to join; each new number is handed
+    // over once, and the next question asks from its rev.
+    @Test(timeout = 10_000)
+    public void hearsHowManyWaitToJoinOncePerChangeAndAsksFromThere() throws Exception {
+        AtomicInteger n = new AtomicInteger();
+        server.reply = (line, auth) -> {
+            int i = n.getAndIncrement();
+            if (i == 0) return new Object[] {200, "{\"sos\":[],\"rev\":0,\"serverTime\":1,\"join\":{\"rev\":1,\"count\":3}}"};
+            if (i == 1) return new Object[] {200, "{\"sos\":[],\"rev\":0,\"serverTime\":1,\"join\":{\"rev\":1,\"count\":3}}"};
+            if (i == 2) return new Object[] {200, "{\"sos\":[],\"rev\":0,\"serverTime\":1,\"join\":{\"rev\":2,\"count\":0}}"};
+            return new Object[] {200, answer("", 0)};
+        };
+        listener.start();
+        waitUntil(() -> server.asked.size() >= 4, 5_000);
+        assertEquals(2, joins.size());
+        assertEquals(3, joins.get(0).count);
+        assertEquals(0, joins.get(1).count);
+        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=1 HTTP/1.1", server.asked.get(1));
+        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=2 HTTP/1.1", server.asked.get(3));
+        assertEquals(0, heard.size());
     }
 
     @Test(timeout = 10_000)
@@ -185,7 +213,7 @@ public class SosListenerTest {
         listener.start();
         waitUntil(() -> !heard.isEmpty(), 5_000);
         assertEquals(1, heard.size());
-        assertEquals("GET /api/background/sos?after=0&wait=7 HTTP/1.1", server.asked.get(2)); // still from the beginning: nothing was heard yet
+        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=0 HTTP/1.1", server.asked.get(2)); // still from the beginning: nothing was heard yet
     }
 
     @Test(timeout = 10_000)

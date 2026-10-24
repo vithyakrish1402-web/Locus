@@ -17,6 +17,10 @@ import java.util.List;
  * answer starts it over. The next question always asks from the last rev heard, and a phone that
  * has just started asks from the beginning, so an SOS raised while the phone was out of reach is
  * heard as soon as it is back.
+ *
+ * The same question also asks how many people wait to join the Group (JoinNotice): the server
+ * answers that only to the Group's main admin and moderators, and the listener hands each change
+ * to {@link Host#deliverJoin}.
  */
 final class SosListener {
     /** Reconnect timing in the background: 2 s doubling up to a 30 s ceiling. */
@@ -34,6 +38,9 @@ final class SosListener {
 
         /** What was heard. Always called on the main thread. */
         void deliver(List<SosAlert> alerts);
+
+        /** A new number of people waiting to join. Always called on the main thread. */
+        default void deliverJoin(JoinNotice notice) {}
     }
 
     private final Host host;
@@ -117,6 +124,7 @@ final class SosListener {
     private void loop(Object run, UrlConnectionPoster poster) {
         Backoff backoff = new Backoff(random, backoffBaseMs, backoffCapMs);
         long after = 0;
+        long joinAfter = 0; // the last join rev heard; a phone that has just started hears the current one
         while (alive(run)) {
             Session session = host.session();
             if (session == null) {
@@ -124,12 +132,19 @@ final class SosListener {
                 continue;
             }
             long asked = System.currentTimeMillis();
-            HttpResult result = poster.getSos(session.baseUrl, session.deviceToken, after, waitSec);
+            HttpResult result = poster.getSos(session.baseUrl, session.deviceToken, after, waitSec, joinAfter);
             if (!alive(run)) return;
             SosPollHandler.Next next = SosPollHandler.forPoll(result, backoff);
             switch (next.action) {
                 case DELIVER:
                     after = next.rev;
+                    JoinNotice join = JoinNotice.parse(result.body);
+                    if (join != null && join.rev != joinAfter) {
+                        joinAfter = join.rev;
+                        main.execute(() -> {
+                            if (alive(run)) host.deliverJoin(join);
+                        });
+                    }
                     if (!next.alerts.isEmpty()) {
                         final List<SosAlert> heard = next.alerts;
                         main.execute(() -> {

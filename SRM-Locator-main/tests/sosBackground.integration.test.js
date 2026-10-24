@@ -48,6 +48,8 @@ beforeAll(async () => {
     LOCUS_FORCE_CLASS_HOURS: '',
     // No SOS cooldown here: a second press from the same person is what some of these exercise.
     LOCUS_SOS_COOLDOWN_DEFAULT_MS: '0',
+    // A burst of join requests is gathered for this long before admitters are told (joinNotify.js).
+    LOCUS_JOIN_NOTIFY_BATCH_MS: '300',
   };
   for (const key of Object.keys(env)) saved[key] = process.env[key];
   Object.assign(process.env, env);
@@ -128,6 +130,78 @@ const mint = async (uid, room) => (await call('POST', '/token', { auth: idToken(
 const tokenFor = async (uid, room) => (await mint(uid, room)).json.token;
 const poll = (token, { after = 0, wait = 0 } = {}) => call('GET', `/sos?after=${after}&wait=${wait}`, { auth: token });
 const ack = (token, id) => call('POST', '/sos/ack', { auth: token, body: { id } });
+const pollJoin = (token, { joinAfter = 0, wait = 0 } = {}) => call('GET', `/sos?after=0&wait=${wait}&joinAfter=${joinAfter}`, { auth: token });
+const knock = async (room, uid) => {
+  const s = await connect();
+  expect((await join(s, room, uid)).outcome).toBe('pending');
+  return s;
+};
+
+// Item 13 (2026-10-24): people waiting to join reach the Group's admitters whose app is closed, on
+// the same route as the closed-app SOS: one answer per burst, with the total, and a last one when
+// nobody is waiting any more. Only for phones that ask (joinAfter); never for plain members.
+describe('people waiting to join, for an admitter whose app is closed', () => {
+  it('wakes the waiting phone once per burst, with how many are waiting', async () => {
+    const { room, alpha } = await group();
+    const token = await tokenFor('uA', room);
+    alpha.disconnect(); // the Group Lead's app is swiped away
+    await sleep(100);
+    const waiting = pollJoin(token, { wait: 3 });
+    await sleep(100);
+    await knock(room, 'u1');
+    await knock(room, 'u2');
+    await knock(room, 'u3');
+    const knocked = Date.now();
+    const answer = await waiting;
+    expect(Date.now() - knocked).toBeLessThan(1500); // woken when the 0.3 s burst closed, not at the 3 s timeout
+    expect(answer.status).toBe(200);
+    expect(answer.json.join).toEqual({ rev: 1, count: 3 });
+    expect(answer.json.sos).toEqual([]);
+    // Asked again from that rev: nothing new, so it waits (here, times out).
+    const again = await pollJoin(token, { joinAfter: 1, wait: 1 });
+    expect(again.json.join).toBeUndefined();
+  });
+
+  it('says when nobody is waiting any more, so the notification can go', async () => {
+    const { room, alpha, bravo } = await group();
+    const token = await tokenFor('uA', room);
+    alpha.disconnect();
+    await sleep(100);
+    await knock(room, 'u1');
+    await knock(room, 'u2');
+    await sleep(500); // the burst is gathered, then told
+    expect((await pollJoin(token)).json.join).toEqual({ rev: 1, count: 2 });
+    // Bravo stands in for the Group Lead and lets them all in.
+    expect((await ask(bravo, 'admit-all', { roomCode: room })).ok).toBe(true);
+    const cleared = await pollJoin(token, { joinAfter: 1 });
+    expect(cleared.json.join).toEqual({ rev: 2, count: 0 });
+  });
+
+  it('reaches moderators too, and never a plain member', async () => {
+    const { room, alpha, bravo, charlie } = await group();
+    expect(await ask(alpha, 'set-moderator', { roomCode: room, targetId: bravo.id, moderator: true })).toEqual({ ok: true });
+    const forMod = await tokenFor('uB', room);
+    const forMember = await tokenFor('uC', room);
+    bravo.disconnect();
+    charlie.disconnect();
+    await knock(room, 'u1');
+    await sleep(500);
+    expect((await pollJoin(forMod)).json.join).toEqual({ rev: 1, count: 1 });
+    expect((await pollJoin(forMember)).json.join).toBeUndefined();
+  });
+
+  it('is never offered to a phone that does not ask for it (the v1.1.61 app)', async () => {
+    const { room, alpha } = await group();
+    const token = await tokenFor('uA', room);
+    alpha.disconnect();
+    await knock(room, 'u1');
+    await sleep(500);
+    const started = Date.now();
+    const answer = await poll(token, { wait: 1 });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(900); // not woken by it either
+    expect(answer.json).not.toHaveProperty('join');
+  });
+});
 
 describe('an SOS reaching a closed app', () => {
   it('is delivered at once to a member whose app was swiped away, while they were waiting', async () => {

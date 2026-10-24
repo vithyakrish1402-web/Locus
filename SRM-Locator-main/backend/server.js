@@ -74,6 +74,7 @@ app.use('/api/background', createBackgroundRouter({
   getSquad: (roomCode) => activeSquads[roomCode],
   accept: (roomCode, uid, report, now) => acceptBackgroundPosition(roomCode, uid, report, now),
   endSharing: (roomCode, uid) => endSharing(roomCode, uid),
+  joinNoticeFor: (roomCode, uid) => joinNoticeFor(roomCode, uid),
 }));
 app.use(express.json());
 
@@ -202,15 +203,35 @@ const nameOf = (squad, socketId) =>
   io.sockets.sockets.get(socketId)?.data?.profile?.name ?? users[socketId]?.name ?? squad?.profiles?.[uidOfSocket(squad, socketId)]?.name ?? null;
 
 // --- JOIN REQUESTS WAITING (joinNotify.js) ---
-// One message per burst of requests to everyone who may admit, with how many are waiting then.
-// PUSH SEAM: `joinRequestsWaiting` below is where the phone-notification pipeline (being built
-// separately) is meant to hook in, for admitters whose app is closed. Until it does, only
-// connected admitters hear it, and the count waits for the others on squad.pending.
+// One message per burst of requests to everyone who may admit, with how many are waiting then:
+// connected admitters on their socket, and admitters whose app is closed through the same route
+// the closed-app SOS takes (backgroundSharing.js GET /sos: their sharing service is asking it, and
+// the bell below wakes it). squad.joinNotice = { rev, count } is what that route offers them; its
+// rev moves on each burst, and again when the queue empties, so the phone clears its notification.
 function joinRequestsWaiting(roomCode) {
   const squad = activeSquads[roomCode];
   const count = Object.keys(squad?.pending ?? {}).length;
   if (!squad || count === 0) return;
   for (const id of socketsAllowed(squad, 'seeJoinQueue')) io.to(id).emit('join-requests-waiting', { roomCode, count });
+  setJoinNotice(squad, roomCode, count);
+}
+function setJoinNotice(squad, roomCode, count) {
+  squad.joinNotice = { rev: (squad.joinNotice?.rev ?? 0) + 1, count };
+  sosWatch.notify(roomCode);
+}
+// The queue may just have emptied (an answer, Admit all, a joiner giving up): a phone showing
+// "N people waiting" is told there are none, once.
+function joinQueueChanged(squad, roomCode) {
+  if (!squad || Object.keys(squad.pending ?? {}).length > 0) return;
+  if ((squad.joinNotice?.count ?? 0) > 0) setJoinNotice(squad, roomCode, 0);
+}
+// What the closed-app route offers `uid` of the Group's waiting joiners: only to its main admin
+// (whoever holds command, and its own Commander) and its moderators; null to anyone else.
+function joinNoticeFor(roomCode, uid) {
+  const squad = activeSquads[roomCode];
+  if (!squad?.joinNotice || !uid) return null;
+  const admits = uid === squad.ownerUid || uid === commanderOf(squad) || Boolean(squad.moderatorUids?.includes(uid));
+  return admits ? { ...squad.joinNotice } : null;
 }
 const joinNotifier = createJoinNotifier({ deliver: joinRequestsWaiting });
 
@@ -852,6 +873,7 @@ socket.on('check-ping', (clientTimestamp) => {
       if (id !== socket.id) io.to(id).emit('access-request-withdrawn', { targetId, roomCode });
     }
     admitOrDeny(squad, roomCode, targetId, approved);
+    joinQueueChanged(squad, roomCode);
   });
 
   // Admit all: the main admin only (groupRoles.js). Every request still open is admitted whose
@@ -868,6 +890,7 @@ socket.on('check-ping', (clientTimestamp) => {
       for (const id of socketsAllowed(squad, 'seeJoinQueue')) io.to(id).emit('access-request-withdrawn', { targetId, roomCode });
       if (admitOrDeny(squad, roomCode, targetId, true)) admitted += 1;
     }
+    joinQueueChanged(squad, roomCode);
     reply({ ok: true, admitted });
   });
 
@@ -1469,6 +1492,7 @@ socket.on('check-ping', (clientTimestamp) => {
       const squad = activeSquads[roomCode];
       const ownerId = squad?.ownerId;
       if (ownerId) io.to(ownerId).emit('access-request-withdrawn', { targetId, roomCode });
+      joinQueueChanged(squad, roomCode);
       for (const id of socketsAllowed(squad, 'seeJoinQueue')) {
         if (id !== ownerId) io.to(id).emit('access-request-withdrawn', { targetId, roomCode });
       }

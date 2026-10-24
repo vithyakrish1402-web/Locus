@@ -92,6 +92,13 @@ public class LocusBackgroundPlugin extends Plugin {
 
     /** Hands a tapped SOS to the app once: the intent is spent afterwards, so a recreated activity does not repeat it. */
     private void deliverLaunch(Intent intent) {
+        // A tapped "N people waiting to join": the app opens its Group tab (once, as for an SOS).
+        if (JoinNotifications.isGroupIntent(intent)) {
+            intent.setAction(Intent.ACTION_MAIN);
+            JoinNotifications.cancel(getContext());
+            notifyListeners("groupOpened", new JSObject(), true);
+            return;
+        }
         if (!SosLaunch.isSosIntent(intent)) return;
         JSObject data = new JSObject();
         data.put("id", intent.getStringExtra(SosLaunch.EXTRA_ID));
