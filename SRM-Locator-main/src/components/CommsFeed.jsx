@@ -134,7 +134,7 @@ function Notice({ item, reduceMotion, coveredBy }) {
               {headline}
             </p>
             {item.timestamp && (
-              <span className="shrink-0 text-[11px] font-medium text-text-secondary/75 tracking-normal">
+              <span className="shrink-0 text-[11px] font-medium text-text-secondary tracking-normal">
                 {item.timestamp}
               </span>
             )}
@@ -145,7 +145,7 @@ function Notice({ item, reduceMotion, coveredBy }) {
             </p>
           )}
           {more && (
-            <p className="text-secondary text-text-secondary/80 leading-relaxed break-words mt-0.5">
+            <p className="text-secondary text-text-secondary leading-relaxed break-words mt-0.5">
               {more}
             </p>
           )}

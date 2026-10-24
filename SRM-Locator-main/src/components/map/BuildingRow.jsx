@@ -66,7 +66,7 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
               <span>{away}</span>
               {walk && (
                 <>
-                  <span className="text-text-secondary/50">•</span>
+                  <span className="text-text-secondary/50" aria-hidden="true">•</span>
                   <span>{walk}</span>
                 </>
               )}

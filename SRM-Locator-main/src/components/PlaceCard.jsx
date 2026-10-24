@@ -144,7 +144,7 @@ export default function PlaceCard({
         {/* Tags Section */}
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {category && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold tracking-wide bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-sm">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold tracking-wide bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-sm">
               <Building2 size={12} className="shrink-0" />
               <span>{category}</span>
             </span>

@@ -41,63 +41,65 @@ export default function MemberOptions({ member, me, heading, headingLive, isLead
 
   const act = (fn) => () => { fn(member); onClose(); };
 
-  // Pure solid opaque panel without glassmorphism / translucent blur
-  const solidPanelClass = 'bg-[#161b22] dark:bg-[#12161c] border-t border-[#30363d] shadow-[0_-8px_32px_rgba(0,0,0,0.7)]';
+  // A solid panel, no glass. Theme colours only: it used to be a fixed dark grey whose `dark:`
+  // shade followed the phone, under rows whose text follows the app's theme, so in Light every
+  // row title was dark ink on dark grey (about 1:1).
+  const solidPanelClass = 'bg-surface border-t border-border shadow-[var(--shadow-3)]';
 
   return (
     <>
       <Sheet open={Boolean(member)} onClose={onClose} label={MEMBERS.options(name)} panelClassName={solidPanelClass}>
         <div data-testid="member-options" className="px-4 flex flex-col">
-          <div className="flex items-center gap-3.5 pb-3.5 border-b border-[#30363d]">
+          <div className="flex items-center gap-3.5 pb-3.5 border-b border-border">
             <Avatar name={name} dashed={shown?.status === 'FROZEN' || !shown?.hasFix} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-heading truncate font-semibold text-white">{name}</p>
+                <p className="text-heading truncate font-semibold text-text">{name}</p>
                 {shown?.status === 'GHOST' ? (
-                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-warning-soft text-warning border border-warning/30">
                     Signal lost
                   </span>
                 ) : (
-                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-success-soft text-success border border-success/30">
                     {status?.text || 'Active'}
                   </span>
                 )}
               </div>
-              <p className="text-secondary text-gray-400 mt-0.5">{facts || 'Location tracking active'}</p>
+              <p className="text-secondary text-text-secondary mt-0.5">{facts || 'Location tracking active'}</p>
             </div>
           </div>
 
           {/* Quick telemetry stat chips */}
-          <div className="grid grid-cols-3 gap-2 py-3 border-b border-[#30363d]">
-            <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#0d1117] border border-[#30363d]/60 text-center">
-              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Distance</span>
-              <span className="text-xs font-bold text-white mt-0.5">{place?.distance || '—'}</span>
+          <div className="grid grid-cols-3 gap-2 py-3 border-b border-border">
+            <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-sunken border border-border text-center">
+              <span className="text-[10px] text-text-secondary font-medium uppercase tracking-wider">Distance</span>
+              <span className="text-xs font-bold text-text mt-0.5">{place?.distance || '—'}</span>
             </div>
-            <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#0d1117] border border-[#30363d]/60 text-center">
-              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Battery</span>
-              <span className={`text-xs font-bold mt-0.5 ${shown?.battery > 0 && shown.battery < 25 ? 'text-amber-400' : 'text-white'}`}>
+            <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-sunken border border-border text-center">
+              <span className="text-[10px] text-text-secondary font-medium uppercase tracking-wider">Battery</span>
+              <span className={`text-xs font-bold mt-0.5 ${shown?.battery > 0 && shown.battery < 25 ? 'text-warning' : 'text-text'}`}>
                 {Number.isFinite(shown?.battery) && shown.battery > 0 ? `${shown.battery}%` : '—'}
               </span>
             </div>
-            <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#0d1117] border border-[#30363d]/60 text-center">
-              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Speed</span>
-              <span className="text-xs font-bold text-white mt-0.5">
+            <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-sunken border border-border text-center">
+              <span className="text-[10px] text-text-secondary font-medium uppercase tracking-wider">Speed</span>
+              <span className="text-xs font-bold text-text mt-0.5">
                 {shown?.speed > 0 ? `${Math.round(shown.speed)} km/h` : '0 km/h'}
               </span>
             </div>
           </div>
 
-          <div className="flex flex-col divide-y divide-[#21262d]">
+          <div className="flex flex-col divide-y divide-border">
             {onNavigate && (shown?.lat != null && shown?.lng != null) && (
               <ListRow
-                leading={<Navigation size={20} className="text-blue-400" />}
+                leading={<Navigation size={20} className="text-blue-600 dark:text-blue-400" />}
                 title={MEMBER_OPTIONS.navigate(first)}
                 description={place ? `${place.distance} away · live directions` : 'Set destination & navigate'}
                 onClick={act(onNavigate)}
               />
             )}
             <ListRow
-              leading={<Radio size={20} className="text-emerald-400" />}
+              leading={<Radio size={20} className="text-emerald-600 dark:text-emerald-400" />}
               title={MEMBER_OPTIONS.ping(first)}
               description="Transmit sonar ping to their device"
               onClick={act((m) => onPing(m.id))}
@@ -105,13 +107,13 @@ export default function MemberOptions({ member, me, heading, headingLive, isLead
             {place && (
               <>
                 <ListRow
-                  leading={<MapPin size={20} className="text-amber-400" />}
+                  leading={<MapPin size={20} className="text-amber-600 dark:text-amber-400" />}
                   title={MEMBER_OPTIONS.showOnMap}
                   description="Center and zoom on member position"
                   onClick={act(onShowOnMap)}
                 />
                 <ListRow
-                  leading={<ScanLine size={20} className="text-purple-400" />}
+                  leading={<ScanLine size={20} className="text-purple-600 dark:text-purple-400" />}
                   title={MEMBER_OPTIONS.arScan}
                   description="Scan surroundings using AR camera"
                   onClick={act(onArScan)}
@@ -122,18 +124,19 @@ export default function MemberOptions({ member, me, heading, headingLive, isLead
               <ListRow leading={<Heart size={20} />} title={FRIENDS.add} description={FRIENDS.addHelp} onClick={act(friend.onAdd)} />
             )}
             {friend && friend.status === 'asked' && (
-              <ListRow leading={<Heart size={20} />} title={FRIENDS.acceptRequest} onClick={act(friend.onAccept)} />
+              <ListRow leading={<Heart size={20} />} title={FRIENDS.acceptRequest} description={FRIENDS.acceptHelp} onClick={act(friend.onAccept)} />
             )}
             {friend && friend.status === 'sent' && (
-              <ListRow leading={<HeartOff size={20} />} title={FRIENDS.sent} onClick={act(friend.onRemove)} />
+              <ListRow leading={<HeartOff size={20} />} title={FRIENDS.sent} description={FRIENDS.sentHelp} onClick={act(friend.onRemove)} />
             )}
             {friend && friend.status === 'friends' && (
-              <ListRow leading={<HeartOff size={20} />} title={FRIENDS.remove} onClick={act(friend.onRemove)} />
+              <ListRow leading={<HeartOff size={20} />} title={FRIENDS.remove} description={FRIENDS.removeHelp} onClick={act(friend.onRemove)} />
             )}
             {moderator && (
               <ListRow
                 leading={moderator.is ? <ShieldOff size={20} /> : <ShieldCheck size={20} />}
                 title={moderator.is ? MEMBER_OPTIONS.removeModerator : MEMBER_OPTIONS.makeModerator}
+                description={moderator.is ? MEMBER_OPTIONS.removeModeratorHelp : MEMBER_OPTIONS.makeModeratorHelp}
                 onClick={() => { moderator.onChange(member, !moderator.is); onClose(); }}
               />
             )}
@@ -142,6 +145,7 @@ export default function MemberOptions({ member, me, heading, headingLive, isLead
                 danger
                 leading={<UserMinus size={20} />}
                 title={MEMBER_OPTIONS.remove}
+                description={MEMBER_OPTIONS.removeHelp}
                 onClick={() => { setConfirming({ member, block: false }); onClose(); }}
               />
             )}
@@ -150,12 +154,12 @@ export default function MemberOptions({ member, me, heading, headingLive, isLead
                 danger
                 leading={<Ban size={20} />}
                 title={MEMBER_OPTIONS.removeAndBlock}
-                description="Revoke squad access and ban user"
+                description={MEMBER_OPTIONS.removeAndBlockHelp}
                 onClick={() => { setConfirming({ member, block: true }); onClose(); }}
               />
             )}
           </div>
-          <Button variant="secondary" block className="mt-3.5 mb-2 !bg-[#21262d] !border-[#30363d] text-gray-200" onClick={onClose}>
+          <Button variant="secondary" block className="mt-3.5 mb-2" onClick={onClose}>
             {MEMBER_OPTIONS.cancel}
           </Button>
         </div>

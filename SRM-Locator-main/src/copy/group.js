@@ -74,6 +74,11 @@ export const MEMBER_OPTIONS = {
   makeModerator: 'Make moderator',
   removeModerator: 'Remove as moderator',
   cancel: 'Cancel',
+  // The line under each action, so every row is the same height.
+  makeModeratorHelp: 'Can let people in and remove members',
+  removeModeratorHelp: 'Back to a member, without the moderator tools',
+  removeHelp: 'They can ask to join again',
+  removeAndBlockHelp: "They can't ask to join again until you unblock them",
 };
 
 // Trusted friends (utils/friends.js): only they, the Group Lead and moderators hear your SOS.
@@ -82,6 +87,9 @@ export const FRIENDS = {
   add: 'Add as trusted friend',
   addHelp: 'Trusted friends hear your SOS. The Group Lead and moderators always do.',
   sent: 'Cancel friend request',
+  sentHelp: 'Waiting for them to accept',
+  acceptHelp: 'They asked to be trusted friends',
+  removeHelp: 'You stop hearing each other\'s SOS',
   accept: 'Accept',
   acceptRequest: 'Accept friend request',
   decline: 'Decline',
