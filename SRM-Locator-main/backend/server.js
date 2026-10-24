@@ -428,11 +428,11 @@ function expireLeases(now) {
         uid: entry.uid,
         name: entry.name,
         photo: entry.photo,
+        // Where they last really were. No speed or heading: those only ever fed the app's
+        // dead reckoning, which moved a lost member's marker to places they were never seen.
         lastKnownLocation: {
           latitude: entry.lat,
           longitude: entry.lng,
-          speed: entry.speed,
-          heading: entry.heading,
           batteryLevel: entry.battery,
         },
         timeDelta: (now - entry.lastSeen) / 1000,
@@ -1383,15 +1383,16 @@ socket.on('check-ping', (clientTimestamp) => {
           uid: squad.memberUids?.[socket.id] || socket.data?.uid || null,
           name: userData.name,
           photo: userData.photo,
-          // 3. Package the trajectory data for the frontend's Pre-Cog engine
+          // 3. Where they last really were, and how long ago that was. No speed or heading:
+          // those only ever fed the app's dead reckoning ("Pre-Cog"), which moved a lost
+          // member's marker on after they went dark. A phone still on an app that has it now
+          // gets no trajectory, so its marker stays put too.
           lastKnownLocation: {
-            latitude: lastLocation.lat || lastLocation.latitude, 
+            latitude: lastLocation.lat || lastLocation.latitude,
             longitude: lastLocation.lng || lastLocation.longitude,
-            speed: lastLocation.speed || 0,
-            heading: lastLocation.heading || 0,          // <-- The trajectory
             batteryLevel: lastLocation.battery || 0
           },
-          timeDelta: timeDeltaSeconds,                   // <-- The exact lag time
+          timeDelta: timeDeltaSeconds,                   // seconds since their last real report
           disconnectTime: new Date().toISOString()
         });
       }

@@ -8,7 +8,6 @@ import {
   calculateBearing,
   normalizeRotationDelta,
   angularDifference,
-  projectGhostLocation
 } from '../src/utils/geoMath';
 
 describe('geoMath Utility', () => {
@@ -124,43 +123,6 @@ describe('geoMath Utility', () => {
     it('never exceeds [-180, 180]', () => {
       const delta1 = normalizeRotationDelta(180, 0);
       expect(Math.abs(delta1)).toBeLessThanOrEqual(180);
-    });
-  });
-
-  describe('projectGhostLocation (Dead Reckoning)', () => {
-    const startLat = 12.8237;
-    const startLng = 80.0444;
-
-    it('returns identical coordinates if speed is 0 or stationary (< 1 km/h)', () => {
-      const projected = projectGhostLocation(startLat, startLng, 0, 90, 10);
-      expect(projected.lat).toBe(startLat);
-      expect(projected.lng).toBe(startLng);
-    });
-
-    it('returns identical coordinates if timeDelta is 0', () => {
-      const projected = projectGhostLocation(startLat, startLng, 30, 90, 0);
-      expect(projected.lat).toBe(startLat);
-      expect(projected.lng).toBe(startLng);
-    });
-
-    it('projects northward movement when heading is 0°', () => {
-      // 36 km/h = 10 m/s. Over 10 seconds -> 100 meters north
-      const projected = projectGhostLocation(startLat, startLng, 36, 0, 10);
-      expect(projected.lat).toBeGreaterThan(startLat);
-      expect(projected.lng).toBeCloseTo(startLng, 5);
-
-      const distanceTravelled = calculateDistanceMeters(startLat, startLng, projected.lat, projected.lng);
-      expect(distanceTravelled).toBeCloseTo(100, -1);
-    });
-
-    it('projects eastward movement when heading is 90°', () => {
-      // 36 km/h = 10 m/s. Over 10 seconds -> 100 meters east
-      const projected = projectGhostLocation(startLat, startLng, 36, 90, 10);
-      expect(projected.lng).toBeGreaterThan(startLng);
-      expect(projected.lat).toBeCloseTo(startLat, 5);
-
-      const distanceTravelled = calculateDistanceMeters(startLat, startLng, projected.lat, projected.lng);
-      expect(distanceTravelled).toBeCloseTo(100, -1);
     });
   });
 });

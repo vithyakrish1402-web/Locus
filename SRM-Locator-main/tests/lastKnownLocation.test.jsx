@@ -181,6 +181,64 @@ describe('a member whose connection is lost', () => {
   });
 });
 
+// The dead man's switch, end to end in the app (2026-10-24): a member walks, reporting, then goes
+// silent; the server notices late and sends 'member-signal-lost'. However long the clock runs
+// past the switch's timers, the marker stays at the LAST REAL report, and says lost / last seen.
+describe("the dead man's switch", () => {
+  const walk = [
+    { lat: 12.82300, lng: 80.04400 },
+    { lat: 12.82320, lng: 80.04420 },
+    { lat: 12.82340, lng: 80.04440 }, // the last real report
+  ];
+  const report = (spot) => act(() => fakeSocket.receive('users-update', {
+    'sock-Bravo': { ...bravo()['sock-Bravo'], ...spot, speed: 18, heading: 45 },
+  }));
+  const rowText = () => screen.getByTestId('lost-member-row').textContent;
+
+  // `payload` as the server sends it now (no speed or heading), or as it used to.
+  for (const [label, trajectory] of [['as the server sends it now', {}], ['even with an old trajectory in it', { speed: 18, heading: 45 }]]) {
+    it(`freezes the marker at the last real report, ${label}`, async () => {
+      await onTheMap();
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'], shouldAdvanceTime: true });
+      for (const spot of walk) report(spot);
+      expect(shown('data-users')).toEqual([{ id: 'sock-Bravo', ...walk[2] }]);
+      // The phone went silent; the server noticed 45 s later.
+      act(() => fakeSocket.receive('member-signal-lost', {
+        targetId: 'sock-Bravo', uid: 'u-Bravo', name: 'Bravo',
+        lastKnownLocation: { latitude: walk[2].lat, longitude: walk[2].lng, batteryLevel: 50, ...trajectory },
+        timeDelta: 45,
+        disconnectTime: new Date().toISOString(),
+      }));
+      expect(shown('data-users')).toEqual([]);
+      fireEvent.click(tabBar().getByRole('button', { name: /Group/ }));
+      expect(rowText()).toMatch(/Lost connection 0:4[45] ago/); // the shared 1 s clock tick
+      // Past every timer the switch has (the 120 s "last seen" switch-over), and far beyond.
+      for (const seconds of [1, 10, 30, 74, 1, 300, 3600]) {
+        act(() => { vi.advanceTimersByTime(seconds * 1000); });
+        expect(shown('data-ghosts')[0].position).toEqual(walk[2]);
+      }
+      // "Last seen", counted from the last real report, not from when the server noticed.
+      expect(shown('data-ghosts')[0].phase).toBe('expired');
+      expect(rowText()).toMatch(/Last seen 67:4[01] ago/); // counted from the last real report, 45 s before it was noticed
+      vi.useRealTimers();
+    });
+  }
+
+  it('takes them off the lost list when they come back, at their new real position', async () => {
+    await onTheMap();
+    report(walk[2]);
+    act(() => fakeSocket.receive('member-signal-lost', {
+      targetId: 'sock-Bravo', uid: 'u-Bravo', name: 'Bravo',
+      lastKnownLocation: { latitude: walk[2].lat, longitude: walk[2].lng }, timeDelta: 0,
+    }));
+    const back = { lat: 12.8250, lng: 80.0460 };
+    act(() => fakeSocket.receive('users-update', { 'sock-Bravo2': { ...bravo()['sock-Bravo'], ...back } }));
+    expect(shown('data-users')).toEqual([{ id: 'sock-Bravo2', ...back }]);
+    await act(async () => { await new Promise((r) => setTimeout(r, 800)); });
+    expect(shown('data-ghosts')).toEqual([]);
+  });
+});
+
 // Hidden means hidden (found with item 14 of the 2026-10 batch): the app used to keep sending its
 // exact position every few seconds while Hidden, and the server relayed it to the whole group.
 describe('sharing as Hidden', () => {

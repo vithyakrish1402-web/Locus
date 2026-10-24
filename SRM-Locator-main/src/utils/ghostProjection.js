@@ -22,10 +22,11 @@ export const formatElapsed = (totalSeconds) => {
 
 // The view model for every member whose connection is lost. `nowMs` is a shared clock tick
 // (App.jsx re-renders this ~1/sec) so every ghost's elapsed time recomputes together instead of
-// each running its own interval. `position` is always their last known location.
+// each running its own interval. Elapsed time counts from their last real report (lastSeenAt).
+// `position` is always their last known location.
 export const deriveGhostMembers = (offlineNodes, nowMs) =>
   Object.values(offlineNodes).map((ghost) => {
-    const elapsedSeconds = (nowMs - ghost.receivedAt) / 1000;
+    const elapsedSeconds = (nowMs - ghost.lastSeenAt) / 1000;
     const lastKnownLocation = { lat: ghost.lat, lng: ghost.lng };
     return {
       ...ghost,

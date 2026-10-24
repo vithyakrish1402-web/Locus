@@ -1109,11 +1109,10 @@ const App = () => {
           photo,
           lat: lastKnownLocation.latitude,
           lng: lastKnownLocation.longitude,
-          heading: lastKnownLocation.heading || 0,
-          speedKmh: lastKnownLocation.speed || 0,
           battery: lastKnownLocation.batteryLevel,
-          timeDelta: timeDelta || 0,
-          receivedAt: Date.now(),
+          // When they were last really reported: the server notices a dead phone up to ~45 s
+          // late, and says how late (timeDelta), so "last seen" counts from the real report.
+          lastSeenAt: Date.now() - Math.max(0, Number(timeDelta) || 0) * 1000,
         }
       }));
 
