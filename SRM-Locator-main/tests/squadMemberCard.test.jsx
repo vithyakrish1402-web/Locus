@@ -102,3 +102,30 @@ describe('low battery', () => {
     }
   });
 });
+
+describe('the role and Trusted friend tags', () => {
+  it('sit together in one row above the name, the same size, each on one line', () => {
+    renderRow({ member: { ...bravo, role: 'moderator' }, isFriend: true });
+    const role = screen.getByTestId('member-role');
+    const friend = screen.getByTestId('member-friend');
+    expect(role.parentElement).toBe(friend.parentElement);
+    expect(role.parentElement.className).toMatch(/\bflex\b.*\bflex-wrap\b.*\bgap-1\b/);
+    // The tags come before the name, never inside it.
+    expect(role.parentElement.nextElementSibling.tagName).toBe('H4');
+    const size = (el) => el.className.match(/text-\[\d+px\]|leading-\d|px-\d|py-[\d.]+|rounded-full|whitespace-nowrap/g).join(' ');
+    expect(size(friend)).toBe(size(role));
+    expect(friend.className).toMatch(/whitespace-nowrap/);
+  });
+
+  it('use the theme\'s soft success colours for Trusted friend', () => {
+    renderRow({ isFriend: true });
+    expect(screen.getByTestId('member-friend').className).toMatch(/\bbg-success-soft\b.*\btext-success\b/);
+  });
+
+  it('leave no empty row for a plain member', () => {
+    renderRow();
+    expect(screen.queryByTestId('member-role')).toBeNull();
+    expect(screen.queryByTestId('member-friend')).toBeNull();
+    expect(screen.getByRole('heading', { name: /Bravo Rao/ }).previousElementSibling).toBeNull();
+  });
+});

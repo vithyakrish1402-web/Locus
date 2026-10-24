@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.div>, which this config can't see
 import { motion, useReducedMotion, useMotionValue, animate } from 'framer-motion';
-import { BatteryLow, MoreVertical, Navigation } from 'lucide-react';
+import { BatteryLow, Heart, MoreVertical, Navigation } from 'lucide-react';
 import { Avatar, IconButton } from './ui';
 import { continuousAngle } from '../utils/direction';
 import { PANEL_SPRING } from '../utils/motion';
@@ -28,6 +28,9 @@ function useNow(ms) {
   }, [ms]);
   return now;
 }
+
+// A tag above the name (role, trusted friend): one size, one line each.
+const TAG = 'inline-flex items-center max-w-full whitespace-nowrap text-[11px] leading-4 font-medium px-2 py-0.5 rounded-full';
 
 /** Below 25 %, the old row's red line (0 is no reading). */
 const lowBattery = (battery) => Number.isFinite(battery) && battery > 0 && battery < 25;
@@ -77,15 +80,22 @@ export default function SquadMemberCard({ member, me, heading, headingLive, onOp
     >
       <Avatar name={name} dashed={member.status === 'FROZEN' || !member.hasFix} />
       <div className="flex-1 min-w-0">
-        {ROLES[member.role] && (
-          <span data-testid="member-role" className="inline-block mb-0.5 mr-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-accent-soft text-accent">
-            {ROLES[member.role]}
-          </span>
-        )}
-        {isFriend && (
-          <span data-testid="member-friend" className="inline-block mb-0.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-success/15 text-success">
-            {FRIENDS.badge}
-          </span>
+        {/* Role and friend tags share one row, the same size and spacing, above the name. On a
+            narrow card the second wraps under the first, whole, never the name. */}
+        {(ROLES[member.role] || isFriend) && (
+          <div className="flex flex-wrap items-center gap-1 mb-1">
+            {ROLES[member.role] && (
+              <span data-testid="member-role" className={`${TAG} bg-accent-soft text-accent`}>
+                {ROLES[member.role]}
+              </span>
+            )}
+            {isFriend && (
+              <span data-testid="member-friend" className={`${TAG} gap-1 bg-success-soft text-success`}>
+                <Heart size={10} className="shrink-0 fill-current" aria-hidden="true" />
+                {FRIENDS.badge}
+              </span>
+            )}
+          </div>
         )}
         <h4 className="text-heading break-words">
           {name}

@@ -18,7 +18,7 @@ const ARIA_LABELS = {
 };
 
 const PHASE_LOOK = {
-  idle: 'bg-danger/15 text-danger border-danger/30 hover:bg-danger/25',
+  idle: 'bg-danger/15 text-danger-pressed border-danger/30 hover:bg-danger/25', // pressed: 4.5:1 on the tint in Light
   arming: 'bg-danger text-white border-danger shadow-[0_0_15px_rgba(239,68,68,0.5)]',
   armed: 'bg-white text-danger border-white shadow-[0_0_20px_rgba(255,255,255,0.7)]',
   confirming: 'bg-danger-pressed text-white border-danger shadow-[0_0_20px_rgba(220,38,38,0.8)]',

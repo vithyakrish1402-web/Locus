@@ -893,8 +893,11 @@ const App = () => {
   const [groupRole, setGroupRole] = useState(null);
   const myRole = squadRole === 'OWNER' ? 'admin'
     : groupRole?.roomCode === squadCode && groupRole.role === 'moderator' ? 'moderator' : 'member';
-  // The main admin and moderators: join requests, removing and blocking, the activity log.
+  // The main admin and moderators: join requests, removing, the activity log. Blocking,
+  // unblocking, Admit all and making moderators are the Group's own admin's only, not a stand-in's
+  // (`ownAdmin`, from a server that says; with an older server the admin keeps them, as before).
   const canModerate = myRole === 'admin' || myRole === 'moderator';
+  const isOwnAdmin = myRole === 'admin' && !(groupRole?.roomCode === squadCode && groupRole.ownAdmin === false);
   const canModerateRef = useRef(false);
   canModerateRef.current = canModerate;
   const liveLocationRef = useRef(null);
@@ -1847,11 +1850,12 @@ const App = () => {
 
   // Commander-only screens close when the role goes: a stand-in handing the squad back
   // to its returning Commander could otherwise be left looking at the join queue, or the
-  // telemetry matrix, with every action on them refused. A moderator keeps the join queue,
-  // the log and the blocked list; a member has none of them.
+  // telemetry matrix, with every action on them refused. A moderator keeps the join queue
+  // and the log; a member has none of them.
   useEffect(() => {
     if (squadRole === 'OWNER') return;
     setShowTelemetryModal(false);
+    setShowBlocked(false);
     if (canModerate) return;
     setShowRequestsModal(false);
     setShowActivityLog(false);
@@ -1859,8 +1863,9 @@ const App = () => {
   }, [squadRole, canModerate]);
 
   // The Group Lead's and moderators' actions. Each is checked again by the server, which says
-  // when it refuses (the person acted on is the Group Lead or a moderator, or the role changed).
-  const refused = (answer) => { if (answer && !answer.ok) notify.warning(ROLE_REFUSED); };
+  // when it refuses (the person acted on is the Group Lead or a moderator, or the role changed),
+  // and why.
+  const refused = (answer) => { if (answer && !answer.ok) notify.warning(answer.message || ROLE_REFUSED); };
   const kickMember = (targetId) => socket.emit('kick-member', { roomCode: squadCode, targetId }, refused);
   const setMemberModerator = (member, on) => socket.emit('set-moderator', { roomCode: squadCode, targetId: member.id, moderator: on }, refused);
   const admitAll = () => socket.emit('admit-all', { roomCode: squadCode }, refused);
@@ -2100,8 +2105,8 @@ const App = () => {
       if (prev.includes(userId)) return prev.filter(id => id !== userId);
       // Tell the server too — this actually removes them from the squad and bans
       // their account from rejoining, not just hiding them on this screen.
-      if (canModerate) {
-        socket.emit('block-user', { roomCode: squadCode, targetId: userId });
+      if (isOwnAdmin) {
+        socket.emit('block-user', { roomCode: squadCode, targetId: userId }, refused);
       }
       return [...prev, userId];
     });
@@ -3159,7 +3164,7 @@ const App = () => {
               <LeadTools
                 moderatorOnly={myRole !== 'admin'}
                 onActivityLog={openActivityLog}
-                onBlocked={openBlocked}
+                onBlocked={isOwnAdmin ? openBlocked : undefined}
                 requests={pendingRequests.length}
                 onRequests={() => setShowRequestsModal(true)}
                 refresh={telemetrySync}
@@ -3774,7 +3779,7 @@ const App = () => {
         onClose={() => setShowRequestsModal(false)}
         requests={pendingRequests}
         code={squadCode}
-        onAdmitAll={myRole === 'admin' ? admitAll : undefined}
+        onAdmitAll={isOwnAdmin ? admitAll : undefined}
         onAnswer={(request, approved) => {
           // The squad the request was made to, not merely the one on screen.
           socket.emit('resolve-access', { targetId: request.targetId, roomCode: request.roomCode || squadCode, approved });
@@ -3790,7 +3795,7 @@ const App = () => {
         onDecline={(uid) => friendAction(friends.remove(uid))}
       />
 
-      {/* The activity log and blocked people, for the Group Lead and moderators. */}
+      {/* The activity log, for the Group Lead and moderators; blocked people, the Group Lead's. */}
       <ActivityLog
         open={showActivityLog && canModerate}
         onClose={() => setShowActivityLog(false)}
@@ -3798,7 +3803,7 @@ const App = () => {
         onExport={exportLog}
       />
       <BlockedList
-        open={showBlocked && canModerate}
+        open={showBlocked && isOwnAdmin}
         onClose={() => setShowBlocked(false)}
         blocked={blockedPeople}
         onUnblock={unblock}
@@ -3980,7 +3985,7 @@ const App = () => {
         isLead={mayRemove(optionsMember)}
         onRemove={kickMember}
         friend={friendFor(optionsMember)}
-        moderator={myRole === 'admin' && optionsMember?.role && optionsMember.role !== 'admin' && optionsMember.status !== 'GHOST'
+        moderator={isOwnAdmin && optionsMember?.role && optionsMember.role !== 'admin' && optionsMember.status !== 'GHOST'
           ? { is: optionsMember.role === 'moderator', onChange: setMemberModerator }
           : undefined}
         onClose={() => setOptionsMemberId(null)}
@@ -3995,7 +4000,7 @@ const App = () => {
           focusMember(m);
         }}
         onArScan={(m) => setArTarget(arTargetForMember(m))}
-        onRemoveAndBlock={toggleBlock}
+        onRemoveAndBlock={isOwnAdmin ? toggleBlock : undefined}
       />
 
       {/* The camera explainer, before AR Scan opens, only until the camera has been allowed.

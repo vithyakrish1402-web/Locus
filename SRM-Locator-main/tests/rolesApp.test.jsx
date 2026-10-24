@@ -94,7 +94,7 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 const { default: App } = await import('../src/App.jsx');
 const { __resetNotifications, subscribe } = await import('../src/utils/notify.js');
 const { NOTICES } = await import('../src/copy/notices.js');
-const { ROLE_REFUSED, ACTIVITY_LOG, MEMBER_OPTIONS } = await import('../src/copy/group.js');
+const { ROLE_REFUSED, ACTIVITY_LOG, MEMBER_OPTIONS, REMOVE_AND_BLOCK } = await import('../src/copy/group.js');
 let feed = [];
 subscribe((items) => { feed = items; });
 const noticeUp = (text) => feed.some((n) => n.message === text || n.body === text);
@@ -197,6 +197,44 @@ describe('the Group Lead', () => {
     // Refused by the server: said so.
     answer('kick-member', { ok: false, reason: 'not-allowed' });
     expect(noticeUp(ROLE_REFUSED)).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
+    fireEvent.click(await screen.findByText(MEMBER_OPTIONS.removeAndBlock));
+    fireEvent.click(within(await screen.findByTestId('remove-and-block-confirm')).getByRole('button', { name: REMOVE_AND_BLOCK.confirm }));
+    expect(emitted('block-user').at(-1)[1]).toEqual({ roomCode: code, targetId: 'sock-Bravo' });
+    // With the server's own reason when it gives one.
+    answer('block-user', { ok: false, reason: 'not-allowed', message: 'Only the main admin can block people.' });
+    expect(noticeUp('Only the main admin can block people.')).toBe(true);
+  });
+
+  it('standing in for the Commander, can remove but has no block, Blocked people, Admit all or Make moderator', async () => {
+    await onTheMap();
+    act(() => fakeSocket.receive('group-role', { roomCode: code, role: 'admin', moderatorIds: [], ownAdmin: false }));
+    bravoAs('member');
+    request(1);
+    request(2);
+    openGroup();
+    expect(screen.queryByRole('button', { name: 'Blocked people' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
+    expect(await screen.findByText(MEMBER_OPTIONS.remove)).toBeTruthy();
+    expect(screen.queryByText(MEMBER_OPTIONS.removeAndBlock)).toBeNull();
+    expect(screen.queryByText(MEMBER_OPTIONS.makeModerator)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Cancel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Join requests/ }));
+    await screen.findByTestId('join-requests');
+    expect(screen.queryByRole('button', { name: /Admit all/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Approve Joiner 1' })).toBeTruthy();
+  });
+
+  it('as the Group\'s own admin (said by the server), keeps them all', async () => {
+    await onTheMap();
+    act(() => fakeSocket.receive('group-role', { roomCode: code, role: 'admin', moderatorIds: [], ownAdmin: true }));
+    bravoAs('member');
+    openGroup();
+    expect(screen.getByRole('button', { name: 'Blocked people' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
+    expect(await screen.findByText(MEMBER_OPTIONS.removeAndBlock)).toBeTruthy();
+    expect(screen.getByText(MEMBER_OPTIONS.makeModerator)).toBeTruthy();
   });
 
   it('can take a moderator back to member', async () => {
@@ -210,12 +248,12 @@ describe('the Group Lead', () => {
 });
 
 describe('a moderator', () => {
-  it('has Join requests, the log and the blocked list, but not the Lead-only tools', async () => {
+  it('has Join requests and the log, but not the blocked list or the Lead-only tools', async () => {
     await asModerator();
     openGroup();
     expect(screen.getByRole('button', { name: /Join requests/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Activity log' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Blocked people' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Blocked people' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Refresh locations/ })).toBeNull();
     expect(screen.queryByTestId('sos-controls')).toBeNull();
   });
@@ -233,12 +271,13 @@ describe('a moderator', () => {
     expect(emitted('resolve-access').at(-1)[1]).toEqual({ targetId: 'j1', roomCode: code, approved: true });
   });
 
-  it('can remove a member but not another moderator, and nobody can remove the Group Lead', async () => {
+  it('can remove a member (never block) but not another moderator, and nobody can remove the Group Lead', async () => {
     await asModerator();
     bravoAs('member');
     openGroup();
     fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
     expect(await screen.findByText(MEMBER_OPTIONS.remove)).toBeTruthy();
+    expect(screen.queryByText(MEMBER_OPTIONS.removeAndBlock)).toBeNull();
     expect(screen.queryByText(MEMBER_OPTIONS.makeModerator)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Cancel/ }));
     for (const role of ['moderator', 'admin']) {
@@ -323,8 +362,8 @@ describe('the activity log', () => {
 });
 
 describe('blocked people', () => {
-  it('are listed for the Group Lead and moderators, who can unblock them', async () => {
-    await asModerator();
+  it('are listed for the Group Lead, who can unblock them', async () => {
+    await onTheMap();
     openGroup();
     fireEvent.click(screen.getByRole('button', { name: 'Blocked people' }));
     answer('get-blocked', { ok: true, blocked: [{ uid: 'u-X', name: 'Xray' }] });

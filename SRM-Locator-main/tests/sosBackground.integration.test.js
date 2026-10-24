@@ -167,12 +167,13 @@ describe('people waiting to join, for an admitter whose app is closed', () => {
     const token = await tokenFor('uA', room);
     alpha.disconnect();
     await sleep(100);
-    await knock(room, 'u1');
-    await knock(room, 'u2');
+    const joiners = [await knock(room, 'u1'), await knock(room, 'u2')];
     await sleep(500); // the burst is gathered, then told
     expect((await pollJoin(token)).json.join).toEqual({ rev: 1, count: 2 });
-    // Bravo stands in for the Group Lead and lets them all in.
-    expect((await ask(bravo, 'admit-all', { roomCode: room })).ok).toBe(true);
+    // Bravo stands in for the Group Lead. Admit all is the Group's own admin's only, so Bravo lets
+    // them in one at a time.
+    expect((await ask(bravo, 'admit-all', { roomCode: room })).ok).toBe(false);
+    for (const s of joiners) bravo.emit('resolve-access', { targetId: s.id, roomCode: room, approved: true });
     const cleared = await pollJoin(token, { joinAfter: 1 });
     expect(cleared.json.join).toEqual({ rev: 2, count: 0 });
   });

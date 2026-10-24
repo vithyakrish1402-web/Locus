@@ -3,7 +3,7 @@ import { Ban } from 'lucide-react';
 import { Avatar, Button, Sheet } from '../ui';
 import { BLOCKED } from '../../copy/group';
 
-// Who is blocked from this Group (backend/groupRoles.js), for the Group Lead and moderators,
+// Who is blocked from this Group (backend/groupRoles.js), for the Group Lead only,
 // each with Unblock: they can then ask to join again (and are decided on as anyone else).
 
 /**

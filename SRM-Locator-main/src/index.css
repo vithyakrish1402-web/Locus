@@ -12,6 +12,21 @@
 /* Light and dark design tokens (redesign). Screens move onto them one piece at a time. */
 @import "./theme/tokens.css";
 
+/* `dark:` utilities follow the app's own theme (<html data-theme>, src/theme/theme.js), as the
+   tokens do, and the phone's setting only when no theme is set at all. Left to Tailwind's
+   default they followed the phone alone: a phone in dark mode running LOCUS in Light drew
+   `dark:` colours under light-theme text, and the reverse. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme]), :root:not([data-theme]) *) {
+      @slot;
+    }
+  }
+}
+
 /* Theme switch (src/theme/theme.js, the one place it happens). While the theme is swapped,
    nothing fades its own colours across and CSS animations hold still: the new theme lands
    in one frame, out of sight. */
