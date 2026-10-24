@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-rotate';
 import { SRM_MASTER_DATABASE } from '../srmDatabase';
 import LiveLocationMarker, { NAVIGATING_SPEED_MPS } from '../LiveLocationMarker';
 import { ConfidenceHalo, FloorTag } from './IndoorMarkers';
@@ -56,6 +57,20 @@ const SATELLITE_TILES = {
   maxNativeZoom: 19,
 };
 
+// Leaflet keeps marker labels upright; only the directional arrow follows map bearing.
+function SelfLocationLayer({ location, indoor, zoom, navigating, heading, roadName, onFocus }) {
+  const map = useMap();
+  const [bearing, setBearing] = useState(() => map.getBearing?.() || 0);
+  useMapEvents({ rotate: () => setBearing(map.getBearing?.() || 0) });
+  if (!location) return null;
+  return <LeafletReactMarker lat={location.lat} lng={location.lng} onClick={() => onFocus(location, null)}>
+    <div style={{ position: 'relative' }}>
+      {WIFI_POSITIONING_ENABLED && indoor && <ConfidenceHalo confidence={indoor.confidence} color="#10B981" />}
+      <LiveLocationMarker zoom={zoom} isNavigating={navigating} heading={(heading || 0) + bearing} roadName={roadName} />
+    </div>
+  </LeafletReactMarker>;
+}
+
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
 
 // MapContainer only applies `center`/`zoom` on the initial mount — it won't
@@ -97,9 +112,7 @@ const FocusDriver = ({ onMapInstance, onUserInteraction, active = true }) => {
     dragstart() {
       onUserInteraction?.();
     },
-    zoomstart() {
-      onUserInteraction?.();
-    },
+
   });
 
   return null;
@@ -191,6 +204,9 @@ const TacticalLeafletMap = ({
       center={[center?.lat || SRM_KTR_COORDS.lat, center?.lng || SRM_KTR_COORDS.lng]}
       zoom={zoom || 17}
       zoomControl={false}
+      rotate={true}
+      rotateControl={false}
+      touchRotate={false}
       className="w-full h-full bg-[var(--color-map-land)]"
     >
       <TileLayer
@@ -200,6 +216,10 @@ const TacticalLeafletMap = ({
         className={tiles.className}
         maxNativeZoom={tiles.maxNativeZoom}
         maxZoom={21}
+        updateWhenIdle={false}
+        updateWhenZooming={true}
+        updateInterval={100}
+        keepBuffer={3}
       />
       <ViewController center={center} zoom={zoom} />
       <FocusDriver onMapInstance={onMapInstance} onUserInteraction={onUserInteraction} active={driverActive} />
@@ -207,25 +227,8 @@ const TacticalLeafletMap = ({
       <ZoomTracker onZoomChange={onZoomChange} />
 
 
-      {liveLocation && (
-        <LeafletReactMarker
-          lat={liveLocation.lat}
-          lng={liveLocation.lng}
-          onClick={() => onFocus(liveLocation, null)}
-        >
-          {/* The wrapper gives the halo a positioned parent at the anchor; see IndoorMarkers. */}
-          <div style={{ position: 'relative' }}>
-            {WIFI_POSITIONING_ENABLED && liveIndoor && <ConfidenceHalo confidence={liveIndoor.confidence} color="#10B981" />}
-            <LiveLocationMarker
-              zoom={currentZoom}
-              isNavigating={liveIsNavigating}
-              heading={liveHeading}
-              roadName={currentRoadName}
-            />
-          </div>
-        </LeafletReactMarker>
-      )}
-
+      <SelfLocationLayer location={liveLocation} indoor={liveIndoor} zoom={currentZoom}
+        navigating={liveIsNavigating} heading={liveHeading} roadName={currentRoadName} onFocus={onFocus} />
       {(showBuildings ?? activeTab === 'buildings') && places.map((b) => (
         <LeafletReactMarker key={b.id} lat={b.lat} lng={b.lng} onClick={() => onFocus({ lat: b.lat, lng: b.lng }, b)}>
           <BuildingMarker highlighted={highlightBuildingId === b.id} />
@@ -241,7 +244,7 @@ const TacticalLeafletMap = ({
       {activeWaypoint && (
         <LeafletReactMarker lat={activeWaypoint.lat} lng={activeWaypoint.lng}>
           <WaypointMarker
-            name={activeWaypoint.name}
+            name={activeWaypoint.name} description={activeWaypoint.description}
             onClick={() => onFocus(activeWaypoint, null)}
             canClear={canClearWaypoint}
             onClear={onClearWaypoint}

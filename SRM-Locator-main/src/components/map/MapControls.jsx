@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.span>, which this config can't see
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Flag, Layers, LocateFixed, MapPin, Navigation, Settings, X } from 'lucide-react';
+import { Flag, Layers, LocateFixed, MapPin, Navigation, ScanLine, Settings, X } from 'lucide-react';
 import { MAP_CONTROLS } from '../../copy/map';
 
 // The map's right-hand controls (redesign Map batch, piece 2): one raised column of round
@@ -41,7 +41,7 @@ function useOpenOnTouchDown(onOpen) {
   };
 }
 
-export function MapControls({ onCampus, onLocate = null, isSatellite, onToggleSatellite, onSettings, onToggleAutoFollow = null, autoFollow = false }) {
+export function MapControls({ onCampus, onLocate = null, isSatellite, onToggleSatellite, onSettings, onScan, onToggleAutoFollow = null, autoFollow = false }) {
   const gear = useOpenOnTouchDown(onSettings);
   return (
     <div
@@ -67,6 +67,7 @@ export function MapControls({ onCampus, onLocate = null, isSatellite, onToggleSa
         <MapPin size={21} aria-hidden="true" />
       </button>
       <span className="w-6 h-px bg-[var(--glass-border-subtle)]" aria-hidden="true" />
+      {onScan && <button type="button" className={ROUND} onClick={onScan} aria-label="AR Scan" title="AR Scan"><ScanLine size={21} aria-hidden="true" /></button>}
       <button type="button" className={ROUND} {...gear} aria-label={MAP_CONTROLS.settings} title={MAP_CONTROLS.settings}>
         <Settings size={21} aria-hidden="true" />
       </button>

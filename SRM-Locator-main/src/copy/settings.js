@@ -105,7 +105,7 @@ export const SEND_APP = {
 export const BACKGROUND_SHARING = {
   section: 'Sharing when LOCUS is closed',
   switchLabel: 'Keep sharing when the app is closed',
-  help: 'Needs a Group. It ends when you leave the Group. Pause or stop it from the notification, or here.',
+  help: 'Needs a Group. Also delivers pings and join-request notifications while the app is closed. It ends when you leave the Group. Pause or stop it from the notification, or here.',
   // Under it, its own switch: hearing a teammate's SOS while the app is closed.
   sos: {
     label: 'SOS alerts when the app is closed',

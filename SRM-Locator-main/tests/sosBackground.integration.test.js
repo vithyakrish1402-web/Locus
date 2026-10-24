@@ -141,24 +141,25 @@ const knock = async (room, uid) => {
 // the same route as the closed-app SOS: one answer per burst, with the total, and a last one when
 // nobody is waiting any more. Only for phones that ask (joinAfter); never for plain members.
 describe('people waiting to join, for an admitter whose app is closed', () => {
-  it('wakes the waiting phone once per burst, with how many are waiting', async () => {
+  it('wakes the waiting phone on the first request, then reports the current count', async () => {
     const { room, alpha } = await group();
     const token = await tokenFor('uA', room);
-    alpha.disconnect(); // the Group Lead's app is swiped away
+    const baseline = (await pollJoin(token)).json.join?.rev || 0;
+    alpha.disconnect();
+    const waiting = pollJoin(token, { joinAfter: baseline, wait: 3 });
     await sleep(100);
-    const waiting = pollJoin(token, { wait: 3 });
-    await sleep(100);
+    const requestedAt = Date.now();
     await knock(room, 'u1');
+    const answer = await waiting;
+    expect(answer.status).toBe(200);
+    expect(answer.json.join.count).toBe(1);
+    expect(Date.now() - requestedAt).toBeLessThan(1000);
     await knock(room, 'u2');
     await knock(room, 'u3');
-    const knocked = Date.now();
-    const answer = await waiting;
-    expect(Date.now() - knocked).toBeLessThan(1500); // woken when the 0.3 s burst closed, not at the 3 s timeout
-    expect(answer.status).toBe(200);
-    expect(answer.json.join).toEqual({ rev: 1, count: 3 });
-    expect(answer.json.sos).toEqual([]);
-    // Asked again from that rev: nothing new, so it waits (here, times out).
-    const again = await pollJoin(token, { joinAfter: 1, wait: 1 });
+    const latest = (await pollJoin(token)).json.join;
+    expect(latest.count).toBe(3);
+    expect(latest.rev).toBeGreaterThan(answer.json.join.rev);
+    const again = await pollJoin(token, { joinAfter: latest.rev, wait: 1 });
     expect(again.json.join).toBeUndefined();
   });
 
@@ -169,13 +170,15 @@ describe('people waiting to join, for an admitter whose app is closed', () => {
     await sleep(100);
     const joiners = [await knock(room, 'u1'), await knock(room, 'u2')];
     await sleep(500); // the burst is gathered, then told
-    expect((await pollJoin(token)).json.join).toEqual({ rev: 1, count: 2 });
-    // Bravo stands in for the Group Lead. Admit all is the Group's own admin's only, so Bravo lets
-    // them in one at a time.
+    const pending = (await pollJoin(token)).json.join;
+    expect(pending.count).toBe(2);
+    // 1.1.74: a stand-in can admit individually; Admit all stays with the Group Lead.
     expect((await ask(bravo, 'admit-all', { roomCode: room })).ok).toBe(false);
     for (const s of joiners) bravo.emit('resolve-access', { targetId: s.id, roomCode: room, approved: true });
-    const cleared = await pollJoin(token, { joinAfter: 1 });
-    expect(cleared.json.join).toEqual({ rev: 2, count: 0 });
+    await ask(bravo, 'admit-all', { roomCode: room }); // round trip: approvals have been processed
+    const cleared = await pollJoin(token, { joinAfter: pending.rev });
+    expect(cleared.json.join.count).toBe(0);
+    expect(cleared.json.join.rev).toBeGreaterThan(pending.rev);
   });
 
   it('reaches moderators too, and never a plain member', async () => {
@@ -187,7 +190,7 @@ describe('people waiting to join, for an admitter whose app is closed', () => {
     charlie.disconnect();
     await knock(room, 'u1');
     await sleep(500);
-    expect((await pollJoin(forMod)).json.join).toEqual({ rev: 1, count: 1 });
+    expect((await pollJoin(forMod)).json.join.count).toBe(1);
     expect((await pollJoin(forMember)).json.join).toBeUndefined();
   });
 
@@ -421,5 +424,37 @@ describe('the question itself', () => {
     }
     expect(limited).not.toBeNull();
     expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0);
+  });
+});
+
+describe('ordinary pings reaching a closed app', () => {
+  it('reaches a member shown under their background presence ID', async () => {
+    const { room, alpha, bravo } = await group();
+    const token = await tokenFor('uB', room);
+    expect((await call('POST', '/location', { auth: token, body: { lat: 12.8231, lng: 80.0442, nextPostWithinSec: 60 } })).status).toBe(200);
+    bravo.disconnect();
+    const waiting = call('GET', '/sos?pingAfter=0&wait=3', { auth: token });
+    await sleep(100);
+    alpha.emit('ping-user', { targetId: 'bg:uB' });
+    expect((await waiting).json.pings).toEqual([{ rev: expect.any(Number), senderName: 'uA' }]);
+  });
+
+  it('wakes only the recipient, preserves sender identity, and advances the cursor', async () => {
+    const { room, alpha, bravo } = await group();
+    const token = await tokenFor('uB', room);
+    const other = await tokenFor('uC', room);
+    const targetId = bravo.id;
+    bravo.disconnect();
+    const waiting = call('GET', '/sos?pingAfter=0&wait=3', { auth: token });
+    await sleep(100);
+    alpha.emit('ping-user', { targetId, senderName: 'Forged name' });
+    const answer = await waiting;
+    expect(answer.status).toBe(200);
+    expect(answer.json.pings).toHaveLength(1);
+    expect(answer.json.pings[0].senderName).toBe('uA');
+    expect((await call('GET', '/sos?pingAfter=0', { auth: other })).json.pings).toEqual([]);
+    const after = answer.json.pings[0].rev;
+    expect((await call('GET', '/sos?pingAfter=' + after, { auth: token })).json.pings).toEqual([]);
+    expect((await poll(token)).json).not.toHaveProperty('pings');
   });
 });

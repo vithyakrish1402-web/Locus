@@ -66,6 +66,7 @@ vi.mock('../src/components/TacticalLeafletMap.jsx', () => ({
   default: (props) => (
     <div data-testid="leaflet-stub" data-dots={String(props.showBuildings)}>
       <button type="button" data-testid="stub-dot" onClick={() => props.onFocus({ lat: props.places[0].lat, lng: props.places[0].lng }, props.places[0])}>dot</button>
+      <button type="button" data-testid="stub-map-click" onClick={() => props.onMapClick({ lat: 12.8231, lng: 80.0442 })}>map spot</button>
     </div>
   ),
 }));
@@ -167,5 +168,46 @@ describe('tapping "people waiting to join"', () => {
     tapNotification();
     expect(currentTab()).toBe('Group');
     expect(screen.queryByTestId('join-requests')).toBeNull();
+  });
+});
+
+describe('dedicated mobile sections', () => {
+  it('returns to the map when a building is chosen, so its card is visible', async () => {
+    await onTheMap();
+    fireEvent.click(tabBar().getByRole('button', { name: 'Buildings' }));
+    fireEvent.click(screen.getAllByTestId('building-row')[0]);
+    expect(currentTab()).toBe('Map');
+    expect(await screen.findByTestId('location-card')).toBeTruthy();
+  });
+
+  it('asks for a description before publishing a rally point placed on the map', async () => {
+    await onTheMap();
+    fakeSocket.emit.mockClear();
+    fireEvent.click(screen.getByTestId('meeting-point-button'));
+    fireEvent.click(screen.getByTestId('stub-map-click'));
+    const description = await screen.findByRole('textbox', { name: 'Rally point description' });
+    expect(fakeSocket.emit.mock.calls.some(c => c[0] === 'publish-waypoint')).toBe(false);
+    fireEvent.change(description, { target: { value: 'Meet by the gate at 4 pm' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set meeting point', exact: true }));
+    expect(fakeSocket.emit).toHaveBeenCalledWith('publish-waypoint', {
+      roomCode: code, waypoint: { lat: 12.8231, lng: 80.0442, name: 'RALLY POINT', description: 'Meet by the gate at 4 pm' },
+    });
+  });
+
+  it('switches Buildings, Group and Map without a draggable panel; AR is above Settings', async () => {
+    await onTheMap();
+    expect(tabBar().queryByRole('button', { name: /Scan/ })).toBeNull();
+    fireEvent.click(tabBar().getByRole('button', { name: 'Buildings' }));
+    expect(currentTab()).toBe('Buildings');
+    expect(screen.getByTestId('section-page').dataset.section).toBe('buildings');
+    expect(screen.queryByTestId('group-panel-header')).toBeNull();
+    fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
+    expect(screen.getByTestId('section-page').dataset.section).toBe('users');
+    fireEvent.click(screen.getByRole('button', { name: 'Back to map' }));
+    expect(currentTab()).toBe('Map');
+    const controls = within(screen.getByTestId('map-controls')).getAllByRole('button');
+    const scan = controls.findIndex(b => b.getAttribute('aria-label') === 'AR Scan');
+    expect(scan).toBeGreaterThanOrEqual(0);
+    expect(controls[scan+1].getAttribute('aria-label')).toMatch(/Settings/i);
   });
 });

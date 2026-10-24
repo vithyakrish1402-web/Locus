@@ -107,6 +107,7 @@ public class SosListenerTest {
     private Script server;
     private final List<SosAlert> heard = new CopyOnWriteArrayList<>();
     private final List<JoinNotice> joins = new CopyOnWriteArrayList<>();
+    private final List<PingNotice> pings = new CopyOnWriteArrayList<>();
     private volatile Session session;
     private SosListener listener;
 
@@ -137,6 +138,11 @@ public class SosListenerTest {
             public void deliverJoin(JoinNotice notice) {
                 joins.add(notice);
             }
+
+            @Override
+            public void deliverPing(PingNotice notice) {
+                pings.add(notice);
+            }
         }, Runnable::run, () -> 0.5, 30, 120, 7, 40);
     }
 
@@ -161,9 +167,9 @@ public class SosListenerTest {
         };
         listener.start();
         waitUntil(() -> server.asked.size() >= 3, 5_000);
-        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=0 HTTP/1.1", server.asked.get(0));
-        assertEquals("GET /api/background/sos?after=3&wait=7&joinAfter=0 HTTP/1.1", server.asked.get(1));
-        assertEquals("GET /api/background/sos?after=3&wait=7&joinAfter=0 HTTP/1.1", server.asked.get(2));
+        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=0&pingAfter=0 HTTP/1.1", server.asked.get(0));
+        assertEquals("GET /api/background/sos?after=3&wait=7&joinAfter=0&pingAfter=0 HTTP/1.1", server.asked.get(1));
+        assertEquals("GET /api/background/sos?after=3&wait=7&joinAfter=0&pingAfter=0 HTTP/1.1", server.asked.get(2));
         assertEquals("Bearer v1.dev.tok", server.auth.get(0));
         assertEquals(1, heard.size());
         assertEquals("s1", heard.get(0).id);
@@ -186,9 +192,20 @@ public class SosListenerTest {
         assertEquals(2, joins.size());
         assertEquals(3, joins.get(0).count);
         assertEquals(0, joins.get(1).count);
-        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=1 HTTP/1.1", server.asked.get(1));
-        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=2 HTTP/1.1", server.asked.get(3));
+        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=1&pingAfter=0 HTTP/1.1", server.asked.get(1));
+        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=2&pingAfter=0 HTTP/1.1", server.asked.get(3));
         assertEquals(0, heard.size());
+    }
+
+    @Test(timeout = 10_000)
+    public void deliversEachPingOnceAndAsksFromItsCursor() throws Exception {
+        server.reply = (line, auth) -> new Object[] {200,
+            "{\"sos\":[],\"rev\":0,\"pings\":[{\"rev\":10,\"senderName\":\"Asha\"}]}"};
+        listener.start();
+        waitUntil(() -> server.asked.size() >= 3, 5_000);
+        assertEquals(1, pings.size());
+        assertEquals("Asha", pings.get(0).senderName);
+        assertTrue(server.asked.get(1).contains("pingAfter=10"));
     }
 
     @Test(timeout = 10_000)
@@ -213,7 +230,7 @@ public class SosListenerTest {
         listener.start();
         waitUntil(() -> !heard.isEmpty(), 5_000);
         assertEquals(1, heard.size());
-        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=0 HTTP/1.1", server.asked.get(2)); // still from the beginning: nothing was heard yet
+        assertEquals("GET /api/background/sos?after=0&wait=7&joinAfter=0&pingAfter=0 HTTP/1.1", server.asked.get(2)); // still from the beginning: nothing was heard yet
     }
 
     @Test(timeout = 10_000)

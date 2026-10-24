@@ -1,3 +1,4 @@
+import { queueBackgroundPing } from './pingRelay.js';
 import 'dotenv/config';
 import express from 'express';
 import http from 'http';
@@ -166,7 +167,7 @@ if (classClock() !== null) {
 
 // A person's stable identity on this squad: their uid, else (an old client) their socket id.
 const keyOf = (squad, socketId) =>
-  memberKey(squad?.memberUids?.[socketId] || io.sockets.sockets.get(socketId)?.data?.uid, socketId);
+  memberKey(squad?.memberUids?.[socketId] || io.sockets.sockets.get(socketId)?.data?.uid || uidOfPresenceKey(socketId), socketId);
 
 // --- ROLES (groupRoles.js has the permissions table) ---
 const uidOfSocket = (squad, socketId) => squad?.memberUids?.[socketId] || io.sockets.sockets.get(socketId)?.data?.uid || null;
@@ -222,14 +223,15 @@ function joinRequestsWaiting(roomCode) {
   setJoinNotice(squad, roomCode, count);
 }
 function setJoinNotice(squad, roomCode, count) {
+  if (!squad || squad.joinNotice?.count === count) return;
   squad.joinNotice = { rev: (squad.joinNotice?.rev ?? 0) + 1, count };
   sosWatch.notify(roomCode);
 }
 // The queue may just have emptied (an answer, Admit all, a joiner giving up): a phone showing
 // "N people waiting" is told there are none, once.
 function joinQueueChanged(squad, roomCode) {
-  if (!squad || Object.keys(squad.pending ?? {}).length > 0) return;
-  if ((squad.joinNotice?.count ?? 0) > 0) setJoinNotice(squad, roomCode, 0);
+  if (!squad) return;
+  setJoinNotice(squad, roomCode, Object.keys(squad.pending ?? {}).length);
 }
 // What the closed-app route offers `uid` of the Group's waiting joiners: only to its main admin
 // (whoever holds command, and its own Commander) and its moderators; null to anyone else.
@@ -837,6 +839,7 @@ socket.on('check-ping', (clientTimestamp) => {
     addPendingRequest(existing, socket.id, { uid: requesterUid, name: user?.name ?? null, photo: user?.photo ?? null });
     // Every reply names its squad, so a client can ignore one about a squad it has left.
     socket.emit('access-pending', { roomCode });
+    setJoinNotice(activeSquads[roomCode], roomCode, Object.keys(activeSquads[roomCode].pending ?? {}).length);
     joinNotifier.requested(roomCode);
     const request = { targetId: socket.id, name: user?.name, photo: user?.photo, roomCode: roomCode };
     // Moderators admit too, so each connected one sees the request as the admin does.
@@ -1082,7 +1085,8 @@ socket.on('check-ping', (clientTimestamp) => {
       const rallyPoint = {
         lat: waypoint.lat,
         lng: waypoint.lng,
-        name: waypoint.name,
+        name: typeof waypoint.name === 'string' ? waypoint.name.slice(0, 120) : undefined,
+        ...(typeof waypoint.description === 'string' ? { description: waypoint.description.trim().slice(0, 160) } : {}),
         setBy: memberKey(socket.data?.uid, socket.id),
       };
       activeSquads[roomCode].activeWaypoint = rallyPoint;
@@ -1174,8 +1178,13 @@ socket.on('check-ping', (clientTimestamp) => {
   // here and take the whole server down — and so did a null one, after the fix for that
   // was a `= {}` default, which null skips.
   socket.on('ping-user', (payload) => {
-    const { targetId, senderName } = payload ?? {};
-    const roomCode = sharedSquad(activeSquads, socket.id, targetId);
+    const { targetId } = payload ?? {};
+    const backgroundUid = uidOfPresenceKey(targetId);
+    const roomCode = sharedSquad(activeSquads, socket.id, targetId) || (backgroundUid && Object.keys(activeSquads).find(room => {
+      const squad = activeSquads[room];
+      return squad.members.includes(socket.id) && squad.knownUids?.includes(backgroundUid)
+        && !squad.blockedUids?.includes(backgroundUid) && presenceOf(squad, backgroundUid, Date.now());
+    }));
     if (!roomCode) {
       console.warn(`[PING] Dropped: ${socket.id} is not in a squad with ${targetId}`);
       return;
@@ -1192,7 +1201,15 @@ socket.on('check-ping', (clientTimestamp) => {
       // Pings the target has muted still count against the sender, and the sender is not
       // told: a muted person gets silence, not a way to find out they were muted.
       if (!isPersonallyMuted(squad, targetKey, senderKey)) {
-        io.to(targetId).emit('receive-ping', { senderName });
+        const verifiedName = nameOf(squad, socket.id) || 'A group member';
+        const recipientUid = backgroundUid || uidOfSocket(squad, targetId);
+        if (backgroundUid) {
+          for (const id of squad.members) {
+            if (uidOfSocket(squad, id) === recipientUid) io.to(id).emit('receive-ping', { senderName: verifiedName });
+          }
+        } else io.to(targetId).emit('receive-ping', { senderName: verifiedName });
+        queueBackgroundPing(squad, recipientUid, verifiedName, now);
+        sosWatch.notify(roomCode);
         delivered = true;
       }
     } else {

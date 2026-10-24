@@ -49,8 +49,13 @@ public final class UrlConnectionPoster {
 
     /** The same question, also asking how many wait to join (from joinAfterRev; -1 does not ask). */
     public HttpResult getSos(String baseUrl, String deviceToken, long afterRev, int waitSec, long joinAfterRev) {
+        return getSos(baseUrl, deviceToken, afterRev, waitSec, joinAfterRev, -1);
+    }
+
+    public HttpResult getSos(String baseUrl, String deviceToken, long afterRev, int waitSec, long joinAfterRev, long pingAfterRev) {
         String path = Endpoint.SOS_PATH + "?after=" + Math.max(0, afterRev) + "&wait=" + Math.max(0, waitSec)
-            + (joinAfterRev >= 0 ? "&joinAfter=" + joinAfterRev : "");
+            + (joinAfterRev >= 0 ? "&joinAfter=" + joinAfterRev : "")
+            + (pingAfterRev >= 0 ? "&pingAfter=" + pingAfterRev : "");
         return send("GET", baseUrl, path, deviceToken, null, (waitSec + 10) * 1000, SOS_MAX_BODY_BYTES);
     }
 

@@ -64,14 +64,14 @@ html.theme-switching *::after {
    Unlayered on purpose, so it beats Tailwind's layered transition-* utilities. Only
    transform and opacity move (the redesign's motion rule): colour, shadow and filter
    changes on a control are instant, never animated. */
-button, [role="button"], a[href], summary, label[for] {
+button, [role="button"]:not(.leaflet-marker-icon), a[href], summary, label[for] {
   transition-property: scale, transform, translate, opacity, background-color, border-color, box-shadow;
   transition-duration: var(--duration-press-out);
   transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   touch-action: manipulation; /* no 300 ms double-tap-zoom wait */
 }
 button:not(:disabled):active,
-[role="button"]:active,
+[role="button"]:not(.leaflet-marker-icon):active,
 a[href]:active {
   scale: var(--press-scale);
   transition-duration: var(--duration-press-in);
