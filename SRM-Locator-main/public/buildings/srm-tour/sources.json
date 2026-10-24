@@ -1,0 +1,851 @@
+{
+  "source": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/index.htm",
+  "publisher": "SRM Institute of Science and Technology",
+  "retrievedOn": "2026-10-22",
+  "processing": "Official photos resized to at most 1600px and encoded as WebP; panorama images are the selected original cube faces. No generated content.",
+  "locations": [
+    {
+      "buildingId": 1,
+      "buildingName": "UNIVERSITY BUILDING",
+      "tourLabel": "UB",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/photo_C4A3DB04_96C0_F761_41B2_C82220A65E81.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/photo_C4A3DB04_96C0_F761_41B2_C82220A65E81.jpg",
+          "tourMediaId": "photo_C4A3DB04_96C0_F761_41B2_C82220A65E81",
+          "sha256": "9edef8939ed943c11a0cb0ee1bd699024f7dea875c23520dc2fc556c3e1cd00d",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/photo_C6E89A9D_96C1_D160_41C7_4D91E26B6C71.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/photo_C6E89A9D_96C1_D160_41C7_4D91E26B6C71.png",
+          "tourMediaId": "photo_C6E89A9D_96C1_D160_41C7_4D91E26B6C71",
+          "sha256": "70ebe1a4666e5b6d18b7916fdc6bcf4b737b3b186a1284a9c50a56cb6755596e",
+          "width": 1600,
+          "height": 479
+        }
+      ]
+    },
+    {
+      "buildingId": 2,
+      "buildingName": "TECH PARK",
+      "tourLabel": "Tech Park",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_F3DAA33D_96C1_57A3_41AA_BCCF91906734_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_F3DAA33D_96C1_57A3_41AA_BCCF91906734_0.jpg",
+          "tourMediaId": "album_F3DAA33D_96C1_57A3_41AA_BCCF91906734_0",
+          "sha256": "e041a6a86cec457817b59c1036422d52eb96661591c5a91f0d216653e81b1926",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/album_F3DAA33D_96C1_57A3_41AA_BCCF91906734_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_F3DAA33D_96C1_57A3_41AA_BCCF91906734_1.jpg",
+          "tourMediaId": "album_F3DAA33D_96C1_57A3_41AA_BCCF91906734_1",
+          "sha256": "f9c83a829fdaca82ff26e12bea52cc4f9d65f3a3e2affce98561fc3792bd7155",
+          "width": 1600,
+          "height": 1066
+        }
+      ]
+    },
+    {
+      "buildingId": 4,
+      "buildingName": "SRM CENTRAL LIBRARY",
+      "tourLabel": "Central library",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_C6012898_96C1_F161_41CC_965D36DD487A_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C6012898_96C1_F161_41CC_965D36DD487A_0.jpg",
+          "tourMediaId": "album_C6012898_96C1_F161_41CC_965D36DD487A_0",
+          "sha256": "17a4de2c9ad28a741d881c82651c3cd794c6b255e4c2f1dc024e4ce26ae5781f",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/photo_F693EA60_96BF_71A1_41CE_72CF441F836E.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/photo_F693EA60_96BF_71A1_41CE_72CF441F836E.png",
+          "tourMediaId": "photo_F693EA60_96BF_71A1_41CE_72CF441F836E",
+          "sha256": "437db5bc7ffd49ba16266cd9871a869b7ec50c5657dc22a00e49703a1b5cb671",
+          "width": 1066,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 6,
+      "buildingName": "MECHANICAL ENGINEERING BLOCK (MEB)",
+      "tourLabel": "Mechanical Engineering",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_73C48FC7_6042_4B8D_41B1_0A1B308F0457-l.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_73C48FC7_6042_4B8D_41B1_0A1B308F0457_0/l/vr2gen/0.jpg",
+          "tourMediaId": "panorama_73C48FC7_6042_4B8D_41B1_0A1B308F0457",
+          "cubeFace": "l",
+          "sha256": "d5a9c476c4e83c1512a1c3ee4e00d945c35cc4ac5ac6ba812affdb101fac5155",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 7,
+      "buildingName": "BASIC ENGINEERING LAB (BEL)",
+      "tourLabel": "Basic Engineering Lab",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CAD520D1_C145_8478_41C3_8ED932C240B4-l.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CAD520D1_C145_8478_41C3_8ED932C240B4_0/l/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CAD520D1_C145_8478_41C3_8ED932C240B4",
+          "cubeFace": "l",
+          "sha256": "b3f9d2bf373670836d1491ac91b7abf44e33d731f4b76705f969d5a570bfa996",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 8,
+      "buildingName": "SCHOOL OF ARCHITECTURE",
+      "tourLabel": "Architecture",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_C8C5B26A_96DF_71A1_41A4_CCE2A69E6A04_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C8C5B26A_96DF_71A1_41A4_CCE2A69E6A04_0.png",
+          "tourMediaId": "album_C8C5B26A_96DF_71A1_41A4_CCE2A69E6A04_0",
+          "sha256": "7463f429e9f824f4207580aec92a139c5e8514a235932dcfcd1bbb86bb0c1c78",
+          "width": 1600,
+          "height": 1065
+        },
+        {
+          "path": "/buildings/srm-tour/album_C8C5B26A_96DF_71A1_41A4_CCE2A69E6A04_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C8C5B26A_96DF_71A1_41A4_CCE2A69E6A04_1.png",
+          "tourMediaId": "album_C8C5B26A_96DF_71A1_41A4_CCE2A69E6A04_1",
+          "sha256": "7f09aacfd921faff96e9a77aea4b518ad0ea6c2f3caa487b8bf92444da5e880b",
+          "width": 1600,
+          "height": 1065
+        }
+      ]
+    },
+    {
+      "buildingId": 9,
+      "buildingName": "HI-TECH BLOCK",
+      "tourLabel": "HI-Tech",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_73C4F6A7_6046_5D8D_41B3_CEA0E6CA64A4-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_73C4F6A7_6046_5D8D_41B3_CEA0E6CA64A4_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_73C4F6A7_6046_5D8D_41B3_CEA0E6CA64A4",
+          "cubeFace": "r",
+          "sha256": "7154a5ba3ca047d1b542ebbb3c5ecb7b130bb3044c69056fac5a141e510fe5c3",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 10,
+      "buildingName": "BIO-TECH BLOCK",
+      "tourLabel": "Bio Engineering",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_1.jpg",
+          "tourMediaId": "album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_1",
+          "sha256": "f0a726d7405881119f07ca575ffd173dc4b56b290ae336827d3126503ba782fd",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_3.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_3.jpg",
+          "tourMediaId": "album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_3",
+          "sha256": "603f89a0e310cd0e715cce44a59ab4a5a1ec7daba76e2b07d27c47860e5e7550",
+          "width": 1600,
+          "height": 1066
+        }
+      ]
+    },
+    {
+      "buildingId": 11,
+      "buildingName": "AEROSPACE BLOCK (HANGAR)",
+      "tourLabel": "Aerospace Engineering Hangar",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_73C5BE37_6043_CC8D_41D5_CF51E9008CCD-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_73C5BE37_6043_CC8D_41D5_CF51E9008CCD_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_73C5BE37_6043_CC8D_41D5_CF51E9008CCD",
+          "cubeFace": "r",
+          "sha256": "362d0ee61261e6517c4f9e6f82deca8e8213a03d36cc7afb301c4ea6b0b8f7ad",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 12,
+      "buildingName": "SRM MEDICAL COLLEGE",
+      "tourLabel": "Medical College",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_F698BFFD_96C1_6EA3_41CF_101DE50D6B01_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_F698BFFD_96C1_6EA3_41CF_101DE50D6B01_1.png",
+          "tourMediaId": "album_F698BFFD_96C1_6EA3_41CF_101DE50D6B01_1",
+          "sha256": "352ebb5323b3b06a968081eeb7083f913240c50b8469fef01ce1250e4d43413f",
+          "width": 1600,
+          "height": 1065
+        },
+        {
+          "path": "/buildings/srm-tour/album_F698BFFD_96C1_6EA3_41CF_101DE50D6B01_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_F698BFFD_96C1_6EA3_41CF_101DE50D6B01_0.jpg",
+          "tourMediaId": "album_F698BFFD_96C1_6EA3_41CF_101DE50D6B01_0",
+          "sha256": "9e72c9214487b53878c81d04391f43c23a02602e2e68edd92d5d2d12f7feaea3",
+          "width": 1600,
+          "height": 1066
+        }
+      ]
+    },
+    {
+      "buildingId": 14,
+      "buildingName": "SRM DENTAL COLLEGE",
+      "tourLabel": "Dental college",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CAD4E8B9_C145_8428_41E4_EE41BD116ACD-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CAD4E8B9_C145_8428_41E4_EE41BD116ACD_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CAD4E8B9_C145_8428_41E4_EE41BD116ACD",
+          "cubeFace": "r",
+          "sha256": "6e8ea46357cc8f01a5b9d01966c4e47eaaba9d4fe2fe1ec9fb31e619d2197202",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 16,
+      "buildingName": "T.P. GANESAN AUDITORIUM",
+      "tourLabel": "Auditorum",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_C302A046_96C1_31E1_41D1_5FCF8AF29034_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C302A046_96C1_31E1_41D1_5FCF8AF29034_0.jpg",
+          "tourMediaId": "album_C302A046_96C1_31E1_41D1_5FCF8AF29034_0",
+          "sha256": "860a775ac9dd3e6af8b16cda6250b6c41f906d52172bb9b1adffaefabf0b5705",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/album_C302A046_96C1_31E1_41D1_5FCF8AF29034_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C302A046_96C1_31E1_41D1_5FCF8AF29034_1.jpg",
+          "tourMediaId": "album_C302A046_96C1_31E1_41D1_5FCF8AF29034_1",
+          "sha256": "bb5052ca3ca43b842245923c2c2f4b967eacfffd76f97fed8d202b1f25df7f52",
+          "width": 1600,
+          "height": 1066
+        }
+      ]
+    },
+    {
+      "buildingId": 17,
+      "buildingName": "JAVA GREEN (FOOD COURT)",
+      "tourLabel": "JAVA",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_CC1041D0_D1CD_88FE_41D2_C61E2B6C6C9E_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_CC1041D0_D1CD_88FE_41D2_C61E2B6C6C9E_0.jpg",
+          "tourMediaId": "album_CC1041D0_D1CD_88FE_41D2_C61E2B6C6C9E_0",
+          "sha256": "3c27a444ae7c90c9b2d995e530343c008f307730cca65a2b27d97714149a2410",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/album_CC1041D0_D1CD_88FE_41D2_C61E2B6C6C9E_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_CC1041D0_D1CD_88FE_41D2_C61E2B6C6C9E_1.jpg",
+          "tourMediaId": "album_CC1041D0_D1CD_88FE_41D2_C61E2B6C6C9E_1",
+          "sha256": "7faff737269eb251ba6ecfd757aa2210b5c6a78025492387b1fb5d43f7aa8256",
+          "width": 1600,
+          "height": 1047
+        }
+      ]
+    },
+    {
+      "buildingId": 22,
+      "buildingName": "PAARI HOSTEL",
+      "tourLabel": "Paari Block",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CADCDF32_C14B_9C38_41E5_7BBC4BAA2284-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CADCDF32_C14B_9C38_41E5_7BBC4BAA2284_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CADCDF32_C14B_9C38_41E5_7BBC4BAA2284",
+          "cubeFace": "r",
+          "sha256": "ebf80a9742398b41e32da4b96f2c5eb1e1d96c0e3801ad5e7fd4a0e08ff09fe8",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 23,
+      "buildingName": "KAARI HOSTEL",
+      "tourLabel": "Kaari Block",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CADC498B_C14B_84E8_41E7_4DDDA6657D6E-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CADC498B_C14B_84E8_41E7_4DDDA6657D6E_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CADC498B_C14B_84E8_41E7_4DDDA6657D6E",
+          "cubeFace": "r",
+          "sha256": "ddac2e2cca4b9d1541fc90db5dcb2095a7aedd2e7413ad4a1027d35be7391c2c",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 25,
+      "buildingName": "ADHIYAMAN HOSTEL",
+      "tourLabel": "Adhiyaman Block",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CADC0EC4_C14B_9C58_41A7_FA987E22B3C3-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CADC0EC4_C14B_9C58_41A7_FA987E22B3C3_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CADC0EC4_C14B_9C58_41A7_FA987E22B3C3",
+          "cubeFace": "r",
+          "sha256": "a091655b2ebe48193fbd000b966e0f055c6c5fdfead7c77be7d14e15de8ede48",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 32,
+      "buildingName": "C V RAMAN BLOCK",
+      "tourLabel": "CV Raman Block",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_C484FC4D_96C1_31E0_41CA_E44F489F6DA7_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C484FC4D_96C1_31E0_41CA_E44F489F6DA7_1.jpg",
+          "tourMediaId": "album_C484FC4D_96C1_31E0_41CA_E44F489F6DA7_1",
+          "sha256": "7eb3935d9826a9eb1daecda34f5e7fd824a0a94f07457f92ed0df6d6e0531269",
+          "width": 1600,
+          "height": 1112
+        },
+        {
+          "path": "/buildings/srm-tour/album_C484FC4D_96C1_31E0_41CA_E44F489F6DA7_2.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C484FC4D_96C1_31E0_41CA_E44F489F6DA7_2.jpg",
+          "tourMediaId": "album_C484FC4D_96C1_31E0_41CA_E44F489F6DA7_2",
+          "sha256": "b8db24257f1df4973f10d696c474f0b73996a3a0142fe9756a77db57ab632750",
+          "width": 1600,
+          "height": 1066
+        }
+      ]
+    },
+    {
+      "buildingId": 33,
+      "buildingName": "MBA BLOCK",
+      "tourLabel": "Management",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_0.jpg",
+          "tourMediaId": "album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_0",
+          "sha256": "7bb3ae0ec4eee5b726db8d80d1807009b583a4db6dfc28b710d5bdedb364b879",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_1.png",
+          "tourMediaId": "album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_1",
+          "sha256": "0c4c042d13f038bc68cb5c6dba08aaf261794412a383f0ed02b8376fdebff706",
+          "width": 1600,
+          "height": 1065
+        }
+      ]
+    },
+    {
+      "buildingId": 34,
+      "buildingName": "OORI HOSTEL",
+      "tourLabel": "Oori Block",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CADCD3D4_C14B_8478_4197_74B9BB8B0BAA-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CADCD3D4_C14B_8478_4197_74B9BB8B0BAA_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CADCD3D4_C14B_8478_4197_74B9BB8B0BAA",
+          "cubeFace": "r",
+          "sha256": "d77329c6dcf27c73d231e40cce720ef21bb73b0e2f8bbd39889d6ae7490080ea",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 35,
+      "buildingName": "NELSON MANDELA HOSTEL",
+      "tourLabel": "Nelson Mandela Block",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CADC6950_C14B_8479_41DE_77E9C8F5B958-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CADC6950_C14B_8479_41DE_77E9C8F5B958_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CADC6950_C14B_8479_41DE_77E9C8F5B958",
+          "cubeFace": "r",
+          "sha256": "47e02aa724a7f5df4157128755541b8002635627df600a00e031c5411e09f8d6",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 36,
+      "buildingName": "AGASTHAYAR HOSTEL",
+      "tourLabel": "Agasthiyar Block",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CADDA3DD_C14A_8468_41DB_E174EBB9A95B-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CADDA3DD_C14A_8468_41DB_E174EBB9A95B_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CADDA3DD_C14A_8468_41DB_E174EBB9A95B",
+          "cubeFace": "r",
+          "sha256": "cc29c51dd3f1c7e94aa06755df1875cb5bf60360f5bee3052eb4ec13f29994c5",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 37,
+      "buildingName": "SANNASI C BLOCK",
+      "tourLabel": "Sannasi C-Block",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CADDEF7B_C14A_9C28_41E0_91FAA446A32F-b.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CADDEF7B_C14A_9C28_41E0_91FAA446A32F_0/b/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CADDEF7B_C14A_9C28_41E0_91FAA446A32F",
+          "cubeFace": "b",
+          "sha256": "88c347457198918703d6d60b163e8a9f2f77083490049f93095ca1ac1f3ebc9b",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 43,
+      "buildingName": "SRM COLLEGE OF NURSING",
+      "tourLabel": "School of Nursing",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_CCE0904B_96C3_51E0_41D4_2803CD7B1784_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_CCE0904B_96C3_51E0_41D4_2803CD7B1784_1.jpg",
+          "tourMediaId": "album_CCE0904B_96C3_51E0_41D4_2803CD7B1784_1",
+          "sha256": "f36bd83572149f461bb0a863d56a5e9f8cad745948ef6e84507d5a6aa5ab2b66",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/album_CCE0904B_96C3_51E0_41D4_2803CD7B1784_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_CCE0904B_96C3_51E0_41D4_2803CD7B1784_0.jpg",
+          "tourMediaId": "album_CCE0904B_96C3_51E0_41D4_2803CD7B1784_0",
+          "sha256": "4d1b120a489ff2dda5bf4a8bdfce064ffdc250d3c758d56da47c1fb1a3130942",
+          "width": 1600,
+          "height": 1066
+        }
+      ]
+    },
+    {
+      "buildingId": 45,
+      "buildingName": "MANORANJITHAM",
+      "tourLabel": "Manoranjitham Block",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CADC4507_C14A_8DD8_41E2_A051A51DE516-l.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CADC4507_C14A_8DD8_41E2_A051A51DE516_0/l/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CADC4507_C14A_8DD8_41E2_A051A51DE516",
+          "cubeFace": "l",
+          "sha256": "f6499f5b609e0e61c736522f41c4d940fba1c2cc7abda8f34f0caed7ae1fd529",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 46,
+      "buildingName": "SRM CHAPEL",
+      "tourLabel": "Church",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_73FCFCEE_607D_CD9F_41C2_51704460CCA8-b.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_73FCFCEE_607D_CD9F_41C2_51704460CCA8_0/b/vr2gen/0.jpg",
+          "tourMediaId": "panorama_73FCFCEE_607D_CD9F_41C2_51704460CCA8",
+          "cubeFace": "b",
+          "sha256": "82afbea4a3d680e9169163bb1ae4b04ae457dcf5007c654dcfa0805fd4e9aa69",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 49,
+      "buildingName": "ARCH. GATE",
+      "tourLabel": "Arch Gate",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_376DF872_2734_77E8_41BE_53A2EB32FDD1-b.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_376DF872_2734_77E8_41BE_53A2EB32FDD1_0/b/vr2gen/0.jpg",
+          "tourMediaId": "panorama_376DF872_2734_77E8_41BE_53A2EB32FDD1",
+          "cubeFace": "b",
+          "sha256": "620854ad8874773fb6a86e3ec0e82df31c6271b85f1f7db4fcf8470f8faf1de9",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 52,
+      "buildingName": "RAJA RAJA CHOLAN STATUE",
+      "tourLabel": "Chola's Statue",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CAD5EBA9_C146_8428_41E2_2EEC90D5ED01-b.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CAD5EBA9_C146_8428_41E2_2EEC90D5ED01_0/b/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CAD5EBA9_C146_8428_41E2_2EEC90D5ED01",
+          "cubeFace": "b",
+          "sha256": "4f55b356c0d62c8aea1f702b42fe45969adba93577749a8b281e3de0641657a9",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 55,
+      "buildingName": "SRM FABLAB",
+      "tourLabel": "FAB Lab",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_73C477ED_6042_7B9D_41B8_9D98CD5E8E16-l.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_73C477ED_6042_7B9D_41B8_9D98CD5E8E16_0/l/vr2gen/0.jpg",
+          "tourMediaId": "panorama_73C477ED_6042_7B9D_41B8_9D98CD5E8E16",
+          "cubeFace": "l",
+          "sha256": "53404533822678e1cd60d3c4726632d7c096995ddd457a0bb85d228f3bdbdb1d",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 63,
+      "buildingName": "APJ GIRLS HOSTEL",
+      "tourLabel": "Abdul kalam hostel",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_2F47BF2E_224E_5460_4190_80A08687299C-f.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_2F47BF2E_224E_5460_4190_80A08687299C_0/f/vr2gen/0.jpg",
+          "tourMediaId": "panorama_2F47BF2E_224E_5460_4190_80A08687299C",
+          "cubeFace": "f",
+          "sha256": "7eb4f34939311413344ab0b9bc005ca05341583a66ca3c64fd9eebebdc5ec44c",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 69,
+      "buildingName": "PADMA BHUSHAN MAJOR. DHYAN CHAND INDOOR STADIUM",
+      "tourLabel": "Indoor Stadium",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_2F44485A_224A_3C20_41C0_C27A80AB5F3A-b.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_2F44485A_224A_3C20_41C0_C27A80AB5F3A_0/b/vr2gen/0.jpg",
+          "tourMediaId": "panorama_2F44485A_224A_3C20_41C0_C27A80AB5F3A",
+          "cubeFace": "b",
+          "sha256": "986083ca3fe57018196d1316a1b8f292eaba70470c8621c1b1136cbc4d18d8f6",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 75,
+      "buildingName": "DR. B. C. ROY GIRLS HOSTEL",
+      "tourLabel": "B.C.Roy Girls Hostel",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_2F444C5D_224E_7420_4194_6F7BD2C2A3E7-f.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_2F444C5D_224E_7420_4194_6F7BD2C2A3E7_0/f/vr2gen/0.jpg",
+          "tourMediaId": "panorama_2F444C5D_224E_7420_4194_6F7BD2C2A3E7",
+          "cubeFace": "f",
+          "sha256": "d7f6dbce4426aa4af8cd53ded3e151599f180595242fca6fec92f705ffae9210",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 97,
+      "buildingName": "SCIENCE AND HUMANITIES",
+      "tourLabel": "Science and Humanities",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_CD394F34_96C1_2FA1_41D2_523C13104AAD_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_CD394F34_96C1_2FA1_41D2_523C13104AAD_0.png",
+          "tourMediaId": "album_CD394F34_96C1_2FA1_41D2_523C13104AAD_0",
+          "sha256": "9469a7ac196650409a9ac3569e621dcc63f1438527616b7c7ee840f5236a2b4d",
+          "width": 1600,
+          "height": 1065
+        },
+        {
+          "path": "/buildings/srm-tour/album_CD394F34_96C1_2FA1_41D2_523C13104AAD_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_CD394F34_96C1_2FA1_41D2_523C13104AAD_1.png",
+          "tourMediaId": "album_CD394F34_96C1_2FA1_41D2_523C13104AAD_1",
+          "sha256": "54c402e5ed77dfec5493b7e9045685b3225334d3c2e58df49fd23f4024f7ad24",
+          "width": 1600,
+          "height": 1065
+        }
+      ]
+    },
+    {
+      "buildingId": 98,
+      "buildingName": "SRM FACULTY OF SCIENCE AND HUMANITIES",
+      "tourLabel": "Science and Humanities",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_CD394F34_96C1_2FA1_41D2_523C13104AAD_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_CD394F34_96C1_2FA1_41D2_523C13104AAD_0.png",
+          "tourMediaId": "album_CD394F34_96C1_2FA1_41D2_523C13104AAD_0",
+          "sha256": "9469a7ac196650409a9ac3569e621dcc63f1438527616b7c7ee840f5236a2b4d",
+          "width": 1600,
+          "height": 1065
+        },
+        {
+          "path": "/buildings/srm-tour/album_CD394F34_96C1_2FA1_41D2_523C13104AAD_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_CD394F34_96C1_2FA1_41D2_523C13104AAD_1.png",
+          "tourMediaId": "album_CD394F34_96C1_2FA1_41D2_523C13104AAD_1",
+          "sha256": "54c402e5ed77dfec5493b7e9045685b3225334d3c2e58df49fd23f4024f7ad24",
+          "width": 1600,
+          "height": 1065
+        }
+      ]
+    },
+    {
+      "buildingId": 100,
+      "buildingName": "SRM SCHOOL OF LAW",
+      "tourLabel": "School of Law",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CADB9150_C14A_8478_41DC_58112CB07A4A-b.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CADB9150_C14A_8478_41DC_58112CB07A4A_0/b/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CADB9150_C14A_8478_41DC_58112CB07A4A",
+          "cubeFace": "b",
+          "sha256": "efc7783ab965e30bb8e38377df8526b480222f53bf58446b5e326489388b9782",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 108,
+      "buildingName": "OM SHRI SELVA VINAYAGAR TEMPLE",
+      "tourLabel": "Temple",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_73FC8AC5_607D_D58D_41D0_D5F1D423BF23-b.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_73FC8AC5_607D_D58D_41D0_D5F1D423BF23_0/b/vr2gen/0.jpg",
+          "tourMediaId": "panorama_73FC8AC5_607D_D58D_41D0_D5F1D423BF23",
+          "cubeFace": "b",
+          "sha256": "4379c195919995463eb209bcd46d846c07c4a8ea7737984a74eea9a19c34af53",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 111,
+      "buildingName": "SRM ADMISSION OFFICE",
+      "tourLabel": "Admission Area",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_8E0146AC_AE70_BA9A_41BB_ED6C27BB79B5-l.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_8E0146AC_AE70_BA9A_41BB_ED6C27BB79B5_0/l/vr2gen/0.jpg",
+          "tourMediaId": "panorama_8E0146AC_AE70_BA9A_41BB_ED6C27BB79B5",
+          "cubeFace": "l",
+          "sha256": "e1d0d0d4589b2c45d85217e4700ae538123036c6391fc55a6e778431ec2b0f36",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 116,
+      "buildingName": "D MESS",
+      "tourLabel": "D.Mess",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CADC5E3E_C14A_9C28_41C1_EB81341F4A6A-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CADC5E3E_C14A_9C28_41C1_EB81341F4A6A_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CADC5E3E_C14A_9C28_41C1_EB81341F4A6A",
+          "cubeFace": "r",
+          "sha256": "6bf38f4ab2b5b50f479d541268a5361701f454b312b9e75b627c5ac605e74f52",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 124,
+      "buildingName": "SRM COLLEGE OF MANAGEMENT",
+      "tourLabel": "Management",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_0.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_0.jpg",
+          "tourMediaId": "album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_0",
+          "sha256": "7bb3ae0ec4eee5b726db8d80d1807009b583a4db6dfc28b710d5bdedb364b879",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_1.png",
+          "tourMediaId": "album_C466CAA1_96C1_36A3_41D9_A8F6CB8C7388_1",
+          "sha256": "0c4c042d13f038bc68cb5c6dba08aaf261794412a383f0ed02b8376fdebff706",
+          "width": 1600,
+          "height": 1065
+        }
+      ]
+    },
+    {
+      "buildingId": 125,
+      "buildingName": "SRM INNOVATION AND INCUBATION CENTRE",
+      "tourLabel": "SIIC",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_49B05FEB_5B7E_0652_41C0_A689D4C9B954-b.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_49B05FEB_5B7E_0652_41C0_A689D4C9B954_0/b/vr2gen/0.jpg",
+          "tourMediaId": "panorama_49B05FEB_5B7E_0652_41C0_A689D4C9B954",
+          "cubeFace": "b",
+          "sha256": "dac58d0632328a62a721e8736f8af5c5f52d53e794fb0d8487b84e8ded62885d",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 131,
+      "buildingName": "SCHOOL OF BIOENGINEERING (SOBE)",
+      "tourLabel": "Bio Engineering",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_1.jpg",
+          "tourMediaId": "album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_1",
+          "sha256": "f0a726d7405881119f07ca575ffd173dc4b56b290ae336827d3126503ba782fd",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_3.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_3.jpg",
+          "tourMediaId": "album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_3",
+          "sha256": "603f89a0e310cd0e715cce44a59ab4a5a1ec7daba76e2b07d27c47860e5e7550",
+          "width": 1600,
+          "height": 1066
+        }
+      ]
+    },
+    {
+      "buildingId": 132,
+      "buildingName": "BIO ENGINEERING BLOCK SRM",
+      "tourLabel": "Bio Engineering",
+      "kind": "album",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_1.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_1.jpg",
+          "tourMediaId": "album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_1",
+          "sha256": "f0a726d7405881119f07ca575ffd173dc4b56b290ae336827d3126503ba782fd",
+          "width": 1600,
+          "height": 1066
+        },
+        {
+          "path": "/buildings/srm-tour/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_3.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_3.jpg",
+          "tourMediaId": "album_F3E77790_96C7_3F61_41D3_99ED92CC41CF_3",
+          "sha256": "603f89a0e310cd0e715cce44a59ab4a5a1ec7daba76e2b07d27c47860e5e7550",
+          "width": 1600,
+          "height": 1066
+        }
+      ]
+    },
+    {
+      "buildingId": 141,
+      "buildingName": "CLOCK TOWER ROUNDABOUT",
+      "tourLabel": "Clock Tower",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_CAD4961B_C145_8FEF_41CA_B28B6AFBD0A6-f.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_CAD4961B_C145_8FEF_41CA_B28B6AFBD0A6_0/f/vr2gen/0.jpg",
+          "tourMediaId": "panorama_CAD4961B_C145_8FEF_41CA_B28B6AFBD0A6",
+          "cubeFace": "f",
+          "sha256": "e11818d20f315d0ef030bde047b24a9b66352a2e3ad57bec451bc4a95c14f95e",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "buildingId": 143,
+      "buildingName": "MOSQUE",
+      "tourLabel": "Mosque",
+      "kind": "panorama",
+      "photos": [
+        {
+          "path": "/buildings/srm-tour/panorama_73FD063D_607D_DCFD_41B9_EF4B564AE4FC-r.webp",
+          "sourceUrl": "https://webstor.srmist.edu.in/web_assets/srmist-virtual-tour-vo/media/panorama_73FD063D_607D_DCFD_41B9_EF4B564AE4FC_0/r/vr2gen/0.jpg",
+          "tourMediaId": "panorama_73FD063D_607D_DCFD_41B9_EF4B564AE4FC",
+          "cubeFace": "r",
+          "sha256": "25a5ed51a94c345d325f87d8146cd835fad2fb8935608228ed79b6562ce4fd2d",
+          "width": 1600,
+          "height": 1600
+        }
+      ]
+    }
+  ]
+}

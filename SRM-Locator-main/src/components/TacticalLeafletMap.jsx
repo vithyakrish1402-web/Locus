@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { SRM_MASTER_DATABASE } from '../srmDatabase';
@@ -181,6 +181,10 @@ const TacticalLeafletMap = ({
   focusedMemberId = null,
 }) => {
   const tiles = isSatellite ? SATELLITE_TILES : DARK_TILES;
+  // The walking route, made once per route: both lines draw the same points, unsimplified
+  // (smoothFactor 0) and unclipped, so they stay on the roads and under the markers while the
+  // map is zoomed or panned (js-1.1.72).
+  const routePositions = useMemo(() => walkingRoute?.path?.map((p) => [p.lat, p.lng]) || [], [walkingRoute?.path]);
 
   return (
     <MapContainer
@@ -249,7 +253,9 @@ const TacticalLeafletMap = ({
       {/* Live walking route to the active waypoint — shared solid blue route and white outline in both themes */}
       {walkingRoute?.path?.length > 1 && (
         <Polyline
-          positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
+          positions={routePositions}
+          smoothFactor={0}
+          noClip
           pathOptions={{
             color: casingColor,
             weight: ROUTE_CASING_WIDTH,
@@ -260,7 +266,9 @@ const TacticalLeafletMap = ({
       )}
       {walkingRoute?.path?.length > 1 && (
         <Polyline
-          positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
+          positions={routePositions}
+          smoothFactor={0}
+          noClip
           pathOptions={{
             color: routeColor,
             weight: ROUTE_WIDTH,

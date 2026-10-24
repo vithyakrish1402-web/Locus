@@ -2,6 +2,8 @@
 // Curated for Google/Apple Maps aesthetic.
 // Contains verified photos, facilities, operating hours, floor counts, and descriptions.
 
+import { LOCATION_CONTENT, TOUR_PHOTOS } from './campusLocationContent';
+
 export const SRM_BUILDING_ASSETS = {
   1: {
     id: 1,
@@ -489,12 +491,21 @@ export const SRM_BUILDING_ASSETS = {
 };
 
 /**
- * Returns rich building assets for a building, with intelligent defaults.
+ * Returns rich building assets for a building, with intelligent defaults: its official tour
+ * photos where it has them (js-1.1.71), and its own category line, tags and description
+ * (js-1.1.72, data/campusLocationContent.js).
  * @param {object} building
  */
 export function getBuildingAsset(building) {
+  const asset = baseAsset(building);
+  if (!asset) return null;
+  const content = LOCATION_CONTENT[building.id];
+  return { ...asset, ...content, tags: content?.tags || [] };
+}
+
+function baseAsset(building) {
   if (!building) return null;
-  const asset = SRM_BUILDING_ASSETS[building.id] || {};
+  const asset = { ...SRM_BUILDING_ASSETS[building.id], ...TOUR_PHOTOS[building.id] };
   
   // Clean fallback category display
   const categoryMap = {

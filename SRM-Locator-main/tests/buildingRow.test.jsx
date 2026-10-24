@@ -5,6 +5,7 @@ import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import BuildingRow from '../src/components/map/BuildingRow.jsx';
+import { LOCATION_CONTENT } from '../src/data/campusLocationContent';
 import { BUILDING_LIST } from '../src/copy/map.js';
 
 afterEach(cleanup);
@@ -19,12 +20,23 @@ const renderRow = (props = {}) => {
 };
 
 describe('a building in the list', () => {
-  it('shows its category, name, how far, and its line', () => {
+  it('shows its own category line, name, how far, and its description', () => {
     renderRow();
-    expect(screen.getByText('Academic')).toBeTruthy();
+    expect(screen.getByText(LOCATION_CONTENT[2].categoryDisplay)).toBeTruthy();
     expect(screen.getByText('TECH PARK')).toBeTruthy();
     expect(screen.getByText(/^\d+ m away$/)).toBeTruthy();
+    expect(screen.getByText(LOCATION_CONTENT[2].description)).toBeTruthy();
+  });
+
+  it('falls back to its default category line and its line for a place with no words of its own', () => {
+    renderRow({ building: { ...TECH_PARK, id: 9999 } });
+    expect(screen.getByText('Academic Block')).toBeTruthy();
     expect(screen.getByText(TECH_PARK.info)).toBeTruthy();
+  });
+
+  it('has no Open dot: nothing had checked it (js-1.1.72)', () => {
+    renderRow();
+    expect(screen.queryByTitle('Open')).toBeNull();
   });
 
   it('without a fix, no distance', () => {
