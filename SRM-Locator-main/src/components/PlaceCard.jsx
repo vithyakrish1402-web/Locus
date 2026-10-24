@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Flag,
-  Layers,
   Navigation,
   ScanLine,
   X,
@@ -63,8 +62,8 @@ export default function PlaceCard({
   onArScan,
   rally,
 }) {
-  const category = categoryLabel(place?.category);
   const asset = getBuildingAsset(place);
+  const category = asset?.categoryDisplay || categoryLabel(place?.category);
   const photos = asset?.photos?.length > 0 ? asset.photos : asset?.image ? [asset.image] : ['/buildings/campus_main.jpg'];
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
@@ -150,33 +149,21 @@ export default function PlaceCard({
               <span>{category}</span>
             </span>
           )}
-          {asset?.categoryDisplay && asset.categoryDisplay !== category && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/25">
-              {asset.categoryDisplay}
-            </span>
-          )}
-          {asset?.floors && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/[0.06] text-slate-300 border border-white/10">
-              <Layers size={11} className="shrink-0 text-slate-400" />
-              <span>{asset.floors} Floors</span>
-            </span>
-          )}
-          {asset?.isOpen !== undefined && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-              <span>{asset.isOpen ? 'Open' : 'Closed'}</span>
-            </span>
-          )}
-          {asset?.departments?.slice(0, 2).map((dept) => (
+          {/* Its tags. The Open/Closed and floor-count chips are gone: nothing had checked them. */}
+          {asset?.tags?.map((tag) => (
             <span
-              key={dept}
-              className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-normal bg-white/[0.04] text-slate-300 border border-white/5 truncate max-w-[140px]"
-              title={dept}
+              key={tag}
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-normal bg-white/[0.04] text-slate-300 border border-white/5"
             >
-              {dept}
+              {tag}
             </span>
           ))}
         </div>
+        {asset?.description && (
+          <p className="text-slate-300" style={{ fontSize: 13, lineHeight: '1.25rem' }} data-testid="place-description">
+            {asset.description}
+          </p>
+        )}
       </div>
 
       {/* Bottom actions: Navigate (primary), Rally and AR Scan. Outside the photo, so the
