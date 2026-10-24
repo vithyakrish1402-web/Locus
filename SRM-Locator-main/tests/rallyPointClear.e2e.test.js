@@ -30,6 +30,26 @@ const deploy = async (socket, room, waypoint = RALLY) => {
   return echoed;
 };
 
+describe('rally point descriptions', () => {
+  it('shares the description and restores it after reconnecting', async () => {
+    const { room, alpha, bravo } = await squadOfThree();
+    const received = once(bravo, 'new-waypoint');
+    await deploy(alpha, room, { ...RALLY, description: '  Meet by the gate at 4 pm  ' });
+    expect((await received).description).toBe('Meet by the gate at 4 pm');
+    bravo.disconnect();
+    const returning = await connect();
+    const restored = once(returning, 'new-waypoint');
+    await requestJoin(returning, room, 'uB');
+    expect((await restored).description).toBe('Meet by the gate at 4 pm');
+  });
+
+  it('bounds descriptions and ignores non-text values from older or malformed clients', async () => {
+    const { room, alpha } = await squadOfThree();
+    expect((await deploy(alpha, room, { ...RALLY, description: 'x'.repeat(200) })).description).toHaveLength(160);
+    expect(await deploy(alpha, room, { ...RALLY, description: { unexpected: true } })).not.toHaveProperty('description');
+  });
+});
+
 describe('who can clear a Rally Point', () => {
   it('the member who dropped it, and it goes from every map in the squad', async () => {
     const { room, alpha, bravo, charlie } = await squadOfThree();

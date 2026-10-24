@@ -2199,6 +2199,7 @@ const App = () => {
       // (the dots show on a phone whatever the tab) must switch to it or no card appears.
       setActiveTab('buildings');
       setSelectedItem(item);
+      if (isMobile) setMobileView('grid');
     }
   };
 
@@ -2209,10 +2210,7 @@ const App = () => {
     // 0. TARGETING MODE RALLY POINT (Mobile two-step)
     if (isTargetingMode) {
       const waypoint = { lat, lng, name: "RALLY POINT" };
-      setActiveWaypoint(waypoint);
-      if (squadCode) {
-        socket.emit('publish-waypoint', { roomCode: squadCode, waypoint });
-      }
+      setMeetingPointToConfirm(waypoint);
       setIsTargetingMode(false);
       return;
     }
@@ -2869,8 +2867,7 @@ const App = () => {
         />
       )}
 
-      {/* Sidebar Panel — visible on desktop always; on a phone, a sheet that is open when
-          mobileView is 'matrix' or 'squad' and can be dragged down by its handle strip. */}
+      {/* Buildings and Group are separate fixed pages on phones, with a sidebar on desktop. */}
       {!isNavigatingMode && (
         <motion.div
           data-testid="section-page"
@@ -2893,12 +2890,7 @@ const App = () => {
           </header>
           {activeTab === 'users' && <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode} />}
           {/* List Content */}
-          {/* Room at the bottom on a phone under the last row: SHEET_BOTTOM_PADDING_PX, one tab bar's
-            measured height and 2 rem (utils/panelHeights.js). The panel ends at the top of the tab
-            bar; the spacer at the end of the list is what makes room for the part of the panel
-            that lies below the screen at half and peek. */}
-          {/* At half, the first scroll through the list (members or places) lifts the panel to
-            full: there is little of the list to read through at half, so the panel makes room. */}
+          {/* The page stays fixed while its list scrolls above the bottom tabs. */}
           <div
             data-testid="group-panel-list"
             className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pt-1 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
@@ -3117,7 +3109,7 @@ const App = () => {
             {activeTab === 'users' && <LeaveGroupButton onClick={() => setShowLeaveConfirm(true)} />}
             {/* The panel rests lower than full by this much: room to scroll the last rows up into
               view at half. */}
-            
+
           </div>
         </motion.div>
       )}

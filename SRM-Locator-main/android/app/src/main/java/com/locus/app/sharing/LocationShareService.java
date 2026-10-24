@@ -464,7 +464,8 @@ public class LocationShareService extends Service implements LocationListener {
         // where its own badge and notice say it; taken down when nobody is waiting.
         @Override
         public void deliverPing(PingNotice notice) {
-            if (!SharingState.isAppLive()) PingNotifications.show(LocationShareService.this, notice);
+            Session session = SharingState.session();
+            if (session != null) PingNotifications.deliver(LocationShareService.this, notice, session.roomCode);
         }
 
         @Override

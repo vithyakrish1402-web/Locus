@@ -23,7 +23,7 @@ export function useNavigationController({
   const [rerouteError, setRerouteError] = useState(null);
   const [hasArrived, setHasArrived] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [autoFollow, setAutoFollow] = useState(false); // Manual recenter by default
+  const [autoFollow, setAutoFollow] = useState(false); // Enabled for each new navigation session.
   const [isFollowingCamera, setIsFollowingCamera] = useState(false);
   const [remainingDistanceMeters, setRemainingDistanceMeters] = useState(0);
   const [remainingTimeMinutes, setRemainingTimeMinutes] = useState(0);
@@ -276,14 +276,9 @@ export function useNavigationController({
   }, []);
 
   const toggleAutoFollow = useCallback(() => {
-    setAutoFollow((prev) => {
-      const next = !prev;
-      if (next) {
-        handleRecenter();
-      }
-      return next;
-    });
-  }, [handleRecenter]);
+    if (autoFollow) setAutoFollow(false);
+    else handleRecenter();
+  }, [autoFollow, handleRecenter]);
 
   const currentStep = activeRoute?.steps?.[currentStepIndex] || activeRoute?.steps?.[0] || null;
   const nextStep = activeRoute?.steps?.[currentStepIndex + 1] || null;

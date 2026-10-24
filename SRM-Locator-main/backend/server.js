@@ -1085,8 +1085,8 @@ socket.on('check-ping', (clientTimestamp) => {
       const rallyPoint = {
         lat: waypoint.lat,
         lng: waypoint.lng,
-        name: typeof waypoint.name === 'string' ? waypoint.name.slice(0, 120) : 'Rally point',
-        description: typeof waypoint.description === 'string' ? waypoint.description.trim().slice(0, 160) : '',
+        name: typeof waypoint.name === 'string' ? waypoint.name.slice(0, 120) : undefined,
+        ...(typeof waypoint.description === 'string' ? { description: waypoint.description.trim().slice(0, 160) } : {}),
         setBy: memberKey(socket.data?.uid, socket.id),
       };
       activeSquads[roomCode].activeWaypoint = rallyPoint;
@@ -1178,7 +1178,7 @@ socket.on('check-ping', (clientTimestamp) => {
   // here and take the whole server down — and so did a null one, after the fix for that
   // was a `= {}` default, which null skips.
   socket.on('ping-user', (payload) => {
-    const { targetId, senderName } = payload ?? {};
+    const { targetId } = payload ?? {};
     const backgroundUid = uidOfPresenceKey(targetId);
     const roomCode = sharedSquad(activeSquads, socket.id, targetId) || (backgroundUid && Object.keys(activeSquads).find(room => {
       const squad = activeSquads[room];

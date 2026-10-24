@@ -7,7 +7,7 @@ import { MEETING_POINT_CONFIRM, RALLY_CLEAR_CONFIRM } from '../copy/place';
 // taking the rally point off everyone's map instead.
 
 /**
- * @param {{ place: {name: string} | null, onConfirm: () => void, onCancel: () => void,
+ * @param {{ place: {name: string, description?: string} | null, onConfirm: (description: string) => void, onCancel: () => void,
  *   clearing?: boolean }} props
  */
 export default function MeetingPointConfirm({ place, onConfirm, onCancel, clearing = false }) {

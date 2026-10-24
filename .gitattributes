@@ -1,0 +1,3 @@
+# These existing source blobs contain CRLF. Preserve them to keep feature diffs readable.
+SRM-Locator-main/src/components/TacticalLeafletMap.jsx -text whitespace=trailing-space,space-before-tab,cr-at-eol
+SRM-Locator-main/src/hooks/useNavigationController.js -text whitespace=trailing-space,space-before-tab,cr-at-eol

@@ -12,7 +12,14 @@ import com.locus.app.alerts.AlertPrefs;
 
 /** Phone notifications for ordinary pings; the person's in-app DND remains respected. */
 public final class PingNotifications {
-    public static void show(Context context, PingNotice ping) {
+    public static void deliver(Context context, PingNotice ping, String roomCode) {
+        // Remember deliveries across a sharing-service restart, including pings already heard
+        // on screen, so a reconnect cannot replay a recent ping as a new phone alert.
+        android.content.SharedPreferences ledger = context.getSharedPreferences("locus_ping_deliveries", Context.MODE_PRIVATE);
+        String key = "rev:" + roomCode;
+        if (ping.rev <= ledger.getLong(key, 0)) return;
+        ledger.edit().putLong(key, ping.rev).apply();
+        if (SharingState.isAppLive()) return;
         boolean silent = AlertPrefs.inAppDnd(context);
         String channelId = silent ? "locus_pings_silent_v1" : "locus_pings_v1";
         NotificationManager manager = context.getSystemService(NotificationManager.class);
@@ -31,6 +38,7 @@ public final class PingNotifications {
                 .setContentTitle(ping.senderName + " pinged you")
                 .setContentText("Tap to open your group")
                 .setPriority(silent ? NotificationCompat.PRIORITY_LOW : NotificationCompat.PRIORITY_HIGH)
+                .setDefaults(silent ? 0 : NotificationCompat.DEFAULT_ALL)
                 .setSilent(silent).setAutoCancel(true).setContentIntent(tap).build());
         } catch (SecurityException ignored) { /* Android notification permission is off. */ }
     }

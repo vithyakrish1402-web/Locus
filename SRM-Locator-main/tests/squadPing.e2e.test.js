@@ -31,7 +31,7 @@ describe('member ping', () => {
     ping(alpha, bravo, 'Alpha');
 
     await waitFor(() => bravo.pings.length);
-    expect(bravo.pings[0]).toEqual({ senderName: 'Alpha' });
+    expect(bravo.pings[0]).toEqual({ senderName: 'uA' });
     await settle(alpha);
     await sleep(150);
     expect(alpha.pings).toEqual([]);
@@ -43,7 +43,7 @@ describe('member ping', () => {
     listen(alpha);
     ping(charlie, alpha, 'Charlie');
     await waitFor(() => alpha.pings.length);
-    expect(alpha.pings[0]).toEqual({ senderName: 'Charlie' });
+    expect(alpha.pings[0]).toEqual({ senderName: 'uC' });
   });
 
   it('is dropped when the target is in a different squad', async () => {

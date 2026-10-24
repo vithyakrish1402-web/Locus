@@ -58,10 +58,17 @@ const SATELLITE_TILES = {
 };
 
 // Leaflet keeps marker labels upright; only the directional arrow follows map bearing.
-function BearingTracker({ onBearing }) {
+function SelfLocationLayer({ location, indoor, zoom, navigating, heading, roadName, onFocus }) {
   const map = useMap();
-  useMapEvents({ rotate: () => onBearing(map.getBearing?.() || 0) });
-  return null;
+  const [bearing, setBearing] = useState(() => map.getBearing?.() || 0);
+  useMapEvents({ rotate: () => setBearing(map.getBearing?.() || 0) });
+  if (!location) return null;
+  return <LeafletReactMarker lat={location.lat} lng={location.lng} onClick={() => onFocus(location, null)}>
+    <div style={{ position: 'relative' }}>
+      {WIFI_POSITIONING_ENABLED && indoor && <ConfidenceHalo confidence={indoor.confidence} color="#10B981" />}
+      <LiveLocationMarker zoom={zoom} isNavigating={navigating} heading={(heading || 0) + bearing} roadName={roadName} />
+    </div>
+  </LeafletReactMarker>;
 }
 
 const SRM_KTR_COORDS = { lat: 12.8237, lng: 80.0444 };
@@ -191,7 +198,6 @@ const TacticalLeafletMap = ({
   // (smoothFactor 0) and unclipped, so they stay on the roads and under the markers while the
   // map is zoomed or panned (js-1.1.72).
   const routePositions = useMemo(() => walkingRoute?.path?.map((p) => [p.lat, p.lng]) || [], [walkingRoute?.path]);
-  const [bearing, setBearing] = useState(0);
 
   return (
     <MapContainer
@@ -216,31 +222,13 @@ const TacticalLeafletMap = ({
         keepBuffer={3}
       />
       <ViewController center={center} zoom={zoom} />
-      <BearingTracker onBearing={setBearing} />
       <FocusDriver onMapInstance={onMapInstance} onUserInteraction={onUserInteraction} active={driverActive} />
       <ClickHandler onMapClick={onMapClick} />
       <ZoomTracker onZoomChange={onZoomChange} />
 
 
-      {liveLocation && (
-        <LeafletReactMarker
-          lat={liveLocation.lat}
-          lng={liveLocation.lng}
-          onClick={() => onFocus(liveLocation, null)}
-        >
-          {/* The wrapper gives the halo a positioned parent at the anchor; see IndoorMarkers. */}
-          <div style={{ position: 'relative' }}>
-            {WIFI_POSITIONING_ENABLED && liveIndoor && <ConfidenceHalo confidence={liveIndoor.confidence} color="#10B981" />}
-            <LiveLocationMarker
-              zoom={currentZoom}
-              isNavigating={liveIsNavigating}
-              heading={(liveHeading || 0) + bearing}
-              roadName={currentRoadName}
-            />
-          </div>
-        </LeafletReactMarker>
-      )}
-
+      <SelfLocationLayer location={liveLocation} indoor={liveIndoor} zoom={currentZoom}
+        navigating={liveIsNavigating} heading={liveHeading} roadName={currentRoadName} onFocus={onFocus} />
       {(showBuildings ?? activeTab === 'buildings') && places.map((b) => (
         <LeafletReactMarker key={b.id} lat={b.lat} lng={b.lng} onClick={() => onFocus({ lat: b.lat, lng: b.lng }, b)}>
           <BuildingMarker highlighted={highlightBuildingId === b.id} />

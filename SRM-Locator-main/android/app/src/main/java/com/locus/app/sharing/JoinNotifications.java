@@ -68,6 +68,8 @@ public final class JoinNotifications {
             .setNumber(count)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setOnlyAlertOnce(true)
             .setContentIntent(tap)
             .setAutoCancel(true)
             .build();

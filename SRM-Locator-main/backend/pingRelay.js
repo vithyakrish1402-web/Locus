@@ -3,7 +3,7 @@
 export const PING_TTL_MS = 2 * 60 * 1000;
 export function queueBackgroundPing(squad, uid, senderName, now = Date.now()) {
   if (!uid) return null;
-  const rev = squad.pingRev = (squad.pingRev || 0) + 1;
+  const rev = squad.pingRev = Math.max(now, (squad.pingRev || 0) + 1);
   const ping = { rev, uid, senderName: String(senderName || 'A group member').slice(0, 80), expiresAt: now + PING_TTL_MS };
   squad.backgroundPings = [...(squad.backgroundPings || []).filter(p => p.expiresAt > now), ping].slice(-200);
   return ping;

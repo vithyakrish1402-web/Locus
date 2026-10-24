@@ -428,6 +428,17 @@ describe('the question itself', () => {
 });
 
 describe('ordinary pings reaching a closed app', () => {
+  it('reaches a member shown under their background presence ID', async () => {
+    const { room, alpha, bravo } = await group();
+    const token = await tokenFor('uB', room);
+    expect((await call('POST', '/location', { auth: token, body: { lat: 12.8231, lng: 80.0442, nextPostWithinSec: 60 } })).status).toBe(200);
+    bravo.disconnect();
+    const waiting = call('GET', '/sos?pingAfter=0&wait=3', { auth: token });
+    await sleep(100);
+    alpha.emit('ping-user', { targetId: 'bg:uB' });
+    expect((await waiting).json.pings).toEqual([{ rev: expect.any(Number), senderName: 'uA' }]);
+  });
+
   it('wakes only the recipient, preserves sender identity, and advances the cursor', async () => {
     const { room, alpha, bravo } = await group();
     const token = await tokenFor('uB', room);

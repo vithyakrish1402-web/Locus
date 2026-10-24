@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { INDICATOR_SPRING } from '../utils/motion';
 import { Badge } from './ui';
 
-// The phone's bottom bar (redesign Map batch): Map, Scan and Group. One highlight slides between the tabs on a spring (a shared
+// The phone's bottom bar: Map, Buildings and Group. One highlight slides between the tabs on a spring (a shared
 // layoutId), so changing tab reads as one object moving rather than two states swapping.
 // Each icon also answers in its own way when its tab becomes active - the map lifts, the
 // scan reticle turns a quarter, the squad pops - keyed on `active` so it plays once per
