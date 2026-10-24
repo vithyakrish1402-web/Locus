@@ -15,13 +15,14 @@ export default function SettingsHost({ onSignOut, onAdmin, ...screenProps }) {
   return (
     <AnimatePresence>
       {open && (
-        // The outer layer is opaque and above the bars from its first frame to its last; only the
-        // screen inside it fades (its parts then arrive one by one, see SettingsScreen). A moving element is its own stacking context, so with the motion
+        // The outer layer is opaque and above the bars from its first frame to its last. The screen
+        // inside it is whole from its first frame too (no fade in, so no empty frame in any theme);
+        // only closing fades it out. A moving element is its own stacking context, so with the motion
         // on an unlayered wrapper, Settings' z-index counted only inside it and the top and bottom
         // bars drew over Settings until the motion finished.
         <motion.div key="settings" data-testid="settings-layer" className="fixed inset-0 bg-bg" style={{ zIndex: SETTINGS_Z }}>
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0.15 : 0.2, ease: 'easeOut' }}

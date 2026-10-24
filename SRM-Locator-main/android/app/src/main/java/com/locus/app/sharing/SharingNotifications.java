@@ -128,10 +128,12 @@ public final class SharingNotifications {
         if (kind == ReasonNotice.Kind.NONE) return;
         ensureChannels(context);
         boolean unreachable = kind == ReasonNotice.Kind.UNREACHABLE;
+        boolean switchedOff = kind == ReasonNotice.Kind.DISABLED;
         Notification notification = new NotificationCompat.Builder(context, CHANNEL_RESUME)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle(unreachable ? "LOCUS stopped sharing your location" : "Your Group ended")
-            .setContentText(unreachable ? "The server could not be reached. Tap to reopen LOCUS" : "Tap to reopen LOCUS")
+            .setContentTitle(switchedOff ? "Background sharing was switched off" : unreachable ? "LOCUS stopped sharing your location" : "Your Group ended")
+            .setContentText(switchedOff ? "LOCUS no longer shares your location when it is closed. Tap to reopen LOCUS"
+                : unreachable ? "The server could not be reached. Tap to reopen LOCUS" : "Tap to reopen LOCUS")
             .setContentIntent(openApp(context))
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)

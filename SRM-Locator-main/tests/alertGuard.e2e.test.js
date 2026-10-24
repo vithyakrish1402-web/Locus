@@ -307,14 +307,60 @@ describe('SOS rules', () => {
     expect(alpha.sos[0]).not.toHaveProperty('flag');
   });
 
-  it('are never limited, however often they are pressed', async () => {
+  it('refuse a second alarm from the same person inside the cooldown, saying how long is left', async () => {
     const { room, alpha, bravo } = await group(api);
     await place(bravo, room, HOSTEL);
-    for (let i = 0; i < 12; i++) sos(bravo, room);
-    await waitFor(() => bravo.results.length === 12);
-    expect(bravo.results.every((r) => r.allowed)).toBe(true);
+    for (let i = 0; i < 3; i++) sos(bravo, room);
+    await waitFor(() => bravo.results.length === 3);
+    expect(bravo.results[0]).toMatchObject({ allowed: true });
+    for (const refused of bravo.results.slice(1)) {
+      expect(refused).toMatchObject({ type: 'sos', allowed: false, mode: 'blocked', reasonCode: 'COOLDOWN' });
+      // The default cooldown is 3 minutes.
+      expect(refused.retryAfterSec).toBeGreaterThan(170);
+      expect(refused.retryAfterSec).toBeLessThanOrEqual(180);
+    }
+    await sleep(100);
     expect(alpha.sos).toHaveLength(1);
+    expect(alpha.updates).toEqual([]);
   });
+
+  it('follow the cooldown the Group Lead picked, which must be one of the presets', async () => {
+    const { room, alpha, bravo } = await group(api);
+    // Not a preset: ignored, the default stands.
+    await ask(alpha, 'set-group-settings', { roomCode: room, sosCooldownMs: 1234 });
+    await ask(alpha, 'set-group-settings', { roomCode: room, sosCooldownMs: 60000 });
+    await waitFor(() => bravo.settings.some((s) => s.sosCooldownMs === 60000));
+    expect(last(bravo.settings)).toMatchObject({ sosCooldownMs: 60000, sosCooldownPresetsMs: [60000, 180000, 300000] });
+    sos(bravo, room);
+    sos(bravo, room);
+    await waitFor(() => bravo.results.length === 2);
+    expect(bravo.results[1].retryAfterSec).toBeLessThanOrEqual(60);
+    // A member cannot change it.
+    expect(await ask(bravo, 'set-group-settings', { roomCode: room, sosCooldownMs: 300000 })).toEqual({ ok: false, reason: 'not-commander' });
+  });
+
+  it('keep one person\'s cooldown to themselves', async () => {
+    const { room, alpha, bravo, charlie } = await group(api);
+    sos(bravo, room);
+    await waitFor(() => alpha.sos.length === 1);
+    sos(charlie, room, { senderName: 'Charlie' });
+    await waitFor(() => alpha.sos.length === 2);
+  });
+
+  it('do not crash the server on a malformed cooldown or payload', async () => {
+    const { room, alpha, bravo } = await group(api);
+    for (const bad of [null, 'x', 7, { sosCooldownMs: 'soon' }, { roomCode: room, sosCooldownMs: -1 }, { roomCode: room, sosCooldownMs: Infinity }]) {
+      alpha.emit('set-group-settings', bad);
+      bravo.emit('sos-broadcast', bad);
+    }
+    sos(bravo, room);
+    await waitFor(() => alpha.sos.length === 1);
+  });
+});
+
+describe('SOS rules with a cooldown shorter than coalescing', () => {
+  // A cooldown of 0 is how the coalescing and repeat-notice behaviour beneath it is checked.
+  const api = e2eServer({ env: { LOCUS_QUIET_ZONES_ENABLED: 'true', LOCUS_CLASS_CLOCK_ISO: DURING_CLASS, LOCUS_SOS_COOLDOWN_DEFAULT_MS: '0' } });
 
   it('update the sender\'s earlier one instead of sounding a second alarm', async () => {
     const { room, alpha, bravo, charlie } = await group(api);
@@ -344,8 +390,26 @@ describe('SOS rules', () => {
     await waitFor(() => alpha.sos.length === 2);
     expect(alpha.updates).toEqual([]);
   });
+});
 
-  it('tell the Group Lead, once, when someone presses repeatedly', async () => {
+describe('SOS cooldown running out', () => {
+  const api = e2eServer({ env: { LOCUS_SOS_COOLDOWN_DEFAULT_MS: '300', LOCUS_SOS_COALESCE_SEC: '0' } });
+
+  it('lets the same person raise a new alarm once it has passed', async () => {
+    const { room, alpha, bravo } = await group(api);
+    sos(bravo, room);
+    await waitFor(() => alpha.sos.length === 1);
+    await sleep(400);
+    sos(bravo, room);
+    await waitFor(() => alpha.sos.length === 2);
+    expect(bravo.results.every((r) => r.allowed)).toBe(true);
+  });
+});
+
+describe('SOS repeats', () => {
+  const api = e2eServer({ env: { LOCUS_QUIET_ZONES_ENABLED: 'true', LOCUS_CLASS_CLOCK_ISO: DURING_CLASS } });
+
+  it('tell the Group Lead, once, when someone presses repeatedly, counting the presses the cooldown refused', async () => {
     const { room, alpha, bravo, charlie } = await group(api);
     for (let i = 0; i < 5; i++) sos(bravo, room);
     await waitFor(() => bravo.results.length === 5);
@@ -572,11 +636,12 @@ describe('quiet zones with the master switch at its default (off)', () => {
     expect(alpha.sos).toEqual([]);
     await ask(alpha, 'set-group-settings', { roomCode: room, sosEnabled: true });
 
-    // SOS coalescing, the repeated-SOS notice and the log.
+    // The SOS cooldown, the repeated-SOS notice and the log.
     for (let i = 0; i < 4; i++) sos(bravo, room);
     await waitFor(() => alpha.notices.length);
+    await waitFor(() => bravo.results.length === 8);
     expect(alpha.sos).toHaveLength(1);
-    expect(alpha.updates.length).toBeGreaterThanOrEqual(1);
+    expect(bravo.results.slice(5).every((r) => r.reasonCode === 'COOLDOWN')).toBe(true);
     expect(alpha.logEntries.length).toBeGreaterThanOrEqual(5);
   });
 });

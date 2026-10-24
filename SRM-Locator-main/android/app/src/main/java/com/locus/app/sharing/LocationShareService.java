@@ -21,11 +21,20 @@ import android.os.Looper;
 import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import com.locus.app.alerts.AlertVolume;
+import com.locus.app.alerts.AlertVolumeLedger;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Shares the person's position with their Group while LOCUS is closed.
+ * Shares the person's position with their Group while LOCUS is closed, and listens for the
+ * Group's SOS (see SosListener): an SOS from a teammate rings here as a loud alert when the app
+ * is not on screen, as long as the person has not turned "SOS alerts when the app is closed" off.
+ * Both end together: with sharing off, there is no service and so no alert.
  *
  * A foreground service of type "location", started by the app only while it is on screen (the
  * only time Android 12+ allows it). It reports over HTTPS with the device token the app gave it,
@@ -48,8 +57,13 @@ public class LocationShareService extends Service implements LocationListener {
     public static final String ACTION_PAUSE = "com.locus.app.sharing.PAUSE";
     public static final String ACTION_RESUME = "com.locus.app.sharing.RESUME";
     public static final String ACTION_STOP = "com.locus.app.sharing.STOP";
+    /** The person switched "SOS alerts when the app is closed" on or off in Settings. */
+    public static final String ACTION_SOS_ALERTS = "com.locus.app.sharing.SOS_ALERTS";
+    /** The app is showing that SOS (or the person acknowledged it): take its notification down. */
+    public static final String ACTION_SOS_DISMISS = "com.locus.app.sharing.SOS_DISMISS";
     public static final String EXTRA_MINUTES = "minutes";
     public static final String EXTRA_REASON = "reason";
+    public static final String EXTRA_SOS_ID = "sosId";
 
     private static final long TICK_MS = 5_000;
     private static volatile boolean running = false;
@@ -75,12 +89,22 @@ public class LocationShareService extends Service implements LocationListener {
     private long requestedIntervalMs = -1;
     private boolean wasPaused = false;
 
+    // SOS heard while the app is closed
+    private final SosLedger ledger = new SosLedger();
+    private final Map<Integer, Runnable> quieters = new HashMap<>(); // slot -> "stop the sound of that alert"
+    private final Map<Integer, SosAlert> alerting = new HashMap<>(); // slot -> the alert it shows
+    private final Map<Integer, Long> alertedAt = new HashMap<>(); // slot -> when that alert reached this phone
+    private SosListener sosListener;
+
     @Override
     public void onCreate() {
         super.onCreate();
         network = Executors.newSingleThreadExecutor();
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         SharingNotifications.ensureChannels(this);
+        SosNotifications.ensureChannel(this);
+        // A new service: anything an earlier one held the alarm volume up for is over.
+        AlertVolume.releaseAll(this, AlertVolumeLedger.SERVICE);
     }
 
     @Override
@@ -104,6 +128,12 @@ public class LocationShareService extends Service implements LocationListener {
                 break;
             case ACTION_RESUME:
                 resumeSharing();
+                break;
+            case ACTION_SOS_ALERTS:
+                updateSosListening();
+                break;
+            case ACTION_SOS_DISMISS:
+                dismissSos(intent.getStringExtra(EXTRA_SOS_ID));
                 break;
             case ACTION_STOP:
                 String reason = intent.getStringExtra(EXTRA_REASON);
@@ -194,6 +224,7 @@ public class LocationShareService extends Service implements LocationListener {
             SharingNotifications.cancelEnded(this); // sharing is on again: an old "ended" notice is no longer true
             registerUpdates();
             if (!started) return; // location was refused and sharing has already ended
+            updateSosListening();
             SharingState.setLiveListener(this::onLiveChanged);
             main.postDelayed(tick, TICK_MS);
             SharingState.emit("running", null);
@@ -416,6 +447,105 @@ public class LocationShareService extends Service implements LocationListener {
         return pct <= 0 || pct > 100 ? -1 : pct;
     }
 
+    // --- SOS from the Group, heard while the app is closed -------------------------------------------
+
+    private final SosListener.Host sosHost = new SosListener.Host() {
+        @Override
+        public Session session() {
+            return SharingState.session();
+        }
+
+        @Override
+        public void deliver(List<SosAlert> alerts) {
+            onSosHeard(alerts);
+        }
+
+        // People waiting to join (for the Group's admitters): shown while the app is not on screen,
+        // where its own badge and notice say it; taken down when nobody is waiting.
+        @Override
+        public void deliverJoin(JoinNotice notice) {
+            if (notice.count <= 0) {
+                JoinNotifications.cancel(LocationShareService.this);
+                return;
+            }
+            if (SharingState.isAppLive()) return;
+            Session session = SharingState.session();
+            JoinNotifications.show(LocationShareService.this, notice.count, session == null ? null : session.groupName);
+        }
+    };
+
+    /** Listening runs exactly while sharing runs and the person has not turned these alerts off. */
+    private void updateSosListening() {
+        boolean want = started && SosPrefs.enabled(this);
+        if (want && sosListener == null) {
+            sosListener = new SosListener(sosHost, main::post, Math::random);
+            sosListener.start();
+        } else if (!want && sosListener != null) {
+            sosListener.stop();
+            sosListener = null;
+        }
+    }
+
+    private void onSosHeard(List<SosAlert> alerts) {
+        if (!started || sosListener == null) return;
+        long now = System.currentTimeMillis();
+        boolean enabled = SosPrefs.enabled(this);
+        for (SosAlert alert : alerts) {
+            // The app on screen has its own overlay for this: no second alert from here.
+            SosLedger.Decision decision = ledger.decide(alert, SharingState.isAppLive(), enabled, now);
+            if (decision.verdict == SosLedger.Verdict.IGNORE) continue;
+            boolean loud = decision.verdict == SosLedger.Verdict.ALERT;
+            alerting.put(decision.slot, alert);
+            alertedAt.put(decision.slot, now); // when this version of the alert reached this phone
+            // Loud: the alarm volume is held up for it until it is quietened, dealt with or swiped away.
+            if (loud) AlertVolume.raise(this, SosNotifications.volumeHolder(decision.slot));
+            SosNotifications.post(this, alert, decision.slot, loud, now);
+            if (loud) scheduleQuiet(decision.slot);
+        }
+    }
+
+    /** The app is showing this SOS: its notification goes, and nothing re-posts it. */
+    private void dismissSos(String sosId) {
+        if (sosId == null) return;
+        int slot = ledger.slotOf(sosId);
+        if (slot < 0) return;
+        Runnable quiet = quieters.remove(slot);
+        if (quiet != null) main.removeCallbacks(quiet);
+        alerting.remove(slot);
+        alertedAt.remove(slot);
+        SosNotifications.cancel(this, slot);
+        AlertVolume.release(this, SosNotifications.volumeHolder(slot));
+    }
+
+    /** After SOS_ALERT_AUTO_TIMEOUT_MS the sound stops; the notification stays until it is dealt with. */
+    private void scheduleQuiet(final int slot) {
+        Runnable earlier = quieters.remove(slot);
+        if (earlier != null) main.removeCallbacks(earlier);
+        Runnable quiet = () -> {
+            quieters.remove(slot);
+            quietAlert(slot);
+        };
+        quieters.put(slot, quiet);
+        main.postDelayed(quiet, SosNotifications.SOS_ALERT_AUTO_TIMEOUT_MS);
+    }
+
+    private void quietAlert(int slot) {
+        SosAlert alert = alerting.get(slot);
+        if (alert == null) return;
+        SosNotifications.cancel(this, slot); // a ringing notification only stops when it is taken down
+        SosNotifications.post(this, alert, slot, false, alertedAt.getOrDefault(slot, System.currentTimeMillis()));
+        AlertVolume.release(this, SosNotifications.volumeHolder(slot));
+    }
+
+    /** The service is going: no alert is left ringing with nobody to quieten it. */
+    private void quietAllAlerts() {
+        for (Map.Entry<Integer, Runnable> entry : new HashMap<>(quieters).entrySet()) {
+            main.removeCallbacks(entry.getValue());
+            quietAlert(entry.getKey());
+        }
+        quieters.clear();
+    }
+
     // --- the notification, and the end ----------------------------------------------------------
 
     private void refreshNotification() {
@@ -439,6 +569,7 @@ public class LocationShareService extends Service implements LocationListener {
         final Session ending = session != null ? session : SharingState.session();
         started = false;
         running = false;
+        updateSosListening(); // started is false now: stops listening
         SharingState.forget(this);
         SharingState.stopNote(this).record(reason);
         SharingState.emit("stopped", reason);
@@ -457,11 +588,13 @@ public class LocationShareService extends Service implements LocationListener {
 
     @Override
     public void onDestroy() {
+        quietAllAlerts();
         main.removeCallbacksAndMessages(null);
         SharingState.setLiveListener(null);
         removeUpdates();
         started = false;
         running = false;
+        updateSosListening();
         if (network != null) network.shutdown(); // lets a pending stop notice finish
         super.onDestroy();
     }

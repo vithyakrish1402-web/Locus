@@ -18,8 +18,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Bumped by scripts/release.mjs - do not hand-edit. versionName must stay valid
         // semver: the in-app updater compares it against the GitHub release tag.
-        versionCode 7
-        versionName "1.1.37"
+        versionCode 12
+        versionName "1.1.73"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Empty string (not null) so a missing key fails obviously inside Google Maps
         // (invalid key error) instead of Gradle throwing over an unresolved placeholder.
@@ -64,6 +64,24 @@ android {
         sidetest {
             initWith debug
             applicationIdSuffix ".sidetest"
+            matchingFallbacks = ['debug']
+        }
+        // The release-candidate test build (npm run rctest:build): a THIRD app, "LOCUS RC Test"
+        // (src/rctest/res), beside LOCUS and beside "LOCUS Test" / "LOCUS BG Test" - its own app id,
+        // so it can never replace or be replaced by any of them. Debug-signed. Its web build is the
+        // Vite 'sidetest' mode only because that switches both updaters off; the app's own screens are
+        // the production ones. Never released from.
+        rctest {
+            initWith debug
+            applicationIdSuffix ".rctest"
+            versionNameSuffix "-rctest"
+            matchingFallbacks = ['debug']
+        }
+        // "LOCUS Panel" (src/paneltest/res): a further side-by-side test app for trying one change
+        // on a phone without replacing LOCUS or any other test app. Same rules as sidetest above.
+        paneltest {
+            initWith debug
+            applicationIdSuffix ".paneltest"
             matchingFallbacks = ['debug']
         }
     }

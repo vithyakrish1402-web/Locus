@@ -98,9 +98,9 @@ const clearEmits = () => fakeSocket.emit.mockClear();
 const advance = (ms) => act(() => { vi.advanceTimersByTime(ms); });
 
 let watchCallback = null;
-// Standing at a spot for a dozen fixes: the app's Kalman filter only moves part of the way
-// to each new fix once it has settled, so one fix alone would land short of the spot. The
-// watch callback is async (it awaits getBattery before deciding what to send).
+// Standing at a spot for a dozen fixes (one would do now that fixes are shown as reported;
+// a dozen also covers a settled position). The watch callback is async (it awaits getBattery
+// before deciding what to send).
 const moveToAndSettle = (spot) => act(async () => {
   for (let i = 0; i < 12; i += 1) {
     await watchCallback({ coords: { latitude: spot.lat, longitude: spot.lng, speed: 0 } });

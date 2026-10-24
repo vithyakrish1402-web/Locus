@@ -1,15 +1,19 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, cleanup } from '@testing-library/react';
-import { useBackButtonGuard } from '../src/hooks/useBackButtonGuard.js';
+import { useBackButtonGuard, BACK_EXIT_WINDOW_MS } from '../src/hooks/useBackButtonGuard.js';
+import { pushBackHandler } from '../src/utils/backHandlers.js';
 
 const cap = vi.hoisted(() => ({
   isNative: vi.fn(),
   addListener: vi.fn(),
   minimizeApp: vi.fn(),
+  exitApp: vi.fn(),
+  info: vi.fn(),
 }));
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: cap.isNative } }));
-vi.mock('@capacitor/app', () => ({ App: { addListener: cap.addListener, minimizeApp: cap.minimizeApp } }));
+vi.mock('@capacitor/app', () => ({ App: { addListener: cap.addListener, minimizeApp: cap.minimizeApp, exitApp: cap.exitApp } }));
+vi.mock('../src/utils/notify', () => ({ notify: { info: cap.info } }));
 
 let pressBack; // invokes the backButton listener the hook registered, like Android would
 let remove;
@@ -25,6 +29,8 @@ beforeEach(() => {
     return Promise.resolve({ remove });
   });
   cap.minimizeApp.mockClear();
+  cap.exitApp.mockClear();
+  cap.info.mockClear();
   historyBack = vi.spyOn(window.history, 'back').mockImplementation(() => {});
 });
 
@@ -55,6 +61,8 @@ describe('useBackButtonGuard while an SOS is up (blocked)', () => {
     pressBack({ canGoBack: false });
     expect(historyBack).not.toHaveBeenCalled();
     expect(cap.minimizeApp).not.toHaveBeenCalled();
+    expect(cap.exitApp).not.toHaveBeenCalled();
+    expect(cap.info).not.toHaveBeenCalled();
   });
 });
 
@@ -68,13 +76,79 @@ describe('useBackButtonGuard normally (not blocked)', () => {
     expect(cap.minimizeApp).not.toHaveBeenCalled();
   });
 
-  it('sends the app to the background (not quit) when there is no history', async () => {
+  it('on the home screen, says "press again" first, and leaves on a second press inside the window', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
     renderHook(() => useBackButtonGuard(false));
     await settle();
 
     pressBack({ canGoBack: false });
-    expect(cap.minimizeApp).toHaveBeenCalledTimes(1);
+    expect(cap.exitApp).not.toHaveBeenCalled();
+    expect(cap.minimizeApp).not.toHaveBeenCalled();
+    expect(cap.info).toHaveBeenCalledTimes(1);
+    expect(cap.info.mock.calls[0][0]).toBe('Press back again to exit');
+    expect(cap.info.mock.calls[0][1]).toMatchObject({ duration: BACK_EXIT_WINDOW_MS, haptic: false });
+
+    now.mockReturnValue(1_000_000 + BACK_EXIT_WINDOW_MS - 1);
+    pressBack({ canGoBack: false });
+    expect(cap.exitApp).toHaveBeenCalledTimes(1);
+    now.mockRestore();
+  });
+
+  it('does not leave on a second press after the window: that press asks again', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    renderHook(() => useBackButtonGuard(false));
+    await settle();
+    pressBack({ canGoBack: false });
+    now.mockReturnValue(1_000_000 + BACK_EXIT_WINDOW_MS);
+    pressBack({ canGoBack: false });
+    expect(cap.exitApp).not.toHaveBeenCalled();
+    expect(cap.info).toHaveBeenCalledTimes(2);
+    now.mockRestore();
+  });
+
+  it('starts the count afresh when a press in between closed something', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    let open = false;
+    const off = pushBackHandler(() => (open ? (open = false, true) : false));
+    renderHook(() => useBackButtonGuard(false));
+    await settle();
+    pressBack({ canGoBack: false }); // "press again"
+    open = true;
+    pressBack({ canGoBack: false }); // closes the overlay
+    pressBack({ canGoBack: false }); // home again: asks again, does not leave
+    expect(cap.exitApp).not.toHaveBeenCalled();
+    expect(cap.info).toHaveBeenCalledTimes(2);
+    off();
+    now.mockRestore();
+  });
+});
+
+describe('useBackButtonGuard with a surface that wants Back (AR Scan)', () => {
+  it('lets the newest handler take the press, and does nothing else with it', async () => {
+    const handler = vi.fn(() => true);
+    const off = pushBackHandler(handler);
+    renderHook(() => useBackButtonGuard(false));
+    await settle();
+
+    pressBack({ canGoBack: true });
+    expect(handler).toHaveBeenCalledTimes(1);
     expect(historyBack).not.toHaveBeenCalled();
+    expect(cap.minimizeApp).not.toHaveBeenCalled();
+
+    off(); // the surface closed: Back is the app's again
+    pressBack({ canGoBack: false });
+    expect(cap.info).toHaveBeenCalledTimes(1);
+    expect(cap.exitApp).not.toHaveBeenCalled();
+  });
+
+  it('still swallows Back during an SOS, whatever handler is registered', async () => {
+    const handler = vi.fn(() => true);
+    const off = pushBackHandler(handler);
+    renderHook(() => useBackButtonGuard(true));
+    await settle();
+    pressBack({ canGoBack: false });
+    expect(handler).not.toHaveBeenCalled();
+    off();
   });
 });
 
@@ -86,13 +160,14 @@ describe('useBackButtonGuard as an SOS comes and goes', () => {
     await settle();
 
     pressBack({ canGoBack: false });
-    expect(cap.minimizeApp).toHaveBeenCalledTimes(1); // normal Back
+    expect(cap.info).toHaveBeenCalledTimes(1); // normal Back: "press again to exit"
 
     rerender({ blocked: true }); // SOS arrives
     await settle();
     pressBack({ canGoBack: false });
     pressBack({ canGoBack: true });
-    expect(cap.minimizeApp).toHaveBeenCalledTimes(1); // swallowed
+    expect(cap.info).toHaveBeenCalledTimes(1); // swallowed
+    expect(cap.exitApp).not.toHaveBeenCalled();
     expect(historyBack).not.toHaveBeenCalled();
 
     rerender({ blocked: false }); // acknowledged

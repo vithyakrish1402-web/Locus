@@ -29,7 +29,19 @@ import MeetingPointConfirm from './components/MeetingPointConfirm';
 import { SETTINGS } from './copy/settings';
 import { SETTINGS_Z } from './components/settings/SettingsScreen';
 import SettingsHost from './components/settings/SettingsHost';
-import { setSettingsOpen } from './utils/settingsOpen';
+import { setSettingsOpen, isSettingsOpen } from './utils/settingsOpen';
+import { sectionSwipe } from './utils/panelSwipe';
+import { isInAppDnd } from './utils/inAppDnd';
+import { hasNativeAlertSound, playAlertSound, shareInAppDnd, dndAccessGranted, openDndAccessSettings } from './utils/alertSound';
+
+// The one-time explanation of Do Not Disturb access is shown once per phone.
+const DND_EXPLAINED_KEY = 'locus.dndExplained';
+const dndExplainedBefore = () => {
+  try { return window.localStorage?.getItem(DND_EXPLAINED_KEY) === '1'; } catch { return true; }
+};
+const rememberDndExplained = () => {
+  try { window.localStorage?.setItem(DND_EXPLAINED_KEY, '1'); } catch { /* shown again next time */ }
+};
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
@@ -52,16 +64,20 @@ import { ADD_PLACE_PROBLEMS } from './copy/addPlace';
 import { useCampusPlaces } from './hooks/useCampusPlaces';
 import { isGrounds, placeMatches } from './utils/campusPlaces';
 import JoinRequests from './components/group/JoinRequests';
+import ActivityLog from './components/group/ActivityLog';
+import BlockedList from './components/group/BlockedList';
+import FriendRequests from './components/group/FriendRequests';
+import { useFriends } from './hooks/useFriends';
+import { exportActivityLog } from './utils/activityLogExport';
 import PeekLines from './components/group/PeekLines';
 import PanelStops from './components/group/PanelStops';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
-import { panelStops, snapPanel } from './utils/panelHeights';
+import { panelStops, snapPanel, SHEET_BOTTOM_PADDING_PX } from './utils/panelHeights';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED } from './copy/group';
+import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
-import { cssColor } from './utils/cssColor';
 import MemberMarker from './components/MemberMarker';
 import { MARKERS } from './copy/map';
 import { distanceLabel } from './copy/place';
@@ -81,7 +97,6 @@ import { useDeviceHeading } from './hooks/useDeviceHeading';
 import { DEFAULT_AR_FEATURE_OVERRIDES } from './utils/arFeatures';
 
 import { useLiveHeading } from './hooks/useLiveHeading';
-import { useGhostProjectionLines } from './hooks/useGhostProjectionLines';
 import { useWaypointNavigationLine, ROUTE_COLOR, ROUTE_CASING_COLOR } from './hooks/useWaypointNavigationLine';
 import { useWalkingRoute } from './hooks/useWalkingRoute';
 import { formatDistanceMeters, formatDurationMinutes } from './utils/walkingRoute';
@@ -102,15 +117,17 @@ import { notify, dismiss as dismissNotice } from './utils/notify';
 import { logNavBuild } from './utils/navBuild';
 import { rallyAction, rallyIsAt } from './utils/rallyAction';
 import { mapEngineStatus } from './utils/mapEngineStatus';
-import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM } from './utils/mapFocus';
+import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM, FOCUS_ZOOM_LEVEL, FOCUS_HIGHLIGHT_MS } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useClosedAppSos } from './hooks/useClosedAppSos';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useLiveUpdate } from './hooks/useLiveUpdate';
 import { useBackButtonGuard } from './hooks/useBackButtonGuard';
+import { pushBackHandler } from './utils/backHandlers';
+import { useBlurOnKeyboardHide } from './hooks/useBlurOnKeyboardHide';
 import { useWifiFusion } from './hooks/useWifiFusion';
 import { useBackgroundSharing } from './hooks/useBackgroundSharing';
-import { stopBackgroundSharing } from './utils/backgroundSharing';
+import { stopBackgroundSharing, LocusBackground } from './utils/backgroundSharing';
 import { rememberGroup, rememberedGroup, forgetGroup } from './utils/rememberedGroup';
 import { useIndoorView } from './hooks/useIndoorView';
 import { WIFI_POSITIONING_ENABLED, SHOW_INDOOR_POSITION_TO_SQUAD } from './utils/positionSource';
@@ -125,8 +142,7 @@ import { LAYER } from './utils/layers';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { createSosOutbox } from './utils/sosOutbox';
-import { SOS_HELD, SOS_SENT, SOS_DROPPED } from './copy/emergency';
-import { PrecognitionFilter } from './utils/precognition';
+import { SOS_HELD, SOS_SENT, SOS_DROPPED, SOS_REFUSED } from './copy/emergency';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -260,6 +276,12 @@ const AuthTerminal = ({
   const creating = screen === 'create';
   const problemField = problem ? PROBLEM_FIELD[problem] : undefined;
   const go = (next) => { setScreen(next); setProblem(null); };
+  // Back from Create account or "reset link sent" returns to Sign in (it used to leave the app).
+  const onSubScreen = screen !== 'sign-in';
+  useEffect(() => {
+    if (!onSubScreen) return undefined;
+    return pushBackHandler(() => { setScreen('sign-in'); setProblem(null); return true; });
+  }, [onSubScreen]);
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
@@ -399,6 +421,7 @@ const App = () => {
   const panelY = useMotionValue(0);
   const panelDragStartRef = useRef(0);
   const listTouchRef = useRef(null);
+  const panelSwipeRef = useRef(null); // where a finger went down on the panel, for sectionSwipe
   const [panelGeometry, setPanelGeometry] = useState(null);
   const panelHeaderRef = useRef(null);
   const peekWrapRef = useRef(null);
@@ -428,6 +451,7 @@ const App = () => {
   // "Waiting for connection", and a notice says so until it goes, or can't.
   const [sosHeld, setSosHeld] = useState(false);
   const heldNoticeRef = useRef(null);
+  const sentNoticeRef = useRef(null); // the "alert sent" notice, taken back if the server refuses
   useEffect(() => {
     sosOutbox.reset(); // a fresh app: nothing held, not in a group yet
     const unsubscribe = sosOutbox.subscribe(({ held, event, reason, late, withLocation }) => {
@@ -443,12 +467,38 @@ const App = () => {
         const mode = telemetryModeRef.current;
         const stillLine = mode === 'FROZEN' ? SOS_SENT.stillPaused : mode === 'GHOST' ? SOS_SENT.stillHidden : null;
         const body = [late ? SOS_SENT.late : null, withLocation ? SOS_SENT.withLocation : SOS_SENT.noLocation, stillLine].filter(Boolean).join(' ');
-        if (withLocation) notify.success(SOS_SENT.title, { body, haptic: false });
-        else notify.warning(SOS_SENT.noLocationTitle, { body, haptic: false });
+        sentNoticeRef.current = withLocation
+          ? notify.success(SOS_SENT.title, { body, haptic: false })
+          : notify.warning(SOS_SENT.noLocationTitle, { body, haptic: false });
       }
       if (event === 'dropped') notify.warning(reason === 'gone' ? SOS_DROPPED.gone : SOS_DROPPED.left, { duration: 0, safety: true });
     });
     return unsubscribe;
+  }, []);
+
+  // The Group's switches as the server last said (backend/groupSettings.js, 'group-settings'),
+  // and its answer to each SOS this phone sent ('alert-result'). A refused SOS takes back the
+  // "sent" notice and says why: the cooldown (with the time left), SOS switched off, or a class
+  // zone. Neither was listened for before, so a refused alert still read as sent.
+  const [groupSettings, setGroupSettings] = useState(null);
+  useEffect(() => {
+    const onSettings = (settings) => setGroupSettings(settings ?? null);
+    const onResult = (result) => {
+      if (result?.type !== 'sos' || result.allowed) return;
+      if (sentNoticeRef.current !== null) dismissNotice(sentNoticeRef.current);
+      sentNoticeRef.current = null;
+      const body = result.reasonCode === 'COOLDOWN' ? SOS_REFUSED.cooldown(result.retryAfterSec ?? 1)
+        : result.reasonCode === 'GROUP_DISABLED' ? SOS_REFUSED.disabled
+          : result.reasonCode === 'QUIET_ZONE' ? SOS_REFUSED.quietZone
+            : SOS_REFUSED.other;
+      notify.warning(SOS_REFUSED.title, { body, safety: true });
+    };
+    socket.on('group-settings', onSettings);
+    socket.on('alert-result', onResult);
+    return () => {
+      socket.off('group-settings', onSettings);
+      socket.off('alert-result', onResult);
+    };
   }, []);
   // --- IN-APP UPDATER (full-APK self-update; see src/hooks/useAppUpdate.js) ---
   // Checks GitHub Releases once per cold start. Held here rather than in a leaf
@@ -464,7 +514,17 @@ const App = () => {
   // button/gesture does nothing (ACKNOWLEDGE / UPDATE NOW is the only way out);
   // otherwise it behaves normally. See useBackButtonGuard.
   useBackButtonGuard(Boolean(incomingSos) || appUpdate.mandatory);
+  // A keyboard hidden with Back leaves its field focused, which can bring it back: let go of it.
+  useBlurOnKeyboardHide();
   const [arTarget, setArTarget] = useState(null);
+  // Back closes AR Scan (its permission screen and camera explainer too) and leaves the map
+  // showing; it claims the press only while AR Scan is open, so Back means what it always did
+  // everywhere else.
+  const arOpen = Boolean(arTarget);
+  useEffect(() => {
+    if (!arOpen) return undefined;
+    return pushBackHandler(() => { setArTarget(null); return true; });
+  }, [arOpen]);
   // The camera explainer (components/CameraExplainer.jsx) shows before AR Scan only until the
   // camera has been allowed: known from this phone's note or the Permissions API. Continue
   // lets AR Scan open this time; the note is made once the camera actually starts.
@@ -529,9 +589,6 @@ const App = () => {
     if (seconds < 300) return { text: `WARN (${Math.floor(seconds / 60)}m ago)`, color: "text-warning" };
     return { text: `STALE (> 5m)`, color: "text-warning" };
   };
-  // --- PRECOGNITION TRACKERS ---
-  const localPrecognition = useRef(new PrecognitionFilter());
-  const squadPrecognition = useRef({}); // Tracks separate Kalman math for every squad member
   const memberSeenRef = useRef({}); // id -> { server: lastSeen, local: when this phone saw it change }
 
   const [offlineNodes, setOfflineNodes] = useState({}); // <-- NEW: Tracks dead signals
@@ -540,12 +597,15 @@ const App = () => {
   // ids change on every reconnect; this doesn't, so it's what "is this me?" is answered with.
   const myUidRef = useRef(null);
 
-  // Shared 1Hz clock so every ghost's elapsed-time tag / projection decay
-  // recomputes together instead of each running its own interval.
+  // Shared 1Hz clock so every ghost's elapsed-time tag recomputes together instead of each
+  // running its own interval. It only ticks while someone is lost, so it is set to now the moment
+  // the first one is: it used to keep the time of the last tick (or of app start) until a second
+  // later, and a fresh "lost connection" read short, or 0:00.
   const [ghostClockTick, setGhostClockTick] = useState(() => Date.now());
   const hasGhosts = Object.keys(offlineNodes).length > 0;
   useEffect(() => {
     if (!hasGhosts) return;
+    setGhostClockTick(Date.now());
     const id = setInterval(() => setGhostClockTick(Date.now()), 1000);
     return () => clearInterval(id);
   }, [hasGhosts]);
@@ -689,6 +749,10 @@ const App = () => {
 
   const [activeTab, setActiveTab] = useState('buildings');
   const [searchQuery, setSearchQuery] = useState('');
+  // The campus dots. On a phone they always show: the map has no Members/Buildings tab, so the
+  // dots used to vanish once the Group tab had set it to Members and never come back. On a
+  // larger screen the sidebar's Members tab still hides them.
+  const buildingDotsShown = isMobile || activeTab === 'buildings';
   // The top bar's search: which buildings and places the Buildings list shows.
   const [placeQuery, setPlaceQuery] = useState('');
   // The group panel's search box has focus, so on a phone the keyboard is up and the screen is
@@ -823,6 +887,16 @@ const App = () => {
   const [accessStatus, setAccessStatus] = useState(null);
   const [squadRole, setSquadRole] = useState(null);
   const [pendingRequests, setPendingRequests] = useState([]);
+  // This person's role in the Group, as the server last said ('group-role', backend/groupRoles.js):
+  // { roomCode, role: 'admin' | 'moderator' | 'member', moderatorIds }. Whoever holds command
+  // (squadRole OWNER) is the admin; a Group made before roles makes everyone else a member.
+  const [groupRole, setGroupRole] = useState(null);
+  const myRole = squadRole === 'OWNER' ? 'admin'
+    : groupRole?.roomCode === squadCode && groupRole.role === 'moderator' ? 'moderator' : 'member';
+  // The main admin and moderators: join requests, removing and blocking, the activity log.
+  const canModerate = myRole === 'admin' || myRole === 'moderator';
+  const canModerateRef = useRef(false);
+  canModerateRef.current = canModerate;
   const liveLocationRef = useRef(null);
   // Shared with ARCompass.jsx (src/hooks/useDeviceHeading.js) so both the AR
   // targeting view and this device's own map marker read the compass the same way.
@@ -843,7 +917,7 @@ const App = () => {
   const [pausedHasSpot, setPausedHasSpot] = useState(false);
   // WiFi Arc Stage 6: every update-location payload takes its lat/lng/positionSource from
   // positionFor(gps). Off by default (src/utils/positionSource.js), and then it is always
-  // the GPS fix with positionSource 'gps'. The Kalman filter and safety-ping stay on GPS.
+  // the GPS fix with positionSource 'gps'. Safety-ping stays on GPS.
   // Stable identity, so listing it in the telemetry effect's dependencies below never
   // re-runs that effect.
   //
@@ -1027,9 +1101,8 @@ const App = () => {
       // alone removes nobody and leaves the roster carrying a node the server has dropped.
       setUsers(prev => prev.filter(u => u.id !== targetId && !(uid && u.uid === uid)));
 
-      // Store the raw last-known fix, undisturbed — GhostMemberMarker/
-      // deriveGhostMembers re-projects from this every clock tick (up to the
-      // decay cap) rather than baking in a single one-shot guess here.
+      // Store the last-known fix, undisturbed: the marker stays exactly there, marked as lost,
+      // however long they are gone (deriveGhostMembers). Nothing guesses where they went.
       setOfflineNodes(prev => ({
         ...prev,
         [targetId]: {
@@ -1041,11 +1114,10 @@ const App = () => {
           photo,
           lat: lastKnownLocation.latitude,
           lng: lastKnownLocation.longitude,
-          heading: lastKnownLocation.heading || 0,
-          speedKmh: lastKnownLocation.speed || 0,
           battery: lastKnownLocation.batteryLevel,
-          timeDelta: timeDelta || 0,
-          receivedAt: Date.now(),
+          // When they were last really reported: the server notices a dead phone up to ~45 s
+          // late, and says how late (timeDelta), so "last seen" counts from the real report.
+          lastSeenAt: Date.now() - Math.max(0, Number(timeDelta) || 0) * 1000,
         }
       }));
 
@@ -1077,6 +1149,7 @@ const App = () => {
     socket.on('exiled', ({ reason } = {}) => {
       // 1. Tell them why (a comms-feed notice; this used to be a blocking alert())
       if (reason === 'blocked') notify.error(NOTICES.removedByLead);
+      else if (reason === 'kicked') notify.error(NOTICES.removedKicked);
       else notify.error(NOTICES.removedByVote);
 
       // 2. Trigger your existing leave function to wipe local state and return to the join screen
@@ -1180,10 +1253,10 @@ const App = () => {
 
       // Pure: builds the new roster and nothing else. Reconciling ghosts against it used
       // to happen inline here, from inside the setUsers updater — but an updater has to be
-      // a pure function of the previous state (React is free to call it more than once),
-      // and firing another setState from within it also re-ran the Kalman filter below on
-      // the same coordinate. That reconciliation now lives in its own effect, keyed off
-      // the roster this produces.
+      // a pure function of the previous state (React is free to call it more than once).
+      // That reconciliation now lives in its own effect, keyed off the roster this produces.
+      // Positions are shown as reported: no smoothing (the GPS Kalman filter that lagged them
+      // behind, and moved them between reports, was removed in 2026-10).
       setUsers(() => {
         const formattedUsers = [];
         Object.entries(activeUsers).forEach(([id, data]) => {
@@ -1205,24 +1278,15 @@ const App = () => {
           // them outright here is what made them vanish from both views at once.
           const hasFix = Boolean(data.lat && data.lng);
 
-          // Run Kalman smoothing on every incoming coordinate
-          let smoothed = null;
-          if (hasFix) {
-            if (!squadPrecognition.current[id]) {
-              squadPrecognition.current[id] = new PrecognitionFilter();
-            }
-            smoothed = squadPrecognition.current[id].filter(data.lat, data.lng);
-          }
-
           formattedUsers.push({
             id,
             uid: data.uid || null,
             name: data.name || 'Squad Node',
             photo: data.photo,
-            role: data.role || 'Campus Node',
+            role: data.role || null, // 'admin' | 'moderator' | 'member' (backend/groupRoles.js)
             hasFix,
-            lat: hasFix ? smoothed.lat : null,
-            lng: hasFix ? smoothed.lng : null,
+            lat: hasFix ? data.lat : null,
+            lng: hasFix ? data.lng : null,
             speed: data.speed || 0,
             heading: data.heading || 0,
             battery: data.battery || 0,
@@ -1247,9 +1311,11 @@ const App = () => {
     // HUD; the OS notification only when the app isn't in view to show that notice.
     // The notice keeps the old ping banner's six seconds and, like it, doesn't buzz.
     socket.on('receive-ping', ({ senderName } = {}) => {
-      playSonarPing();
+      // LOCUS's Do Not Disturb (utils/inAppDnd.js): the ping still shows, without a sound.
+      const quiet = isInAppDnd();
+      if (!quiet) playIncomingPing();
 
-      if (document.hidden) {
+      if (document.hidden && !quiet) {
         triggerSystemNotification(OS_NOTICES.ping.title, OS_NOTICES.ping.body(senderName));
       }
 
@@ -1320,15 +1386,6 @@ const App = () => {
     });
   }, [users, offlineNodes]);
 
-  // Retire the per-member Kalman filter of anyone off the roster. Keyed by socket id, so
-  // without this every reconnect strands the departed socket's filter for the session.
-  useEffect(() => {
-    const liveIds = new Set(users.map(u => u.id));
-    Object.keys(squadPrecognition.current).forEach(id => {
-      if (!liveIds.has(id)) delete squadPrecognition.current[id];
-    });
-  }, [users]);
-
   // Everything a squad session leaves on this client, cleared on the way back to the
   // lobby: by leaving, by logging out, or when the server turns the request down.
   // `nextCode` is what the lobby's code box shows next. The Commander's queue goes too: it
@@ -1348,8 +1405,34 @@ const App = () => {
     ghostFadeTimersRef.current = {};
     setAccessStatus(null);
     setSquadRole(null);
+    setGroupRole(null);
     setPendingRequests([]);
     setJustApproved(false);
+  }, []);
+
+  // Roles, the waiting count and the activity log (backend/groupRoles.js, joinNotify.js,
+  // activityLog.js). Set up once: what they read of the moment comes through refs.
+  const [activityLog, setActivityLog] = useState([]);
+  const [showActivityLog, setShowActivityLog] = useState(false);
+  const [blockedPeople, setBlockedPeople] = useState([]);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const openRequestsRef = useRef(() => {});
+  useEffect(() => {
+    const onRole = (payload) => setGroupRole(payload ?? null);
+    const onEntry = ({ entry } = {}) => { if (entry) setActivityLog((log) => [...log, entry]); };
+    // A burst of requests, said once, to whoever may admit (one notice, not one per request).
+    const onWaiting = ({ count } = {}) => {
+      if (!canModerateRef.current || !(count > 0)) return;
+      notify.info(NOTICES.joinWaiting(count), { onClick: () => openRequestsRef.current() });
+    };
+    socket.on('group-role', onRole);
+    socket.on('activity-entry', onEntry);
+    socket.on('join-requests-waiting', onWaiting);
+    return () => {
+      socket.off('group-role', onRole);
+      socket.off('activity-entry', onEntry);
+      socket.off('join-requests-waiting', onWaiting);
+    };
   }, []);
 
   // --- GATEKEEPER PROTOCOL LISTENERS ---
@@ -1493,6 +1576,11 @@ const App = () => {
     };
   }, [hasJoinedSquad, squadCode, user, requestSosSync, accessStatus, squadRole, endSquadSession]);
 
+  // What an update-location carries of where this phone is: nothing while Hidden. The status
+  // still goes, so the group (and the activity log) know this member is hidden; the position
+  // used to go too, every few seconds, and was relayed to everyone (2026-10 fix).
+  const sharedPosition = (fix) => (telemetryModeRef.current === 'GHOST' ? {} : positionFor(fix));
+
   /// 2. Broadcast your live GPS data to the network
   // 2. Broadcast your live GPS data to the network
   useEffect(() => {
@@ -1517,9 +1605,9 @@ const App = () => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
-        const smoothed = localPrecognition.current.filter(latitude, longitude);
-        setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
-        liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
+        const fix = { lat: latitude, lng: longitude };
+        setLiveLocation(fix);
+        liveLocationRef.current = fix;
         setLiveAccuracy(accuracy || null);
         setLocationError(null);
         noteRealFix();
@@ -1528,7 +1616,7 @@ const App = () => {
         if (telemetryModeRef.current === 'FROZEN') return;
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
-          ...positionFor(smoothed),
+          ...sharedPosition(fix),
           speed: 0, battery: 100,
           status: telemetryModeRef.current,
           roomCode: squadCode,
@@ -1562,7 +1650,7 @@ const App = () => {
       // paused position and the time it was taken, and no GPS report goes out at all. Both
       // used to carry the live fix every beat, so "FROZEN" never froze anything.
       const paused = telemetryModeRef.current === 'FROZEN' ? pausedPositionRef.current : null;
-      if (telemetryModeRef.current !== 'FROZEN' || paused) {
+      if (telemetryModeRef.current === 'ACTIVE' || paused) {
         socket.emit('safety-ping', {
           latitude: paused ? paused.position.lat : currentLoc.lat,
           longitude: paused ? paused.position.lng : currentLoc.lng,
@@ -1587,10 +1675,10 @@ const App = () => {
     const watchId = navigator.geolocation.watchPosition(
       async (position) => {
         const { latitude, longitude, speed, accuracy } = position.coords;
-        const smoothed = localPrecognition.current.filter(latitude, longitude);
+        const fix = { lat: latitude, lng: longitude };
 
-        setLiveLocation({ lat: smoothed.lat, lng: smoothed.lng });
-        liveLocationRef.current = { lat: smoothed.lat, lng: smoothed.lng };
+        setLiveLocation(fix);
+        liveLocationRef.current = fix;
         setLiveSpeed(speed || 0);
         setLiveAccuracy(accuracy || null);
         setLocationError(null);
@@ -1613,7 +1701,7 @@ const App = () => {
         // to override movement-based updates, you'd need to clear this watch and rely purely on the interval.
         socket.emit('update-location', {
           name: user.displayName, photo: user.photoURL,
-          ...positionFor(smoothed),
+          ...sharedPosition(fix),
           speed: speed ? Math.round(speed * 3.6) : 0,
           battery: batteryLevel,
           status: telemetryModeRef.current,
@@ -1658,7 +1746,7 @@ const App = () => {
     setPausedHasSpot(pausedPositionRef.current !== null);
     socket.emit('update-location', {
       name: user.displayName, photo: user.photoURL,
-      ...position,
+      ...(telemetryMode === 'GHOST' ? {} : position),
       speed: 0, battery: 100,
       status: telemetryMode, // use state here — this effect re-runs when it changes
       roomCode: squadCode,
@@ -1666,6 +1754,31 @@ const App = () => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [telemetryMode]);
+
+  // A ping someone sent this phone: on a phone, natively at full alarm volume (utils/alertSound.js),
+  // else the Web Audio blip below. Settings' Alert sounds switch silences it, as it always has.
+  const playIncomingPing = () => {
+    if (!alertSoundsRef.current) return;
+    if (!hasNativeAlertSound()) {
+      playSonarPing();
+      return;
+    }
+    playAlertSound('ping').then((played) => { if (!played) playSonarPing(); });
+  };
+
+  // LOCUS's Do Not Disturb, handed to native code once at start (it is kept on the phone), and the
+  // one-time word about letting an SOS ring through the phone's own Do Not Disturb.
+  useEffect(() => { shareInAppDnd(isInAppDnd()); }, []);
+  useEffect(() => {
+    if (accessStatus !== 'granted') return undefined;
+    let live = true;
+    dndAccessGranted().then((granted) => {
+      if (!live || granted !== false || dndExplainedBefore()) return;
+      rememberDndExplained();
+      notify.info(NOTICES.dndAccess.title, { body: NOTICES.dndAccess.body, duration: 0, onClick: openDndAccessSettings });
+    });
+    return () => { live = false; };
+  }, [accessStatus]);
 
   // --- PING SOUND ---
   // The short blip for a ping (sent or received) and for someone losing connection. Settings'
@@ -1705,14 +1818,91 @@ const App = () => {
   const [blockedUserIds, setBlockedUserIds] = useState([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
 
+  openRequestsRef.current = () => {
+    setShowRequestsModal(true);
+  };
+
+  // A tapped "N people waiting to join" notification (raised while the app was closed, by the
+  // sharing service: android/.../JoinNotifications.java) opens the Group tab and, for whoever may
+  // let them in, Join requests.
+  const openGroupFromNotificationRef = useRef(() => {});
+  openGroupFromNotificationRef.current = () => {
+    setActiveTab('users');
+    setSelectedItem(null);
+    setMobileView('squad');
+    if (canModerate) setShowRequestsModal(true);
+  };
+  useEffect(() => {
+    let handle = null;
+    let gone = false;
+    try {
+      Promise.resolve(LocusBackground.addListener('groupOpened', () => openGroupFromNotificationRef.current()))
+        .then((h) => { if (gone) h?.remove?.(); else handle = h; })
+        .catch(() => {});
+    } catch {
+      // not available in this shell
+    }
+    return () => { gone = true; handle?.remove?.(); };
+  }, []);
+
   // Commander-only screens close when the role goes: a stand-in handing the squad back
   // to its returning Commander could otherwise be left looking at the join queue, or the
-  // telemetry matrix, with every action on them refused.
+  // telemetry matrix, with every action on them refused. A moderator keeps the join queue,
+  // the log and the blocked list; a member has none of them.
   useEffect(() => {
     if (squadRole === 'OWNER') return;
-    setShowRequestsModal(false);
     setShowTelemetryModal(false);
-  }, [squadRole]);
+    if (canModerate) return;
+    setShowRequestsModal(false);
+    setShowActivityLog(false);
+    setShowBlocked(false);
+  }, [squadRole, canModerate]);
+
+  // The Group Lead's and moderators' actions. Each is checked again by the server, which says
+  // when it refuses (the person acted on is the Group Lead or a moderator, or the role changed).
+  const refused = (answer) => { if (answer && !answer.ok) notify.warning(ROLE_REFUSED); };
+  const kickMember = (targetId) => socket.emit('kick-member', { roomCode: squadCode, targetId }, refused);
+  const setMemberModerator = (member, on) => socket.emit('set-moderator', { roomCode: squadCode, targetId: member.id, moderator: on }, refused);
+  const admitAll = () => socket.emit('admit-all', { roomCode: squadCode }, refused);
+  const openActivityLog = () => {
+    setShowActivityLog(true);
+    socket.emit('get-activity-log', { roomCode: squadCode }, (answer) => {
+      if (answer?.ok) setActivityLog(answer.log ?? []);
+      else refused(answer);
+    });
+  };
+  const openBlocked = () => {
+    setShowBlocked(true);
+    socket.emit('get-blocked', { roomCode: squadCode }, (answer) => {
+      if (answer?.ok) setBlockedPeople(answer.blocked ?? []);
+      else refused(answer);
+    });
+  };
+  const unblock = (uid) => socket.emit('unblock-user', { roomCode: squadCode, uid }, (answer) => {
+    if (answer?.ok) setBlockedPeople(answer.blocked ?? []);
+    else refused(answer);
+  });
+  // Trusted friends (hooks/useFriends.js): who hears this person's SOS, and whose they hear.
+  const friends = useFriends(user, socket);
+  const [showFriendRequests, setShowFriendRequests] = useState(false);
+  const friendAction = (done) => done.then((ok) => { if (!ok) notify.warning(FRIENDS.failed); });
+  // A member someone can be trusted friends with: signed in (a uid), and not a lost connection.
+  const friendFor = (member) => (member?.uid && member.status !== 'GHOST' ? {
+    status: friends.statusOf(member.uid),
+    onAdd: (m) => friendAction(friends.ask(m)),
+    onAccept: (m) => friendAction(friends.accept(m.uid)),
+    onRemove: (m) => friendAction(friends.remove(m.uid)),
+  } : undefined);
+
+  const exportLog = async () => {
+    const outcome = await exportActivityLog(activityLog, squadCode);
+    if (outcome === 'copied') notify.info(ACTIVITY_LOG.copied);
+    else if (outcome === 'failed') notify.warning(ACTIVITY_LOG.exportFailed);
+  };
+  // Whether this person may remove `member` (the server has the same rule): the Group Lead
+  // anyone but themself, a moderator only members; nobody the Group Lead.
+  const mayRemove = (member) => Boolean(member) && member.role !== 'admin'
+    && (myRole === 'admin' || (myRole === 'moderator' && member.role !== 'moderator'));
 
   const [mapProps, setMapProps] = useState({ center: SRM_KTR_COORDS, zoom: 17 });
   const mapRef = useRef(null);
@@ -1887,6 +2077,14 @@ const App = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backgroundState]);
 
+  // The Group Lead's SOS switch and cooldown. The server sends everyone the new settings; a
+  // stand-in (not the Group's own Commander) is refused, and told so.
+  const changeGroupSettings = (change) => {
+    socket.emit('set-group-settings', { roomCode: squadCode, ...change }, (answer) => {
+      if (answer && !answer.ok) notify.warning(SOS_CONTROLS.notCommander);
+    });
+  };
+
   const sendPing = (targetId) => {
     socket.emit('ping-user', {
       targetId: targetId,
@@ -1902,7 +2100,7 @@ const App = () => {
       if (prev.includes(userId)) return prev.filter(id => id !== userId);
       // Tell the server too — this actually removes them from the squad and bans
       // their account from rejoining, not just hiding them on this screen.
-      if (squadRole === 'OWNER') {
+      if (canModerate) {
         socket.emit('block-user', { roomCode: squadCode, targetId: userId });
       }
       return [...prev, userId];
@@ -1976,13 +2174,48 @@ const App = () => {
     setMapProps({ center: { lat: c.lat, lng: c.lng }, zoom: googleShown ? Math.round(zoom) : zoom });
   }, [googleShown]);
 
+  // --- FOCUS A MEMBER: the person being looked for ---
+  // One action for a tapped member card (and its peek row, and "Show on map"), and for the sender
+  // of an incoming SOS: the panel gets out of the way on a phone, the map glides and zooms to them
+  // (utils/mapFocus.js drives whichever map engine is showing, and a touch on the map stops the
+  // glide, so the user's own pan is never pulled back), and their marker is ringed on both
+  // engines. The ring goes after FOCUS_HIGHLIGHT_MS, counted once no SOS is on screen, or on the
+  // next tap on the map. Nothing follows them afterwards: the camera stays where it ended.
+  const [focusedMemberId, setFocusedMemberId] = useState(null);
+  const focusMember = (member, at = member) => {
+    if (!member) return;
+    if (isMobile) setMobileView('grid');
+    setFocusedMemberId(member.id ?? null);
+    if (Number.isFinite(at?.lat) && Number.isFinite(at?.lng)) glideTo(at, FOCUS_ZOOM_LEVEL);
+  };
+  useEffect(() => {
+    if (!focusedMemberId || incomingSos) return undefined;
+    const timer = setTimeout(() => setFocusedMemberId(null), FOCUS_HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [focusedMemberId, incomingSos]);
+  // An SOS someone sends: their last position (sent with the alert) and their marker. Once per
+  // alert: useIncomingSos hands over a new object only for a new alert, never on a re-render.
+  useEffect(() => {
+    if (!incomingSos) return;
+    focusMember({ id: incomingSos.senderId }, { lat: incomingSos.lat, lng: incomingSos.lng });
+    // Keyed on the alert only: focusMember reads the rest at the time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingSos]);
+
   const handleFocus = (coords, item) => {
     setMapProps({ center: coords, zoom: 19 });
-    if (item) setSelectedItem(item);
+    if (item) {
+      // The place card shows for the Buildings tab; a dot tapped while Members was the tab
+      // (the dots show on a phone whatever the tab) must switch to it or no card appears.
+      setActiveTab('buildings');
+      setSelectedItem(item);
+    }
   };
 
   // ---  MODIFIED: INTERCEPTS CLICKS FOR ADMIN RECORDER ---
   const handleMapClick = ({ lat, lng }) => {
+    // A tap on the map lets go of the member being looked for.
+    setFocusedMemberId(null);
     // 0. TARGETING MODE RALLY POINT (Mobile two-step)
     if (isTargetingMode) {
       const waypoint = { lat, lng, name: "RALLY POINT" };
@@ -2117,7 +2350,6 @@ const App = () => {
   // Leaflet's path options take literal colours, so they are read from the theme here.
   const resolvedTheme = useResolvedTheme();
   const routeColor = ROUTE_COLOR;
-  const lastKnownColor = useMemo(() => cssColor('--color-map-last-known', '#8A94A3'), [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
   const casingColor = ROUTE_CASING_COLOR;
   // How far a member is from you, for their plate on the map ("Meera · 120 m").
   const memberDistance = (u) => {
@@ -2158,12 +2390,6 @@ const App = () => {
   userInteractionHandlerRef.current = () => {
     if (isNavigatingMode) navigationController.handleUserMapInteraction();
   };
-
-  // Native Google Maps polylines for each dark member's projection vector —
-  // no-ops when the Leaflet fallback is active (mapRef only holds a Google
-  // map instance) or before the map's finished mounting. TacticalLeafletMap
-  // renders the Leaflet-engine equivalent itself, declaratively.
-  useGhostProjectionLines(googleMounted && isMapReady ? mapRef.current : null, ghostMembers, lastKnownColor);
 
   // Live walking route to the active squad waypoint — real routed path from
   // Google Directions (or OSRM on the Leaflet fallback) when available,
@@ -2309,7 +2535,9 @@ const App = () => {
       if (!panel || !header || !panel.offsetHeight || !header.offsetHeight) return;
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       const inset = insetProbeRef.current?.offsetHeight ?? 0;
-      const tabBar = 4 * rem;
+      // The tab bar as tall as it really is: the group panel stands on it.
+      const bar = document.querySelector('nav[aria-label="Main"]');
+      const tabBar = bar?.offsetHeight || 5 * rem + inset;
       const room = 10 * rem + inset - tabBar + 0.5 * rem;
       const headerAtPeek = header.offsetHeight - (peekWrapRef.current?.offsetHeight ?? 0) + (peekLinesRef.current?.scrollHeight ?? 0);
       const next = panelStops({ viewport: window.innerHeight, panelHeight: panel.offsetHeight, peekHeight: headerAtPeek + room, tabBar });
@@ -2319,6 +2547,8 @@ const App = () => {
     window.addEventListener('resize', measure);
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(panelHeaderRef.current);
+    const bar = document.querySelector('nav[aria-label="Main"]');
+    if (bar) observer?.observe(bar);
     observer?.observe(sheetRef.current);
     return () => {
       window.removeEventListener('resize', measure);
@@ -2495,6 +2725,45 @@ const App = () => {
       <CommsFeed overArScan={Boolean(arTarget) && arScanReady} coveredBy={hasJoinedSquad && isMobile && sheetOpen ? sheetRef : null} />
     </>
   );
+
+  // --- ANDROID BACK: one ladder for the whole app (hooks/useBackButtonGuard.js runs it) ---
+  // Each press does the first of these that applies, top-most first: close an overlay (the
+  // guide, Settings, admin tools, a sheet, a confirmation, a dialog), then step back a level
+  // (choosing a meeting point, navigation, a place card, a route), then from any other tab or
+  // the open group panel back to the map. Only with none of them left does Back reach the
+  // "press again to exit" step. AR Scan registers its own handler above this one while it is
+  // open. While an SOS is on screen Back does nothing at all (useBackButtonGuard's `blocked`),
+  // so an alert can never be dismissed by an accidental Back.
+  const backLadderRef = useRef(null);
+  backLadderRef.current = () => {
+    const steps = [
+      [guideOpen, () => setGuideOpen(false)],
+      [isSettingsOpen(), () => setSettingsOpen(false)],
+      [showAdminSettings, () => setShowAdminSettings(false)],
+      [isPlacing || Boolean(draftPlace), cancelAddPlace],
+      [Boolean(optionsMemberId), () => setOptionsMemberId(null)],
+      [showLeaveConfirm, () => setShowLeaveConfirm(false)],
+      [Boolean(meetingPointToConfirm), () => setMeetingPointToConfirm(null)],
+      [Boolean(rallyToClear), () => setRallyToClear(null)],
+      [showRequestsModal, () => setShowRequestsModal(false)],
+      [showActivityLog, () => setShowActivityLog(false)],
+      [showBlocked, () => setShowBlocked(false)],
+      [showFriendRequests, () => setShowFriendRequests(false)],
+      [showTelemetryModal, () => setShowTelemetryModal(false)],
+      [Boolean(deniedCode) && !hasJoinedSquad, () => { setSquadMode('join'); setSquadCode(deniedCode); setDeniedCode(null); }],
+      [justApproved, () => setJustApproved(false)],
+      [isTargetingMode, () => setIsTargetingMode(false)],
+      [isNavigatingMode, () => setIsNavigatingMode(false)],
+      [Boolean(selectedItem), () => setSelectedItem(null)],
+      [Boolean(routeStart || routeData), clearRoute],
+      [hasJoinedSquad && sheetOpen, () => setMobileView('grid')],
+    ];
+    const step = steps.find(([applies]) => applies);
+    if (!step) return false;
+    step[1]();
+    return true;
+  };
+  useEffect(() => pushBackHandler(() => backLadderRef.current()), []);
 
   // Everything that sits over the screens before the map (boot, guide, sign-in, the lobby): the
   // update overlays, and an incoming SOS. A tapped SOS notification starts LOCUS cold into one of
@@ -2711,23 +2980,30 @@ const App = () => {
           }}
           ref={sheetRef}
           className={`${isMobile
-              ? `fixed inset-x-0 bottom-16 z-[900] flex flex-col glass-floating text-text rounded-t-[28px] ${sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
+              ? `fixed inset-x-0 z-[900] flex flex-col glass-solid text-text rounded-t-[28px] ${sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
               }`
               : 'hidden md:flex w-84 glass-floating text-text rounded-3xl fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
             }`}
           // Starts under the header instead of behind it (it used to start at the very top, so
           // its handle and MATRIX/SQUAD indicator were hidden under the header).
-          style={isMobile ? { top: BELOW_TOP_BAR, y: panelY } : undefined}
-          onTouchStart={(e) => { e.currentTarget._touchStartX = e.touches[0].clientX; }}
+          style={isMobile ? { top: BELOW_TOP_BAR, bottom: 'var(--tab-bar-height)', y: panelY } : undefined}
+          // A clearly sideways swipe changes section (utils/panelSwipe.js); a scroll of the list,
+          // however it drifts sideways, never does.
+          onTouchStart={(e) => {
+            const list = e.currentTarget.querySelector('[data-testid="group-panel-list"]');
+            panelSwipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, scrollTop: list?.scrollTop ?? 0 };
+          }}
           onTouchEnd={(e) => {
-            const startX = e.currentTarget._touchStartX;
-            const endX = e.changedTouches[0].clientX;
-            const diff = startX - endX;
-            if (diff > 60) {
+            const start = panelSwipeRef.current;
+            panelSwipeRef.current = null;
+            const list = e.currentTarget.querySelector('[data-testid="group-panel-list"]');
+            const scrolled = Boolean(start) && (list?.scrollTop ?? 0) !== start.scrollTop;
+            const direction = sectionSwipe(start, { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }, scrolled);
+            if (direction === 'left') {
               // Swiped LEFT → go to Squad
               setActiveTab('users'); setSelectedItem(null);
               if (isMobile) setMobileView('squad');
-            } else if (diff < -60) {
+            } else if (direction === 'right') {
               // Swiped RIGHT → go to Matrix
               setActiveTab('buildings'); setSelectedItem(null);
               if (isMobile) setMobileView('matrix');
@@ -2765,9 +3041,13 @@ const App = () => {
                   <div ref={peekLinesRef} className="overflow-hidden min-h-0">
                     <PeekLines
                       requests={pendingRequests.length}
-                      onRequests={squadRole === 'OWNER' ? () => setShowRequestsModal(true) : null}
+                      onRequests={canModerate ? () => setShowRequestsModal(true) : null}
                       members={peekMembers}
-                      onMember={(id) => setOptionsMemberId(id)}
+                      onMember={(id) => {
+                        const member = users.find((u) => u.id === id);
+                        if (member?.hasFix) focusMember(member);
+                        else setOptionsMemberId(id);
+                      }}
                       counts={peekCounts}
                     />
                   </div>
@@ -2780,10 +3060,10 @@ const App = () => {
 
 
           {/* List Content */}
-          {/* Room at the bottom on a phone to scroll the last rows clear of the Emergency and
-            meeting point buttons: they stand 10 rem above the screen's bottom edge plus the
-            gesture bar's inset, and this panel ends 4 rem up without that inset. 8 rem plus the
-            inset leaves 2 rem between the last row and the buttons on any phone. */}
+          {/* Room at the bottom on a phone under the last row: SHEET_BOTTOM_PADDING_PX, one tab bar's
+            measured height and 2 rem (utils/panelHeights.js). The panel ends at the top of the tab
+            bar; the spacer at the end of the list is what makes room for the part of the panel
+            that lies below the screen at half and peek. */}
           {/* At half, the first scroll through the list (members or places) lifts the panel to
             full: there is little of the list to read through at half, so the panel makes room. */}
           <div
@@ -2802,7 +3082,8 @@ const App = () => {
               setPanelHeight('full');
             }}
             onWheel={(e) => { if (isMobile && sheetOpen && panelHeight === 'half' && e.deltaY !== 0) setPanelHeight('full'); }}
-            className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto p-4 pt-1 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
+            className={`${atPeek ? 'invisible ' : ''}flex-1 overflow-y-auto overscroll-contain p-4 pt-1 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
+            style={isMobile ? { paddingBottom: SHEET_BOTTOM_PADDING_PX } : undefined}
           >
             <SegmentedControl
               label={GROUP_TABS.label}
@@ -2874,8 +3155,11 @@ const App = () => {
             {/* The Group Lead's tools come first, before Your location (the design has them after):
               at half height on a 360 px phone they would otherwise sit under the Emergency button,
               which stays above the panel. */}
-            {activeTab === 'users' && squadRole === 'OWNER' && !keyboardUp && (
+            {activeTab === 'users' && canModerate && !keyboardUp && (
               <LeadTools
+                moderatorOnly={myRole !== 'admin'}
+                onActivityLog={openActivityLog}
+                onBlocked={openBlocked}
                 requests={pendingRequests.length}
                 onRequests={() => setShowRequestsModal(true)}
                 refresh={telemetrySync}
@@ -2889,6 +3173,13 @@ const App = () => {
                 }}
                 hasMeetingPoint={Boolean(activeWaypoint)}
                 onRemoveMeetingPoint={() => socket.emit('clear-waypoint', squadCode)}
+                sos={groupSettings?.roomCode === squadCode && Array.isArray(groupSettings.sosCooldownPresetsMs) ? {
+                  enabled: groupSettings.sosEnabled !== false,
+                  cooldownMs: groupSettings.sosCooldownMs,
+                  presetsMs: groupSettings.sosCooldownPresetsMs,
+                  onEnabled: (on) => changeGroupSettings({ sosEnabled: on }),
+                  onCooldown: (ms) => changeGroupSettings({ sosCooldownMs: ms }),
+                } : undefined}
               />
             )}
             {/* Your location: Live, Paused or Hidden (components/group/SharingControl.jsx). */}
@@ -2904,6 +3195,12 @@ const App = () => {
             {/* The members list's heading and its states (components/group/MembersHeading.jsx). */}
             {activeTab === 'users' && (
               <MembersHeading count={users.filter(u => !blockedUserIds.includes(u.id)).length + ghostMembers.length + 1} updatedAt={rosterAt} />
+            )}
+            {/* Friend requests waiting for this person, above the members (FriendRequests.jsx). */}
+            {activeTab === 'users' && friends.incoming.length > 0 && (
+              <Button variant="secondary" block onClick={() => setShowFriendRequests(true)}>
+                {FRIENDS.requestsButton(friends.incoming.length)}
+              </Button>
             )}
             {activeTab === 'users' && groupSearch}
             {activeTab === 'users' && rosterAt === null && <MembersLoading />}
@@ -2959,7 +3256,7 @@ const App = () => {
                       key={`ghost-row-${ghost.id}`}
                       data-testid="lost-member-row"
                       onClick={() => {
-                        handleFocus(ghost.position, null);
+                        focusMember(ghost, ghost.position);
                         setOptionsMemberId(ghost.id);
                       }}
                       className="flex items-center gap-3 p-3 rounded-2xl glass-panel font-ui text-text cursor-pointer hover:bg-surface/90 transition-all duration-150"
@@ -2990,6 +3287,8 @@ const App = () => {
                         heading={heading}
                         headingLive={hasHeadingReading}
                         onOptions={(m) => setOptionsMemberId(m.id)}
+                        onFocus={focusMember}
+                        isFriend={Boolean(user.uid) && friends.friends.has(user.uid)}
                       />
                     </motion.div>
                   )),
@@ -3079,7 +3378,14 @@ const App = () => {
           } md:-translate-x-1/2 pointer-events-none flex flex-col gap-2`}
         style={isNavigatingMode ? { top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' } : { top: BELOW_TOP_BAR }}
       >
-        {!isNavigatingMode && !(isTargetingMode && isMobile) && !locationError && !showDeclinedCard && <SharingChip mode={telemetryMode} waiting={!liveLocation} pausedNoSpot={!pausedHasSpot} />}
+        {/* Always mounted, only hidden while a banner stands in its place: coming and going with
+            every location hiccup made it open afresh each time (components/map/TopBar.jsx). */}
+        <SharingChip
+          mode={telemetryMode}
+          waiting={!liveLocation}
+          pausedNoSpot={!pausedHasSpot}
+          hidden={isNavigatingMode || (isTargetingMode && isMobile) || Boolean(locationError) || showDeclinedCard}
+        />
         <AnimatePresence initial={false}>
           {/* Choosing a meeting point (a phone's meeting point button). */}
           {isTargetingMode && (
@@ -3193,6 +3499,7 @@ const App = () => {
               blockedUserIds={blockedUserIds}
               ghostMembers={ghostMembers}
               activeTab={activeTab}
+              showBuildings={buildingDotsShown}
               places={campusPlaces}
               draftPlace={isAdmin ? draftPlace : null}
               activeWaypoint={activeWaypoint}
@@ -3205,9 +3512,9 @@ const App = () => {
               isSatellite={isSatellite && !googleUsable}
               routeColor={routeColor}
               casingColor={casingColor}
-              lastKnownColor={lastKnownColor}
               memberDistance={memberDistance}
               ghostFocusItem={ghostFocusItem}
+              focusedMemberId={focusedMemberId}
             />
           </Suspense>
         </div>
@@ -3281,7 +3588,7 @@ const App = () => {
               from the ground footprint OSM actually traces, so the outline reads as
               "wrong" even when the underlying data is correct. A dot has no such
               failure mode. (TacticalLeafletMap.jsx renders the same way.) */}
-            {activeTab === 'buildings' && campusPlaces.map(b => (
+            {buildingDotsShown && campusPlaces.map(b => (
               <div
                 key={`building-${b.id}`}
                 lat={b.lat}
@@ -3332,7 +3639,7 @@ const App = () => {
                 style={{
                   cursor: 'pointer',
                   pointerEvents: 'auto',
-                  zIndex: 45,
+                  zIndex: u.id === focusedMemberId ? 46 : 45,
                   animation: 'locus-member-fade-in 0.6s ease',
                   // Stage 7: on another floor of the building you're viewing - dimmed, never hidden.
                   ...(SHOW_INDOOR_POSITION_TO_SQUAD && isOnOtherFloor(u, indoorView) ? { opacity: 0.35 } : {}),
@@ -3344,6 +3651,8 @@ const App = () => {
                   isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
                   heading={u.heading}
                   distance={memberDistance(u)}
+                  highlighted={u.id === focusedMemberId}
+                  lastSeen={u.lastSeen}
                 />
                 {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
               </div>
@@ -3370,7 +3679,7 @@ const App = () => {
                   transition: `opacity ${GHOST_FADE_MS}ms ease`
                 }}
               >
-                <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} />
+                <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} highlighted={ghost.id === focusedMemberId} />
               </div>
             ))}
 
@@ -3461,15 +3770,38 @@ const App = () => {
 
       {/* The Group Lead's join requests (components/group/JoinRequests.jsx): Waiting only. */}
       <JoinRequests
-        open={showRequestsModal && squadRole === 'OWNER'}
+        open={showRequestsModal && canModerate}
         onClose={() => setShowRequestsModal(false)}
         requests={pendingRequests}
         code={squadCode}
+        onAdmitAll={myRole === 'admin' ? admitAll : undefined}
         onAnswer={(request, approved) => {
           // The squad the request was made to, not merely the one on screen.
           socket.emit('resolve-access', { targetId: request.targetId, roomCode: request.roomCode || squadCode, approved });
           setPendingRequests(prev => prev.filter(p => p.targetId !== request.targetId));
         }}
+      />
+
+      <FriendRequests
+        open={showFriendRequests}
+        onClose={() => setShowFriendRequests(false)}
+        requests={friends.incoming}
+        onAccept={(uid) => friendAction(friends.accept(uid))}
+        onDecline={(uid) => friendAction(friends.remove(uid))}
+      />
+
+      {/* The activity log and blocked people, for the Group Lead and moderators. */}
+      <ActivityLog
+        open={showActivityLog && canModerate}
+        onClose={() => setShowActivityLog(false)}
+        entries={activityLog}
+        onExport={exportLog}
+      />
+      <BlockedList
+        open={showBlocked && canModerate}
+        onClose={() => setShowBlocked(false)}
+        blocked={blockedPeople}
+        onUnblock={unblock}
       />
 
       {/* The Group Lead's locations table (components/group/LocationsTable.jsx). */}
@@ -3577,14 +3909,16 @@ const App = () => {
       {/* ========== MOBILE BOTTOM BAR (src/components/BottomTabBar.jsx) ========== */}
       {!isNavigatingMode && (
         <BottomTabBar
-          activeId={mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid'}
+          keyboardUp={keyboardUp}
+          activeId={arTarget ? 'scan' : sheetOpen ? 'squad' : 'grid'}
           tabs={[
             // Map only navigates. It used to toggle satellite on every tap as well, so coming
             // back to the map from Group or Scan flipped the map style; satellite has its own
             // control on the map.
             { id: 'grid', label: TABS.map, Icon: Map, flourish: 'lift' },
             { id: 'scan', label: TABS.scan, Icon: Scan, flourish: 'turn' },
-            { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop' },
+            // The people waiting to join, on Group, for whoever may let them in.
+            { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop', badge: canModerate ? { count: pendingRequests.length, label: LEAD_TOOLS.waiting(pendingRequests.length) } : undefined },
           ]}
           sosTrigger={
             accessStatus === 'granted' ? (
@@ -3601,7 +3935,7 @@ const App = () => {
             ) : null
           }
           onSelect={(id) => {
-            const current = mobileView === 'scan' ? 'scan' : sheetOpen ? 'squad' : 'grid';
+            const current = arTarget ? 'scan' : sheetOpen ? 'squad' : 'grid';
             if (id !== current) haptic('select');
             if (id === 'grid') {
               setMobileView('grid');
@@ -3622,7 +3956,7 @@ const App = () => {
       )}
 
       {/* The meeting point button (two steps: tap it, then tap the map) */}
-      {!isNavigatingMode && !(selectedItem && activeTab === 'buildings') && (
+      {!isNavigatingMode && !keyboardUp && !(isMobile && sheetOpen && panelHeight !== 'peek') && !(selectedItem && activeTab === 'buildings') && (
         <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
       )}
 
@@ -3643,7 +3977,12 @@ const App = () => {
         me={liveLocation}
         heading={heading}
         headingLive={hasHeadingReading}
-        isLead={squadRole === 'OWNER'}
+        isLead={mayRemove(optionsMember)}
+        onRemove={kickMember}
+        friend={friendFor(optionsMember)}
+        moderator={myRole === 'admin' && optionsMember?.role && optionsMember.role !== 'admin' && optionsMember.status !== 'GHOST'
+          ? { is: optionsMember.role === 'moderator', onChange: setMemberModerator }
+          : undefined}
         onClose={() => setOptionsMemberId(null)}
         onNavigate={(m) => {
           handleWaypointSelect({ lat: m.lat, lng: m.lng, name: m.name, id: m.id });
@@ -3652,9 +3991,8 @@ const App = () => {
         }}
         onPing={sendPing}
         onShowOnMap={(m) => {
-          handleFocus({ lat: m.lat, lng: m.lng }, null);
-          // On a phone the open panel covers the map: get out of the way, as a building does.
-          if (isMobile) setMobileView('grid');
+          setOptionsMemberId(null);
+          focusMember(m);
         }}
         onArScan={(m) => setArTarget(arTargetForMember(m))}
         onRemoveAndBlock={toggleBlock}

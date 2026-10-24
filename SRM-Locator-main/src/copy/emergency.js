@@ -21,6 +21,23 @@ export const SOS_SENT = {
 // The offline fix's notice once a held alert goes: the same title.
 export const SOS_DELIVERED = { title: SOS_SENT.title, body: SOS_SENT.late };
 
+// An alert the server refused (backend/alertRules.js, its answer 'alert-result'). The "sent"
+// notice is taken back first: it shows as the alert leaves the phone, before the server answers.
+const timeLeft = (sec) => {
+  const s = Math.max(1, Math.ceil(sec));
+  const min = Math.floor(s / 60);
+  const rest = s % 60;
+  if (min === 0) return `${rest} s`;
+  return rest === 0 ? `${min} min` : `${min} min ${rest} s`;
+};
+export const SOS_REFUSED = {
+  title: 'SOS not sent',
+  cooldown: (sec) => `You sent an alert a moment ago. You can send another in ${timeLeft(sec)}. If you need help right now, call 112.`,
+  disabled: 'Your Group Lead has turned emergency alerts off for this group. If you need help right now, call 112.',
+  quietZone: "Alerts can't be sent from a class building right now. If you need help right now, call 112.",
+  other: "The server didn't send your alert. If you need help right now, call 112.",
+};
+
 // A held alert that can never go: the group is gone from the server, or this phone left it.
 export const SOS_DROPPED = {
   gone: "Your group is no longer on the server, so your alert couldn't reach them. If you need help right now, call 112.",

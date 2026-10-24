@@ -192,7 +192,7 @@ export function useNavigationController({
           center: targetCenter,
           zoom: 19,
           heading: targetHeading,
-          tilt: 35,
+          tilt: 0, // flat: a tilted view put the route and markers out of line (js-1.1.72)
         });
       } else if (typeof mapInstance.panTo === 'function') {
         mapInstance.panTo(targetCenter);

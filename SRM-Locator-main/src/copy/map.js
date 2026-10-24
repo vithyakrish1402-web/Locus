@@ -43,6 +43,8 @@ export const TABS = { map: 'Map', scan: 'Scan', group: 'Group' };
 export const MARKERS = {
   memberPlate: (name, distance) => (distance ? `${name} · ${distance}` : name),
   memberPaused: (name) => `${name} · paused`,
+  // Still connected, but no new position for a while (utils/memberStatus.js says when).
+  memberStale: (name, minutes) => `${name} · last update ${minutes} min ago`,
   lostConnection: (name, elapsed) => `${name} · lost connection ${elapsed} ago`,
   lastSeen: (name, elapsed) => `${name} · last seen ${elapsed} ago`,
   lostConnectionTitle: (name) => `Lost connection: ${name}`,

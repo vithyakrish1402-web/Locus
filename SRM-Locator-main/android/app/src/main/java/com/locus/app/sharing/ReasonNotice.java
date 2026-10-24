@@ -12,9 +12,11 @@ package com.locus.app.sharing;
  *                means nothing to it (401 "revoked"): both are what a server restart looks like. The
  *                pass is wiped, and a new one needs a fresh sign-in, which only the app can do.
  *   UNREACHABLE  the server could not be reached for the whole retry window.
+ *   DISABLED     the server says background sharing is switched off (the kill switch). The person did not
+ *                do this and the notification would otherwise just vanish.
  */
 public final class ReasonNotice {
-    public enum Kind { NONE, GROUP_ENDED, UNREACHABLE }
+    public enum Kind { NONE, GROUP_ENDED, UNREACHABLE, DISABLED }
 
     public static final String SERVER_UNREACHABLE = "server-unreachable";
 
@@ -23,6 +25,7 @@ public final class ReasonNotice {
     public static Kind forStopReason(String reason) {
         if (ResponseHandler.GROUP_GONE.equals(reason) || ResponseHandler.REVOKED.equals(reason)) return Kind.GROUP_ENDED;
         if (SERVER_UNREACHABLE.equals(reason)) return Kind.UNREACHABLE;
+        if (ResponseHandler.DISABLED.equals(reason)) return Kind.DISABLED;
         return Kind.NONE;
     }
 }

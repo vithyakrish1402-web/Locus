@@ -3,19 +3,23 @@ import { UserPlus } from 'lucide-react';
 import { Avatar, Button, Sheet } from '../ui';
 import { JOIN_REQUESTS } from '../../copy/group';
 
-// The Group Lead's join requests (redesign Group panel batch, piece 5): who is waiting, with
-// Approve and Decline, answered exactly as before. Waiting only: the old BLACKLIST tab and its
-// REVOKE are gone, because the server has no unblock.
+// Join requests (redesign Group panel batch, piece 5), for the Group Lead and moderators: who is
+// waiting, with Approve and Decline, answered exactly as before. The Group Lead alone also has
+// Admit all (`onAdmitAll`, backend/groupRoles.js). Blocked people are their own list
+// (BlockedList.jsx).
 
 /**
  * @param {{ open: boolean, onClose: () => void, requests: Array<{targetId: string, name: string}>,
- *   code: string, onAnswer: (request: object, approved: boolean) => void }} props
+ *   code: string, onAnswer: (request: object, approved: boolean) => void, onAdmitAll?: () => void }} props
  */
-export default function JoinRequests({ open, onClose, requests, code, onAnswer }) {
+export default function JoinRequests({ open, onClose, requests, code, onAnswer, onAdmitAll }) {
   return (
     <Sheet open={open} onClose={onClose} title={JOIN_REQUESTS.title}>
       <div data-testid="join-requests" className="px-4 flex flex-col gap-3">
         <p className="text-secondary text-text-secondary">{JOIN_REQUESTS.help}</p>
+        {onAdmitAll && requests.length > 1 && (
+          <Button block onClick={onAdmitAll}>{JOIN_REQUESTS.admitAll(requests.length)}</Button>
+        )}
         {requests.length === 0 ? (
           <div className="py-8 flex flex-col items-center text-center gap-3" data-testid="join-requests-empty">
             <span className="flex items-center justify-center w-14 h-14 rounded-full bg-accent-soft text-accent" aria-hidden="true">

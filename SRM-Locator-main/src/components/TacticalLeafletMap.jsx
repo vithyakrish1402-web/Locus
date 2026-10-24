@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { SRM_MASTER_DATABASE } from '../srmDatabase';
@@ -11,7 +11,7 @@ import WaypointMarker from './WaypointMarker';
 import BuildingMarker from './BuildingMarker';
 import LeafletReactMarker from './LeafletReactMarker';
 import MemberMarker from './MemberMarker';
-import { getProjectionSegments, GHOST_FADE_MS } from '../utils/ghostProjection';
+import { GHOST_FADE_MS } from '../utils/ghostProjection';
 import { registerMapDriver } from '../utils/mapFocus';
 import { ROUTE_CASING_WIDTH, ROUTE_WIDTH, ROUTE_COLOR, ROUTE_CASING_COLOR } from '../hooks/useWaypointNavigationLine';
 
@@ -151,6 +151,8 @@ const TacticalLeafletMap = ({
   blockedUserIds,
   ghostMembers,
   activeTab,
+  // Whether the campus dots show; without it, only for the Buildings tab.
+  showBuildings = undefined,
   // Every place to mark (the database plus the admin's additions), and the spot the admin
   // has just chosen for a new one.
   places = SRM_MASTER_DATABASE,
@@ -173,11 +175,16 @@ const TacticalLeafletMap = ({
   // member's distance for their plate, and what a lost-connection member's card says.
   routeColor = ROUTE_COLOR,
   casingColor = ROUTE_CASING_COLOR,
-  lastKnownColor = '#8A94A3',
   memberDistance = () => null,
   ghostFocusItem = (ghost) => ({ name: ghost.name }),
+  // The member being looked for (App.jsx's focusMember): their marker is highlighted.
+  focusedMemberId = null,
 }) => {
   const tiles = isSatellite ? SATELLITE_TILES : DARK_TILES;
+  // The walking route, made once per route: both lines draw the same points, unsimplified
+  // (smoothFactor 0) and unclipped, so they stay on the roads and under the markers while the
+  // map is zoomed or panned (js-1.1.72).
+  const routePositions = useMemo(() => walkingRoute?.path?.map((p) => [p.lat, p.lng]) || [], [walkingRoute?.path]);
 
   return (
     <MapContainer
@@ -219,7 +226,7 @@ const TacticalLeafletMap = ({
         </LeafletReactMarker>
       )}
 
-      {activeTab === 'buildings' && places.map((b) => (
+      {(showBuildings ?? activeTab === 'buildings') && places.map((b) => (
         <LeafletReactMarker key={b.id} lat={b.lat} lng={b.lng} onClick={() => onFocus({ lat: b.lat, lng: b.lng }, b)}>
           <BuildingMarker highlighted={highlightBuildingId === b.id} />
         </LeafletReactMarker>
@@ -246,7 +253,9 @@ const TacticalLeafletMap = ({
       {/* Live walking route to the active waypoint — shared solid blue route and white outline in both themes */}
       {walkingRoute?.path?.length > 1 && (
         <Polyline
-          positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
+          positions={routePositions}
+          smoothFactor={0}
+          noClip
           pathOptions={{
             color: casingColor,
             weight: ROUTE_CASING_WIDTH,
@@ -257,7 +266,9 @@ const TacticalLeafletMap = ({
       )}
       {walkingRoute?.path?.length > 1 && (
         <Polyline
-          positions={walkingRoute.path.map((p) => [p.lat, p.lng])}
+          positions={routePositions}
+          smoothFactor={0}
+          noClip
           pathOptions={{
             color: routeColor,
             weight: ROUTE_WIDTH,
@@ -304,22 +315,13 @@ const TacticalLeafletMap = ({
                 isNavigating={Boolean(activeWaypoint) || (u.speed / 3.6) > NAVIGATING_SPEED_MPS}
                 heading={u.heading}
                 distance={memberDistance(u)}
+                highlighted={u.id === focusedMemberId}
+                lastSeen={u.lastSeen}
               />
               {SHOW_INDOOR_POSITION_TO_SQUAD && memberFloorTag(u) && <FloorTag text={memberFloorTag(u)} color="#EF4444" />}
             </div>
           </LeafletReactMarker>
         ))}
-
-      {ghostMembers.flatMap((ghost) => {
-        if (ghost.phase === 'expired') return [];
-        return getProjectionSegments(ghost.lastKnownLocation, ghost.position).map((segment, i) => (
-          <Polyline
-            key={`ghost-line-${ghost.id}-${i}`}
-            positions={[[segment.from.lat, segment.from.lng], [segment.to.lat, segment.to.lng]]}
-            pathOptions={{ color: lastKnownColor, opacity: segment.opacity, weight: 2, dashArray: '4 6' }}
-          />
-        ));
-      })}
 
       {ghostMembers.map((ghost) => (
         <LeafletReactMarker
@@ -332,7 +334,7 @@ const TacticalLeafletMap = ({
           }}
         >
           <div style={{ opacity: ghost.fading ? 0 : 1, transition: `opacity ${GHOST_FADE_MS}ms ease` }}>
-            <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} />
+            <GhostMemberMarker name={ghost.name} phase={ghost.phase} elapsedLabel={ghost.elapsedLabel} highlighted={ghost.id === focusedMemberId} />
           </div>
         </LeafletReactMarker>
       ))}

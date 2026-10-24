@@ -1,3 +1,4 @@
+import { LOCATION_CONTENT } from './data/campusLocationContent.js';
 // --- SRM KTR MASTER TACTICAL DATABASE (VERIFIED CENTER POINTS) ---
 export const SRM_MASTER_DATABASE = [
   // Academic & Admin Sector
@@ -155,4 +156,5 @@ export const SRM_MASTER_DATABASE = [
   { id: 146, name: "PADMAM HALL BY SRM HOTEL", category: "LOGISTICS", lat: 12.8220875, lng: 80.0431739, info: "Campus service, food or logistics location." }, // info generated from the category, replace
   { id: 147, name: "AUTO CREED RACING", category: "ACADEMIC", lat: 12.822058, lng: 80.0428328, info: "Academic building or facility." }, // info generated from the category, replace
   { id: 148, name: "BADMINTON COURT 1", category: "GROUNDS", lat: 12.8225421, lng: 80.0431569, info: "Open ground or landmark." }, // info generated from the category, replace
-];
+// A place's own description (data/campusLocationContent.js) replaces the generated line.
+].map((place) => ({ ...place, info: LOCATION_CONTENT[place.id]?.description || place.info }));

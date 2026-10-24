@@ -1,22 +1,32 @@
 import React, { useState } from 'react';
-import { Ban, MapPin, Navigation, Radio, ScanLine } from 'lucide-react';
+import { Ban, Heart, HeartOff, MapPin, Navigation, Radio, ScanLine, ShieldCheck, ShieldOff, UserMinus } from 'lucide-react';
 import { Avatar, Button, ListRow, Sheet } from '../ui';
 import { memberStatus, memberWhere } from '../../utils/memberStatus';
-import { MEMBERS, MEMBER_OPTIONS, REMOVE_AND_BLOCK, firstName } from '../../copy/group';
+import { FRIENDS, MEMBERS, MEMBER_OPTIONS, REMOVE_AND_BLOCK, REMOVE_MEMBER, firstName } from '../../copy/group';
 
 // A member's options: solid opaque bottom sheet without glassmorphism.
-// Provides their live info, Navigate to them, Ping, Show on map, Find with AR Scan,
-// and Group Lead's Remove and block behind its confirmation.
+// Provides their live info, Navigate to them, Ping, Show on map, Find with AR Scan, and, for
+// whoever may (App.jsx decides by role, backend/groupRoles.js has the rules), Remove and
+// Remove and block behind a confirmation, and the Group Lead's Make / Remove moderator.
 
 /**
  * @param {{ member: object|null, me: object|null, heading: number, headingLive: boolean,
  *   isLead: boolean, onClose: () => void, onNavigate?: (member: object) => void, onPing: (id: string) => void,
  *   onShowOnMap: (member: object) => void, onArScan: (member: object) => void,
- *   onRemoveAndBlock: (id: string) => void }} props
+ *   onRemoveAndBlock: (id: string) => void, onRemove?: (id: string) => void,
+ *   moderator?: { is: boolean, onChange: (member: object, on: boolean) => void },
+ *   friend?: { status: 'none'|'sent'|'asked'|'friends', onAdd: Function, onAccept: Function, onRemove: Function } }} props
  *   member: whose options are open, or null when closed
+ *   isLead: whether this person may remove `member` (the Group Lead, or a moderator for a member)
+ *   moderator: only for the Group Lead, about someone who can be made a moderator
+ *   friend: trusted friends with this member (utils/friends.js), when they can be
  */
-export default function MemberOptions({ member, me, heading, headingLive, isLead, onClose, onNavigate, onPing, onShowOnMap, onArScan, onRemoveAndBlock }) {
-  const [confirming, setConfirming] = useState(null);
+export default function MemberOptions({ member, me, heading, headingLive, isLead, onClose, onNavigate, onPing, onShowOnMap, onArScan, onRemoveAndBlock, onRemove, moderator, friend }) {
+  // { member, block }: the removal waiting on its confirmation.
+  const [confirmingRemoval, setConfirming] = useState(null);
+  const confirming = confirmingRemoval?.member ?? null;
+  const blocking = confirmingRemoval?.block ?? true;
+  const removal = blocking ? REMOVE_AND_BLOCK : REMOVE_MEMBER;
   const shown = member ?? confirming;
   const name = shown?.name || '?';
   const first = firstName(shown?.name);
@@ -107,13 +117,40 @@ export default function MemberOptions({ member, me, heading, headingLive, isLead
                 />
               </>
             )}
+            {friend && friend.status === 'none' && (
+              <ListRow leading={<Heart size={20} />} title={FRIENDS.add} description={FRIENDS.addHelp} onClick={act(friend.onAdd)} />
+            )}
+            {friend && friend.status === 'asked' && (
+              <ListRow leading={<Heart size={20} />} title={FRIENDS.acceptRequest} onClick={act(friend.onAccept)} />
+            )}
+            {friend && friend.status === 'sent' && (
+              <ListRow leading={<HeartOff size={20} />} title={FRIENDS.sent} onClick={act(friend.onRemove)} />
+            )}
+            {friend && friend.status === 'friends' && (
+              <ListRow leading={<HeartOff size={20} />} title={FRIENDS.remove} onClick={act(friend.onRemove)} />
+            )}
+            {moderator && (
+              <ListRow
+                leading={moderator.is ? <ShieldOff size={20} /> : <ShieldCheck size={20} />}
+                title={moderator.is ? MEMBER_OPTIONS.removeModerator : MEMBER_OPTIONS.makeModerator}
+                onClick={() => { moderator.onChange(member, !moderator.is); onClose(); }}
+              />
+            )}
+            {isLead && onRemove && (
+              <ListRow
+                danger
+                leading={<UserMinus size={20} />}
+                title={MEMBER_OPTIONS.remove}
+                onClick={() => { setConfirming({ member, block: false }); onClose(); }}
+              />
+            )}
             {isLead && (
               <ListRow
                 danger
                 leading={<Ban size={20} />}
                 title={MEMBER_OPTIONS.removeAndBlock}
                 description="Revoke squad access and ban user"
-                onClick={() => { setConfirming(member); onClose(); }}
+                onClick={() => { setConfirming({ member, block: true }); onClose(); }}
               />
             )}
           </div>
@@ -123,25 +160,30 @@ export default function MemberOptions({ member, me, heading, headingLive, isLead
         </div>
       </Sheet>
 
-      {/* Remove and block, confirmed: solid opaque */}
-      <Sheet open={Boolean(confirming)} onClose={() => setConfirming(null)} label={REMOVE_AND_BLOCK.title(confirming?.name || '?')} panelClassName={solidPanelClass}>
-        <div data-testid="remove-and-block-confirm" className="px-5 flex flex-col gap-4">
+      {/* Remove, or remove and block, confirmed: solid opaque */}
+      <Sheet open={Boolean(confirming)} onClose={() => setConfirming(null)} label={removal.title(confirming?.name || '?')} panelClassName={solidPanelClass}>
+        <div data-testid={blocking ? 'remove-and-block-confirm' : 'remove-confirm'} className="px-5 flex flex-col gap-4">
           <span className="flex items-center justify-center w-14 h-14 rounded-full bg-danger-soft text-danger" aria-hidden="true">
-            <Ban size={26} />
+            {blocking ? <Ban size={26} /> : <UserMinus size={26} />}
           </span>
           <div className="flex flex-col gap-2">
-            <h2 className="text-title">{REMOVE_AND_BLOCK.title(confirming?.name || '?')}</h2>
-            <p className="text-body text-text-secondary">{REMOVE_AND_BLOCK.body(firstName(confirming?.name))}</p>
+            <h2 className="text-title">{removal.title(confirming?.name || '?')}</h2>
+            <p className="text-body text-text-secondary">{removal.body(firstName(confirming?.name))}</p>
           </div>
           <Button
             variant="danger"
             size="large"
             block
-            onClick={() => { const id = confirming.id; setConfirming(null); onRemoveAndBlock(id); }}
+            onClick={() => {
+              const id = confirming.id;
+              setConfirming(null);
+              if (blocking) onRemoveAndBlock(id);
+              else onRemove(id);
+            }}
           >
-            {REMOVE_AND_BLOCK.confirm}
+            {removal.confirm}
           </Button>
-          <Button variant="plain" block onClick={() => setConfirming(null)}>{REMOVE_AND_BLOCK.cancel}</Button>
+          <Button variant="plain" block onClick={() => setConfirming(null)}>{removal.cancel}</Button>
         </div>
       </Sheet>
     </>

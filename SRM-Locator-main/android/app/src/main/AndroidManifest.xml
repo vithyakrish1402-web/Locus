@@ -31,6 +31,17 @@
     <!-- Only to post "Tap to resume sharing with <Group>" after a restart (sharing/BootResumeReceiver.java).
          It never starts the location service. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- SOS alerts while LOCUS is closed (sharing/SosNotifications.java): lets the alert for a teammate's
+         SOS take over the screen of a locked phone like an incoming call. Android 14+ can take this away
+         from an app; the alert is then an ordinary heads-up notification, which still rings. It starts
+         nothing by itself: only a notification the service raises, and only for an SOS. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Alerts through Do Not Disturb (alerts/AlertChannels.java): lets the app ask for, and check, the
+         Do Not Disturb access the person gives it in the system's settings. Install-time; the access
+         itself is only ever given by the person. Without it the alerts still play on the alarm stream. -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <!-- Raising the alarm volume for an SOS or a ping, and putting it back (alerts/AlertVolume.java). -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <!-- navigator.vibrate() in the WebView. Without it every call silently did nothing: the
          SOS alarm's vibration (SosOverlay.jsx) never fired on a phone, and neither do the
@@ -79,6 +90,11 @@
             android:name=".sharing.LocationShareService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- A swiped-away SOS notification puts the alarm volume back (alerts/AlertVolumeReceiver.java). -->
+        <receiver
+            android:name=".alerts.AlertVolumeReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".sharing.BootResumeReceiver"

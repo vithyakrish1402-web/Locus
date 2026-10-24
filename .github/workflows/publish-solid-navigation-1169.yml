@@ -1,0 +1,91 @@
+name: Publish solid navigation 1.1.69
+
+on:
+  push:
+    branches: [release/solid-navigation-1.1.69]
+    paths: [.github/workflows/publish-solid-navigation-1169.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: locus-publish-1.1.69
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'vithyakrish1402-web/Locus'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    defaults:
+      run:
+        working-directory: SRM-Locator-main
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check release version and download verified 1.1.68 baseline
+        run: |
+          gh api "repos/$GH_REPO/releases?per_page=100" > "$RUNNER_TEMP/releases-before.json"
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          import { releaseVersionConflict } from './src/utils/liveUpdateManifest.js';
+          const releases = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/releases-before.json'));
+          const tags = releases.filter(r => !r.draft).map(r => r.tag_name);
+          assert.equal(releaseVersionConflict('1.1.69', tags, ['1.1.61']), null);
+          JS
+          mkdir -p .release-base-1168
+          gh release download js-1.1.68 --pattern locus-bundle.zip --dir .release-base-1168
+          echo '4d85dbc1dd22f4b50a5c424387c6c73c7a716976d5b78bec7692e31792196aec  .release-base-1168/locus-bundle.zip' | sha256sum --check
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          target = Path('.release-base-1168/dist').resolve()
+          with zipfile.ZipFile('.release-base-1168/locus-bundle.zip') as bundle:
+              for info in bundle.infolist():
+                  assert (target / info.filename).resolve().is_relative_to(target)
+              bundle.extractall(target)
+          PY
+      - name: Prepare solid-line update without changing other published features
+        run: node scripts/prepare-solid-1169.mjs
+      - name: Publish 1.1.69
+        run: |
+          gh release create js-1.1.69 dist-release/solid-1169/locus-bundle.zip --target "$GITHUB_SHA" --title 'LOCUS JS bundle 1.1.69 - solid navigation lines' --notes-file dist-release/solid-1169/BUNDLE_NOTES.md --latest
+      - name: Refresh in-app updater index
+        run: |
+          node --input-type=module <<'JS'
+          import { publishUpdateIndex } from './scripts/lib/updateIndex.mjs';
+          const result = publishUpdateIndex({ dir: 'dist-release/solid-1169/update-index', repo: process.env.GH_REPO });
+          if (!result.ok) throw new Error(JSON.stringify(result));
+          console.log('In-app updater index published.');
+          JS
+      - name: Verify published bundle and updater
+        run: |
+          gh release download js-1.1.69 --pattern locus-bundle.zip --dir dist-release/solid-1169/verified-bundle
+          gh release download update-index --pattern update-index.json --dir dist-release/solid-1169/verified-index
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
+          import { parseUpdateIndex } from './src/utils/updateIndex.js';
+          import { selectLatestBundleRelease, shouldApplyBundle } from './src/utils/liveUpdateManifest.js';
+          const root = 'dist-release/solid-1169/';
+          const expected = JSON.parse(fs.readFileSync(root + 'verification.json')).checksum;
+          const actual = createHash('sha256').update(fs.readFileSync(root + 'verified-bundle/locus-bundle.zip')).digest('hex');
+          assert.equal(actual, expected);
+          const index = parseUpdateIndex(JSON.parse(fs.readFileSync(root + 'verified-index/update-index.json')), {repo: process.env.GH_REPO, now: Date.now()});
+          assert(index.ok);
+          const manifest = selectLatestBundleRelease(index.releases);
+          assert.equal(manifest.version, '1.1.69');
+          assert(shouldApplyBundle({nativeVersion:'1.1.61',currentBundleVersion:'1.1.68',manifest}).apply);
+          console.log('Published download and in-app updater verified for 1.1.69.');
+          JS
+

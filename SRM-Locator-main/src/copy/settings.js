@@ -30,6 +30,14 @@ export const SETTINGS = {
   notifications: 'Notifications',
   alertSounds: 'Alert sounds',
   alertSoundsHelp: 'A sound for pings and when someone loses connection.',
+  // LOCUS's own Do Not Disturb (utils/inAppDnd.js), on this phone only.
+  inAppDnd: 'Do not disturb',
+  inAppDndHelp: 'Pings arrive silently, with no sound or vibration. An SOS still rings.',
+  // Letting the alerts through the phone's own Do Not Disturb (Android's access screen).
+  dndAccess: 'Ring through Do Not Disturb',
+  dndAccessOn: 'Allowed. An SOS rings even when your phone is on Do Not Disturb.',
+  dndAccessOff: "Not allowed yet. An SOS rings at full alarm volume, but your phone's Do Not Disturb can still hold it back.",
+  dndAccessAllow: 'Allow',
   emergencyAlerts: 'Emergency alerts',
   emergencyAlertsHelp: 'Always on. An emergency alert always sounds, whatever you choose above.',
 

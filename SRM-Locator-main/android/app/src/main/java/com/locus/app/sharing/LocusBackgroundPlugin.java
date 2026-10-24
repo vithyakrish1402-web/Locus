@@ -30,6 +30,24 @@ import java.util.regex.Pattern;
  *   getState()         { state: running | paused | stopped, reason?, running } - a stopped state keeps its
  *                      reason (other than user-stop) across a killed process, until acknowledgeStop()
  *   acknowledgeStop()  the app has shown why sharing ended; forget the reason
+ *
+ * SOS from the Group while the app is closed (the sharing service listens for it; see SosListener).
+ * Additive: the contract VERSION above did not change, and an app that does not know these just
+ * never calls them. getCapabilities() says whether this build has them:
+ *   getCapabilities() also gives { sosAlerts: true, sosAlertsOn, sosAudible, sosFullScreen }
+ *                      sosAlertsOn: the person's choice (on until they turn it off); sosAudible: false when
+ *                      the phone has the "SOS alerts" notifications turned off or silent; sosFullScreen:
+ *                      false when Android 14+ has taken away the full-screen alert (it is then a heads-up one)
+ *   setSosAlerts({ enabled })   the person's choice; takes effect at once in a running service
+ *   sosShown({ id })            the app is showing that SOS in its own overlay: its notification goes
+ *   acknowledgeSos({ id, more? })   the person acknowledged it in the app: the server stops offering it (this
+ *                      works where the app's socket is not in the Group yet) and its notification goes. If
+ *                      the app was shown over a locked screen and `more` (another alert is waiting) is not
+ *                      true, LOCUS leaves the screen so the lock screen is back
+ *   event "sosOpened" { id, senderName?, senderId, lat?, lng?, ageMs, timestamp }   the person tapped an
+ *                      SOS notification (or its full-screen alert): show this SOS. Held until the app
+ *                      listens, so a tap that starts the app from cold is not lost.
+ *
  *   event "stateChanged" { state, reason? }   reason says why it stopped: user-stop (or whatever the
  *                      app passed to stop()), revoked, token-expired, forbidden, group-gone,
  *                      server-unreachable (no answer, 502, 503 or 504 for ten minutes of retries),
@@ -61,6 +79,41 @@ public class LocusBackgroundPlugin extends Plugin {
             if (reason != null) data.put("reason", reason);
             notifyListeners("stateChanged", data, true);
         });
+        // The app may have been started by tapping an SOS notification.
+        if (getActivity() != null) deliverLaunch(getActivity().getIntent());
+    }
+
+    /** Called when LOCUS, already running, is brought forward by an intent (a tapped SOS notification). */
+    @Override
+    protected void handleOnNewIntent(Intent intent) {
+        super.handleOnNewIntent(intent);
+        deliverLaunch(intent);
+    }
+
+    /** Hands a tapped SOS to the app once: the intent is spent afterwards, so a recreated activity does not repeat it. */
+    private void deliverLaunch(Intent intent) {
+        // A tapped "N people waiting to join": the app opens its Group tab (once, as for an SOS).
+        if (JoinNotifications.isGroupIntent(intent)) {
+            intent.setAction(Intent.ACTION_MAIN);
+            JoinNotifications.cancel(getContext());
+            notifyListeners("groupOpened", new JSObject(), true);
+            return;
+        }
+        if (!SosLaunch.isSosIntent(intent)) return;
+        JSObject data = new JSObject();
+        data.put("id", intent.getStringExtra(SosLaunch.EXTRA_ID));
+        data.put("senderId", intent.getStringExtra(SosLaunch.EXTRA_UID));
+        String name = intent.getStringExtra(SosLaunch.EXTRA_NAME);
+        if (name != null) data.put("senderName", name);
+        if (intent.hasExtra(SosLaunch.EXTRA_LAT) && intent.hasExtra(SosLaunch.EXTRA_LNG)) {
+            data.put("lat", intent.getDoubleExtra(SosLaunch.EXTRA_LAT, 0));
+            data.put("lng", intent.getDoubleExtra(SosLaunch.EXTRA_LNG, 0));
+        }
+        long postedAt = intent.getLongExtra(SosLaunch.EXTRA_POSTED_AT, System.currentTimeMillis());
+        data.put("ageMs", intent.getLongExtra(SosLaunch.EXTRA_AGE_MS, 0) + Math.max(0, System.currentTimeMillis() - postedAt));
+        data.put("timestamp", intent.getLongExtra(SosLaunch.EXTRA_TIMESTAMP, 0));
+        intent.setAction(Intent.ACTION_MAIN);
+        notifyListeners("sosOpened", data, true);
     }
 
     @Override
@@ -82,7 +135,54 @@ public class LocusBackgroundPlugin extends Plugin {
         r.put("notificationsEnabled", SharingNotifications.canBeSeen(getContext()));
         r.put("locationGranted", locationGranted());
         r.put("resumable", SharingState.store(getContext()).resumeHint(System.currentTimeMillis()) != null);
+        r.put("sosAlerts", true);
+        r.put("sosAlertsOn", SosPrefs.enabled(getContext()));
+        r.put("sosAudible", SosNotifications.audible(getContext()));
+        r.put("sosFullScreen", SosNotifications.fullScreenAllowed(getContext()));
         call.resolve(r);
+    }
+
+    @PluginMethod
+    public void setSosAlerts(PluginCall call) {
+        Boolean enabled = call.getBoolean("enabled");
+        if (enabled == null) {
+            call.reject("bad-arguments");
+            return;
+        }
+        SosPrefs.setEnabled(getContext(), enabled);
+        if (LocationShareService.isRunning()) sendToService(LocationShareService.ACTION_SOS_ALERTS, 0, null);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void sosShown(PluginCall call) {
+        dismissSos(call.getString("id"));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void acknowledgeSos(PluginCall call) {
+        final String id = call.getString("id");
+        dismissSos(id);
+        // Shown over the lock screen and nothing else waiting: hand the phone back to the lock screen.
+        if (!Boolean.TRUE.equals(call.getBoolean("more", false))) SosLaunch.leaveIfStillLocked(getActivity());
+        final Session session = SharingState.session() != null ? SharingState.session() : SharingState.store(getContext()).load();
+        if (id != null && session != null) {
+            new Thread(() -> new UrlConnectionPoster().acknowledgeSos(session.baseUrl, session.deviceToken, id)).start();
+        }
+        call.resolve();
+    }
+
+    private void dismissSos(String id) {
+        if (id == null || !LocationShareService.isRunning()) return;
+        Intent intent = new Intent(getContext(), LocationShareService.class)
+            .setAction(LocationShareService.ACTION_SOS_DISMISS)
+            .putExtra(LocationShareService.EXTRA_SOS_ID, id);
+        try {
+            getContext().startService(intent);
+        } catch (RuntimeException e) {
+            // The service may not be started from here right now; it is not running, so there is no notification of its to take down.
+        }
     }
 
     @PluginMethod

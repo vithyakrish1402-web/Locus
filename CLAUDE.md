@@ -13,7 +13,7 @@ SRM-Locator-main/
 │   ├── App.jsx              # ~145KB monolithic component: nearly all app state, UI, and logic live here
 │   ├── ARCompass.jsx        # AR camera viewfinder, bearing/heading math
 │   ├── LocusGuide.jsx       # Onboarding/help modal
-│   ├── utils/               # Pure helpers: geoMath, precognition (GPS Kalman filter), squadCode, ghostProjection, markerStatus
+│   ├── utils/               # Pure helpers: geoMath, squadCode, ghostProjection (lost-connection markers, no projection), memberStatus
 │   ├── srmDatabase.js       # SRM_MASTER_DATABASE — static campus building coordinates
 │   ├── firebase.js          # Firebase SDK init (Auth + Firestore)
 │   └── main.jsx             # Entry point
@@ -80,6 +80,9 @@ The backend does not currently require any `.env` variables — the `GEMINI_API_
 - **Commander away.** While the Commander's socket is gone, only an approved member can take command. A stranger's request is held in `squad.pending`, never admitted and never dropped. It is handed to a connected approved member promoted to stand in (`promoted-to-owner`), or waits for whoever takes command next. That promotion also happens when the Commander's socket drops with requests already waiting on it.
 - **Commander back.** The Commander gets the squad back whenever they return, however long they were away. The stand-in is sent `demoted-to-member`, and the client drops its Commander controls and join queue.
 - **Deliberate exits.** Only a deliberate exit (`leave-squad`, a vote-out) hands `commanderUid` on. A stand-in cannot block the Commander.
+- **Roles** (`backend/groupRoles.js`, one `PERMISSIONS` table). Whoever holds command (`ownerId`) is the main admin; moderators are kept by uid in `squad.moderatorUids` and survive reconnects. Moderators admit one by one, kick, block and unblock; only the admin has Admit all; only the Commander promotes. Nobody acts on the admin or the Commander, and a moderator never on another moderator. A Group with no `moderatorUids` behaves as before. Roles sit on top of command: succession and reclaim are unchanged.
+- **Activity log and join notices** (`backend/activityLog.js`, `backend/joinNotify.js`): in memory like everything else, so a Render restart loses them, and the block list too. `joinRequestsWaiting()` in `server.js` is where a push for admitters whose app is closed hooks in.
+- **SOS cooldown.** One person's second SOS within the Group's cooldown (default 3 min, presets 1/3/5, `alertConfig.js`) is refused with `retryAfterSec`. Only app builds that listen for `alert-result` show that; an older app shows "sent". `LOCUS_SOS_COOLDOWN_DEFAULT_MS=0` turns it off.
 - **Disconnects are not departures.** A raw disconnect never changes command by itself: it fires on every signal blip.
 - **Dead connections look alive for a while.** Behind Render's proxy, a dead phone is only noticed at the socket.io heartbeat timeout, up to about 45 s. Until then its socket still looks live.
 

@@ -7,7 +7,7 @@ import { continuousAngle } from '../utils/direction';
 import { PANEL_SPRING } from '../utils/motion';
 import { SHOW_INDOOR_POSITION_TO_SQUAD } from '../utils/positionSource';
 import { floorLabel, hasIndoorFloor } from '../utils/indoorView';
-import { MEMBERS } from '../copy/group';
+import { FRIENDS, MEMBERS, ROLES } from '../copy/group';
 import { MEMBER_DOTS, memberStatus, memberWhere } from '../utils/memberStatus';
 
 // One member in the group panel (redesign Group panel batch, piece 3), built around the
@@ -55,10 +55,14 @@ function PointingArrow({ angle, reduceMotion }) {
 }
 
 /**
+ * A tap on the card shows the member on the map (`onFocus`, App.jsx's focusMember); the ⋮
+ * button opens their options. Without `onFocus`, or with no position to show, the card opens
+ * the options as it always did.
  * @param {{ member: object, me: {lat:number,lng:number}|null, heading: number,
- *   headingLive: boolean, onOptions: (member: object) => void }} props
+ *   headingLive: boolean, onOptions: (member: object) => void, onFocus?: (member: object) => void,
+ *   isFriend?: boolean }} props
  */
-export default function SquadMemberCard({ member, me, heading, headingLive, onOptions }) {
+export default function SquadMemberCard({ member, me, heading, headingLive, onOptions, onFocus, isFriend = false }) {
   const reduceMotion = useReducedMotion();
   const now = useNow(5000);
   const status = memberStatus(member, now);
@@ -68,11 +72,21 @@ export default function SquadMemberCard({ member, me, heading, headingLive, onOp
   return (
     <div
       data-testid="member-row"
-      onClick={() => onOptions(member)}
+      onClick={() => (onFocus && member.hasFix ? onFocus(member) : onOptions(member))}
       className="flex items-center gap-3 p-3 rounded-2xl glass-panel font-ui text-text hover:bg-surface/90 cursor-pointer active:scale-[0.99] transition-all duration-150"
     >
       <Avatar name={name} dashed={member.status === 'FROZEN' || !member.hasFix} />
       <div className="flex-1 min-w-0">
+        {ROLES[member.role] && (
+          <span data-testid="member-role" className="inline-block mb-0.5 mr-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-accent-soft text-accent">
+            {ROLES[member.role]}
+          </span>
+        )}
+        {isFriend && (
+          <span data-testid="member-friend" className="inline-block mb-0.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-success/15 text-success">
+            {FRIENDS.badge}
+          </span>
+        )}
         <h4 className="text-heading break-words">
           {name}
           {/* Low battery, as the old row's bar warned below 25 %: amber, never red. 0 is no
@@ -102,7 +116,7 @@ export default function SquadMemberCard({ member, me, heading, headingLive, onOp
         </div>
       )}
       {place && !place.where.here && <PointingArrow angle={place.angle} reduceMotion={reduceMotion} />}
-      <IconButton label={MEMBERS.options(name)} icon={MoreVertical} onClick={() => onOptions(member)} />
+      <IconButton label={MEMBERS.options(name)} icon={MoreVertical} onClick={(e) => { e?.stopPropagation?.(); onOptions(member); }} />
     </div>
   );
 }

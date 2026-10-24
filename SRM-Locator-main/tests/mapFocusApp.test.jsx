@@ -169,7 +169,7 @@ describe('a matrix building tap', () => {
     try {
       const { container } = render(<App />);
       await joinAsMember();
-      const sheet = () => container.querySelector('.fixed.inset-x-0.bottom-16');
+      const sheet = () => container.querySelector('[data-height]');
       fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Group' })); // the bottom bar's: opens the sheet
       fireEvent.click(screen.getByRole('radio', { name: 'Buildings' }));
       await waitFor(() => expect(sheet().dataset.height).toBe('peek')); // the Group tab opens it at peek

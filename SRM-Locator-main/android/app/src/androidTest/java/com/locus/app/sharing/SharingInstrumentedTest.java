@@ -361,6 +361,21 @@ public class SharingInstrumentedTest {
     }
 
     @Test
+    public void aServerThatSwitchesItOffStopsTheServiceAndSaysSo() throws Exception {
+        server.status = 503;
+        server.body = "{\"error\":\"disabled\"}";
+        startSharing(sessionFor(3_600_000, "v1.off.token"));
+        waitFor("the service to stop", 25_000, () -> server.count("POST") >= 1 && !LocationShareService.isRunning());
+        assertEquals("stopped:disabled", lastState());
+        assertNull("the pass is wiped", SharingState.session());
+        StatusBarNotification notice = active(SharingNotifications.ENDED_ID);
+        assertNotNull("a notice says it was switched off", notice);
+        assertEquals("Background sharing was switched off", notice.getNotification().extras.getString("android.title"));
+        assertTrue((notice.getNotification().flags & android.app.Notification.FLAG_AUTO_CANCEL) != 0);
+        assertNotNull(notice.getNotification().contentIntent);
+    }
+
+    @Test
     public void aMemberRemovedOrAPassThatRanOutLeavesNoNotice() throws Exception {
         server.status = 403;
         server.body = "{\"error\":\"blocked\"}";

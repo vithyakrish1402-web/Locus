@@ -28,6 +28,8 @@ import { transitionTheme } from '../../theme/transition';
 import { AnimatedThemeToggleButton } from '../ui/animated-theme-toggle-button';
 import { AR_FEATURE_OPTIONS } from '../../utils/arFeatures';
 import { MAP_STATUS_LABEL, MAP_STATUS_REASON_TEXT } from '../../utils/mapEngineStatus';
+import { useInAppDnd, setInAppDnd } from '../../utils/inAppDnd';
+import { dndAccessGranted, openDndAccessSettings } from '../../utils/alertSound';
 
 // Settings, as a full screen (redesign P9). Opened from the gear in the map's right-hand
 // column. Organized cleanly with iOS/macOS styled categorized cards and collapsible advanced tools.
@@ -57,6 +59,21 @@ export default function SettingsScreen({
   const headingRef = useRef(null);
   const [theme, setTheme] = useState(getThemePreference);
   const [moreExpanded, setMoreExpanded] = useState(true);
+  const inAppDnd = useInAppDnd();
+  // Whether alerts may ring through the phone's Do Not Disturb: null off a phone (no row then).
+  // Asked again on coming back from the system's settings screen.
+  const [dndAccess, setDndAccess] = useState(null);
+  useEffect(() => {
+    let live = true;
+    const ask = () => dndAccessGranted().then((granted) => { if (live) setDndAccess(granted); });
+    ask();
+    const onVisible = () => { if (document.visibilityState === 'visible') ask(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      live = false;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   useEffect(() => subscribeTheme(({ preference }) => setTheme(preference)), []);
   useEffect(() => { headingRef.current?.focus(); }, []);
@@ -74,8 +91,12 @@ export default function SettingsScreen({
       aria-labelledby={titleId}
       data-testid="settings"
       className="fixed inset-0 overflow-y-auto bg-bg text-text font-ui pointer-events-auto overscroll-contain"
-      style={{ zIndex: SETTINGS_Z, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(var(--emergency-clearance) + 1rem)' }}
+      style={{ zIndex: SETTINGS_Z, paddingBottom: 'calc(var(--emergency-clearance) + 1rem)' }}
     >
+      {/* The status bar's strip: opaque, and pinned, so the content scrolls under it and never
+          shows behind the clock and battery (it used to be padding on this scrolling box, which
+          scrolled away with the content). */}
+      <div data-testid="settings-top-cover" className="top-cover sticky top-0 z-20" aria-hidden="true" />
       <div className="max-w-xl mx-auto px-4 pb-8">
         {/* Header Bar */}
         <div className="pt-3 -ml-2 flex items-center justify-between">
@@ -175,7 +196,17 @@ export default function SettingsScreen({
           </SectionLabel>
           <Card padded={false} className="divide-y divide-border shadow-sm">
             <Switch label={SETTINGS.alertSounds} description={SETTINGS.alertSoundsHelp} checked={alertSounds} onChange={onAlertSounds} />
+            <Switch label={SETTINGS.inAppDnd} description={SETTINGS.inAppDndHelp} checked={inAppDnd} onChange={setInAppDnd} />
             <Switch label={SETTINGS.emergencyAlerts} description={SETTINGS.emergencyAlertsHelp} checked locked />
+            {dndAccess !== null && (
+              <div data-testid="dnd-access" className="flex items-center justify-between gap-4 px-4 py-3 min-h-14 font-ui">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-body font-medium text-text">{SETTINGS.dndAccess}</span>
+                  <span className="block text-secondary text-text-secondary mt-0.5">{dndAccess ? SETTINGS.dndAccessOn : SETTINGS.dndAccessOff}</span>
+                </span>
+                {!dndAccess && <Button variant="secondary" onClick={openDndAccessSettings}>{SETTINGS.dndAccessAllow}</Button>}
+              </div>
+            )}
           </Card>
         </section>
 

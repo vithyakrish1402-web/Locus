@@ -211,15 +211,17 @@ export const shortenName = (name, chars = TAG_SHORT_NAME_CHARS) =>
  * one already placed shifts up to just clear it (its tick stretched down to its point),
  * at most TAG_MAX_ROWS - 1 times (`row` counts the shifts); with no room, its name is cut
  * short and tried again, and failing that it is left out. Every label stays
- * TAG_SCREEN_MARGIN_PX inside the screen.
+ * TAG_SCREEN_MARGIN_PX inside the screen (at the top, `topMarginPx` if that is more: the status
+ * bar covers the top of a full-screen view, and a tag must not sit over it).
  *
  * Returns the placed tags with `labelName`, `row`, `tickPx`, and x, y moved where
  * clamping needed it, in drawing order: farthest first and the destination last, so the
  * nearer one is on top; within that, higher rows first, so a long tick passes behind the
  * labels below it.
  */
-export const layoutTags = (tags, { width: W, height: H }) => {
+export const layoutTags = (tags, { width: W, height: H, topMarginPx = TAG_SCREEN_MARGIN_PX }) => {
   if (!(W > 0) || !(H > 0)) return [];
+  const topMargin = Math.max(TAG_SCREEN_MARGIN_PX, Number.isFinite(topMarginPx) ? topMarginPx : 0);
   const order = [...tags].sort((a, b) => (b.isTarget - a.isTarget) || a.distanceM - b.distanceM);
   const placed = [];
   const boxes = [];
@@ -232,11 +234,11 @@ export const layoutTags = (tags, { width: W, height: H }) => {
     const w = Math.min(labelWidthPx(labelName, t.distanceText, t.offscreenSide, W) * s, W - 2 * TAG_SCREEN_MARGIN_PX);
     const h = TAG_LABEL_HEIGHT_PX * s;
     const cx = clamp(t.x, TAG_SCREEN_MARGIN_PX + w / 2, W - TAG_SCREEN_MARGIN_PX - w / 2);
-    const anchorY = clamp(t.y, TAG_SCREEN_MARGIN_PX + h + TAG_TICK_PX, H - TAG_SCREEN_MARGIN_PX);
+    const anchorY = clamp(t.y, topMargin + h + TAG_TICK_PX, H - TAG_SCREEN_MARGIN_PX);
     let bottom = anchorY - TAG_TICK_PX;
     for (let row = 0; row < TAG_MAX_ROWS; row++) {
       const box = { left: cx - w / 2, right: cx + w / 2, top: bottom - h, bottom };
-      if (box.top < TAG_SCREEN_MARGIN_PX) break;
+      if (box.top < topMargin) break;
       const blocking = hits(box);
       if (!blocking.length) {
         boxes.push(box);
@@ -423,7 +425,7 @@ export class LandmarkAnchorEngine {
     return g;
   }
 
-  frame({ q, headingDeg, pitchDeg, rollDeg, hFovDeg, width, height, nowMs = 0, targetId = null }) {
+  frame({ q, headingDeg, pitchDeg, rollDeg, hFovDeg, width, height, topMarginPx, nowMs = 0, targetId = null }) {
     const orientation = q ?? orientationFromAngles({ headingDeg, pitchDeg, rollDeg });
     const angles = anglesFromOrientation(orientation);
     const vFovDeg = width > 0 && height > 0 ? verticalFovDeg(width, height, hFovDeg) : NaN;
@@ -501,7 +503,7 @@ export class LandmarkAnchorEngine {
       nowMs,
     );
 
-    const placed = layoutTags(kept, { width, height });
+    const placed = layoutTags(kept, { width, height, topMarginPx });
 
     // Easing toward the laid-out spots, by elapsed time; a big jump snaps.
     const dt = this.lastFrameAt === null ? 0 : clamp(nowMs - this.lastFrameAt, 0, 100);

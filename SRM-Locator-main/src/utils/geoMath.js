@@ -98,37 +98,3 @@ export const angularDifference = (to, from) => {
  * named for its job of animating a displayed rotation.
  */
 export const normalizeRotationDelta = (targetAngle, currentAngle) => angularDifference(targetAngle, currentAngle);
-
-/**
- * Dead Reckoning kinematic engine:
- * Projects an operative's estimated location after a signal disconnect based on
- * last known velocity, heading, and elapsed time delta in seconds.
- */
-export const projectGhostLocation = (lat, lng, speedKmh, headingDegrees, timeDeltaSeconds) => {
-  if (!lat || !lng) return { lat: 0, lng: 0 };
-  if (!speedKmh || speedKmh < 1 || !timeDeltaSeconds || timeDeltaSeconds <= 0) {
-    return { lat, lng };
-  }
-
-  // Convert km/h to m/s, then multiply by elapsed seconds
-  const distanceMeters = (speedKmh * (5 / 18)) * timeDeltaSeconds;
-
-  const radLat = toRad(lat);
-  const radLng = toRad(lng);
-  const radHeading = toRad(headingDegrees || 0);
-
-  const projectedLat = Math.asin(
-    Math.sin(radLat) * Math.cos(distanceMeters / EARTH_RADIUS_METERS) +
-    Math.cos(radLat) * Math.sin(distanceMeters / EARTH_RADIUS_METERS) * Math.cos(radHeading)
-  );
-
-  const projectedLng = radLng + Math.atan2(
-    Math.sin(radHeading) * Math.sin(distanceMeters / EARTH_RADIUS_METERS) * Math.cos(radLat),
-    Math.cos(distanceMeters / EARTH_RADIUS_METERS) - Math.sin(radLat) * Math.sin(projectedLat)
-  );
-
-  return {
-    lat: toDeg(projectedLat),
-    lng: toDeg(projectedLng)
-  };
-};

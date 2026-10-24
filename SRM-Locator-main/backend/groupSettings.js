@@ -8,10 +8,13 @@
 // a restart deletes all of them.
 
 import fs from 'node:fs';
+import { SOS_COOLDOWN_DEFAULT_MS, SOS_COOLDOWN_PRESETS_MS } from './alertConfig.js';
 
 export const defaultSettings = () => ({
   sosEnabled: true,
   pingEnabled: true,
+  // The least time between two SOS alarms from one person (alertRules.js); one of the presets.
+  sosCooldownMs: SOS_COOLDOWN_DEFAULT_MS,
   // memberKey()s (uid, or socket id for a person without one) whose pings the Group Lead
   // has muted. Their SOS is never muted.
   mutedPingers: [],
@@ -30,8 +33,9 @@ export function canChangeSettings(squad, socketId, socketUid, commanderUid) {
   return !commanderUid || socketUid === commanderUid;
 }
 
-/** Applies { sosEnabled?, pingEnabled? } to the squad's settings. Only real booleans are
- *  taken; anything else is ignored. Returns whether anything changed. */
+/** Applies { sosEnabled?, pingEnabled?, sosCooldownMs? } to the squad's settings. Only real
+ *  booleans, and only a cooldown that is one of SOS_COOLDOWN_PRESETS_MS, are taken; anything
+ *  else is ignored. Returns whether anything changed. */
 export function updateSwitches(squad, update) {
   const settings = ensureSettings(squad);
   let changed = false;
@@ -40,6 +44,11 @@ export function updateSwitches(squad, update) {
       settings[key] = update[key];
       changed = true;
     }
+  }
+  const cooldown = update?.sosCooldownMs;
+  if (SOS_COOLDOWN_PRESETS_MS.includes(cooldown) && settings.sosCooldownMs !== cooldown) {
+    settings.sosCooldownMs = cooldown;
+    changed = true;
   }
   return changed;
 }
@@ -82,6 +91,8 @@ export function settingsFor(squad, roomCode, { key, isLead, keyOf }) {
     roomCode,
     sosEnabled: settings.sosEnabled,
     pingEnabled: settings.pingEnabled,
+    sosCooldownMs: settings.sosCooldownMs ?? SOS_COOLDOWN_DEFAULT_MS,
+    sosCooldownPresetsMs: SOS_COOLDOWN_PRESETS_MS,
     pingMuted: settings.mutedPingers.includes(key),
   };
   if (isLead) view.mutedMemberIds = squad.members.filter((id) => settings.mutedPingers.includes(keyOf(id)));

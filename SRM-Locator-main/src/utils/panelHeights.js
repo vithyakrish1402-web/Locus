@@ -37,6 +37,16 @@ export function panelStops({ viewport, panelHeight, peekHeight, tabBar = 64 }) {
 }
 
 /**
+ * The room under the panel's last row on a phone (SHEET_BOTTOM_PADDING_PX): one tab bar's height,
+ * as the bar measured itself (--tab-bar-height, its content, padding and the gesture bar's
+ * inset), and 2 rem more. The panel ends at the top of the tab bar, so the last row comes to rest
+ * that far above it, clear of the buttons that stand over the map. (The list also ends in a
+ * spacer as tall as how far the panel is slid down, which is what lets that last row be scrolled
+ * up out of the part of the panel below the screen.)
+ */
+export const SHEET_BOTTOM_PADDING_PX = 'calc(var(--tab-bar-height) + 2rem)';
+
+/**
  * Where a drag let go at `y` (px), moving at `velocityY` (px/s), comes to rest.
  * @returns {'full'|'half'|'peek'|'closed'}
  */

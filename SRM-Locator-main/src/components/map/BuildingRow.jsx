@@ -44,12 +44,6 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
             aspectRatio="aspect-square"
             containerClassName="w-full h-full"
           />
-          {asset?.isOpen && (
-            <span
-              className="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full bg-success ring-2 ring-surface"
-              title="Open"
-            />
-          )}
         </div>
 
         {/* Info Column */}
@@ -57,7 +51,7 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
           {/* Category Pill */}
           <div className="flex items-center gap-2 mb-1">
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-sunken text-text-secondary border border-[var(--glass-border-subtle)]">
-              {categoryLabel(building.category)}
+              {asset?.categoryDisplay || categoryLabel(building.category)}
             </span>
           </div>
 
@@ -80,9 +74,9 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
           )}
 
           {/* Single Truncated Info Line */}
-          {building.info && (
+          {(asset?.description || building.info) && (
             <p className="text-[12px] text-text-secondary truncate mt-0.5 leading-normal">
-              {building.info}
+              {asset?.description || building.info}
             </p>
           )}
         </div>

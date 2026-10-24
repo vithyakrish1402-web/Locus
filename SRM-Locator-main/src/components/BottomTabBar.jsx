@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.span>, which this config can't see
 import { motion, useReducedMotion } from 'framer-motion';
 import { INDICATOR_SPRING } from '../utils/motion';
+import { Badge } from './ui';
 
 // The phone's bottom bar (redesign Map batch): Map, Scan and Group. One highlight slides between the tabs on a spring (a shared
 // layoutId), so changing tab reads as one object moving rather than two states swapping.
@@ -20,7 +21,8 @@ const ICON_ENTER = {
 };
 
 function Tab({ tab, active, onSelect, reduceMotion }) {
-  const { id, label, Icon, flourish } = tab;
+  // `badge`: { count, label }, a number on the icon (people waiting to join, on Group).
+  const { id, label, Icon, flourish, badge } = tab;
   return (
     <button
       type="button"
@@ -48,6 +50,7 @@ function Tab({ tab, active, onSelect, reduceMotion }) {
         >
           <Icon className="w-6 h-6" aria-hidden="true" />
         </motion.span>
+        {badge && <Badge count={badge.count} label={badge.label} className="absolute -top-1 right-1" />}
       </span>
       <span className={`relative text-caption ${active ? 'font-semibold' : ''}`}>{label}</span>
     </button>
@@ -56,16 +59,35 @@ function Tab({ tab, active, onSelect, reduceMotion }) {
 
 /**
  * @param {{tabs: Array<{id:string, label:string, Icon:Function, flourish:'lift'|'turn'|'pop'}>,
- *   activeId: string|null, onSelect: (id:string) => void, sosTrigger?: React.ReactNode}} props
+ *   activeId: string|null, onSelect: (id:string) => void, sosTrigger?: React.ReactNode,
+ *   keyboardUp?: boolean}} props
+ *   keyboardUp: the on-screen keyboard is up. The WebView is then only as tall as what the keyboard
+ *   leaves, so the bar would ride up on top of it: its tabs step out of the way (nothing to tap
+ *   on the map while typing), but the Emergency button stays where it can be reached.
  */
-export default function BottomTabBar({ tabs, activeId, onSelect, sosTrigger = null }) {
+export default function BottomTabBar({ tabs, activeId, onSelect, sosTrigger = null, keyboardUp = false }) {
   const reduceMotion = useReducedMotion();
+  // Says how tall the bar really is (--tab-bar-height, read by the group panel, which stands on
+  // it), and keeps saying so as it changes (the gesture bar's inset, a larger text size).
+  const barRef = useRef(null);
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return undefined;
+    const root = document.documentElement;
+    const say = () => { if (bar.offsetHeight) root.style.setProperty('--tab-bar-height', `${bar.offsetHeight}px`); };
+    say();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(say);
+    observer?.observe(bar);
+    return () => { observer?.disconnect(); root.style.removeProperty('--tab-bar-height'); };
+  }, []);
   return (
     <nav
+      ref={barRef}
       aria-label="Main"
+      data-keyboard={keyboardUp ? 'up' : undefined}
       className="md:hidden fixed bottom-0 w-full bg-surface border-t border-border flex items-center justify-between px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[1100] pointer-events-auto gap-2 shadow-[var(--shadow-2)]"
     >
-      <div className="flex-1 flex items-stretch">
+      <div className={`flex-1 flex items-stretch ${keyboardUp ? 'hidden' : ''}`} data-testid="tab-bar-tabs">
         {tabs.map((tab) => (
           <Tab key={tab.id} tab={tab} active={tab.id === activeId} onSelect={onSelect} reduceMotion={reduceMotion} />
         ))}

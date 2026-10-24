@@ -27,10 +27,22 @@ describe('what background sharing asks the phone for', () => {
     expect(manifest).not.toMatch(/ACCESS_BACKGROUND_LOCATION/);
   });
 
-  it('asks for no wake lock, battery exemption or Do Not Disturb access', () => {
-    for (const p of ['WAKE_LOCK', 'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'ACCESS_NOTIFICATION_POLICY', 'SYSTEM_ALERT_WINDOW']) {
+  it('asks for no wake lock, battery exemption or drawing over other apps', () => {
+    for (const p of ['WAKE_LOCK', 'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'SYSTEM_ALERT_WINDOW']) {
       expect(permissions).not.toContain(`android.permission.${p}`);
     }
+  });
+
+  // Item 8 of the 2026-10 bug batch (Krish's decision): an SOS and a ping may ring through Do Not
+  // Disturb. That needs the access the person grants in the system's settings, which the app may
+  // ask for (ACCESS_NOTIFICATION_POLICY) and only the alert channels use.
+  it('asks to let only the SOS and ping alerts through Do Not Disturb', () => {
+    expect(permissions).toContain('android.permission.ACCESS_NOTIFICATION_POLICY');
+    const users = [
+      ...fs.readdirSync(path.join(javaDir, 'sharing')).map((f) => ['sharing', f]),
+      ...fs.readdirSync(path.join(javaDir, 'alerts')).map((f) => ['alerts', f]),
+    ].filter(([dir, f]) => f.endsWith('.java') && /setBypassDnd\(/.test(read(dir, f))).map(([, f]) => f);
+    expect(users.sort()).toEqual(['AlertChannels.java', 'SosNotifications.java']);
   });
 
   it('asks for the full-screen intent only for the SOS alert, and only the SOS notification code uses it', () => {
@@ -56,8 +68,10 @@ describe('what background sharing asks the phone for', () => {
   });
 
   it('never unlocks the phone or switches Do Not Disturb off', () => {
-    for (const f of fs.readdirSync(path.join(javaDir, 'sharing')).filter((name) => name.endsWith('.java'))) {
-      expect(read('sharing', f), f).not.toMatch(/requestDismissKeyguard|setBypassDnd|setInterruptionFilter|disableKeyguard/);
+    for (const dir of ['sharing', 'alerts']) {
+      for (const f of fs.readdirSync(path.join(javaDir, dir)).filter((name) => name.endsWith('.java'))) {
+        expect(read(dir, f), f).not.toMatch(/requestDismissKeyguard|setInterruptionFilter|disableKeyguard/);
+      }
     }
   });
 
