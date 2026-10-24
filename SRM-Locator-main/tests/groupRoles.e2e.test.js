@@ -244,19 +244,81 @@ describe('the main admin', () => {
     expect(await ask(alpha, 'unblock-user', { roomCode: room, uid: 'uC' })).toEqual({ ok: false, reason: 'not-blocked' });
   });
 
-  it('as a stand-in, cannot promote moderators or block the Commander', async () => {
-    const { room, alpha, bravo, charlie } = await group();
-    alpha.disconnect();
-    // Charlie comes back on a new socket while the Commander is away: Charlie stands in.
-    charlie.disconnect();
+  it('is told it is the Group\'s own admin', async () => {
+    const { alpha } = await withModerator(); // a role change: everyone is told their role again
+    await waitFor(() => alpha.roles.length);
+    expect(alpha.roles[alpha.roles.length - 1]).toMatchObject({ role: 'admin', ownAdmin: true });
+  });
+});
+
+describe('a stand-in holding command while the Commander is away', () => {
+  // Alpha (the Commander) drops off; Charlie comes back on a new socket and stands in.
+  const standIn = async () => {
+    const g = await group();
+    // Someone Alpha blocked earlier, to try unblocking.
+    expect(await ask(g.alpha, 'block-user', { roomCode: g.room, targetId: g.bravo.id })).toEqual({ ok: true });
+    g.alpha.disconnect();
+    g.charlie.disconnect();
     const charlie2 = track(await api.connect());
-    expect(await api.requestJoin(charlie2, room, 'uC')).toMatchObject({ outcome: 'granted', role: 'OWNER' });
-    expect(await ask(charlie2, 'set-moderator', { roomCode: room, targetId: bravo.id, moderator: true })).toMatchObject({ ok: false, reason: 'not-allowed' });
-    // Its screen is told so, and doesn't offer it.
+    expect(await api.requestJoin(charlie2, g.room, 'uC')).toMatchObject({ outcome: 'granted', role: 'OWNER' });
+    const delta = track(await api.connect());
+    const pending = once(delta, 'access-pending');
+    delta.emit('request-join', { roomCode: g.room, user: { uid: 'uD', name: 'uD' } });
+    await pending;
+    return { ...g, charlie2, delta };
+  };
+
+  it('cannot block, unblock, see the blocked list, Admit all or make moderators, is told why, and nothing changes', async () => {
+    const { room, charlie2, delta } = await standIn();
+    const echo = track(await api.connect());
+    const echoPending = once(echo, 'access-pending');
+    echo.emit('request-join', { roomCode: room, user: { uid: 'uE', name: 'uE' } });
+    await echoPending;
+    // A member to act on: Delta, let in one at a time (still the stand-in's to do).
+    await waitFor(() => charlie2.requests.some((r) => r.targetId === delta.id));
+    const granted = once(delta, 'access-granted');
+    charlie2.emit('resolve-access', { targetId: delta.id, roomCode: room, approved: true });
+    await granted;
+
+    expect(await ask(charlie2, 'block-user', { roomCode: room, targetId: delta.id }))
+      .toEqual({ ok: false, reason: 'not-allowed', message: 'Only the main admin can block people.' });
+    expect(await ask(charlie2, 'unblock-user', { roomCode: room, uid: 'uB' }))
+      .toEqual({ ok: false, reason: 'not-allowed', message: 'Only the main admin can unblock people.' });
+    expect(await ask(charlie2, 'get-blocked', { roomCode: room }))
+      .toEqual({ ok: false, reason: 'not-allowed', message: 'Only the main admin can unblock people.' });
+    expect(await ask(charlie2, 'admit-all', { roomCode: room }))
+      .toEqual({ ok: false, reason: 'not-allowed', message: 'Only the main admin can use Admit all.' });
+    expect(await ask(charlie2, 'set-moderator', { roomCode: room, targetId: delta.id, moderator: true }))
+      .toEqual({ ok: false, reason: 'not-allowed', message: 'Only the main admin can make or remove moderators.' });
+    await sleep(100);
+    expect(delta.exiled).toEqual([]);
+    // Bravo is still blocked; Echo is still waiting.
+    const bravo2 = track(await api.connect());
+    expect(await api.requestJoin(bravo2, room, 'uB')).toEqual({ outcome: 'denied' });
+    expect(echo.listeners('access-granted').length).toBeGreaterThanOrEqual(0);
+
+    // Its screen is told it is not the Group's own admin.
     await waitFor(() => charlie2.roles.length);
-    expect(charlie2.roles[charlie2.roles.length - 1].appoints).toBe(false);
-    // Kicking an ordinary member is the stand-in's to do.
-    expect(await ask(charlie2, 'kick-member', { roomCode: room, targetId: bravo.id })).toEqual({ ok: true });
+    expect(charlie2.roles[charlie2.roles.length - 1]).toMatchObject({ role: 'admin', ownAdmin: false });
+  });
+
+  it('still lets people in one at a time and removes members', async () => {
+    const { room, charlie2, delta } = await standIn();
+    await waitFor(() => charlie2.requests.some((r) => r.targetId === delta.id));
+    const granted = once(delta, 'access-granted');
+    charlie2.emit('resolve-access', { targetId: delta.id, roomCode: room, approved: true });
+    await granted;
+    expect(await ask(charlie2, 'kick-member', { roomCode: room, targetId: delta.id })).toEqual({ ok: true });
+  });
+
+  it('hands all of it back: the returning Commander blocks, unblocks and admits all again', async () => {
+    const { room, charlie2 } = await standIn();
+    const alpha2 = track(await api.connect());
+    expect(await api.requestJoin(alpha2, room, 'uA')).toMatchObject({ outcome: 'granted', role: 'OWNER' });
+    await waitFor(() => alpha2.roles.some((r) => r.ownAdmin === true));
+    expect(await ask(alpha2, 'admit-all', { roomCode: room })).toEqual({ ok: true, admitted: 1 });
+    expect(await ask(alpha2, 'unblock-user', { roomCode: room, uid: 'uB' })).toEqual({ ok: true, blocked: [] });
+    expect(await ask(alpha2, 'block-user', { roomCode: room, targetId: charlie2.id })).toEqual({ ok: true });
   });
 });
 

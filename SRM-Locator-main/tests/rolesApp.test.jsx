@@ -207,14 +207,34 @@ describe('the Group Lead', () => {
     expect(noticeUp('Only the main admin can block people.')).toBe(true);
   });
 
-  it('standing in for the Commander, is not offered Make moderator', async () => {
+  it('standing in for the Commander, can remove but has no block, Blocked people, Admit all or Make moderator', async () => {
     await onTheMap();
-    act(() => fakeSocket.receive('group-role', { roomCode: code, role: 'admin', moderatorIds: [], appoints: false }));
+    act(() => fakeSocket.receive('group-role', { roomCode: code, role: 'admin', moderatorIds: [], ownAdmin: false }));
+    bravoAs('member');
+    request(1);
+    request(2);
+    openGroup();
+    expect(screen.queryByRole('button', { name: 'Blocked people' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
+    expect(await screen.findByText(MEMBER_OPTIONS.remove)).toBeTruthy();
+    expect(screen.queryByText(MEMBER_OPTIONS.removeAndBlock)).toBeNull();
+    expect(screen.queryByText(MEMBER_OPTIONS.makeModerator)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Cancel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Join requests/ }));
+    await screen.findByTestId('join-requests');
+    expect(screen.queryByRole('button', { name: /Admit all/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Approve Joiner 1' })).toBeTruthy();
+  });
+
+  it('as the Group\'s own admin (said by the server), keeps them all', async () => {
+    await onTheMap();
+    act(() => fakeSocket.receive('group-role', { roomCode: code, role: 'admin', moderatorIds: [], ownAdmin: true }));
     bravoAs('member');
     openGroup();
+    expect(screen.getByRole('button', { name: 'Blocked people' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Options for Bravo' }));
     expect(await screen.findByText(MEMBER_OPTIONS.removeAndBlock)).toBeTruthy();
-    expect(screen.queryByText(MEMBER_OPTIONS.makeModerator)).toBeNull();
+    expect(screen.getByText(MEMBER_OPTIONS.makeModerator)).toBeTruthy();
   });
 
   it('can take a moderator back to member', async () => {

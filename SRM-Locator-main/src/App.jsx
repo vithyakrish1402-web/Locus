@@ -894,11 +894,10 @@ const App = () => {
   const myRole = squadRole === 'OWNER' ? 'admin'
     : groupRole?.roomCode === squadCode && groupRole.role === 'moderator' ? 'moderator' : 'member';
   // The main admin and moderators: join requests, removing, the activity log. Blocking,
-  // unblocking and Admit all are the main admin's only, and making moderators the Group's own
-  // Commander's (not a stand-in's: `appoints`, from a server that says).
+  // unblocking, Admit all and making moderators are the Group's own admin's only, not a stand-in's
+  // (`ownAdmin`, from a server that says; with an older server the admin keeps them, as before).
   const canModerate = myRole === 'admin' || myRole === 'moderator';
-  const canBlock = myRole === 'admin';
-  const appointsModerators = myRole === 'admin' && !(groupRole?.roomCode === squadCode && groupRole.appoints === false);
+  const isOwnAdmin = myRole === 'admin' && !(groupRole?.roomCode === squadCode && groupRole.ownAdmin === false);
   const canModerateRef = useRef(false);
   canModerateRef.current = canModerate;
   const liveLocationRef = useRef(null);
@@ -2106,7 +2105,7 @@ const App = () => {
       if (prev.includes(userId)) return prev.filter(id => id !== userId);
       // Tell the server too — this actually removes them from the squad and bans
       // their account from rejoining, not just hiding them on this screen.
-      if (canBlock) {
+      if (isOwnAdmin) {
         socket.emit('block-user', { roomCode: squadCode, targetId: userId }, refused);
       }
       return [...prev, userId];
@@ -3165,7 +3164,7 @@ const App = () => {
               <LeadTools
                 moderatorOnly={myRole !== 'admin'}
                 onActivityLog={openActivityLog}
-                onBlocked={canBlock ? openBlocked : undefined}
+                onBlocked={isOwnAdmin ? openBlocked : undefined}
                 requests={pendingRequests.length}
                 onRequests={() => setShowRequestsModal(true)}
                 refresh={telemetrySync}
@@ -3780,7 +3779,7 @@ const App = () => {
         onClose={() => setShowRequestsModal(false)}
         requests={pendingRequests}
         code={squadCode}
-        onAdmitAll={myRole === 'admin' ? admitAll : undefined}
+        onAdmitAll={isOwnAdmin ? admitAll : undefined}
         onAnswer={(request, approved) => {
           // The squad the request was made to, not merely the one on screen.
           socket.emit('resolve-access', { targetId: request.targetId, roomCode: request.roomCode || squadCode, approved });
@@ -3804,7 +3803,7 @@ const App = () => {
         onExport={exportLog}
       />
       <BlockedList
-        open={showBlocked && canBlock}
+        open={showBlocked && isOwnAdmin}
         onClose={() => setShowBlocked(false)}
         blocked={blockedPeople}
         onUnblock={unblock}
@@ -3986,7 +3985,7 @@ const App = () => {
         isLead={mayRemove(optionsMember)}
         onRemove={kickMember}
         friend={friendFor(optionsMember)}
-        moderator={appointsModerators && optionsMember?.role && optionsMember.role !== 'admin' && optionsMember.status !== 'GHOST'
+        moderator={isOwnAdmin && optionsMember?.role && optionsMember.role !== 'admin' && optionsMember.status !== 'GHOST'
           ? { is: optionsMember.role === 'moderator', onChange: setMemberModerator }
           : undefined}
         onClose={() => setOptionsMemberId(null)}
@@ -4001,7 +4000,7 @@ const App = () => {
           focusMember(m);
         }}
         onArScan={(m) => setArTarget(arTargetForMember(m))}
-        onRemoveAndBlock={canBlock ? toggleBlock : undefined}
+        onRemoveAndBlock={isOwnAdmin ? toggleBlock : undefined}
       />
 
       {/* The camera explainer, before AR Scan opens, only until the camera has been allowed.
