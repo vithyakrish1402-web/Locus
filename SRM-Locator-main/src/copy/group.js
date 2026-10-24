@@ -106,7 +106,7 @@ export const ROLES = {
 // Removing and blocking, confirmed. A blocked person can be unblocked from Blocked people.
 export const REMOVE_AND_BLOCK = {
   title: (name) => `Remove and block ${name}?`,
-  body: (first) => `${first} is removed from your group straight away and can't ask to join again until you or a moderator unblock them.`,
+  body: (first) => `${first} is removed from your group straight away and can't ask to join again until you unblock them.`,
   confirm: 'Remove and block',
   cancel: 'Cancel',
 };
@@ -144,7 +144,7 @@ export const ACTIVITY_LOG = {
   someone: 'Someone',
 };
 
-// Blocked people, for the Group Lead and moderators to unblock.
+// Blocked people, for the Group Lead to unblock.
 export const BLOCKED = {
   title: 'Blocked people',
   help: "They can't ask to join this group until they are unblocked. The list is kept on the server and is lost if the server restarts.",

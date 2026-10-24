@@ -10,7 +10,7 @@ import { LEAD_TOOLS, REFRESH_FAILED, SOS_CONTROLS } from '../../copy/group';
 // button while one is set. With `sos` (the Group's settings, for its Commander) it also has the
 // Group's emergency alert switch and the time one person must wait between two alerts.
 // A moderator (`moderatorOnly`) gets Join requests only, of the tiles. Everyone here gets the
-// Activity log and Blocked people (`onActivityLog`, `onBlocked`).
+// Activity log (`onActivityLog`); Blocked people (`onBlocked`) is the Group Lead's only.
 
 const TILE = 'relative flex-1 min-w-0 min-h-[5.5rem] px-2 py-3 rounded-2xl glass-panel text-accent font-ui text-label flex flex-col items-center justify-center gap-1.5 text-center transition-all duration-150 hover:bg-surface/80 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50';
 

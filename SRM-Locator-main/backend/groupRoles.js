@@ -18,8 +18,8 @@ export const PERMISSIONS = Object.freeze({
   admitOne: [ROLE_ADMIN, ROLE_MODERATOR], // approve or reject one join request
   admitAll: [ROLE_ADMIN], // approve every waiting request at once
   kick: [ROLE_ADMIN, ROLE_MODERATOR], // remove a member (they must ask again to come back)
-  block: [ROLE_ADMIN, ROLE_MODERATOR], // remove a member and keep them out
-  unblock: [ROLE_ADMIN, ROLE_MODERATOR], // let a blocked person ask to join again
+  block: [ROLE_ADMIN], // remove a member and keep them out
+  unblock: [ROLE_ADMIN], // let a blocked person ask to join again (and see who is blocked)
   setModerator: [ROLE_ADMIN], // promote or demote a moderator (also needs to be the Commander, see canSetModerators)
   readActivityLog: [ROLE_ADMIN, ROLE_MODERATOR], // the Group's activity log and its export
   seeJoinQueue: [ROLE_ADMIN, ROLE_MODERATOR], // receives join requests and the waiting count
@@ -34,6 +34,20 @@ export function roleOf(squad, socketId, uid) {
 }
 
 export const can = (role, action) => Boolean(PERMISSIONS[action]?.includes(role));
+
+// What a refused request is answered, by action. reason stays 'not-allowed', as older apps
+// expect; message says why, for an app (or a hand-made client) that shows it.
+const REFUSED = Object.freeze({
+  admitOne: 'Only the main admin and moderators can let people in.',
+  admitAll: 'Only the main admin can use Admit all.',
+  kick: 'Only the main admin and moderators can remove people.',
+  block: 'Only the main admin can block people.',
+  unblock: 'Only the main admin can unblock people.',
+  setModerator: 'Only the main admin can make or remove moderators.',
+  readActivityLog: 'Only the main admin and moderators can read the activity log.',
+  actOn: 'Nobody can remove the main admin, and moderators cannot remove each other.',
+});
+export const refusal = (action) => ({ ok: false, reason: 'not-allowed', message: REFUSED[action] ?? REFUSED.kick });
 
 /**
  * Whether someone of `actorRole`, already allowed to kick or block (PERMISSIONS), may do it to
@@ -69,8 +83,8 @@ export function setModerator(squad, uid, on) {
 export const dropModerator = (squad, uid) => setModerator(squad, uid, false);
 
 // --- Blocked people ---------------------------------------------------------------------
-// squad.blockedUids is what request-join checks. Names are kept beside it only so a moderator
-// or the admin can see who they are unblocking. In memory, like the squad: a Render restart
+// squad.blockedUids is what request-join checks. Names are kept beside it only so the admin
+// can see who they are unblocking. In memory, like the squad: a Render restart
 // forgets both, and a blocked person can then ask to join again.
 
 export function rememberBlocked(squad, uid, name) {

@@ -7,13 +7,14 @@ import { FRIENDS, MEMBERS, MEMBER_OPTIONS, REMOVE_AND_BLOCK, REMOVE_MEMBER, firs
 // A member's options: solid opaque bottom sheet without glassmorphism.
 // Provides their live info, Navigate to them, Ping, Show on map, Find with AR Scan, and, for
 // whoever may (App.jsx decides by role, backend/groupRoles.js has the rules), Remove and
-// Remove and block behind a confirmation, and the Group Lead's Make / Remove moderator.
+// (the Group Lead only, with `onRemoveAndBlock`) Remove and block behind a confirmation, and
+// the Group Lead's Make / Remove moderator.
 
 /**
  * @param {{ member: object|null, me: object|null, heading: number, headingLive: boolean,
  *   isLead: boolean, onClose: () => void, onNavigate?: (member: object) => void, onPing: (id: string) => void,
  *   onShowOnMap: (member: object) => void, onArScan: (member: object) => void,
- *   onRemoveAndBlock: (id: string) => void, onRemove?: (id: string) => void,
+ *   onRemoveAndBlock?: (id: string) => void, onRemove?: (id: string) => void,
  *   moderator?: { is: boolean, onChange: (member: object, on: boolean) => void },
  *   friend?: { status: 'none'|'sent'|'asked'|'friends', onAdd: Function, onAccept: Function, onRemove: Function } }} props
  *   member: whose options are open, or null when closed
@@ -144,7 +145,7 @@ export default function MemberOptions({ member, me, heading, headingLive, isLead
                 onClick={() => { setConfirming({ member, block: false }); onClose(); }}
               />
             )}
-            {isLead && (
+            {isLead && onRemoveAndBlock && (
               <ListRow
                 danger
                 leading={<Ban size={20} />}

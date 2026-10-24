@@ -31,7 +31,7 @@ import {
   createBackgroundRouter, backgroundConfig, backgroundStartupLine, endSession, endAllSessions,
 } from './backgroundSharing.js';
 import {
-  ROLE_ADMIN, ROLE_MODERATOR, roleOf, can, canActOn, canSetModerators, setModerator, dropModerator,
+  ROLE_ADMIN, ROLE_MODERATOR, roleOf, can, refusal, canActOn, canSetModerators, setModerator, dropModerator,
   rememberBlocked, forgetBlocked, blockedList,
 } from './groupRoles.js';
 import { ACTIVITY, logActivity, activityOf, noteSharingMode, forgetSharingMode } from './activityLog.js';
@@ -177,10 +177,12 @@ const socketsAllowed = (squad, action) =>
 
 // Each member is told their own role, and everyone who the moderators are (socket ids, as the
 // member list uses them), whenever it may have changed. The main admin is the role-less 'OWNER'
-// of access-granted, as before.
+// of access-granted, as before. `appoints`: whether they may make moderators (the Group's own
+// Commander, not a stand-in), so a stand-in's screen doesn't offer what would be refused.
 function sendGroupRole(target, squad, roomCode) {
   const moderatorIds = squad.members.filter((id) => roleOfSocket(squad, id) === ROLE_MODERATOR);
-  target.emit('group-role', { roomCode, role: roleOfSocket(squad, target.id), moderatorIds });
+  const appoints = canSetModerators(squad, target.id, uidOfSocket(squad, target.id), commanderOf(squad));
+  target.emit('group-role', { roomCode, role: roleOfSocket(squad, target.id), moderatorIds, appoints });
 }
 function broadcastGroupRoles(roomCode) {
   const squad = activeSquads[roomCode];
@@ -883,7 +885,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const { roomCode } = payload ?? {};
     const squad = activeSquads[roomCode];
     if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
-    if (!can(roleOfSocket(squad, socket.id), 'admitAll')) return reply({ ok: false, reason: 'not-allowed' });
+    if (!can(roleOfSocket(squad, socket.id), 'admitAll')) return reply(refusal('admitAll'));
     let admitted = 0;
     for (const targetId of Object.keys(squad.pending ?? {})) {
       if (!takePendingRequest(squad, targetId)) continue;
@@ -927,10 +929,9 @@ socket.on('check-ping', (clientTimestamp) => {
     return false;
   }
 
-  // --- 🚫 REMOVE / BLOCK (the main admin and moderators, groupRoles.js) ---
+  // --- 🚫 REMOVE (the main admin and moderators) / BLOCK (the main admin only, groupRoles.js) ---
   // Kick takes someone out (they must ask again to come back); block also keeps them out
-  // (squad.blockedUids, checked in request-join) until the main admin or a moderator unblocks
-  // them. Neither touches the main admin or the Group's own Commander, and a moderator never
+  // (squad.blockedUids, checked in request-join) until the main admin unblocks them. Neither touches the main admin or the Group's own Commander, and a moderator never
   // touches another moderator. Both answer an acknowledgement, if one is passed, with { ok } or
   // { ok: false, reason }.
   const removeMember = (payload, ack, { block }) => {
@@ -939,7 +940,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const squad = activeSquads[roomCode];
     if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
     const role = roleOfSocket(squad, socket.id);
-    if (!can(role, block ? 'block' : 'kick')) return reply({ ok: false, reason: 'not-allowed' });
+    if (!can(role, block ? 'block' : 'kick')) return reply(refusal(block ? 'block' : 'kick'));
     if (typeof targetId !== 'string' || targetId === socket.id) return reply({ ok: false, reason: 'bad-target' });
 
     const sharingUid = uidOfPresenceKey(targetId);
@@ -956,7 +957,7 @@ socket.on('check-ping', (clientTimestamp) => {
       isCommander: Boolean(targetUid) && targetUid === commanderOf(squad),
       isModerator: Boolean(targetUid) && Boolean(squad.moderatorUids?.includes(targetUid)),
     };
-    if (!canActOn(role, target)) return reply({ ok: false, reason: 'not-allowed' });
+    if (!canActOn(role, target)) return reply(refusal('actOn'));
 
     const targetName = nameOf(squad, targetId) ?? presenceOf(squad, targetUid, Date.now())?.name ?? null;
     if (block) rememberBlocked(squad, targetUid, targetName);
@@ -988,11 +989,11 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.on('block-user', (payload, ack) => removeMember(payload, ack, { block: true }));
   socket.on('kick-member', (payload, ack) => removeMember(payload, ack, { block: false }));
 
-  // Who is blocked from this Group ([{ uid, name }]), for the main admin and moderators.
+  // Who is blocked from this Group ([{ uid, name }]), for the main admin only.
   socket.on('get-blocked', (payload, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {};
     const squad = activeSquads[payload?.roomCode];
-    if (!squad || !can(roleOfSocket(squad, socket.id), 'unblock')) return reply({ ok: false, reason: 'not-allowed' });
+    if (!squad || !can(roleOfSocket(squad, socket.id), 'unblock')) return reply(refusal('unblock'));
     reply({ ok: true, blocked: blockedList(squad) });
   });
 
@@ -1000,7 +1001,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const reply = typeof ack === 'function' ? ack : () => {};
     const { roomCode, uid } = payload ?? {};
     const squad = activeSquads[roomCode];
-    if (!squad || !can(roleOfSocket(squad, socket.id), 'unblock')) return reply({ ok: false, reason: 'not-allowed' });
+    if (!squad || !can(roleOfSocket(squad, socket.id), 'unblock')) return reply(refusal('unblock'));
     if (typeof uid !== 'string') return reply({ ok: false, reason: 'bad-target' });
     const name = squad.blockedNames?.[uid] ?? null;
     if (!forgetBlocked(squad, uid)) return reply({ ok: false, reason: 'not-blocked' });
@@ -1015,7 +1016,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const squad = activeSquads[roomCode];
     if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
     if (!can(roleOfSocket(squad, socket.id), 'setModerator') || !canSetModerators(squad, socket.id, socket.data?.uid, commanderOf(squad))) {
-      return reply({ ok: false, reason: 'not-allowed' });
+      return reply(refusal('setModerator'));
     }
     const targetUid = uidOfSocket(squad, targetId);
     if (typeof moderator !== 'boolean' || targetId === socket.id || !squad.members.includes(targetId) || !targetUid) {
@@ -1046,7 +1047,7 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.on('get-activity-log', (payload, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {};
     const squad = activeSquads[payload?.roomCode];
-    if (!squad || !can(roleOfSocket(squad, socket.id), 'readActivityLog')) return reply({ ok: false, reason: 'not-allowed' });
+    if (!squad || !can(roleOfSocket(squad, socket.id), 'readActivityLog')) return reply(refusal('readActivityLog'));
     reply({ ok: true, log: activityOf(squad) });
   });
 
