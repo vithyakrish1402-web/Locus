@@ -4,7 +4,7 @@ import { setThemePreference, getThemePreference, resolveTheme, systemPrefersDark
 let running = false;
 
 // Keep the existing theme store, system preference, and native subscribers in sync.
-export async function transitionTheme(preference, type = 'vertical') {
+export async function transitionTheme(preference, origin = null) {
   if (running) return;
   const apply = () => flushSync(() => setThemePreference(preference));
   const next = resolveTheme(preference, systemPrefersDark());
@@ -24,8 +24,18 @@ export async function transitionTheme(preference, type = 'vertical') {
     const finished = transition.finished.catch(() => {});
     try {
       await transition.ready;
+      const rect = origin?.getBoundingClientRect?.();
+      const centerX = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+      const centerY = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
+      const radius = Math.hypot(
+        Math.max(centerX, window.innerWidth - centerX),
+        Math.max(centerY, window.innerHeight - centerY),
+      );
       document.documentElement.animate({
-        clipPath: [type === 'vertical' ? 'inset(0 50% 0 50%)' : 'inset(50% 0 50% 0)', 'inset(0 0 0 0)'],
+        clipPath: [
+          `circle(0px at ${centerX}px ${centerY}px)`,
+          `circle(${radius}px at ${centerX}px ${centerY}px)`,
+        ],
       }, { duration: 700, easing: 'ease-in-out', pseudoElement: '::view-transition-new(root)' });
     } catch {
       transition.skipTransition();

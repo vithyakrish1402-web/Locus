@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useResolvedTheme } from '../../theme/useResolvedTheme';
 import { transitionTheme } from '../../theme/transition';
 
-/** JavaScript adaptation; type is 'horizontal' or 'vertical'. */
+/** Existing type prop is retained for compatibility; reveal starts at the button. */
 export function AnimatedThemeToggleButton({ type = 'vertical', className = '' }) {
+  const buttonRef = useRef(null);
   const theme = useResolvedTheme();
   const darkMode = theme === 'dark';
   const [busy, setBusy] = useState(false);
@@ -14,11 +15,11 @@ export function AnimatedThemeToggleButton({ type = 'vertical', className = '' })
   const toggle = async () => {
     if (busy) return;
     setBusy(true);
-    try { await transitionTheme(darkMode ? 'light' : 'dark', type); }
+    try { await transitionTheme(darkMode ? 'light' : 'dark', buttonRef.current); }
     finally { setBusy(false); }
   };
   return (
-    <button type="button" onClick={toggle} disabled={busy} aria-label={label}
+    <button ref={buttonRef} type="button" onClick={toggle} disabled={busy} aria-label={label}
       title={`Switch to ${label}`} aria-busy={busy}
       className={`inline-flex shrink-0 items-center justify-center rounded-full border border-accent/20 bg-accent-soft/85 text-accent shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent cursor-pointer disabled:cursor-wait ${className}`}
       style={{ width: 44, height: 44 }}>
