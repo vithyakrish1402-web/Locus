@@ -25,17 +25,15 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
     : null;
 
   const asset = getBuildingAsset(building);
-  const dist = where && !where.here ? distanceLabel(where.shownDistance) : null;
   const walk = where && !where.here ? walkLabel(where.distance) : null;
 
   return (
     <div
       data-testid="building-row"
-      onClick={onOpen}
-      className="group relative rounded-2xl glass-panel hover:bg-surface/90 hover:scale-[1.01] transition-all duration-200 p-3 sm:p-3.5 flex flex-col gap-2.5 cursor-pointer text-text font-ui shadow-sm"
+      className="building-card group text-text font-ui"
     >
       {/* Horizontal Layout: 68px Thumbnail + Main Content + Chevron */}
-      <div className="flex items-center gap-3">
+      <button type="button" onClick={onOpen} aria-label={`View ${building.name}`} className="building-card-main flex items-center gap-3 text-left w-full">
         {/* Consistent 68px Square Thumbnail */}
         <div className="relative w-[68px] h-[68px] rounded-xl overflow-hidden shrink-0 bg-sunken border border-[var(--glass-border-subtle)]">
           <CampusBuildingImage
@@ -50,19 +48,19 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
         <div className="flex-1 min-w-0 flex flex-col justify-center">
           {/* Category Pill */}
           <div className="flex items-center gap-2 mb-1">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-sunken text-text-secondary border border-[var(--glass-border-subtle)]">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-accent-soft text-accent">
               {asset?.categoryDisplay || categoryLabel(building.category)}
             </span>
           </div>
 
           {/* Prominent Building Name */}
-          <h4 className="text-[15px] font-semibold text-text leading-tight truncate group-hover:text-accent transition-colors">
+          <h4 className="text-[15px] font-semibold text-text leading-snug line-clamp-2 group-hover:text-accent transition-colors">
             {building.name}
           </h4>
 
           {/* Distance and Walking Time on One Muted Secondary Line */}
           {away && (
-            <p className="text-[12px] text-text-secondary font-normal flex items-center gap-1.5 mt-0.5 truncate">
+            <p className="text-[11px] text-text-secondary font-normal flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1">
               <span>{away}</span>
               {walk && (
                 <>
@@ -85,10 +83,10 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
         <div className="shrink-0 text-text-secondary group-hover:text-accent transition-colors self-center p-0.5">
           <ChevronRight size={18} className="stroke-[2]" />
         </div>
-      </div>
+      </button>
 
       {/* Compact Inline Actions */}
-      <div className="flex items-center justify-end gap-2 pt-1.5 border-t border-[var(--glass-border-subtle)]">
+      <div className="building-card-actions flex items-center justify-end gap-2">
         {/* Secondary AR Scan Button */}
         <Button
           variant="tonal"
@@ -99,7 +97,7 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
             e.stopPropagation();
             onArScan();
           }}
-          className="!min-h-[34px] !h-[34px] !px-3 !rounded-full !text-[12px] !font-medium shrink-0"
+          className="!min-h-[44px] !h-[44px] !px-3 !rounded-full !text-[12px] !font-medium shrink-0"
         >
           {BUILDING_LIST.arScan}
         </Button>
@@ -112,7 +110,7 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
             e.stopPropagation();
             onNavigate();
           }}
-          className="!min-h-[34px] !h-[34px] !px-4 !rounded-full !text-[12px] !font-medium shrink-0"
+          className="!min-h-[44px] !h-[44px] !px-4 !rounded-full !text-[12px] !font-medium shrink-0"
         >
           {BUILDING_LIST.navigate}
         </Button>

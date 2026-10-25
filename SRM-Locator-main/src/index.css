@@ -415,3 +415,42 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
 
 ::view-transition-old(root) { z-index: 1; }
 ::view-transition-new(root) { z-index: 2; }
+
+/* Campus directory: solid, themed surfaces keep scrolling cheap over the live map. */
+.section-page-header { border-bottom: 1px solid var(--color-border); margin-bottom: 12px; }
+.section-close { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-sunken); color: var(--color-text-secondary); }
+.building-directory { font-family: var(--font-ui); }
+.directory-intro { display: flex; align-items: center; gap: 12px; padding: 4px 0 18px; }
+.directory-emblem { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; border-radius: 16px; background: var(--color-accent-soft); color: var(--color-accent); }
+.directory-eyebrow { color: var(--color-accent); font-size: 9px; font-weight: 700; letter-spacing: .14em; margin-bottom: 4px; }
+.directory-intro h2 { font-size: 18px; font-weight: 650; letter-spacing: -.025em; line-height: 1.3; }
+.directory-subtitle { font-size: 11px; line-height: 1.5; color: var(--color-text-secondary); margin-top: 4px; }
+.directory-search { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; border: 1px solid var(--color-border); background: var(--color-sunken); border-radius: 14px; color: var(--color-text-secondary); }
+.directory-search:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.directory-search input { background: transparent; border: 0; outline: 0; min-width: 0; width: 100%; font-size: 13px; color: var(--color-text); }
+.directory-search input::placeholder { color: var(--color-text-secondary); }
+.directory-categories { display: flex; gap: 8px; overflow-x: auto; padding: 14px 2px; scrollbar-width: none; }
+.directory-categories::-webkit-scrollbar { display: none; }
+.directory-categories button { display: flex; align-items: center; gap: 8px; white-space: nowrap; flex-shrink: 0; min-height: 44px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); font-size: 12px; font-weight: 600; }
+.directory-categories button[aria-pressed="true"] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-on); }
+.directory-categories button span { font-size: 10px; opacity: .8; font-variant-numeric: tabular-nums; }
+.directory-results { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 12px; }
+.directory-results h3 { font-size: 13px; font-weight: 650; }
+.directory-results h3 span { margin-left: 4px; font-size: 11px; color: var(--color-text-secondary); font-weight: 400; }
+.directory-results > span { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--color-text-secondary); }
+.directory-cards { display: grid; gap: 12px; }
+.building-card { border: 1px solid var(--color-border); border-radius: 20px; background: var(--color-surface); overflow: hidden; content-visibility: auto; contain-intrinsic-size: auto 182px; }
+.building-card-main { padding: 14px; min-height: 112px; cursor: pointer; }
+.building-card-main:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -3px; border-radius: 18px; }
+.building-card-actions { padding: 8px 12px; border-top: 1px solid var(--color-border); background: color-mix(in srgb, var(--color-sunken) 45%, var(--color-surface)); }
+.directory-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 30px 16px; text-align: center; color: var(--color-text-secondary); font-size: 13px; }
+.directory-empty button { min-height: 44px; color: var(--color-accent); font-weight: 600; }
+@media (hover: hover) {
+  .building-card:hover { border-color: var(--color-accent); }
+  .directory-categories button:hover { border-color: var(--color-accent); }
+}
+/* Modest phones retain the same colours and hierarchy without stacked GPU blurs. */
+:root[data-effects="reduced"] { --glass-blur: none; --webkit-glass-blur: none; }
+:root[data-effects="reduced"] :is(.glass-input, .ar-plate) { backdrop-filter: none; -webkit-backdrop-filter: none; }
+:root[data-effects="reduced"] :is(.glass-panel, .glass-floating, .glass-pill, .glass-input) { background: var(--color-surface); box-shadow: none; }
+:root[data-effects="reduced"] :is(.locus-live-dot, .locus-soft-ring-dot, .locus-skeleton, .animate-pulse) { animation: none; }
