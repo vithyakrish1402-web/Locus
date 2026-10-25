@@ -71,7 +71,7 @@ import { useFriends } from './hooks/useFriends';
 import { exportActivityLog } from './utils/activityLogExport';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
+import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -2898,7 +2898,7 @@ const App = () => {
 
         >
           <header className="section-page-header shrink-0 px-5 py-4 flex items-center justify-between">
-            <h1 className="text-xl font-semibold">{activeTab === 'buildings' ? 'Buildings' : 'Your group'}</h1>
+            <h1 className="text-xl font-semibold">{activeTab === 'buildings' ? 'Buildings' : GROUP_HEADER.title}</h1>
             {isMobile && <button type="button" onClick={() => setMobileView('grid')} className="section-close" aria-label="Back to map"><X size={20} /></button>}
           </header>
           {activeTab === 'users' && <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode} />}

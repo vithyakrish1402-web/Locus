@@ -182,6 +182,16 @@ describe('A10: one search box at a time', () => {
   });
 });
 
+describe('the Group page says "Your group" once', () => {
+  it('in its title bar only, not again in the header under it', async () => {
+    await onTheMap();
+    fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
+    expect(within(page()).getAllByText(GROUP_HEADER.title)).toHaveLength(1);
+    expect(within(page()).getByRole('heading', { name: GROUP_HEADER.title })).toBeTruthy();
+    expect(within(screen.getByTestId('group-header')).queryByText(GROUP_HEADER.title)).toBeNull();
+  });
+});
+
 describe('A9: the group code is one chip', () => {
   it('shows the code and copies it; the empty card has no Copy button of its own', async () => {
     const writeText = vi.fn(() => Promise.resolve());
