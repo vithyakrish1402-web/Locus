@@ -21,7 +21,7 @@ export const MAP_ERROR_COOLDOWN_MS = 1500;
 export default class MapErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { crashed: false, retrying: false, generation: 0 };
+    this.state = { crashed: false, retrying: false };
     this.failures = 0;
     this.timer = null;
   }
@@ -47,14 +47,13 @@ export default class MapErrorBoundary extends React.Component {
   remount = () => {
     clearTimeout(this.timer);
     this.props.onRemount?.();
-    this.setState((s) => ({ crashed: false, retrying: false, generation: s.generation + 1 }));
+    this.setState({ crashed: false, retrying: false });
   };
 
   render() {
-    if (!this.state.crashed) {
-      // A new key each time, so a retry is a fresh map, never the one that crashed.
-      return <React.Fragment key={this.state.generation}>{this.props.children}</React.Fragment>;
-    }
+    // The map that crashed was unmounted when this message replaced it, so a retry is always a
+    // fresh map (a fresh Google map too: it loads again before it shows).
+    if (!this.state.crashed) return this.props.children;
     return (
       <div data-testid="map-problem" className="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
         <div role="alert" className="pointer-events-auto rounded-card glass-panel text-text font-ui p-4 flex flex-col items-center gap-3 shadow-md">

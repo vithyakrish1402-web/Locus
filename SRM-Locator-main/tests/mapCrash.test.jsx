@@ -86,4 +86,21 @@ describe('navigation with a map that has been removed', () => {
     rerender({ ...props, liveLocation: { lat: 12.8233, lng: 80.0444 } });
     rerender({ ...props, isNavigating: false });
   });
+
+  it('stops following the walker once the map it was following is removed', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const map = L.map(el, { rotate: true, touchRotate: false }).setView([12.8231, 80.0442], 17);
+    const props = {
+      isNavigating: true, destination: { lat: 12.8245, lng: 80.0455, name: 'Tech Park' },
+      liveLocation: { lat: 12.8231, lng: 80.0442 }, liveHeading: 90, speedMps: 1.2,
+      mapEngine: 'leaflet', mapInstance: map,
+    };
+    const { result, rerender } = renderHook((p) => useNavigationController(p), { initialProps: props });
+    act(() => { result.current.handleRecenter(); }); // following
+    map.stop();
+    map.remove();
+    el.remove();
+    rerender({ ...props, liveLocation: { lat: 12.8233, lng: 80.0444 } });
+  });
 });
