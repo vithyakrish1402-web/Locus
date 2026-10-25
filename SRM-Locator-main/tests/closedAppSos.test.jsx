@@ -281,7 +281,9 @@ describe('the SOS alerts row in Settings', () => {
     expect(sw.getAttribute('aria-checked')).toBe('false');
     fireEvent.click(sw);
     expect(p.setOn).not.toHaveBeenCalled();
-    expect(screen.getByTestId('sos-alerts-note')).toBeTruthy();
+    // UI audit A7c: greyed out, with the reason in one line in the row itself.
+    expect(screen.getByTestId('sos-alerts').textContent).toContain(COPY.sos.offReason);
+    expect(screen.getByTestId('sos-alerts').dataset.unavailable).toBe('true');
   });
 
   it('says so when the phone has these alerts turned off, or will not let them take over the screen', () => {

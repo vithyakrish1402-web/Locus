@@ -434,7 +434,7 @@ const App = () => {
   const acknowledgeSos = useClosedAppSos({ current: incomingSos, pendingCount: pendingSosCount, receive: receiveSos, acknowledge: acknowledgeSosOnSocket });
 
   // An Emergency alert held for want of a connection (utils/sosOutbox.js): the button reads
-  // "Waiting for connection", and a notice says so until it goes, or can't.
+  // "Waiting", and a notice says "Waiting for connection" until it goes, or can't.
   const [sosHeld, setSosHeld] = useState(false);
   const heldNoticeRef = useRef(null);
   const sentNoticeRef = useRef(null); // the "alert sent" notice, taken back if the server refuses
@@ -745,6 +745,9 @@ const App = () => {
   // short: the panel's title and the Group Lead's buttons step aside until focus leaves, so the
   // box rises clear of the Emergency button (owner, Stop 2, keyboard option 1).
   const [searchFocused, setSearchFocused] = useState(false);
+  // The top bar's own search box has focus (typing there is what opens Buildings, so it stays up
+  // while someone types in it, even with Buildings open; see the top bar's render).
+  const [topSearchFocused, setTopSearchFocused] = useState(false);
   const afterTap = (stillSo, focused) => {
     const apply = () => { if (stillSo()) setSearchFocused(focused); };
     window.addEventListener('click', apply, { once: true });
@@ -2859,18 +2862,25 @@ const App = () => {
   return (
     <div className="h-screen w-full bg-bg flex overflow-hidden text-text font-inter selection:bg-accent-soft bg-dots">
 
-      {/* Top bar and sharing chip (components/map/TopBar.jsx) */}
-      {!isNavigatingMode && (
+      {/* Top bar and sharing chip (components/map/TopBar.jsx). On a phone it goes, tap area and
+          all, while Buildings or Group is open (each has its own search box, so there were two at
+          once), and comes back when it closes: it follows sheetOpen, so every way of changing tab
+          does the same. Not while someone is typing in it: typing there is what opens Buildings. */}
+      {!isNavigatingMode && !(isMobile && sheetOpen && !topSearchFocused) && (
         <TopBar
           isSatellite={isSatellite}
           query={placeQuery}
           onQuery={hasJoinedSquad ? searchPlaces : undefined}
           // With the keyboard up the panel's header steps aside, so the results show above it.
-          onSearchFocus={setSearchFocused}
+          onSearchFocus={(focused) => { setSearchFocused(focused); setTopSearchFocused(focused); }}
         />
       )}
 
       {/* Buildings and Group are separate fixed pages on phones, with a sidebar on desktop. */}
+      {/* Closed on a phone, the page is not drawn at all (display: none), whichever way the tab
+          changed: the tab bar, Back, an SOS, a member's Navigate. It used to be only `invisible`,
+          still laid out and composited, and its two blurred parts with `transition: all` (the
+          Group Lead chip and the members search) were left floating over the map. */}
       {!isNavigatingMode && (
         <motion.div
           data-testid="section-page"
@@ -2878,7 +2888,7 @@ const App = () => {
           drag={false}
           ref={sheetRef}
           className={`${isMobile
-              ? `fixed inset-x-0 z-[900] flex flex-col bg-surface text-text ${sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
+              ? `fixed inset-x-0 z-[900] flex-col bg-surface text-text ${sheetOpen ? 'flex pointer-events-auto' : 'hidden pointer-events-none'
               }`
               : 'hidden md:flex w-84 glass-floating text-text rounded-3xl fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
             }`}
@@ -2896,7 +2906,7 @@ const App = () => {
           {/* The page stays fixed while its list scrolls above the bottom tabs. */}
           <div
             data-testid="group-panel-list"
-            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pt-1 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
+            className={`sheet-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
             style={isMobile ? { paddingBottom: 24 } : undefined}
           >
             {!isMobile && <SegmentedControl

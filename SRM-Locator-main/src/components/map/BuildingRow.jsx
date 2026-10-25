@@ -6,6 +6,7 @@ import { categoryLabel, distanceLabel, walkLabel } from '../../copy/place';
 import { BUILDING_LIST } from '../../copy/map';
 import { getBuildingAsset } from '../../data/srmBuildingAssets';
 import CampusBuildingImage from './CampusBuildingImage';
+import { displayPlaceName } from '../../utils/placeName';
 
 /**
  * Clean, minimalist Android campus-navigation card for SRM KTR.
@@ -53,9 +54,9 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
             </span>
           </div>
 
-          {/* Prominent Building Name */}
-          <h4 className="text-[15px] font-semibold text-text leading-snug line-clamp-2 group-hover:text-accent transition-colors">
-            {building.name}
+          {/* The name, once, in Title Case (shown so; the data keeps its capitals), on up to two lines */}
+          <h4 className="text-[15px] font-semibold text-text leading-snug line-clamp-2 break-words group-hover:text-accent transition-colors">
+            {displayPlaceName(building.name)}
           </h4>
 
           {/* Distance and Walking Time on One Muted Secondary Line */}
@@ -71,12 +72,8 @@ export default function BuildingRow({ building, me, onOpen, onArScan, onNavigate
             </p>
           )}
 
-          {/* Single Truncated Info Line */}
-          {(asset?.description || building.info) && (
-            <p className="text-[12px] text-text-secondary truncate mt-0.5 leading-normal">
-              {asset?.description || building.info}
-            </p>
-          )}
+          {/* No description line: it began with the place's name again ("Tech Park is an…"), cut
+              off, so every card said its name twice. The place card has the description. */}
         </div>
 
         {/* Subtle Chevron indicator */}

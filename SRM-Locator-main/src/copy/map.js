@@ -24,6 +24,15 @@ export const SHARING_CHIP = {
   pausedNoSpot: 'Sharing paused · no spot shared yet',
 };
 
+// The same, in one word: beside the dot once the chip has folded, so it is never a bare dot.
+export const SHARING_CHIP_SHORT = {
+  ACTIVE: 'Live',
+  FROZEN: 'Paused',
+  GHOST: 'Hidden',
+  waiting: 'Waiting',
+  pausedNoSpot: 'Paused',
+};
+
 // The map's right-hand controls and the meeting point button.
 export const MAP_CONTROLS = {
   satellite: 'Satellite view',

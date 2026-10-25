@@ -12,6 +12,7 @@ import {
 import { PLACE, categoryLabel } from '../copy/place';
 import { getBuildingAsset } from '../data/srmBuildingAssets';
 import CampusBuildingImage from './map/CampusBuildingImage';
+import { displayPlaceName } from '../utils/placeName';
 
 // The action row at the bottom of the card. The old "More Info" button was 44 px tall inside
 // this same footer; the three buttons are taller (about 56 px, never under 48) so an icon and
@@ -139,7 +140,7 @@ export default function PlaceCard({
       {/* Card Content: Title & Tags */}
       <div className="p-4 flex flex-col gap-2.5">
         <h2 className="text-lg sm:text-xl font-bold tracking-tight text-text leading-tight break-words">
-          {place?.name}
+          {displayPlaceName(place?.name)}
         </h2>
 
         {/* Tags Section */}

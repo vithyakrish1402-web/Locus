@@ -95,6 +95,7 @@ const { PLACE, MEETING_POINT_CONFIRM, RALLY_CLEAR_CONFIRM } = await import('../s
 const { CAMERA_EXPLAINER } = await import('../src/copy/permissions.js');
 const { NOTICES } = await import('../src/copy/notices.js');
 const { NAV_BUILD } = await import('../src/utils/navBuild.js');
+const { displayPlaceName } = await import('../src/utils/placeName.js');
 
 const RALLY = { lat: 12.8231, lng: 80.0442, name: 'RALLY POINT' };
 const FIX = { coords: { latitude: 12.8235, longitude: 80.0446, speed: 0 } };
@@ -115,9 +116,10 @@ const createAsCommander = async () => {
   await waitFor(() => expect(leaflet.props).not.toBeNull());
 };
 
-// A building's card, opened the way a person opens it: from the buildings list.
+// A building's card, opened the way a person opens it: from the buildings list (which shows the
+// name in Title Case).
 const openCard = async () => {
-  fireEvent.click((await screen.findAllByText(building.name))[0]);
+  fireEvent.click((await screen.findAllByText(displayPlaceName(building.name)))[0]);
   return screen.getByTestId('location-card');
 };
 const rallyButton = () => within(screen.getByTestId('location-card')).getByTestId('place-rally');

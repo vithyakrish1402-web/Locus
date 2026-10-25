@@ -353,8 +353,10 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
 .locus-map-tiles {
   filter: saturate(0.55) contrast(0.95) brightness(1.03);
 }
+/* Dark: brightness 0.75 and contrast 1.2 (were 0.62 and 1.15), so the tiles' own place names
+   reach 4.5:1 over the darkest ground (they measured 4.3:1, #717171 on black, 2026-10-25). */
 :root[data-theme="dark"] .locus-map-tiles {
-  filter: invert(1) hue-rotate(180deg) brightness(0.62) contrast(1.15) saturate(0.18);
+  filter: invert(1) hue-rotate(180deg) brightness(0.75) contrast(1.2) saturate(0.18);
 }
 
 /* The LOCUS logo (components/LocusMark.jsx): navy in the light theme, white in the dark, with
@@ -418,6 +420,14 @@ input, textarea, select, [contenteditable="true"] { scroll-margin-bottom: var(--
 
 /* Campus directory: solid, themed surfaces keep scrolling cheap over the live map. */
 .section-page-header { border-bottom: 1px solid var(--color-border); margin-bottom: 12px; }
+/* The Buildings and Group lists: what scrolls up fades out over the top 12 px instead of being cut
+   through a line of text at the list's edge. The list's own top padding (16 px) is more than the
+   fade, so at rest nothing sits in it. The mask is fixed to the box, not the content, so it costs
+   nothing while scrolling. */
+.sheet-scroll {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+}
 .section-close { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-sunken); color: var(--color-text-secondary); }
 .building-directory { font-family: var(--font-ui); }
 .directory-intro { display: flex; align-items: center; gap: 12px; padding: 4px 0 18px; }

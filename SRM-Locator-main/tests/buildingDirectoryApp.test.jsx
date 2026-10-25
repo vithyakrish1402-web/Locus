@@ -98,7 +98,7 @@ it('only mounts the building directory on its phone tab and opens a selected bui
   fireEvent.click(screen.getByRole('button', { name: 'View TECH PARK' }));
   await waitFor(() => expect(screen.queryByRole('searchbox', { name: 'Search campus buildings' })).toBeNull());
   expect(screen.getByTestId('place-navigate')).toBeTruthy();
-  expect(screen.getByRole('heading', { name: 'TECH PARK' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Tech Park' })).toBeTruthy(); // shown in Title Case (UI audit A6)
 });
 it('starts navigation with the latest action handler after browsing', async () => {
   join();

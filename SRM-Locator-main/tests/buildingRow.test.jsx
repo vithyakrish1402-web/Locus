@@ -20,18 +20,20 @@ const renderRow = (props = {}) => {
 };
 
 describe('a building in the list', () => {
-  it('shows its own category line, name, how far, and its description', () => {
+  // UI audit A6 (2026-10-25): the name once, in Title Case; no description line, which began
+  // with the name again ("Tech Park is an…") and was cut off. The place card still has it.
+  it('shows its own category line, its name once in Title Case, and how far; no description', () => {
     renderRow();
     expect(screen.getByText(LOCATION_CONTENT[2].categoryDisplay)).toBeTruthy();
-    expect(screen.getByText('TECH PARK')).toBeTruthy();
+    expect(screen.getByText('Tech Park')).toBeTruthy();
     expect(screen.getByText(/^\d+ m away$/)).toBeTruthy();
-    expect(screen.getByText(LOCATION_CONTENT[2].description)).toBeTruthy();
+    expect(screen.queryByText(LOCATION_CONTENT[2].description)).toBeNull();
   });
 
-  it('falls back to its default category line and its line for a place with no words of its own', () => {
+  it('falls back to its default category line for a place with no words of its own, and shows no info line', () => {
     renderRow({ building: { ...TECH_PARK, id: 9999 } });
     expect(screen.getByText('Academic Block')).toBeTruthy();
-    expect(screen.getByText(TECH_PARK.info)).toBeTruthy();
+    expect(screen.queryByText(TECH_PARK.info)).toBeNull();
   });
 
   it('has no Open dot: nothing had checked it (js-1.1.72)', () => {
@@ -55,7 +57,7 @@ describe('a building in the list', () => {
 
   it('tapping the row shows the building', () => {
     const h = renderRow();
-    fireEvent.click(screen.getByText('TECH PARK'));
+    fireEvent.click(screen.getByText('Tech Park'));
     expect(h.onOpen).toHaveBeenCalledTimes(1);
   });
 
