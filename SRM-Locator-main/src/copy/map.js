@@ -102,3 +102,11 @@ export const BUILDING_LIST = {
   navigate: 'Navigate',
   navigateTo: (place) => `Navigate to ${place}`,
 };
+
+// Over the map area only, when the map itself crashes; the rest of the app keeps working
+// (components/map/MapErrorBoundary.jsx). No error details on screen.
+export const MAP_PROBLEM = {
+  retrying: 'Map had a problem. Retrying…',
+  stopped: 'Map had a problem.',
+  retry: 'Retry',
+};

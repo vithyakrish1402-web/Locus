@@ -43,6 +43,7 @@ const rememberDndExplained = () => {
 };
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
+import MapErrorBoundary from './components/map/MapErrorBoundary';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
 import { trimRouteBehind } from './utils/routeTrim';
 import RouteCard from './components/map/RouteCard';
@@ -114,6 +115,7 @@ import { notify, dismiss as dismissNotice } from './utils/notify';
 import { logNavBuild } from './utils/navBuild';
 import { rallyAction, rallyIsAt } from './utils/rallyAction';
 import { mapEngineStatus } from './utils/mapEngineStatus';
+import { isMapAttached } from './utils/mapAttached';
 import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM, FOCUS_ZOOM_LEVEL, FOCUS_HIGHLIGHT_MS } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useClosedAppSos } from './hooks/useClosedAppSos';
@@ -228,8 +230,14 @@ const batteryReading = (cacheData) => {
 // so these must keep a stable identity across renders. Rebuilding them inside the
 // component made every render look like an options change and triggered a full
 // map.setOptions() restyle each time.
-const BASE_MAP_OPTIONS = {
+// Settings Google takes only when a map is made. Given again to a map that has drawn, even
+// unchanged, Google throws "Setting map 'renderingType' after instantiation is not supported."
+// (the full-screen crash on 2026-10-25), so these never go into a later setOptions.
+const GOOGLE_CREATION_OPTIONS = {
   renderingType: 'VECTOR',
+};
+
+const BASE_MAP_OPTIONS = {
   zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
   mapTypeId: 'roadmap',
   tilt: 0,
@@ -237,7 +245,6 @@ const BASE_MAP_OPTIONS = {
 };
 
 const SATELLITE_MAP_OPTIONS = {
-  renderingType: 'VECTOR',
   zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
   mapTypeId: 'hybrid', // This triggers the real satellite imagery
   tilt: 0,
@@ -2160,7 +2167,7 @@ const App = () => {
     if (wasGoogleShownRef.current === googleShown) return;
     wasGoogleShownRef.current = googleShown;
     const from = googleShown ? leafletMapRef.current : mapRef.current;
-    if (!from) return;
+    if (!isMapAttached(from)) return;
     const c = googleShown ? from.getCenter?.() : { lat: from.getCenter?.().lat?.(), lng: from.getCenter?.().lng?.() };
     const zoom = from.getZoom?.();
     if (!c || !Number.isFinite(c.lat) || !Number.isFinite(c.lng) || !Number.isFinite(zoom)) return;
@@ -2272,7 +2279,7 @@ const App = () => {
     setIsNavigatingMode(true);
     setMobileView('grid');
     navigationController.handleRecenter();
-    if (leafletMapRef.current) {
+    if (isMapAttached(leafletMapRef.current)) {
       leafletMapRef.current.flyTo([origin.lat, origin.lng], 19, { duration: 1.0 });
     }
   };
@@ -2557,6 +2564,62 @@ const App = () => {
     clickableIcons: false,
     draggableCursor: (isAdmin && (isRecordingPath || isPlacing)) ? 'crosshair' : 'grab',
   }), [isSatellite, resolvedTheme, isAdmin, isRecordingPath, isPlacing]);
+  // google-map-react is given one options function that never changes, so it never calls
+  // setOptions itself: it reads it once, when the map is made, creation-only settings included.
+  // Later changes reach the live map here, without them.
+  const mapOptionsRef = useRef(mapOptions);
+  mapOptionsRef.current = mapOptions;
+  const googleCreateOptions = useCallback(() => ({ ...GOOGLE_CREATION_OPTIONS, ...mapOptionsRef.current }), []);
+  useEffect(() => {
+    if (googleMounted && isMapReady) mapRef.current?.setOptions?.(mapOptions);
+  }, [mapOptions, googleMounted, isMapReady]);
+
+  // --- MAP CRASHES (components/map/MapErrorBoundary.jsx) ---
+  // What happened just before a map crash, for the console line it leaves (console only: no
+  // network, no storage). The last five, with the time.
+  const mapEventsRef = useRef([]);
+  const noteMapEvent = (what) => {
+    mapEventsRef.current = [...mapEventsRef.current.slice(-4), `${new Date().toISOString().slice(11, 19)} ${what}`];
+  };
+  useEffect(() => { noteMapEvent(isSatellite ? 'satellite on' : 'satellite off'); }, [isSatellite]);
+  useEffect(() => { noteMapEvent(`tab ${activeTab} / ${mobileView}`); }, [activeTab, mobileView]);
+  useEffect(() => { if (incomingSos) noteMapEvent('incoming SOS'); }, [incomingSos]);
+  useEffect(() => {
+    const onVisibility = () => noteMapEvent(document.visibilityState === 'visible' ? 'back from background' : 'to background');
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+  const reportMapCrash = (error, failures) => {
+    console.error('[SYS_MAP] map crashed', {
+      engine: googleShown ? 'google' : 'leaflet', // the one on screen
+      googleMounted,
+      // As of the render that crashed (its own change is not in recentEvents yet).
+      now: { satellite: isSatellite, tab: activeTab, view: mobileView, sos: Boolean(incomingSos), page: document.visibilityState },
+      recentEvents: mapEventsRef.current,
+      message: String(error?.message ?? error),
+      failures,
+    });
+  };
+  // A second crash tries the other engine once. On satellite with Google (showing, or still
+  // loading after the retry): satellite goes to the free map on Esri photos, for the rest of the
+  // session. On the free map: it stands down and Google's satellite shows instead, until
+  // satellite is turned off again.
+  const [freeMapStoodDown, setFreeMapStoodDown] = useState(false);
+  const switchMapEngineAfterCrash = () => {
+    if (googleMounted && isSatellite) {
+      failMapEngine('crashed');
+      return true;
+    }
+    if (googleUsable) {
+      setFreeMapStoodDown(true);
+      setIsSatellite(true);
+      return true;
+    }
+    return false;
+  };
+  useEffect(() => {
+    if (!isSatellite) setFreeMapStoodDown(false);
+  }, [isSatellite]);
 
   // A theme switch shows the Google map only once it has redrawn its tiles in the new style
   // (theme.js registerThemeSettle): under the switch's cover, or veiled in the new theme
@@ -3213,8 +3276,17 @@ const App = () => {
       />
       {/* FULLSCREEN MAP */}
       <div className="absolute inset-0 z-0 bg-[var(--color-map-land)]">
-        {/* The free map is always mounted and is the normal map. Google, once asked for by a
-            satellite tap, stays mounted for the session and is only hidden and shown. */}
+        {/* A map crash stays in here: the bar, SOS and the sheets above keep working. A retry
+            starts a fresh Google map, so it waits for that one to load before showing it. */}
+        <MapErrorBoundary
+          onCrash={reportMapCrash}
+          onSwitchEngine={switchMapEngineAfterCrash}
+          onRemount={() => setIsMapReady(false)}
+        >
+        {/* The free map is always mounted and is the normal map (unless it stood down after
+            crashing twice). Google, once asked for by a satellite tap, stays mounted for the
+            session and is only hidden and shown. */}
+        {!freeMapStoodDown && (
         <div
           className="absolute inset-0"
           style={{ visibility: googleShown ? 'hidden' : 'visible' }}
@@ -3270,6 +3342,7 @@ const App = () => {
             />
           </Suspense>
         </div>
+        )}
         {googleMounted && (
         <div
           className="absolute inset-0"
@@ -3280,7 +3353,7 @@ const App = () => {
           <GoogleMapReact
             bootstrapURLKeys={{ key: GOOGLE_MAPS_API_KEY }}
             center={mapProps.center}
-            options={mapOptions}
+            options={googleCreateOptions}
 
             onClick={handleMapClick}
 
@@ -3441,6 +3514,7 @@ const App = () => {
           </GoogleMapReact>
         </div>
         )}
+        </MapErrorBoundary>
         {/* PHASE 3: Satellite toggle pill removed — function reassigned to Bottom HUD GRID button */}
       </div>
 
