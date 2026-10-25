@@ -242,10 +242,28 @@ describe('a map crash', () => {
     expect(screen.getByTestId('google-map')).toBeTruthy();
     expect(screen.queryByTestId('leaflet-map')).toBeNull();
     fireEvent.click(screen.getAllByRole('button', { name: /^Map/ })[0]); // close the Group panel
-    expect(screen.getByRole('button', { name: 'Satellite view' })).toBeTruthy(); // the button names the view showing
+    expect(screen.getByRole('button', { name: /satellite view|map view/i }).getAttribute('aria-pressed')).toBe('true');
     // Back to the normal map: the free map comes back.
     tapSatellite();
     expect(screen.getByTestId('leaflet-map')).toBeTruthy();
+    expect(appCrashed()).toBe(false);
+  });
+
+  it('a free map that stood down comes back if Google then fails too', async () => {
+    const App = await loadApp('test-key');
+    renderApp(App);
+    enterMapScreen();
+    await screen.findByTestId('leaflet-map');
+    leaflet.throws = 2;
+    rerenderMap();
+    act(() => { vi.advanceTimersByTime(1500); }); // retry, crashes again
+    act(() => { vi.advanceTimersByTime(1500); }); // Google instead
+    expect(screen.getByTestId('google-map')).toBeTruthy();
+    expect(screen.queryByTestId('leaflet-map')).toBeNull();
+    act(() => window.gm_authFailure()); // Google refuses the key
+    expect(screen.queryByTestId('google-map')).toBeNull();
+    expect(screen.getByTestId('leaflet-map')).toBeTruthy();
+    expect(leaflet.props.isSatellite).toBe(true); // Esri photos on the free map
     expect(appCrashed()).toBe(false);
   });
 

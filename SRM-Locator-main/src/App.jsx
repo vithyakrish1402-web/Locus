@@ -2603,7 +2603,7 @@ const App = () => {
   // A second crash tries the other engine once. On satellite with Google (showing, or still
   // loading after the retry): satellite goes to the free map on Esri photos, for the rest of the
   // session. On the free map: it stands down and Google's satellite shows instead, until
-  // satellite is turned off again.
+  // satellite is turned off again, or Google fails too (then the free map is all there is).
   const [freeMapStoodDown, setFreeMapStoodDown] = useState(false);
   const switchMapEngineAfterCrash = () => {
     if (googleMounted && isSatellite) {
@@ -2618,8 +2618,8 @@ const App = () => {
     return false;
   };
   useEffect(() => {
-    if (!isSatellite) setFreeMapStoodDown(false);
-  }, [isSatellite]);
+    if (!isSatellite || !googleUsable) setFreeMapStoodDown(false);
+  }, [isSatellite, googleUsable]);
 
   // A theme switch shows the Google map only once it has redrawn its tiles in the new style
   // (theme.js registerThemeSettle): under the switch's cover, or veiled in the new theme
