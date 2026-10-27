@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } fr
 // This project's eslint config has no eslint-plugin-react (only react-hooks/react-refresh),
 // so core no-unused-vars can't see through JSXMemberExpression tag names — false positive.
 // eslint-disable-next-line no-unused-vars
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useReducedMotion } from 'framer-motion';
 import GoogleMapReact from 'google-map-react';
 import {
   Users, Search, Settings, Navigation, ShieldCheck,
@@ -135,6 +135,7 @@ import { ConfidenceHalo, FloorTag } from './components/IndoorMarkers';
 import FloorPicker from './components/FloorPicker';
 import WifiReadout from './components/WifiReadout';
 import { useIsMobile } from './hooks/useIsMobile';
+import { usePanelMotion, PANEL_HEIGHT } from './hooks/usePanelMotion';
 import { haptic } from './utils/haptics';
 import { PANEL_SPRING, fade } from './utils/motion';
 import { LAYER } from './utils/layers';
@@ -755,6 +756,18 @@ const App = () => {
   // The top bar's own search box has focus (typing there is what opens Buildings, so it stays up
   // while someone types in it, even with Buildings open; see the top bar's render).
   const [topSearchFocused, setTopSearchFocused] = useState(false);
+  // The phone panel's movement (hooks/usePanelMotion.js): it slides up from behind the tab bar,
+  // follows the finger, and is drawn until it has slid away.
+  const panelListRef = useRef(null);
+  const topBarShown = useMotionValue(1);
+  const { y: panelY, opacity: panelOpacity, scrim: panelScrim, chrome: panelChrome, shown: panelShown } = usePanelMotion({
+    enabled: isMobile && !isNavigatingMode,
+    open: sheetOpen,
+    onOpen: () => setMobileView(activeTab === 'buildings' ? 'matrix' : 'squad'),
+    onClose: () => setMobileView('grid'),
+    panelRef: sheetRef,
+    listRef: panelListRef,
+  });
   const afterTap = (stillSo, focused) => {
     const apply = () => { if (stillSo()) setSearchFocused(focused); };
     window.addEventListener('click', apply, { once: true });
@@ -2927,23 +2940,43 @@ const App = () => {
 
       {/* Top bar and sharing chip (components/map/TopBar.jsx). On a phone it goes, tap area and
           all, while Buildings or Group is open (each has its own search box, so there were two at
-          once), and comes back when it closes: it follows sheetOpen, so every way of changing tab
-          does the same. Not while someone is typing in it: typing there is what opens Buildings. */}
-      {!isNavigatingMode && !(isMobile && sheetOpen && !topSearchFocused) && (
+          once), and comes back when it closes: it fades out as the panel rises over it and back
+          in as the panel is pulled down (panelChrome, the panel's own position, so it never pops
+          and nothing re-renders while it moves), and it is inert while the panel is open. Not
+          while someone is typing in it: typing there is what opens Buildings. */}
+      {!isNavigatingMode && (
         <TopBar
           isSatellite={isSatellite}
           query={placeQuery}
           onQuery={hasJoinedSquad ? searchPlaces : undefined}
           // With the keyboard up the panel's header steps aside, so the results show above it.
           onSearchFocus={(focused) => { setSearchFocused(focused); setTopSearchFocused(focused); }}
+          // Always a value on a phone: a style framer stops being given is left where it was.
+          fade={isMobile ? (topSearchFocused ? topBarShown : panelChrome) : undefined}
+          inert={isMobile && sheetOpen && !topSearchFocused}
         />
       )}
 
-      {/* Buildings and Group are separate fixed pages on phones, with a sidebar on desktop. */}
-      {/* Closed on a phone, the page is not drawn at all (display: none), whichever way the tab
-          changed: the tab bar, Back, an SOS, a member's Navigate. It used to be only `invisible`,
-          still laid out and composited, and its two blurred parts with `transition: all` (the
-          Group Lead chip and the members search) were left floating over the map. */}
+      {/* Buildings and Group on a phone: a panel that slides up from behind the tab bar over a
+          lightly dimmed map (tap the dim to close), at most PANEL_MAX_HEIGHT_RATIO of the screen
+          and never under the status bar; a sidebar on desktop. It stands over the top bar and the
+          meeting point button while it moves (z 1060 > 1050), under the tab bar and its Emergency
+          button (1100). While the top bar's search has the keyboard up it keeps its old place,
+          under that bar (z 900, from just below it), so the search results show above it. */}
+      {/* Closed on a phone, the page is not drawn at all (display: none) once it has slid away,
+          whichever way the tab changed: the tab bar, Back, an SOS, a member's Navigate. It used
+          to be only `invisible`, still laid out and composited, and its two blurred parts with
+          `transition: all` (the Group Lead chip and the members search) were left floating over
+          the map. */}
+      {!isNavigatingMode && isMobile && panelShown && !topSearchFocused && (
+        <motion.div
+          data-testid="panel-scrim"
+          aria-hidden="true"
+          className={`fixed inset-0 z-[1055] bg-backdrop ${sheetOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
+          style={{ opacity: panelScrim }}
+          onClick={() => setMobileView('grid')}
+        />
+      )}
       {!isNavigatingMode && (
         <motion.div
           data-testid="section-page"
@@ -2951,16 +2984,25 @@ const App = () => {
           drag={false}
           ref={sheetRef}
           className={`${isMobile
-              ? `fixed inset-x-0 z-[900] flex-col bg-surface text-text ${sheetOpen ? 'flex pointer-events-auto' : 'hidden pointer-events-none'
+              ? `fixed inset-x-0 ${topSearchFocused ? 'z-[900]' : 'z-[1060] rounded-t-sheet shadow-[var(--shadow-2)]'} overflow-hidden flex-col bg-surface text-text ${panelShown ? 'flex pointer-events-auto' : 'hidden pointer-events-none'
               }`
               : 'hidden md:flex w-84 glass-floating text-text rounded-3xl fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
             }`}
-          // Starts under the header instead of behind it (it used to start at the very top, so
-          // its handle and MATRIX/SQUAD indicator were hidden under the header).
-          style={isMobile ? { top: BELOW_TOP_BAR, bottom: 'var(--tab-bar-height)', y: 0 } : undefined}
-
+          // Laid out at its open height, always; only transform (y) and opacity move.
+          style={isMobile ? {
+            bottom: 'var(--tab-bar-height)',
+            ...(topSearchFocused ? { top: BELOW_TOP_BAR } : { height: PANEL_HEIGHT }),
+            y: panelY,
+            opacity: panelOpacity,
+          } : undefined}
         >
-          <header className="section-page-header shrink-0 px-5 py-4 flex items-center justify-between">
+          {/* The grab bar: drag it, or the header under it, to move the panel. */}
+          {isMobile && (
+            <div data-testid="panel-handle" className="shrink-0 flex justify-center pt-2.5 pb-0.5 cursor-grab" data-no-ping aria-hidden="true">
+              <span className="w-10 h-1 rounded-full bg-border-control" />
+            </div>
+          )}
+          <header className={`section-page-header shrink-0 px-5 ${isMobile ? 'pt-1.5 pb-3' : 'py-4'} flex items-center justify-between`}>
             <h1 className="text-xl font-semibold">{activeTab === 'buildings' ? 'Buildings' : GROUP_HEADER.title}</h1>
             {isMobile && <button type="button" onClick={() => setMobileView('grid')} className="section-close" aria-label="Back to map"><X size={20} /></button>}
           </header>
@@ -2969,6 +3011,7 @@ const App = () => {
           {/* The page stays fixed while its list scrolls above the bottom tabs. */}
           <div
             data-testid="group-panel-list"
+            ref={panelListRef}
             className={`sheet-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
             style={isMobile ? { paddingBottom: 24 } : undefined}
           >
@@ -3046,13 +3089,18 @@ const App = () => {
             {activeTab === 'users' && searchQuery.trim() && !users.some(u => !blockedUserIds.includes(u.id) && matchesSearch(u.name)) && !ghostMembers.some(g => matchesSearch(g.name)) && (users.length > 0 || ghostMembers.length > 0) && (
               <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="members-no-match">{GROUP_MEMBERS_LIST.noMatch(searchQuery.trim())}</p>
             )}
-            {activeTab === 'buildings' && (!isMobile || sheetOpen) && <BuildingDirectory
+            {activeTab === 'buildings' && (!isMobile || panelShown) && <BuildingDirectory
               places={campusPlaces} query={placeQuery} onSearch={setPlaceQuery} me={liveLocation}
               onOpen={openDirectoryBuilding} onNavigate={navigateDirectoryBuilding}
               onArScan={scanDirectoryBuilding}
             />}
+            {/* Mounted with Members, so rows already there when the page opens are simply there
+                (initial={false}); only someone joining or leaving while it is open fades. It
+                used to stay mounted across Buildings, and every row faded in after the page had
+                appeared. */}
+            {activeTab === 'users' && (
             <AnimatePresence mode="popLayout" initial={false}>
-              {activeTab === 'users' && (
+              {(
                 // A flat array, not a <> fragment. AnimatePresence mode="popLayout" wraps
                 // each direct child in a ref-bearing element to measure it, and a Fragment
                 // cannot take a ref — React logged "Invalid prop `ref` supplied to
@@ -3110,6 +3158,7 @@ const App = () => {
                 ]
               )}
             </AnimatePresence>
+            )}
             {activeTab === 'users' && <LeaveGroupButton onClick={() => setShowLeaveConfirm(true)} />}
             {/* The panel rests lower than full by this much: room to scroll the last rows up into
               view at half. */}
@@ -3777,9 +3826,14 @@ const App = () => {
         />
       )}
 
-      {/* The meeting point button (two steps: tap it, then tap the map) */}
-      {!isNavigatingMode && !keyboardUp && !(isMobile && sheetOpen) && !(selectedItem && activeTab === 'buildings') && (
-        <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
+      {/* The meeting point button (two steps: tap it, then tap the map). On a phone it stays put
+          under the Buildings / Group panel (z 1050 < 1060), which slides over it and away again,
+          and is inert while the panel is open; it used to vanish the moment the tab was tapped.
+          Not while the top bar's search keeps the panel under the bar (z 900): it would stand on it. */}
+      {!isNavigatingMode && !keyboardUp && !(isMobile && sheetOpen && topSearchFocused) && !(selectedItem && activeTab === 'buildings') && (
+        <div inert={isMobile && sheetOpen}>
+          <MeetingPointButton choosing={isTargetingMode} onToggle={() => setIsTargetingMode(!isTargetingMode)} />
+        </div>
       )}
 
       {/* Leaving, confirmed (components/group/LeaveGroup.jsx). */}

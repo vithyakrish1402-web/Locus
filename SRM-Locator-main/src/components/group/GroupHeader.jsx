@@ -26,7 +26,9 @@ export default function GroupHeader({ isLead, code, children }) {
 
   return (
     <div data-testid="group-header" className="px-4 pb-3 font-ui text-text">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      {/* 8 px apart, not 12: at 12 the Group Lead's row was 3 px too wide for a 411 px phone and
+          the theme switch dropped onto a row of its own. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
         {isLead ? (
           <Chip icon={ShieldCheck}>{GROUP_HEADER.lead}</Chip>
         ) : (

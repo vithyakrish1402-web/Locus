@@ -22,11 +22,14 @@ const LABEL_FADE_MS = 140;
 // left side of the screen on mobile, displaying the crisp "L.O.C.U.S" mark and essential actions.
 /**
  * @param {{ isSatellite: boolean, query?: string, onQuery?: (text: string) => void,
- *   onSearchFocus?: (focused: boolean) => void }} props
+ *   onSearchFocus?: (focused: boolean) => void, fade?: import('framer-motion').MotionValue<number>,
+ *   inert?: boolean }} props
  *   query / onQuery: the building search beside the name; omit onQuery for no search
  *   onSearchFocus: told when the search box gains or loses focus (the keyboard is up while it has it)
+ *   fade: its opacity, from the phone's Buildings / Group panel as it rises over the bar;
+ *   inert: while that panel is open
  */
-export function TopBar({ isSatellite, query = '', onQuery, onSearchFocus }) {
+export function TopBar({ isSatellite, query = '', onQuery, onSearchFocus, fade, inert = false }) {
   // Open while it holds text too, so a search never hides behind the icon.
   const [searching, setSearching] = useState(false);
   const open = searching || query.trim() !== '';
@@ -46,11 +49,12 @@ export function TopBar({ isSatellite, query = '', onQuery, onSearchFocus }) {
   const spring = reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 38, mass: 0.9 };
   const fieldWidth = Math.max(120, Math.min(208, (typeof window === 'undefined' ? 412 : window.innerWidth) - 232));
   return (
-    <nav
+    <motion.nav
       aria-label="Top bar"
       data-testid="top-bar"
+      inert={inert}
       className="absolute left-3 z-[1000] flex items-center rounded-full glass-floating text-text font-ui px-3 py-1.5 pointer-events-auto transition-[border-color] duration-200 focus-within:border-accent/50 shadow-[0_4px_20px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-[var(--glass-border)]"
-      style={{ top: TOP_BAR_TOP, minHeight: '44px', maxWidth: 'calc(100vw - 1.5rem)' }}
+      style={{ top: TOP_BAR_TOP, minHeight: '44px', maxWidth: 'calc(100vw - 1.5rem)', ...(fade ? { opacity: fade } : {}) }}
     >
       <div className="flex items-center gap-2 pl-0.5 pr-1 select-none shrink-0">
         <BrandMark size="small" />
@@ -117,7 +121,7 @@ export function TopBar({ isSatellite, query = '', onQuery, onSearchFocus }) {
           </button>
         </>
       )}
-    </nav>
+    </motion.nav>
   );
 }
 

@@ -6,10 +6,11 @@
 // A5  a notice over Settings stands under Settings' own header, never over Back,
 // A7  Emergency alerts is a fixed "Always on", not a switch,
 // A9  the group code is one chip that copies it; the empty card has no second Copy button,
-// A10 the map's top bar (LOCUS and its search) goes while Buildings or Group is open.
+// A10 the map's top bar (LOCUS and its search) goes while Buildings or Group is open (it fades
+//     out under the panel and is inert; it is no longer unmounted, so it can fade back in).
 // Only the app's edges are stubbed (socket, Firebase, native plugins, the maps, update hooks).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup, fireEvent, within } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent, within, waitFor } from '@testing-library/react';
 import { MotionGlobalConfig } from 'framer-motion';
 
 MotionGlobalConfig.skipAnimations = true;
@@ -134,6 +135,7 @@ afterEach(() => {
   delete navigator.geolocation;
 });
 
+// Closed, the page first slides away (hooks/usePanelMotion.js), then is not drawn at all.
 describe('A1: a closed page is not drawn at all', () => {
   it('Group, then Map from the tab bar: display none, not merely invisible', async () => {
     await onTheMap();
@@ -142,7 +144,7 @@ describe('A1: a closed page is not drawn at all', () => {
     expect(classes(page())).toContain('flex');
     expect(classes(page())).not.toContain('hidden');
     fireEvent.click(tabBar().getByRole('button', { name: 'Map' }));
-    expect(classes(page())).toContain('hidden');
+    await waitFor(() => expect(classes(page())).toContain('hidden'));
     expect(classes(page())).not.toContain('flex');
     expect(classes(page())).not.toContain('invisible');
   });
@@ -152,20 +154,24 @@ describe('A1: a closed page is not drawn at all', () => {
     fireEvent.click(tabBar().getByRole('button', { name: 'Buildings' }));
     expect(classes(page())).not.toContain('hidden');
     fireEvent.click(screen.getByRole('button', { name: 'Back to map' }));
-    expect(classes(page())).toContain('hidden');
+    await waitFor(() => expect(classes(page())).toContain('hidden'));
   });
 });
 
 describe('A10: one search box at a time', () => {
   it('the top bar goes while Buildings or Group is open, and comes back after', async () => {
+    const gone = () => screen.getByTestId('top-bar').hasAttribute('inert');
     await onTheMap();
-    expect(screen.getByTestId('top-bar')).toBeTruthy();
+    expect(gone()).toBe(false);
     fireEvent.click(tabBar().getByRole('button', { name: 'Buildings' }));
-    expect(screen.queryByTestId('top-bar')).toBeNull();
+    expect(gone()).toBe(true);
     fireEvent.click(tabBar().getByRole('button', { name: 'Group' }));
-    expect(screen.queryByTestId('top-bar')).toBeNull();
+    expect(gone()).toBe(true);
+    // Faded out under the open panel.
+    await waitFor(() => expect(Number(screen.getByTestId('top-bar').style.opacity)).toBe(0));
     fireEvent.click(tabBar().getByRole('button', { name: 'Map' }));
-    expect(screen.getByTestId('top-bar')).toBeTruthy();
+    expect(gone()).toBe(false);
+    await waitFor(() => expect(Number(screen.getByTestId('top-bar').style.opacity)).toBe(1));
   });
 
   it('stays while someone is typing in it (typing there is what opens Buildings)', async () => {
@@ -177,8 +183,9 @@ describe('A10: one search box at a time', () => {
     expect(page().dataset.section).toBe('buildings');
     expect(classes(page())).not.toContain('hidden');
     expect(screen.getByTestId('top-bar-search')).toBe(box);
+    expect(screen.getByTestId('top-bar').hasAttribute('inert')).toBe(false);
     fireEvent.blur(box);
-    expect(screen.queryByTestId('top-bar')).toBeNull();
+    expect(screen.getByTestId('top-bar').hasAttribute('inert')).toBe(true);
   });
 });
 
