@@ -3234,12 +3234,20 @@ const App = () => {
       {/* The stack under the top bar (redesign Map batch, pieces 1, 6 and 7): the sharing chip,
           or a banner in its place (choosing a meeting point, the location problem), then your
           route. One column, so none of them lands on another. On a phone it sits under the
-          open group panel (z-[850] < 900) and lets taps through except on its own buttons:
-          the location banner used to cover the Group Lead's buttons there. */}
+          open group panel (z-[850] < its 1060) and lets taps through except on its own buttons:
+          the location banner used to cover the Group Lead's buttons there.
+          From md up the Buildings / Group sidebar stands at the left (left-6 w-84: its right edge
+          is 22.5 rem in), so the column is centred only where that leaves it clear: it starts at
+          least 24 rem in (the sidebar and a 1.5 rem gap) and is never wider than what is left
+          before the map controls on the right (5 rem). It used to be centred whatever the width,
+          and below about 1170 px (a phone turned sideways, a small tablet) the sharing chip sat
+          on the sidebar's title. While navigating there is no sidebar, and it stays centred. */}
       <div
         data-testid="map-top-stack"
-        className={`absolute inset-x-3 z-[850] md:z-[1000] md:left-1/2 md:right-auto ${isNavigatingMode ? 'md:w-[32rem]' : 'md:w-[28rem]'
-          } md:-translate-x-1/2 pointer-events-none flex flex-col gap-2`}
+        className={`absolute inset-x-3 z-[850] md:z-[1000] md:right-auto ${isNavigatingMode
+          ? 'md:left-1/2 md:w-[32rem] md:-translate-x-1/2'
+          : 'md:left-[max(24rem,calc(50%_-_14rem))] md:w-[min(28rem,calc(100vw_-_29rem))]'
+          } pointer-events-none flex flex-col gap-2`}
         style={isNavigatingMode ? { top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' } : { top: BELOW_TOP_BAR }}
       >
         {/* Always mounted, only hidden while a banner stands in its place: coming and going with
