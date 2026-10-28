@@ -64,6 +64,14 @@ export function useIncomingSos(socket) {
     socket.emit('sos-sync');
   }, [socket]);
 
+  // Signed out: the alerts were for the account that was signed in, and the next person to
+  // pick up the phone must not find one waiting over the sign-in screen. Nothing is acknowledged:
+  // the server still offers them to that account when it is back (sos-sync).
+  const clear = useCallback(() => {
+    setQueue([]);
+    setHandled(0);
+  }, []);
+
   return {
     current: queue[0] ?? null,
     pendingCount: Math.max(0, queue.length - 1),
@@ -73,5 +81,6 @@ export function useIncomingSos(socket) {
     acknowledge,
     requestSync,
     receive,
+    clear,
   };
 }

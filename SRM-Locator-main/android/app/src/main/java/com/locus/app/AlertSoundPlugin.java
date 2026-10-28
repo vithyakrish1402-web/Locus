@@ -16,6 +16,7 @@ import com.locus.app.alerts.AlertChannels;
 import com.locus.app.alerts.AlertPrefs;
 import com.locus.app.alerts.AlertVolume;
 import com.locus.app.alerts.AlertVolumeLedger;
+import com.locus.app.sharing.LocationShareService;
 import com.locus.app.sharing.SosNotifications;
 
 /**
@@ -49,6 +50,10 @@ public class AlertSoundPlugin extends Plugin {
     public void load() {
         // A new process: anything the app's previous one held the volume up for is over.
         AlertVolume.releaseAll(getContext(), AlertVolumeLedger.APP);
+        // So is anything the sharing service held it up for, unless that service is running now (in
+        // this process). A force-stop during a background SOS used to leave the alarm stream at full
+        // volume until sharing was next turned on, since only a new service released its own.
+        if (!LocationShareService.isRunning()) AlertVolume.releaseAll(getContext(), AlertVolumeLedger.SERVICE);
         ensureAllChannels();
     }
 

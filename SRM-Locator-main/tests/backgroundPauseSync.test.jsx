@@ -114,8 +114,9 @@ const { default: App } = await import('../src/App.jsx');
 const { forgetLastStopForTests } = await import('../src/utils/backgroundSharing.js');
 
 const HERE = { lat: 12.8230, lng: 80.0440 };
-const SWITCH_KEY = 'locus.backgroundSharing';
-const CONSENT_KEY = 'locus.backgroundSharingConsent';
+// The switch and consent are the signed-in account's own (u-self here): src/utils/backgroundConsent.js.
+const SWITCH_KEY = 'locus.backgroundSharing:u-self';
+const CONSENT_KEY = 'locus.backgroundSharingConsent:u-self';
 const COPY = BACKGROUND_SHARING;
 let code;
 let server;

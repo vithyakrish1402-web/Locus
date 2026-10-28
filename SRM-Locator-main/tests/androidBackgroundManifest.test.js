@@ -70,6 +70,13 @@ describe('what background sharing asks the phone for', () => {
     expect(read('sharing', 'LocusBackgroundPlugin.java')).toMatch(/if \(!SosLaunch\.isSosIntent\(getContext\(\), intent\)\) return;/);
   });
 
+  it('puts the alarm volume back on the next launch after a force-stop during a background SOS, unless sharing is running', () => {
+    // Only the app's own holds were let go on launch; the sharing service's waited for a new service.
+    const load = read('AlertSoundPlugin.java').match(/public void load\(\) \{[\s\S]*?\n {4}\}/)[0];
+    expect(load).toMatch(/AlertVolume\.releaseAll\(getContext\(\), AlertVolumeLedger\.APP\);/);
+    expect(load).toMatch(/if \(!LocationShareService\.isRunning\(\)\) AlertVolume\.releaseAll\(getContext\(\), AlertVolumeLedger\.SERVICE\);/);
+  });
+
   it('trusts certificates the user installed only in debug builds', () => {
     const config = fs.readFileSync(path.join(root, 'res/xml/network_security_config.xml'), 'utf8');
     const [base] = config.match(/<base-config[\s\S]*?<\/base-config>/);

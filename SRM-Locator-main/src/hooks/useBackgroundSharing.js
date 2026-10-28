@@ -42,27 +42,38 @@ import { giveConsent, hasConsent } from '../utils/backgroundConsent';
 // `onGroupEnded` is called once, at launch, when the last sharing stopped because the Group ended
 // (the server restarted): the caller shows its lobby message.
 
+// The switch is the signed-in account's own (`uid`), like its consent (utils/backgroundConsent.js):
+// one per phone, it was the next account's too.
 const SWITCH_KEY = 'locus.backgroundSharing';
-const readSwitch = () => {
+const readSwitch = (uid) => {
+  if (!uid) return false;
   try {
-    return localStorage.getItem(SWITCH_KEY) === '1';
+    return localStorage.getItem(`${SWITCH_KEY}:${uid}`) === '1';
   } catch {
     return false;
   }
 };
-const writeSwitch = (on) => {
+const writeSwitch = (uid, on) => {
+  if (!uid) return;
   try {
-    localStorage.setItem(SWITCH_KEY, on ? '1' : '0');
+    localStorage.setItem(`${SWITCH_KEY}:${uid}`, on ? '1' : '0');
   } catch {
     // Not remembered; the switch still works for this session.
   }
 };
 
-export function useBackgroundSharing({ inGroup, hidden = false, roomCode, groupName, polling, backendUrl, getIdToken, onGroupEnded, plugin = LocusBackground, fetchImpl }) {
+export function useBackgroundSharing({ uid, inGroup, hidden = false, roomCode, groupName, polling, backendUrl, getIdToken, onGroupEnded, plugin = LocusBackground, fetchImpl }) {
   const [support, setSupport] = useState(null); // null while checking
   const [serverStatus, setServerStatus] = useState('checking'); // 'checking' | 'available' | 'off' | 'unknown'
-  const [on, setOnState] = useState(readSwitch);
-  const [consented, setConsented] = useState(hasConsent);
+  const [on, setOnState] = useState(() => readSwitch(uid));
+  const [consented, setConsented] = useState(() => hasConsent(uid));
+  // Another account signed in (or the first, once Firebase has said who): its own switch and consent.
+  const uidRef = useRef(uid);
+  useEffect(() => {
+    uidRef.current = uid;
+    setOnState(readSwitch(uid));
+    setConsented(hasConsent(uid));
+  }, [uid]);
   const [consentOpen, setConsentOpen] = useState(false);
   // What the last start attempt, or the service itself, said (cleared whenever sharing ends here).
   const [outcome, setOutcome] = useState(null);
@@ -149,7 +160,7 @@ export function useBackgroundSharing({ inGroup, hidden = false, roomCode, groupN
       // Stop on the notification: the person turned sharing off, so the switch says so. (It used
       // to stay on, with the line under it still saying "Sharing".)
       if (event?.state === 'stopped' && event.reason === 'user-stop') {
-        writeSwitch(false);
+        writeSwitch(uidRef.current, false);
         setOnState(false);
         setOutcome(null);
       } else if (event?.state === 'stopped' && event.reason === APP_STOP) setOutcome(null); // the app's own: nothing to report
@@ -186,12 +197,12 @@ export function useBackgroundSharing({ inGroup, hidden = false, roomCode, groupN
 
   const requestChange = useCallback((value) => {
     if (!value) {
-      writeSwitch(false);
+      writeSwitch(uidRef.current, false);
       setOnState(false);
       return;
     }
     if (consented) {
-      writeSwitch(true);
+      writeSwitch(uidRef.current, true);
       setOnState(true);
     } else {
       setConsentOpen(true);
@@ -199,10 +210,10 @@ export function useBackgroundSharing({ inGroup, hidden = false, roomCode, groupN
   }, [consented]);
 
   const acceptConsent = useCallback(() => {
-    giveConsent();
+    giveConsent(uidRef.current);
     setConsented(true);
     setConsentOpen(false);
-    writeSwitch(true);
+    writeSwitch(uidRef.current, true);
     setOnState(true);
   }, []);
 

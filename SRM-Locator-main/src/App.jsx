@@ -509,6 +509,7 @@ const App = () => {
     acknowledge: acknowledgeSosOnSocket,
     requestSync: requestSosSync,
     receive: receiveSos,
+    clear: clearIncomingSos,
   } = useIncomingSos(socket);
   // SOS that was heard while the app was closed: a tapped notification arrives as an alert here,
   // the notification goes once the overlay shows it, and acknowledging reaches the server even
@@ -647,6 +648,8 @@ const App = () => {
   };
   // --- COMMANDER TELEMETRY STATE ---
   const [showTelemetryModal, setShowTelemetryModal] = useState(false);
+  const showTableRef = useRef(false);
+  useEffect(() => { showTableRef.current = showTelemetryModal; }, [showTelemetryModal]);
   const [rawTelemetryData, setRawTelemetryData] = useState(null);
   // SYNC_TELEMETRY's own state: 'idle' | 'pending' | 'error', with the reason on error. The
   // button used to be a bare emit, so when no answer came it simply did nothing.
@@ -1024,6 +1027,7 @@ const App = () => {
   // unless this phone's app has the sharing service, the server has it on, and the person has
   // turned it on in Settings (after agreeing to what it does).
   const backgroundSharing = useBackgroundSharing({
+    uid: user?.uid,
     inGroup: wifiActive,
     hidden: telemetryMode === 'GHOST',
     roomCode: squadCode.trim().toUpperCase(),
@@ -1125,7 +1129,9 @@ const App = () => {
       setTelemetrySync({ status: 'error', message: REFRESH_FAILED.notConnected });
       return;
     }
-    const attempt = {};
+    // A refresh asked while the table is closed (Refresh locations) opens it; the table's own
+    // refreshes, and the one every few seconds while it is open, only update it.
+    const attempt = { opens: !showTableRef.current };
     pendingSyncRef.current = attempt;
     setTelemetrySync({ status: 'pending', message: null });
     socket.timeout(TELEMETRY_SYNC_TIMEOUT_MS).emit('request-telemetry', squadCode, (err, reply) => {
@@ -1258,10 +1264,14 @@ const App = () => {
       console.log(" [SYS_SYNC] Raw Telemetry Matrix Acquired:", data);
       // The telemetry settles the sync on its own: a server that predates acknowledgements
       // sends only this, and the timeout that follows must not then report a failure.
+      const attempt = pendingSyncRef.current;
       pendingSyncRef.current = null;
       setTelemetrySync({ status: 'idle', message: null });
       setRawTelemetryData(data);
-      setShowTelemetryModal(true); // Pop the Commander's Dashboard
+      // Opened only for a refresh that asked to open it. It used to open on every reply: one
+      // arriving after it was closed opened it again, and one arriving after leaving opened it in
+      // the next Group, with this Group's data (leaving clears the attempt: endSquadSession).
+      if (attempt?.opens) setShowTelemetryModal(true);
     });
     return () => socket.off('telemetry-sync-complete');
   }, []);
@@ -1529,7 +1539,54 @@ const App = () => {
     setGroupRole(null);
     setPendingRequests([]);
     setJustApproved(false);
+    // And everything else that was about this Group (a fix, 2026-10-28). Each of these used to
+    // carry into the next Group: its activity log and blocked list, an AR Scan or route aimed at
+    // one of its members or places, its locations table, its switches and meeting point.
+    setActivityLog([]);
+    setShowActivityLog(false);
+    setBlockedPeople([]);
+    setShowBlocked(false);
+    setBlockedUserIds([]);
+    setShowRequestsModal(false);
+    setArTarget(null);
+    setRouteStart(null);
+    setRouteEnd(null);
+    setRouteData(null);
+    setIsNavigatingMode(false);
+    pendingSyncRef.current = null;
+    setShowTelemetryModal(false);
+    setRawTelemetryData(null);
+    setFocusedMemberId(null);
+    setOptionsMemberId(null);
+    setShowLeaveConfirm(false);
+    setGroupSettings(null);
+    setActiveWaypoint(null);
+    setMeetingPointToConfirm(null);
+    setRallyToClear(null);
+    setIsTargetingMode(false);
   }, []);
+
+  // Signing out: the Group's state (above), and everything that was this account's, so the next
+  // person to pick up the phone starts clean (a fix, 2026-10-28). Each used to survive: the
+  // password in the sign-in box (with its eye showing it), a paused spot later sent as the next
+  // account's position, an unanswered SOS over the sign-in screen, and the lobby's last words.
+  const resetAccountState = () => {
+    endSquadSession();
+    setEmail('');
+    setPassword('');
+    setShowPassword(false);
+    setUsername('');
+    telemetryModeRef.current = 'ACTIVE';
+    setTelemetryMode('ACTIVE');
+    pausedPositionRef.current = null;
+    setPausedHasSpot(false);
+    clearIncomingSos();
+    setLiveLocation(null);
+    setLocationError(null);
+    setLobbyNotice(null);
+    setDeniedCode(null);
+    setResumeOffer(null);
+  };
 
   // Roles, the waiting count and the activity log (backend/groupRoles.js, joinNotify.js,
   // activityLog.js). Set up once: what they read of the moment comes through refs.
@@ -1538,9 +1595,16 @@ const App = () => {
   const [blockedPeople, setBlockedPeople] = useState([]);
   const [showBlocked, setShowBlocked] = useState(false);
   const openRequestsRef = useRef(() => {});
+  // The Group this phone is in, for listeners set up once: an entry about another Group (one just
+  // left) used to be added to this one's log.
+  const currentRoomRef = useRef('');
+  useEffect(() => { currentRoomRef.current = hasJoinedSquad ? squadCode.trim().toUpperCase() : ''; }, [hasJoinedSquad, squadCode]);
   useEffect(() => {
     const onRole = (payload) => setGroupRole(payload ?? null);
-    const onEntry = ({ entry } = {}) => { if (entry) setActivityLog((log) => [...log, entry]); };
+    const onEntry = ({ roomCode, entry } = {}) => {
+      if (!entry || (roomCode && roomCode !== currentRoomRef.current)) return;
+      setActivityLog((log) => [...log, entry]);
+    };
     // A burst of requests, said once, to whoever may admit (one notice, not one per request).
     const onWaiting = ({ count } = {}) => {
       if (!canModerateRef.current || !(count > 0)) return;
@@ -1614,11 +1678,12 @@ const App = () => {
 
     socket.on('access-denied', (payload) => {
       if (!isAboutThisSquad(payload)) return;
-      forgetGroup();
       // Coming back to a Group that has since blocked this person: the sharing left running for it ends.
       if (accessStatus === 'returning') stopBackgroundSharing();
+      // All of that Group's state goes (endSquadSession). This used to clear only the flags, so a
+      // member turned away on their way back kept its lost-member markers into the next Group.
+      endSquadSession(currentRoom);
       setAccessStatus('denied');
-      setHasJoinedSquad(false);
       setDeniedCode(currentRoom);
     });
 
@@ -2144,12 +2209,10 @@ const App = () => {
     stopBackgroundSharing();
     const online = socket.connected;
     const leaving = sendLeave(hasJoinedSquad ? squadCode.trim().toUpperCase() : null);
-    endSquadSession();
-    setLiveLocation(null);
+    resetAccountState();
     // Offline, only once the Leave has its sign-in proof, which signing out would take away.
     if (online) signOut(auth);
     else leaving.finally(() => signOut(auth));
-    setLocationError(null);
   };
 
   // endSquadSession also resets accessStatus: without that, a stale 'granted' (e.g. from
@@ -3390,8 +3453,10 @@ const App = () => {
                 // who tapped GRANT later pulled this user into their squad, wherever they had
                 // gone since (see resolve-access in backend/server.js).
                 socket.emit('cancel-join', { roomCode: squadCode.trim().toUpperCase() });
-                setHasJoinedSquad(false);
-                setAccessStatus(null);
+                // The whole Group session goes, the code staying in the box. Only two flags used
+                // to: the Group cancelled was offered as "Return to" on the next launch, and
+                // what this phone had of it (a reconnect lands here too) carried into the next.
+                endSquadSession(squadCode);
               }}
             >
               {WAITING.cancel}
