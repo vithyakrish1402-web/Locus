@@ -8,7 +8,7 @@ import { resolveSosRoom, recordSos, coalesceSos, toSosPayload, pendingSosFor, ac
 import {
   rememberMember, forgetMember, rebindReturningMember, collectStaleSocketIds,
   refuseJoin, addPendingRequest, takePendingRequest, withdrawPendingRequests, pendingRequestsOf,
-  isKnownMember, commanderOf,
+  isKnownMember, commanderOf, isKept,
 } from './squadRoster.js';
 import { toTelemetryRecord } from './telemetry.js';
 import { evaluateAlertPermission, DEFAULT_RULES_CONFIG } from './alertRules.js';
@@ -57,11 +57,20 @@ const MAX_ROOM_CODE_LENGTH = 64;        // the same cap the background endpoints
 const MAX_FRIEND_LOOKUPS_PER_MIN = 10;  // friend-list reads one person may set off
 const MAX_MESSAGES_PER_SEC = 30;        // events a second from one connection; the rest are dropped
 const MAX_MESSAGE_BYTES = 100_000;      // one event's size (socket.io's own default is 1 MB)
+// A dead phone is noticed within HEARTBEAT_INTERVAL_MS + HEARTBEAT_TIMEOUT_MS (15 s) rather
+// than socket.io's default 45 s, by the server and by the app alike (it follows these).
+const HEARTBEAT_INTERVAL_MS = 5000;
+const HEARTBEAT_TIMEOUT_MS = 10000;
+// How long a Group with nobody connected is kept, so that its members come back to it (no new
+// approvals) after everyone's phone has slept a while. The e2e tests shorten it.
+const EMPTY_GROUP_GRACE_MS = Number(process.env.LOCUS_EMPTY_GROUP_GRACE_MS) || 10 * 60 * 1000;
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
   maxHttpBufferSize: MAX_MESSAGE_BYTES,
+  pingInterval: HEARTBEAT_INTERVAL_MS,
+  pingTimeout: HEARTBEAT_TIMEOUT_MS,
 });
 
 // --- WHO IS ON EACH CONNECTION ---
@@ -170,9 +179,17 @@ const sweepTimer = setInterval(() => {
     // Someone still sharing their position from the background (presence.js) holds the squad
     // open: they count as activity, and as members, until their lease runs out.
     const held = hasPresence(squad, now);
-    const isStale = !held && now - (squad.lastActivity || 0) > ROOM_TTL_MS;
+    // Nobody connected is not "abandoned" at once: every phone in a Group can sleep for a
+    // minute (screens off, signal gone). It used to be deleted at the next sweep, so the first
+    // to come back was told the Group had ended, and everyone had to be approved again. Kept
+    // EMPTY_GROUP_GRACE_MS from when the last one dropped; the inactivity rule is for Groups
+    // that still have connections.
+    if (squad.members.length > 0 || held) delete squad.emptySince;
+    else squad.emptySince ??= now;
+    const abandoned = squad.members.length === 0 && !held && now - squad.emptySince >= EMPTY_GROUP_GRACE_MS;
+    const isStale = squad.members.length > 0 && !held && now - (squad.lastActivity || 0) > ROOM_TTL_MS;
 
-    if ((squad.members.length === 0 && !held) || isStale) {
+    if (abandoned || isStale) {
       console.log(`[🧹 SWEEP] Removing abandoned/stale squad: ${roomCode}`);
       deleteSquad(roomCode);
     }
@@ -348,6 +365,8 @@ function reportAlert(socket, squad, roomCode, type, verdict, now, extra = {}) {
   socket.emit('alert-result', {
     type, roomCode, allowed: verdict.allowed, mode: verdict.mode, reasonCode: verdict.reasonCode,
     ...(verdict.retryAfterSec ? { retryAfterSec: verdict.retryAfterSec } : {}),
+    // Which alert this answers, so the app can tell it from the answer to an earlier one.
+    ...(extra.clientId ? { clientId: extra.clientId } : {}),
   });
   if (squad.ownerId && squad.ownerId !== socket.id) io.to(squad.ownerId).emit('alert-log-entry', { roomCode, entry });
 }
@@ -806,8 +825,10 @@ socket.on('check-ping', (clientTimestamp) => {
 
     // Case 1: brand-new or fully abandoned room -> requester becomes the owner. A squad whose
     // members are all sharing from the background is not abandoned: starting afresh here would
-    // wipe its roster out from under them.
-    if (!existing || (existing.members.length === 0 && !hasPresence(existing, Date.now()))) {
+    // wipe its roster out from under them. Nor is one kept for its admitted members while nobody
+    // is connected (EMPTY_GROUP_GRACE_MS): its Commander comes back through Case 3, a member
+    // through Case 4, as if someone had stayed on.
+    if (!existing || (existing.members.length === 0 && !hasPresence(existing, Date.now()) && !isKept(existing))) {
       // A Commander resuming after a restart is not founding anything new: only creates count.
       if (intent !== 'resume' && !groupsFounded.check(requesterUid ?? socket.id).ok) {
         console.warn(`[GATE] Refused a new Group ${roomCode} from ${socket.id}: over ${MAX_GROUPS_PER_HOUR} an hour`);
@@ -1088,21 +1109,31 @@ socket.on('check-ping', (clientTimestamp) => {
     dropModerator(squad, targetUid);
     forgetSharingMode(squad, targetUid);
 
-    squad.members = squad.members.filter(id => id !== targetId);
-    if (squad.memberUids) delete squad.memberUids[targetId];
-    delete users[targetId];
-    delete locationCache[targetId];
+    // Every connection of theirs, not only the entry that was tapped: shown by their background
+    // sharing ('bg:' key), they could still have the app open, and that connection used to stay
+    // in the Group, getting everyone's positions and alerts, until it next reconnected.
+    const connections = [targetId, ...Object.keys(squad.memberUids ?? {}).filter(
+      (id) => id !== targetId && Boolean(targetUid) && squad.memberUids[id] === targetUid,
+    )];
+    squad.members = squad.members.filter(id => !connections.includes(id));
+    for (const id of connections) {
+      if (squad.memberUids) delete squad.memberUids[id];
+      delete users[id];
+      delete locationCache[id];
+    }
 
     console.log(`[🚫 ${block ? 'BLOCK' : 'KICK'}] ${role} removed node ${targetId} from ${roomCode}`);
     recordActivity(roomCode, {
       kind: block ? ACTIVITY.BLOCKED : ACTIVITY.KICKED, uid: targetUid, name: targetName,
       byUid: socket.data?.uid, byName: socket.data?.profile?.name,
     });
-    io.to(targetId).emit('exiled', { reason: block ? 'blocked' : 'kicked' });
-    // Same as a mutiny exile: off the roster AND out of the room, without relying on the
-    // removed client to leave when told. Otherwise a modified client stays subscribed to
-    // the squad it was removed from, and keeps receiving its locations and SOS alerts.
-    io.sockets.sockets.get(targetId)?.leave(roomCode);
+    for (const id of connections) {
+      io.to(id).emit('exiled', { reason: block ? 'blocked' : 'kicked' });
+      // Same as a mutiny exile: off the roster AND out of the room, without relying on the
+      // removed client to leave when told. Otherwise a modified client stays subscribed to
+      // the squad it was removed from, and keeps receiving its locations and SOS alerts.
+      io.sockets.sockets.get(id)?.leave(roomCode);
+    }
     broadcastSquadUpdate(roomCode);
     broadcastGroupRoles(roomCode);
     reply({ ok: true });
@@ -1364,22 +1395,34 @@ socket.on('check-ping', (clientTimestamp) => {
   // indistinguishable from a single ping on the client, plus lat/lng/timestamp
   // from the sender's payload were being silently discarded (only senderName was
   // ever destructured), so nothing downstream could show the sender's location.
+  // Every SOS is answered with 'alert-result', and the app says "sent" only once that answer has
+  // come (utils/sosOutbox.js), naming the alert by the `clientId` it was sent with.
   socket.on('sos-broadcast', (payload) => {
     const { senderName, lat, lng, roomCode: claimedRoomCode, timestamp } = payload ?? {};
+    const clientId = typeof payload?.clientId === 'string' && payload.clientId.length <= 64 ? payload.clientId : null;
     const roomCode = resolveSosRoom(activeSquads, users, socket.id, claimedRoomCode);
     if (!roomCode) {
       console.warn(`[🚨 SOS] Dropped: ${socket.id} (${senderName}) is not a member of any squad`);
+      // Answered too: unanswered, the app would keep trying an alert nobody can be sent.
+      socket.emit('alert-result', { type: 'sos', roomCode: typeof claimedRoomCode === 'string' ? claimedRoomCode : null, allowed: false, mode: 'blocked', reasonCode: 'NOT_IN_GROUP', ...(clientId ? { clientId } : {}) });
       return;
     }
     // One clock reading for both, so a live broadcast is reliably age 0 rather than
     // occasionally 1ms if the second Date.now() ticks over.
     const now = Date.now();
     const squad = activeSquads[roomCode];
+    const senderKey = memberKey(socket.data?.uid, socket.id);
+    // The same alert again: the phone never heard the answer to its first copy (the connection
+    // dropped), so it sent it once more. Answered as delivered, and neither relayed a second
+    // time nor refused by the cooldown its first copy started.
+    if (clientId && squad.sos?.[senderKey]?.clientId === clientId) {
+      socket.emit('alert-result', { type: 'sos', roomCode, allowed: true, mode: 'allow', reasonCode: null, clientId, duplicate: true });
+      return;
+    }
     // The only way an SOS is relayed: asked of alertRules.js first (see decideAlert). An
     // SOS is only ever refused by the Group Lead's switch, or by the quiet-zone setting
     // when that is 'blocked'; otherwise at worst it goes out flagged.
     const verdict = decideAlert({ type: 'sos', squad, senderId: socket.id, now });
-    const senderKey = memberKey(socket.data?.uid, socket.id);
     // Someone pressing it again and again: tell the Group Lead, quietly (not an alarm). Every
     // press counts, including the ones the cooldown refuses; not while SOS is switched off.
     if (verdict.reasonCode !== 'GROUP_DISABLED') {
@@ -1393,7 +1436,7 @@ socket.on('check-ping', (clientTimestamp) => {
     }
     if (!verdict.allowed) {
       console.log(`[🚨 SOS] Refused in ${roomCode}: ${verdict.reasonCode}`);
-      reportAlert(socket, squad, roomCode, 'sos', verdict, now);
+      reportAlert(socket, squad, roomCode, 'sos', verdict, now, clientId ? { clientId } : {});
       return;
     }
     console.log(`[🚨 SOS] ${senderName} triggered a distress beacon in ${roomCode}`);
@@ -1408,6 +1451,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // Pressing again while the last one is fresh updates it: no second alarm.
     const coalesced = coalesceSos(squad, details, now, SOS_COALESCE_SEC * 1000);
     const sos = coalesced ?? recordSos(squad, details, now);
+    if (clientId) sos.clientId = clientId;
     // The per-person cooldown (alertRules.js) counts from each new alarm.
     if (!coalesced) {
       squad.sosSentAt ??= Object.create(null);
@@ -1417,7 +1461,7 @@ socket.on('check-ping', (clientTimestamp) => {
       if (id !== socket.id && mayHear(sos, keyOf(squad, id))) io.to(id).emit(coalesced ? 'sos-updated' : 'sos-received', toSosPayload(sos, now));
     }
     sosWatch.notify(roomCode); // and the phones listening from the background
-    reportAlert(socket, squad, roomCode, 'sos', verdict, now, coalesced ? { coalesced: true } : {});
+    reportAlert(socket, squad, roomCode, 'sos', verdict, now, { ...(coalesced ? { coalesced: true } : {}), ...(clientId ? { clientId } : {}) });
   });
 
   // --- GROUP SWITCHES AND MUTES ---
@@ -1525,7 +1569,24 @@ socket.on('check-ping', (clientTimestamp) => {
   // Rooms are taken from the socket itself (socket.rooms), not just the roster, so
   // nothing it is still subscribed to can be missed even if the two have drifted apart.
   // (Mutiny exiles and blocks now detach the socket themselves; this is the backstop.)
-  socket.on('leave-squad', () => {
+  socket.on('leave-squad', (payload) => {
+    // A Leave (or sign-out) tapped while the phone was offline, sent on a later connection that is
+    // on no roster: it names the Group and brings sign-in proof, and is applied to that person.
+    // It used to be buffered and sent as a bare 'leave-squad' on the new connection, which removed
+    // nobody, so a Commander who left offline kept the Group from their stand-in for good.
+    const { roomCode: leftRoom, idToken } = payload ?? {};
+    if (typeof leftRoom === 'string' && idToken != null && !activeSquads[leftRoom]?.members.includes(socket.id)) {
+      idTokenVerifier.verifyIdToken(idToken)
+        .then((proof) => {
+          if (!proof.ok) return console.warn(`[GATE] Refused a late Leave from ${socket.id} for ${leftRoom}: ${proof.reason}`);
+          if (leaveByUid(leftRoom, proof.uid)) {
+            broadcastGroupRoles(leftRoom);
+            broadcastSquadUpdate(leftRoom);
+          }
+        })
+        .catch((err) => console.error(`[GATE] Late Leave from ${socket.id} failed:`, err));
+      return;
+    }
     // Logging out from the waiting room is a leave too: nothing left to approve.
     withdrawJoinRequests(null);
     const rooms = new Set([...socket.rooms].filter(room => room !== socket.id));
@@ -1676,12 +1737,48 @@ socket.on('check-ping', (clientTimestamp) => {
   // Tear down a person's superseded connection(s) after they've been rebound onto a new
   // socket: out of the room, and clear of the per-socket state that would otherwise keep
   // them on everyone's map as a second, frozen copy of themselves.
+  // A connection of theirs that is still alive is another phone signed in to the same account
+  // (this one's own old connection is dead): it is told, so it can say so and stop sharing,
+  // where it used to be cut off without a word and left with a frozen map.
   function purgeStaleSockets(roomCode, staleIds = []) {
     for (const staleId of staleIds) {
+      io.sockets.sockets.get(staleId)?.emit('signed-in-elsewhere', { roomCode });
       io.sockets.sockets.get(staleId)?.leave(roomCode);
       delete users[staleId];
       delete locationCache[staleId];
     }
+  }
+
+  // A Leave sent after the fact (the phone was offline when the person left), by who they are
+  // rather than by a connection. Ends the way a Leave on their own connection does: off the
+  // roster, no longer remembered, and a departing Commander's Group handed for good to whoever
+  // holds command. Returns whether they were in the Group.
+  function leaveByUid(roomCode, uid) {
+    const squad = activeSquads[roomCode];
+    if (!squad || !isKnownMember(squad, uid)) return false;
+    squad.memberUids ??= {};
+    const ids = Object.keys(squad.memberUids).filter((id) => squad.memberUids[id] === uid);
+    // Succession runs for one connection of theirs: one still on the roster, else the one holding
+    // command, else any, else a stand-in key for someone with none left (sharing from the background).
+    const departingId = ids.find((id) => squad.members.includes(id))
+      ?? (squad.ownerUid === uid && squad.ownerId ? squad.ownerId : undefined)
+      ?? ids[0] ?? presenceKey(uid);
+    squad.memberUids[departingId] = uid;
+    if (!squad.members.includes(departingId)) squad.members.push(departingId);
+    recordActivity(roomCode, { kind: ACTIVITY.LEFT, uid, name: nameOf(squad, departingId) });
+    dropModerator(squad, uid);
+    forgetSharingMode(squad, uid);
+    for (const id of ids) {
+      if (id !== departingId) {
+        squad.members = squad.members.filter((member) => member !== id);
+        delete squad.memberUids[id];
+      }
+      io.sockets.sockets.get(id)?.leave(roomCode);
+      delete users[id];
+      delete locationCache[id];
+    }
+    handleSquadSuccession(departingId);
+    return true;
   }
 
   function handleSquadSuccession(disconnectedId) {

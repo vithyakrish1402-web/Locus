@@ -114,10 +114,12 @@ export function rebindReturningMember(squad, { uid, socketId }) {
 //             restart comes back under its code.
 //
 // `isSocketLive` says whether a member's socket is still connected: a squad whose members
-// have all dropped off stays on file until the sweep reaches it (up to a minute), and a
-// JOIN must not be handed that squad as its caretaker Commander, which is founding a new
-// squad by another name. A CREATE is stricter: any squad still on file under the code,
-// live or not, counts as taken, so a new squad never inherits another's state.
+// have all dropped off stays on file for a while (server.js, EMPTY_GROUP_GRACE_MS), and a
+// stranger's JOIN must not be handed that squad as its caretaker Commander, which is founding
+// a new squad by another name. Someone already admitted is not a stranger: they are coming
+// back to their own Group, and used to be told it had ended because nobody else happened to be
+// connected at that moment. A CREATE is stricter: any squad still on file under the code, live
+// or not, counts as taken, so a new squad never inherits another's state.
 //
 // `holdsPresence` says the squad has members still sharing their position without a socket
 // (presence.js): it is then a live squad whatever its sockets say, not an abandoned one.
@@ -126,12 +128,16 @@ export function rebindReturningMember(squad, { uid, socketId }) {
 // carry on through the usual cases.
 export function refuseJoin(squad, { intent, uid, isSocketLive = () => true, holdsPresence = false }) {
   const members = squad?.members ?? [];
-  if (intent === 'join' && !members.some(isSocketLive) && !holdsPresence) return 'squad-not-found';
-  if (intent === 'create' && (members.length > 0 || holdsPresence) && !(uid && (squad.ownerUid === uid || commanderOf(squad) === uid))) {
+  if (intent === 'join' && !members.some(isSocketLive) && !holdsPresence && !isKnownMember(squad, uid)) return 'squad-not-found';
+  if (intent === 'create' && (members.length > 0 || holdsPresence || isKept(squad)) && !(uid && (squad.ownerUid === uid || commanderOf(squad) === uid))) {
     return 'squad-code-taken';
   }
   return null;
 }
+
+// A squad with nobody connected that is still on file for its admitted members to come back
+// to (server.js, EMPTY_GROUP_GRACE_MS). Squads from clients that send no uid have none.
+export const isKept = (squad) => Boolean(squad?.knownUids?.length);
 
 // --- Join requests awaiting the Commander -------------------------------------
 //
