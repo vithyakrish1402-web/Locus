@@ -110,8 +110,20 @@ export const LOBBY = {
   // The server couldn't confirm who this is (its sign-in check failed twice).
   signInUnproven: "We couldn't confirm your sign-in. Sign out, sign back in, and try again.",
   tooManyGroups: "You've started a lot of groups in the last hour. Wait a while, or join an existing one.",
+  // The same account came into the Group on another phone, which now has it.
+  signedInElsewhere: "You signed in on another phone, so your group moved there. This phone has stopped sharing your location.",
   // Opening the app after background sharing ended because the server lost the Group.
   groupEndedRestart: 'Your Group ended (the server restarted). Rejoin with the code.',
+};
+
+// Signed in to an account with no name (saving it when the account was made failed): asked for
+// first, so the group never sees a nameless member.
+export const NAME_NEEDED = {
+  title: 'What should your group call you?',
+  body: 'Your account was made, but its name did not save. Your group sees this name.',
+  label: 'Your name',
+  save: 'Save name',
+  failed: "Couldn't save your name. Check your connection and try again.",
 };
 
 // Opening LOCUS again (after a swipe, or from the sharing notification) while this phone still

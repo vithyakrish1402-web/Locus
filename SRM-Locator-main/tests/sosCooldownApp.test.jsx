@@ -162,11 +162,12 @@ const settings = (over = {}) => ({
 const emitted = (event) => fakeSocket.emit.mock.calls.filter(([e]) => e === event);
 
 describe('an SOS the server refuses', () => {
-  it('takes back the "sent" notice and says how long until another can go', async () => {
+  it('never says "sent", and says how long until another can go', async () => {
     await onTheMap();
     await holdTwice();
     expect(sent()).toHaveLength(1);
-    expect(noticeUp(SOS_SENT.title)).toBe(true);
+    // "Sent" waits for the server's answer (utils/sosOutbox.js), and this answer is a refusal.
+    expect(noticeUp(SOS_SENT.title)).toBe(false);
     act(() => fakeSocket.receive('alert-result', { type: 'sos', roomCode: code, allowed: false, mode: 'blocked', reasonCode: 'COOLDOWN', retryAfterSec: 150 }));
     expect(noticeUp(SOS_SENT.title)).toBe(false);
     const refused = feed.find((n) => n.message === SOS_REFUSED.title);

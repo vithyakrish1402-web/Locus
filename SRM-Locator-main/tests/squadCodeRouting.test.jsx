@@ -180,6 +180,19 @@ describe('what the app asks the server for', () => {
     expect(lastJoinRequest()).toMatchObject({ roomCode: 'KTR7X9', intent: 'join' });
   });
 
+  it('a stand-in holding command re-joins after a reconnect, never resumes: the Group is its Commander\'s', () => {
+    // A stand-in used to resume, and after a server restart could get there before the real
+    // Commander: the Group became theirs, and its Commander waited for their approval.
+    localStorage.removeItem('locus.group'); // no Group from an earlier test to go back to
+    render(<App />);
+    joinSquad('KTR7X9');
+    act(() => fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode: 'KTR7X9' }));
+    act(() => fakeSocket.receive('promoted-to-owner', { roomCode: 'KTR7X9' }));
+    act(() => fakeSocket.receive('group-role', { roomCode: 'KTR7X9', role: 'admin', moderatorIds: [], ownAdmin: false }));
+    act(() => fakeSocket.receive('connect'));
+    expect(lastJoinRequest()).toMatchObject({ roomCode: 'KTR7X9', intent: 'join' });
+  });
+
   it('a Commander the server has put back in a waiting room re-joins, rather than resuming', () => {
     // Their squad was lost and re-founded under its code by someone else (a build that
     // predates intents still founds squads on JOIN), so resuming queued them as a joiner.

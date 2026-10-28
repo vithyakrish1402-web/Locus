@@ -86,7 +86,7 @@ import LocationExplainer from './components/LocationExplainer';
 import { locationKnownAllowed, locationPermissionGranted, rememberLocationAllowed } from './utils/locationPermission';
 import { cameraKnownAllowed, cameraPermissionGranted, rememberCameraAllowed } from './utils/cameraPermission';
 import { NOTICES, OS_NOTICES } from './copy/notices';
-import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NOT_APPROVED, RESET, RESUME, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
+import { AUTH_PROBLEMS, CREATE_ACCOUNT, LOBBY, NAME_NEEDED, NOT_APPROVED, RESET, RESUME, SIGN_IN, WAITING, YOURE_IN, firstNameOf } from './copy/access';
 import { authProblem } from './utils/authProblems';
 import ARCompass from './ARCompass';
 import { arTargetForMember, followArTarget } from './utils/arTags';
@@ -142,7 +142,9 @@ import { LAYER } from './utils/layers';
 import { deriveGhostMembers, GHOST_FADE_MS } from './utils/ghostProjection';
 import { generateRandomSquadCode } from './utils/squadCode';
 import { createSosOutbox } from './utils/sosOutbox';
-import { SOS_HELD, SOS_SENT, SOS_DROPPED, SOS_REFUSED } from './copy/emergency';
+import { manageSendQueue } from './utils/sendQueue';
+import { rememberLeave, pendingLeave, forgetLeave } from './utils/pendingLeave';
+import { SOS_HELD, SOS_UNCONFIRMED, SOS_SENT, SOS_DROPPED, SOS_REFUSED } from './copy/emergency';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -175,6 +177,47 @@ const socket = io(BACKEND_URL, {
   upgrade: false
 });
 
+// Positions, heartbeats and the latency probe: dropped while there is no connection rather than
+// saved up (utils/sendQueue.js), since the next one is fresh anyway. Test sockets have no volatile.
+const emitLive = (...args) => (socket.volatile ?? socket).emit(...args);
+// Whatever else is saved up while offline is capped, aged out and sent back in batches.
+if (socket.io?.on) manageSendQueue(socket);
+// The phone says its network has gone: the connection is dropped at once, and socket.io starts
+// trying to reconnect, rather than it looking alive until its heartbeat runs out (up to 15 s).
+if (typeof window !== 'undefined') {
+  window.addEventListener('offline', () => socket.io?.engine?.close());
+  window.addEventListener('online', () => {
+    if (!socket.connected) socket.connect();
+  });
+}
+
+// A Leave or sign-out tapped while offline (utils/pendingLeave.js) goes first on the next
+// connection, with the sign-in proof kept for it: that connection is on no roster, so a bare
+// 'leave-squad' would remove nobody. Registered before App's own 'connect' handler (a rejoin).
+socket.on('connect', () => {
+  const leave = pendingLeave();
+  if (!leave) return;
+  forgetLeave();
+  socket.emit('leave-squad', { roomCode: leave.roomCode, idToken: leave.idToken });
+});
+// Leaving, or signing out of, a Group. Connected, as it always was. Offline, the Leave is kept
+// with sign-in proof to send once back (above); the screen leaves at once either way.
+const sendLeave = async (roomCode) => {
+  if (socket.connected) {
+    socket.emit('leave-squad');
+    return;
+  }
+  const uid = auth.currentUser?.uid;
+  if (!roomCode || !uid) return;
+  let idToken = null;
+  try {
+    idToken = await auth.currentUser.getIdToken();
+  } catch {
+    // Offline with a token too old to use: the server can't be told who is leaving.
+  }
+  if (idToken) rememberLeave({ roomCode, uid, idToken });
+};
+
 // Every join carries proof of who is asking: the server takes the uid from this Firebase ID
 // token, never from the payload (backend/server.js, WHO IS ON EACH CONNECTION). The last join
 // is kept so that one the server refused can be tried once more with a fresh token.
@@ -183,6 +226,9 @@ let joinRetried = false;
 const emitJoin = async (payload, { retry = false } = {}) => {
   lastJoin = payload;
   if (!retry) joinRetried = false;
+  // Back into the Group they had left offline, before that Leave could be sent: it is void.
+  const leave = pendingLeave();
+  if (leave && leave.roomCode === payload.roomCode && leave.uid === payload.user?.uid) forgetLeave();
   // Nobody signed in to Firebase, so no token to fetch: sent as it is, at once.
   if (!auth.currentUser) {
     socket.emit('request-join', payload);
@@ -435,6 +481,9 @@ const App = () => {
   const [isSatellite, setIsSatellite] = useState(false);
   const [latency, setLatency] = useState(0);
   const [username, setUsername] = useState('');
+  // The name asked for when an account has none (NAME_NEEDED).
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameState, setNameState] = useState({ saving: false, failed: false });
   // --- MOBILE VIEW STATE ---
   // Controls which panel is active on mobile bottom HUD: 'grid' | 'matrix' | 'squad' | 'cmd'
   const [mobileView, setMobileView] = useState('grid');
@@ -475,12 +524,17 @@ const App = () => {
     sosOutbox.reset(); // a fresh app: nothing held, not in a group yet
     const unsubscribe = sosOutbox.subscribe(({ held, event, reason, late, withLocation }) => {
       setSosHeld(held);
+      if (heldNoticeRef.current !== null) dismissNotice(heldNoticeRef.current);
+      heldNoticeRef.current = null;
       if (event === 'held') {
         heldNoticeRef.current = notify.warning(SOS_HELD.title, { body: SOS_HELD.body, duration: 0, safety: true });
         return;
       }
-      if (heldNoticeRef.current !== null) dismissNotice(heldNoticeRef.current);
-      heldNoticeRef.current = null;
+      // Sent, and no word from the server yet: it keeps going, and this stays up until it has.
+      if (event === 'unconfirmed') {
+        heldNoticeRef.current = notify.warning(SOS_UNCONFIRMED.title, { body: SOS_UNCONFIRMED.body, duration: 0, safety: true });
+        return;
+      }
       if (event === 'sent') {
         // Said only once it has gone (E3). No buzz of its own: sending feels as it always did.
         const mode = telemetryModeRef.current;
@@ -503,7 +557,9 @@ const App = () => {
   useEffect(() => {
     const onSettings = (settings) => setGroupSettings(settings ?? null);
     const onResult = (result) => {
-      if (result?.type !== 'sos' || result.allowed) return;
+      // NOT_IN_GROUP only means a copy reached the server before this phone was back in its
+      // Group: the outbox sends it again once it is (utils/sosOutbox.js), so it isn't a refusal.
+      if (result?.type !== 'sos' || result.allowed || result.reasonCode === 'NOT_IN_GROUP') return;
       if (sentNoticeRef.current !== null) dismissNotice(sentNoticeRef.current);
       sentNoticeRef.current = null;
       const body = result.reasonCode === 'COOLDOWN' ? SOS_REFUSED.cooldown(result.retryAfterSec ?? 1)
@@ -1109,7 +1165,7 @@ const App = () => {
 
     // Send a ping every 2 seconds
     const pingInterval = setInterval(() => {
-      socket.emit('check-ping', Date.now());
+      emitLive('check-ping', Date.now());
     }, 2000);
 
     // Listen for the bounce and calculate the round trip time
@@ -1121,6 +1177,35 @@ const App = () => {
     return () => {
       clearInterval(pingInterval);
       socket.off('pong-bounce');
+    };
+  }, [hasJoinedSquad]);
+
+  // In a Group with no connection: said, and kept up until it is back. Nothing said it before, and
+  // a dead connection looked alive for up to 45 s. Now it is noticed within 15 s (the server's
+  // heartbeat), or at once when the phone itself reports the network gone (see emitLive above).
+  // A blip of under OFFLINE_NOTICE_DELAY_MS says nothing.
+  useEffect(() => {
+    if (!hasJoinedSquad) return;
+    const OFFLINE_NOTICE_DELAY_MS = 2000;
+    let timer = null;
+    let notice = null;
+    const onDisconnect = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!socket.connected && notice === null) notice = notify.warning(NOTICES.offline.title, { body: NOTICES.offline.body, duration: 0 });
+      }, OFFLINE_NOTICE_DELAY_MS);
+    };
+    const onConnect = () => {
+      clearTimeout(timer);
+      if (notice !== null) dismissNotice(notice);
+      notice = null;
+    };
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect', onConnect);
+    return () => {
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect', onConnect);
+      onConnect();
     };
   }, [hasJoinedSquad]);
   // ---  UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
@@ -1507,7 +1592,7 @@ const App = () => {
       // The position taken when they paused, never a newer one; same fields as ever.
       const paused = telemetryModeRef.current === 'FROZEN' ? pausedPositionRef.current : null;
       if (paused && user) {
-        socket.emit('update-location', {
+        emitLive('update-location', {
           name: user.displayName, photo: user.photoURL,
           ...paused.position,
           speed: 0, battery: 100,
@@ -1594,6 +1679,20 @@ const App = () => {
       notify.info(NOTICES.leadIsBack);
     });
 
+    // This account has just come into the Group on another phone, and the server has moved it
+    // there. This phone leaves the Group screen (and stops sharing for it) and says why. It sends
+    // no Leave: the person is still in the Group, on the other phone. This phone used to be cut
+    // off without a word, its map frozen.
+    socket.on('signed-in-elsewhere', (payload) => {
+      if (!isAboutThisSquad(payload)) return;
+      stopBackgroundSharing();
+      endSquadSession();
+      setLobbyNotice(LOBBY.signedInElsewhere);
+    });
+
+    // A stand-in holds command (the server's group-role says ownAdmin: false), but the Group is
+    // not theirs: only its own Commander may re-create it after a restart.
+    const standingIn = groupRole?.roomCode === currentRoom && groupRole.ownAdmin === false;
     const onConnect = () => {
       console.log("[SYS_SOCKET] Reconnected to network mainframe.");
       if (hasJoinedSquad && squadCode && user) {
@@ -1602,8 +1701,10 @@ const App = () => {
           user: { name: user.displayName, photo: user.photoURL, uid: user.uid },
           // A Commander resumes their squad, which re-creates it under its code if the
           // server lost it (a restart wipes every squad). Anyone else only ever re-joins —
-          // a member, or a joiner still waiting — and must never found a squad of their own.
-          intent: accessStatus === 'granted' && squadRole === 'OWNER' ? 'resume' : 'join',
+          // a member, a stand-in, or a joiner still waiting — and must never found a squad of
+          // their own. A stand-in used to resume too, and after a restart could get there first:
+          // the Group became theirs, and its real Commander waited for their approval.
+          intent: accessStatus === 'granted' && squadRole === 'OWNER' && !standingIn ? 'resume' : 'join',
         });
       }
     };
@@ -1621,9 +1722,10 @@ const App = () => {
       socket.off('access-request-withdrawn');
       socket.off('promoted-to-owner');
       socket.off('demoted-to-member');
+      socket.off('signed-in-elsewhere');
       socket.off('connect', onConnect);
     };
-  }, [hasJoinedSquad, squadCode, user, requestSosSync, accessStatus, squadRole, endSquadSession]);
+  }, [hasJoinedSquad, squadCode, user, requestSosSync, accessStatus, squadRole, groupRole, endSquadSession]);
 
   // What an update-location carries of where this phone is: nothing while Hidden. The status
   // still goes, so the group (and the activity log) know this member is hidden; the position
@@ -1663,7 +1765,7 @@ const App = () => {
 
         // Paused: this effect re-runs on a settings change too, and must not leak a new fix.
         if (telemetryModeRef.current === 'FROZEN') return;
-        socket.emit('update-location', {
+        emitLive('update-location', {
           name: user.displayName, photo: user.photoURL,
           ...sharedPosition(fix),
           speed: 0, battery: 100,
@@ -1700,7 +1802,7 @@ const App = () => {
       // used to carry the live fix every beat, so "FROZEN" never froze anything.
       const paused = telemetryModeRef.current === 'FROZEN' ? pausedPositionRef.current : null;
       if (telemetryModeRef.current === 'ACTIVE' || paused) {
-        socket.emit('safety-ping', {
+        emitLive('safety-ping', {
           latitude: paused ? paused.position.lat : currentLoc.lat,
           longitude: paused ? paused.position.lng : currentLoc.lng,
           timestamp: new Date(paused ? paused.at : Date.now()).toISOString(),
@@ -1709,7 +1811,7 @@ const App = () => {
       }
 
       if (telemetryModeRef.current === 'ACTIVE') {
-        socket.emit('update-location', {
+        emitLive('update-location', {
           name: user.displayName, photo: user.photoURL,
           ...positionFor(currentLoc),
           speed: 0, battery: currentBattery,
@@ -1748,7 +1850,7 @@ const App = () => {
 
         // NOTE: watchPosition still fires on physical movement. If you want strict ECO mode
         // to override movement-based updates, you'd need to clear this watch and rely purely on the interval.
-        socket.emit('update-location', {
+        emitLive('update-location', {
           name: user.displayName, photo: user.photoURL,
           ...sharedPosition(fix),
           speed: speed ? Math.round(speed * 3.6) : 0,
@@ -1793,7 +1895,7 @@ const App = () => {
       pausedPositionRef.current = { position, heading: headingRef.current, at: Date.now() };
     }
     setPausedHasSpot(pausedPositionRef.current !== null);
-    socket.emit('update-location', {
+    emitLive('update-location', {
       name: user.displayName, photo: user.photoURL,
       ...(telemetryMode === 'GHOST' ? {} : position),
       speed: 0, battery: 100,
@@ -2006,13 +2108,23 @@ const App = () => {
           // 4. Attach the data to their Firebase Profile. The name is saved as typed. Accounts
           // made before the redesign keep the capitals they were saved with; nothing compares
           // names (members, blocks and approvals all go by uid), so the two can sit side by side.
-          await updateProfile(userCredential.user, {
-            displayName: username.trim(),
-            photoURL: generatedAvatar
-          });
+          // Tried twice. The account exists and is signed in by now, so a failure is no longer
+          // a sign-up problem: it used to be returned to a sign-up screen already gone, and the
+          // nameless account showed to its group as "Squad Node". It is asked for instead
+          // (NAME_NEEDED, below), before anything else.
+          const profile = { displayName: username.trim(), photoURL: generatedAvatar };
+          let named = false;
+          for (let attempt = 0; attempt < 2 && !named; attempt += 1) {
+            try {
+              await updateProfile(userCredential.user, profile);
+              named = true;
+            } catch {
+              if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+          }
 
           // 5. Force React to recognize the newly attached data immediately
-          setUser({ ...userCredential.user, displayName: username.trim(), photoURL: generatedAvatar });
+          setUser(named ? { ...userCredential.user, ...profile } : { ...userCredential.user, displayName: null });
 
         } else {
           // VERIFY EXISTING CREDENTIALS
@@ -2030,10 +2142,13 @@ const App = () => {
   // ---  KILL SWITCH LOGOUT HANDLER ---
   const handleLogout = () => {
     stopBackgroundSharing();
-    socket.emit('leave-squad');
+    const online = socket.connected;
+    const leaving = sendLeave(hasJoinedSquad ? squadCode.trim().toUpperCase() : null);
     endSquadSession();
     setLiveLocation(null);
-    signOut(auth);
+    // Offline, only once the Leave has its sign-in proof, which signing out would take away.
+    if (online) signOut(auth);
+    else leaving.finally(() => signOut(auth));
     setLocationError(null);
   };
 
@@ -2042,7 +2157,7 @@ const App = () => {
   // handleJoinSquad's comment.
   const handleLeaveSquad = () => {
     stopBackgroundSharing();
-    socket.emit('leave-squad');
+    sendLeave(squadCode.trim().toUpperCase());
     endSquadSession();
   };
 
@@ -2843,6 +2958,42 @@ const App = () => {
           loginMethod={loginMethod}
           latency={latency}
         />
+      </>
+    );
+  }
+
+  // Signed in to an account with no name (its name failed to save when it was made): asked for
+  // before any Group, so nobody joins as a nameless member.
+  if (user && !hasJoinedSquad && !user.displayName?.trim()) {
+    const saveName = async () => {
+      const name = nameDraft.trim();
+      if (!name || !auth.currentUser) return;
+      setNameState({ saving: true, failed: false });
+      try {
+        await updateProfile(auth.currentUser, { displayName: name });
+        setUser({ ...auth.currentUser, displayName: name });
+        setNameState({ saving: false, failed: false });
+      } catch {
+        setNameState({ saving: false, failed: true });
+      }
+    };
+    return (
+      <>
+        {beforeMapOverlay}
+        <StatusScreen
+          testId="name-needed"
+          icon={<AlertCircle size={40} />}
+          title={NAME_NEEDED.title}
+          action={(
+            <Button block size="large" disabled={!nameDraft.trim() || nameState.saving} onClick={saveName}>
+              {NAME_NEEDED.save}
+            </Button>
+          )}
+        >
+          <p>{NAME_NEEDED.body}</p>
+          <TextField label={NAME_NEEDED.label} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} autoComplete="name" />
+          {nameState.failed && <InlineMessage>{NAME_NEEDED.failed}</InlineMessage>}
+        </StatusScreen>
       </>
     );
   }

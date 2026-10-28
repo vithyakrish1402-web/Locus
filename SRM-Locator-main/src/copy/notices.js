@@ -28,6 +28,11 @@ export const NOTICES = {
     cleared: 'Rally point cleared.',
   },
   leadIsBack: 'The Group Lead is back. You are a member again.',
+  // In a Group with no connection (App.jsx): up until it is back.
+  offline: {
+    title: "You're offline",
+    body: 'Your group sees your last shared location. LOCUS reconnects by itself.',
+  },
   // Once per phone, when the alerts can't ring through the phone's own Do Not Disturb yet (App.jsx).
   dndAccess: {
     title: 'Let an SOS ring through Do Not Disturb',

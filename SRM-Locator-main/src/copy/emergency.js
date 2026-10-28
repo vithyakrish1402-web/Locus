@@ -7,6 +7,12 @@ export const SOS_HELD = {
   body: "Your alert will send when you're back online. If you need help right now, call 112.",
 };
 
+// Sent, but the server hasn't said it got it (utils/sosOutbox.js): still trying, never "sent".
+export const SOS_UNCONFIRMED = {
+  title: 'Not delivered yet. Retrying',
+  body: "Your group hasn't got your alert yet. LOCUS keeps sending it. If you need help right now, call 112.",
+};
+
 // Sent (E3). The location line says "last known": the phone sends the latest fix it has.
 export const SOS_SENT = {
   title: 'Emergency alert sent to your group',
