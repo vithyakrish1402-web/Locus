@@ -45,6 +45,7 @@ beforeAll(async () => {
     LOCUS_LEASE_MAX_SEC: '1',
     LOCUS_PRESENCE_CHECK_MS: '30',
     LOCUS_SWEEP_INTERVAL_MS: '100',
+    LOCUS_EMPTY_GROUP_GRACE_MS: '100', // an empty Group is kept a while for its members; here, briefly
     LOCUS_ROOM_TTL_MS: '600',
     LOCUS_CLASS_CLOCK_ISO: '2026-01-04T10:00:00Z',
     LOCUS_FORCE_CLASS_HOURS: '',

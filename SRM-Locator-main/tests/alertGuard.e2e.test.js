@@ -535,7 +535,7 @@ describe('settings outliving the Group', () => {
   const api = e2eServer({
     env: {
       LOCUS_QUIET_ZONES_ENABLED: 'true', LOCUS_CLASS_CLOCK_ISO: DURING_CLASS, LOCUS_SETTINGS_FILE: file,
-      LOCUS_ROOM_TTL_MS: '600', LOCUS_SWEEP_INTERVAL_MS: '100',
+      LOCUS_ROOM_TTL_MS: '600', LOCUS_SWEEP_INTERVAL_MS: '100', LOCUS_EMPTY_GROUP_GRACE_MS: '100',
     },
   });
 

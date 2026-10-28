@@ -20,7 +20,9 @@ const TTL_MS = 600;
 const SWEEP_MS = 100;
 
 const { connect, createSquad, admit, requestJoin, newRoom } = e2eServer({
-  env: { LOCUS_ROOM_TTL_MS: String(TTL_MS), LOCUS_SWEEP_INTERVAL_MS: String(SWEEP_MS) },
+  // A Group nobody is connected to is kept a while for its members (server.js, EMPTY_GROUP_GRACE_MS);
+  // here one sweep long, so these tests can watch it go.
+  env: { LOCUS_ROOM_TTL_MS: String(TTL_MS), LOCUS_SWEEP_INTERVAL_MS: String(SWEEP_MS), LOCUS_EMPTY_GROUP_GRACE_MS: String(SWEEP_MS) },
 });
 
 // What the app does while it's in a squad, fix or no fix: App.jsx's latency tracker
