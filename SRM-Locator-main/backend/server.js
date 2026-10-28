@@ -1641,8 +1641,12 @@ socket.on('check-ping', (clientTimestamp) => {
       const sharingUid = squad ? (squad.memberUids?.[socket.id] || socket.data?.uid) : null;
       const stillSharing = Boolean(sharingUid) && Boolean(presenceOf(squad, sharingUid, Date.now()));
 
-      // TRIGGER DEAD MAN'S SWITCH 
-      if (lastLocation && squad && !stillSharing) {
+      // TRIGGER DEAD MAN'S SWITCH
+      // Not for a member sharing as Hidden: no position is kept for them, and announcing that they
+      // dropped off is itself telling the Group about someone who chose not to be seen. It used
+      // to go out with no position, which also stopped the free map on every phone that drew it.
+      const hasPosition = Number.isFinite(lastLocation?.lat ?? lastLocation?.latitude);
+      if (lastLocation && hasPosition && squad && !stillSharing) {
         
         // 1. Calculate the exact time in the dark (in seconds)
         const lastSeenTime = lastLocation.lastSeen || Date.now(); 
