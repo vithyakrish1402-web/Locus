@@ -99,7 +99,7 @@ public class LocusBackgroundPlugin extends Plugin {
             notifyListeners("groupOpened", new JSObject(), true);
             return;
         }
-        if (!SosLaunch.isSosIntent(intent)) return;
+        if (!SosLaunch.isSosIntent(getContext(), intent)) return;
         JSObject data = new JSObject();
         data.put("id", intent.getStringExtra(SosLaunch.EXTRA_ID));
         data.put("senderId", intent.getStringExtra(SosLaunch.EXTRA_UID));

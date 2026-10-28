@@ -4,8 +4,13 @@ import android.app.Activity;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.view.WindowManager;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 
 import com.locus.app.MainActivity;
 
@@ -25,6 +30,9 @@ public final class SosLaunch {
     public static final String EXTRA_AGE_MS = "sos_age_ms";
     public static final String EXTRA_POSTED_AT = "sos_posted_at";
     public static final String EXTRA_TIMESTAMP = "sos_timestamp";
+    public static final String EXTRA_KEY = "sos_key";
+    private static final String PREFS = "locus_sos_launch";
+    private static final String PREF_KEY = "key";
 
     // True while this launch is showing over the lock screen, so acknowledging can hand the phone back to it.
     private static volatile boolean overLock = false;
@@ -40,7 +48,8 @@ public final class SosLaunch {
             .putExtra(EXTRA_UID, alert.senderUid)
             .putExtra(EXTRA_AGE_MS, alert.ageMs)
             .putExtra(EXTRA_POSTED_AT, postedAtMs)
-            .putExtra(EXTRA_TIMESTAMP, alert.timestamp);
+            .putExtra(EXTRA_TIMESTAMP, alert.timestamp)
+            .putExtra(EXTRA_KEY, launchKey(context));
         if (alert.senderName != null) intent.putExtra(EXTRA_NAME, alert.senderName);
         if (alert.hasLocation()) {
             intent.putExtra(EXTRA_LAT, alert.lat);
@@ -49,8 +58,34 @@ public final class SosLaunch {
         return intent;
     }
 
-    public static boolean isSosIntent(Intent intent) {
-        return intent != null && ACTION_OPEN.equals(intent.getAction()) && intent.getStringExtra(EXTRA_ID) != null;
+    /**
+     * Whether {@code intent} is an SOS launch LOCUS itself made. MainActivity has to be exported (it
+     * is the launcher), so any app on the phone can start it with this action and a made-up alert:
+     * that used to light the screen over the lock screen and sound the alarm. Only an intent that
+     * carries this install's launch key, kept in LOCUS's private storage where no other app can read
+     * it, counts as an SOS. Anything else opens the app as an ordinary start would.
+     */
+    public static boolean isSosIntent(Context context, Intent intent) {
+        if (intent == null || !ACTION_OPEN.equals(intent.getAction()) || intent.getStringExtra(EXTRA_ID) == null) return false;
+        String key = intent.getStringExtra(EXTRA_KEY);
+        return key != null && MessageDigest.isEqual(
+            key.getBytes(StandardCharsets.UTF_8), launchKey(context).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** A random key, made once per install the first time it is needed. */
+    private static synchronized String launchKey(Context context) {
+        SharedPreferences prefs = context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String key = prefs.getString(PREF_KEY, null);
+        if (key == null) {
+            byte[] bytes = new byte[16];
+            new SecureRandom().nextBytes(bytes);
+            StringBuilder hex = new StringBuilder();
+            for (byte b : bytes) hex.append(String.format("%02x", b));
+            key = hex.toString();
+            // Written before any notification can carry it, so a tap after a restart still matches.
+            prefs.edit().putString(PREF_KEY, key).commit();
+        }
+        return key;
     }
 
     /**
@@ -60,7 +95,7 @@ public final class SosLaunch {
      * The phone is not unlocked: whoever picks it up still has to.
      */
     public static void prepareWindow(Activity activity, Intent intent) {
-        if (!isSosIntent(intent)) return;
+        if (!isSosIntent(activity, intent)) return;
         overLock = isLocked(activity);
         if (Build.VERSION.SDK_INT >= 27) {
             activity.setShowWhenLocked(true);

@@ -175,6 +175,31 @@ const socket = io(BACKEND_URL, {
   upgrade: false
 });
 
+// Every join carries proof of who is asking: the server takes the uid from this Firebase ID
+// token, never from the payload (backend/server.js, WHO IS ON EACH CONNECTION). The last join
+// is kept so that one the server refused can be tried once more with a fresh token.
+let lastJoin = null;
+let joinRetried = false;
+const emitJoin = async (payload, { retry = false } = {}) => {
+  lastJoin = payload;
+  if (!retry) joinRetried = false;
+  // Nobody signed in to Firebase, so no token to fetch: sent as it is, at once.
+  if (!auth.currentUser) {
+    socket.emit('request-join', payload);
+    return;
+  }
+  let idToken;
+  try {
+    idToken = await auth.currentUser.getIdToken(retry);
+  } catch {
+    // No token to be had right now: the server decides what a join without one gets.
+  }
+  // Someone else signed in while the token was fetched: this join is no longer theirs to send.
+  const signedIn = auth.currentUser?.uid;
+  if (signedIn && signedIn !== payload.user?.uid) return;
+  socket.emit('request-join', { ...payload, idToken });
+};
+
 // The Emergency alert's way out (utils/sosOutbox.js): straight to the group when it can be
 // reached, held until this phone is back in its group when it can't. One per app, like the socket.
 const sosOutbox = createSosOutbox(socket);
@@ -992,7 +1017,7 @@ const App = () => {
     const targetRoom = squadCode.trim().toUpperCase();
 
     // 1. Send the knock to the server FIRST
-    socket.emit('request-join', {
+    emitJoin({
       roomCode: targetRoom,
       user: { name: user.displayName, photo: user.photoURL, uid: user.uid },
       // Which of the two this is. The server used to have to guess, and guessed "create if
@@ -1531,6 +1556,18 @@ const App = () => {
       returnToLobby(LOBBY.codeTaken, generateRandomSquadCode());
     });
 
+    // The server would not take this join: the sign-in behind it didn't check out (tried once
+    // more with a freshly minted token first), or this person has founded too many Groups lately.
+    socket.on('join-refused', (payload) => {
+      if (!isAboutThisSquad(payload)) return;
+      if (payload.reason === 'identity' && lastJoin && !joinRetried) {
+        joinRetried = true;
+        emitJoin(lastJoin, { retry: true });
+        return;
+      }
+      returnToLobby(payload.reason === 'too-many-groups' ? LOBBY.tooManyGroups : LOBBY.signInUnproven);
+    });
+
     // One entry per request: the server re-sends a squad's queue to whoever takes over as
     // its Commander (a reconnect, a promotion), which must not stack duplicates.
     socket.on('access-request', (requestData) => {
@@ -1560,7 +1597,7 @@ const App = () => {
     const onConnect = () => {
       console.log("[SYS_SOCKET] Reconnected to network mainframe.");
       if (hasJoinedSquad && squadCode && user) {
-        socket.emit('request-join', {
+        emitJoin({
           roomCode: squadCode,
           user: { name: user.displayName, photo: user.photoURL, uid: user.uid },
           // A Commander resumes their squad, which re-creates it under its code if the
@@ -1579,6 +1616,7 @@ const App = () => {
       socket.off('access-denied');
       socket.off('squad-not-found');
       socket.off('squad-code-taken');
+      socket.off('join-refused');
       socket.off('access-request');
       socket.off('access-request-withdrawn');
       socket.off('promoted-to-owner');
@@ -2031,7 +2069,7 @@ const App = () => {
     setSquadCode(offer.code);
     setAccessStatus('returning');
     setHasJoinedSquad(true);
-    socket.emit('request-join', {
+    emitJoin({
       roomCode: offer.code,
       user: { name: user.displayName, photo: user.photoURL, uid: user.uid },
       intent: 'join',
@@ -3052,7 +3090,9 @@ const App = () => {
                 }}
                 hasMeetingPoint={Boolean(activeWaypoint)}
                 onRemoveMeetingPoint={() => socket.emit('clear-waypoint', squadCode)}
-                sos={groupSettings?.roomCode === squadCode && Array.isArray(groupSettings.sosCooldownPresetsMs) ? {
+                // The Emergency switch and cooldown are the Group's own Commander's alone (the
+                // server's canChangeSettings): a moderator or a stand-in was shown them, then refused.
+                sos={isOwnAdmin && groupSettings?.roomCode === squadCode && Array.isArray(groupSettings.sosCooldownPresetsMs) ? {
                   enabled: groupSettings.sosEnabled !== false,
                   cooldownMs: groupSettings.sosCooldownMs,
                   presetsMs: groupSettings.sosCooldownPresetsMs,

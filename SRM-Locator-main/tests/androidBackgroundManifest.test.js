@@ -59,7 +59,23 @@ describe('what background sharing asks the phone for', () => {
     expect(activity).toMatch(/SosLaunch\.prepareWindow\(this, getIntent\(\)\)/);
     expect(activity).toMatch(/onNewIntent[\s\S]*SosLaunch\.prepareWindow\(this, intent\)/);
     expect(activity).toMatch(/onStop[\s\S]*SosLaunch\.releaseWindow\(this\)/);
-    expect(read('sharing', 'SosLaunch.java')).toMatch(/if \(!isSosIntent\(intent\)\) return;/);
+    expect(read('sharing', 'SosLaunch.java')).toMatch(/if \(!isSosIntent\(activity, intent\)\) return;/);
+  });
+
+  it('takes an SOS launch only from LOCUS itself: another app cannot fake one (it must carry the install\'s launch key)', () => {
+    const launch = read('sharing', 'SosLaunch.java');
+    expect(launch).toMatch(/\.putExtra\(EXTRA_KEY, launchKey\(context\)\)/);
+    expect(launch).toMatch(/String key = intent\.getStringExtra\(EXTRA_KEY\);\s*return key != null && MessageDigest\.isEqual\(/);
+    expect(launch).toMatch(/getSharedPreferences\(PREFS, Context\.MODE_PRIVATE\)/);
+    expect(read('sharing', 'LocusBackgroundPlugin.java')).toMatch(/if \(!SosLaunch\.isSosIntent\(getContext\(\), intent\)\) return;/);
+  });
+
+  it('trusts certificates the user installed only in debug builds', () => {
+    const config = fs.readFileSync(path.join(root, 'res/xml/network_security_config.xml'), 'utf8');
+    const [base] = config.match(/<base-config[\s\S]*?<\/base-config>/);
+    expect(base).toMatch(/<certificates src="system" \/>/);
+    expect(base).not.toMatch(/src="user"/);
+    expect(config).toMatch(/<debug-overrides>[\s\S]*<certificates src="user" \/>[\s\S]*<\/debug-overrides>/);
   });
 
   it('hands a locked phone back to its lock screen once the SOS shown over it is acknowledged', () => {

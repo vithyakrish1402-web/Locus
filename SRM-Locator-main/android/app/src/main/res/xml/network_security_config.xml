@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- System certificates only. A certificate the user installed (a campus network that inspects
+         traffic, a profile someone was talked into) could otherwise serve a forged live update. -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
-            <certificates src="user" />
         </trust-anchors>
     </base-config>
+    <!-- Debug builds only (android:debuggable): user certificates too, so a debugging proxy still works. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
