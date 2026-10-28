@@ -177,4 +177,24 @@ describe('a member who genuinely drops', () => {
     expect(lost[0]).toMatchObject({ uid: 'uB' });
     await waitFor(() => entriesFor(roster(), 'uB').length === 0);
   });
+
+  // Hidden means hidden: no "lost connection" for someone nobody can see. It used to go out with
+  // no position, which stopped the free map on every phone in the Group.
+  it('raises no signal-lost for a member sharing as Hidden, and still takes them off the roster', async () => {
+    const { room, alpha, bravo, charlie } = await squadOfThree();
+    const roster = watchRoster(charlie);
+    const lost = watchLost(charlie);
+    sendFix(alpha, room, 'uA', 12.82, 80.04);
+    sendFix(bravo, room, 'uB', 12.821, 80.041);
+    await waitFor(() => Object.values(roster()).filter((u) => u.hasFix).length === 2);
+    bravo.emit('update-location', { name: 'uB', speed: 0, battery: 90, status: 'GHOST', roomCode: room, heading: 0 });
+    await waitFor(() => entriesFor(roster(), 'uB')[0]?.status === 'GHOST');
+
+    await settle(bravo);
+    bravo.disconnect();
+
+    await waitFor(() => entriesFor(roster(), 'uB').length === 0);
+    await sleep(300);
+    expect(lost).toEqual([]);
+  });
 });
