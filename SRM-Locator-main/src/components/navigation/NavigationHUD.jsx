@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { PANEL_SPRING } from '../../utils/motion';
 import { NAV_BUILD } from '../../utils/navBuild';
+import { ROUTE_FAILURE } from '../../hooks/useNavigationController';
 import {
   MapPin,
   CheckCircle2,
@@ -10,6 +11,15 @@ import {
   RefreshCw,
   LocateFixed,
 } from 'lucide-react';
+
+// What went wrong, in words, with what the button does about it (useNavigationController's
+// ROUTE_FAILURE). Every failure used to read "Off route", even the first route of a trip.
+const FAILURE_WORDS = {
+  [ROUTE_FAILURE.noMappedPath]: { title: 'No mapped path from here', action: 'Try again' },
+  [ROUTE_FAILURE.noRoute]: { title: 'No walking route found', action: 'Try again' },
+  [ROUTE_FAILURE.unavailable]: { title: "Can't reach the route service", action: 'Try again' },
+};
+const OFF_ROUTE_WORDS = { title: 'Off route', action: 'Tap to recalculate route' };
 
 // Navigation overlay settings.
 export const NAV_PANEL_MAX_HEIGHT_PCT = 15; // the bar's cap, as a share of the screen height
@@ -178,11 +188,11 @@ export function TurnInstructionCard({
             <p className="text-label animate-pulse">Recalculating…</p>
           ) : rerouteError ? (
             <>
-              <p className="text-label flex items-center gap-1.5 text-warning">
-                <AlertTriangle size={16} /> Off route
+              <p data-testid="nav-failure" className="text-label flex items-center gap-1.5 text-warning">
+                <AlertTriangle size={16} /> {(FAILURE_WORDS[rerouteError] ?? OFF_ROUTE_WORDS).title}
               </p>
               <button type="button" onClick={onRetryReroute} className="text-caption text-accent underline">
-                Tap to recalculate route
+                {(FAILURE_WORDS[rerouteError] ?? OFF_ROUTE_WORDS).action}
               </button>
             </>
           ) : !currentStep ? (

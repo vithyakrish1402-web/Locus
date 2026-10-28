@@ -65,6 +65,10 @@ export const arRoutePathFor = (arTarget, { personalTarget = null, personalRoute 
   if (!destination || !route) return null;
   if (arTarget.lat !== destination.lat || arTarget.lng !== destination.lng) return null;
   if (!route.isRealRoute || !Array.isArray(route.path) || route.path.length < 2) return null;
+  // Not the offline campus route (routingProviders.js): straight lines between hand-placed points,
+  // ending at a building's centre, it was drawn as a road straight through buildings. AR Scan then
+  // shows distance and direction only, as it does with no route.
+  if (route.fromCampusGraph) return null;
   return route.path;
 };
 

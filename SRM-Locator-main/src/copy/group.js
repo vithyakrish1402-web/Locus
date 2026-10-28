@@ -261,4 +261,7 @@ export const MEMBERS_LIST = {
 // The Buildings list (Stop 2 leftovers: a search that found nothing showed a blank list).
 export const BUILDINGS_LIST = {
   noMatch: (query) => `No building called "${query}"`,
+  // Nothing in the chosen category, but the search does match places in others.
+  noMatchHere: (query, category, elsewhere) =>
+    `Nothing called "${query}" in ${category}. ${elsewhere === 1 ? '1 match' : `${elsewhere} matches`} in other categories.`,
 };

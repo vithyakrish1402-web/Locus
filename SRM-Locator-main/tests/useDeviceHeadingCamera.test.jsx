@@ -2,7 +2,8 @@
 //
 // AR Scan Stage 5c: useDeviceHeading's camera mode. The same listener reads the phone's
 // full orientation (alpha, beta and gamma together) for a caller that looks through the
-// camera; every other caller is untouched.
+// camera. Every other caller (the map) gets the same heading from it but no tilt: it read bare
+// 360 - alpha until 1.1.82, which swung wildly held upright and was 90 deg out in landscape.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderHook, act, cleanup } from '@testing-library/react';
 import { useDeviceHeading } from '../src/hooks/useDeviceHeading.js';
@@ -26,11 +27,18 @@ afterEach(() => {
 });
 
 describe('without camera mode (the map, App.jsx)', () => {
-  it('reads 360 - alpha and reports no tilt, even with beta and gamma', async () => {
+  it('reads the heading from the whole orientation, and reports no tilt', async () => {
     const { result } = await granted();
-    act(() => orient({ alpha: 330, beta: 88, gamma: 12 }));
-    expect(result.current.headingRef.current).toBe(30);
+    const e = { alpha: 330, beta: 88, gamma: 12 };
+    act(() => orient(e));
+    expect(result.current.headingRef.current).toBeCloseTo(headingFromQuaternion(deviceQuaternion(e.alpha, e.beta, e.gamma)), 6);
     expect(result.current.tilt).toBeNull();
+  });
+
+  it('lying flat it is still 360 - alpha', async () => {
+    const { result } = await granted();
+    act(() => orient({ alpha: 330, beta: 0, gamma: 0 }));
+    expect(result.current.headingRef.current).toBeCloseTo(30, 6);
   });
 });
 

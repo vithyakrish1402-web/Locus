@@ -4,7 +4,6 @@ import { CameraOff, Compass, MoonStar, ScanLine } from 'lucide-react';
 import { Button } from './components/ui';
 import { AR_START } from './copy/permissions';
 import { useDeviceHeading } from './hooks/useDeviceHeading';
-import { useLiveHeading } from './hooks/useLiveHeading';
 import { calculateBearing, calculateDistanceMeters as calculateDistance, normalizeRotationDelta } from './utils/geoMath';
 import {
   DEFAULT_BUILDING_HEIGHT_M,
@@ -106,7 +105,7 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   const roadPath = features.roadLine === 'off' ? null : routePath;
   // Where the phone is: AR Scan's own accuracy-gated, filtered fix (useArPosition), or
   // App's shared one until that has a fix. Everything below measures from it.
-  const { position: liveLocation, accuracy: gpsAccuracy } = useArPosition(sharedLocation);
+  const { position: liveLocation, accuracy: gpsAccuracy, lowAccuracy } = useArPosition(sharedLocation);
   // The compass, read as a camera (the phone held up; see useDeviceHeading), plus the
   // phone's live tilt: the tags are anchored through it in every mode (the destination's
   // tag is always drawn), as is the 3D road.
@@ -133,29 +132,41 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
   const compassHeading = hasReading
     ? (((magneticHeading + declination + alignment.headingOffsetDeg) % 360) + 360) % 360
     : magneticHeading;
-  // Same fusion as the live map marker: GPS course while walking, the smoothed
-  // compass otherwise. The compass alone drifts indoors and near steel.
-  const heading = useLiveHeading({
-    lat: liveLocation?.lat,
-    lng: liveLocation?.lng,
-    speedMps,
-    compassHeading,
-  });
+  // Where the camera points: the phone's own (already smoothed) heading, always. AR Scan used to
+  // take the map marker's GPS course while walking, so panning the phone sideways mid-step left
+  // the arrow and tags placed as if it faced the way you walked, up to 90 deg off (2026-10-29).
+  const heading = compassHeading;
 
   // Too dark for labels (hooks/useCameraDarkness.js): sampled only while the camera runs.
   // Only the labels hide; the arrow, road line, readout and controls stay.
   const tooDark = useCameraDarkness(videoRef, permissionsGranted && !cameraError);
 
   // 1. Initialize Camera
+  // The stream is kept here, not only on the <video>: that element doesn't exist yet when AR Scan
+  // first draws (the start screen), so the cleanup that read it found nothing to stop, and the
+  // camera (and the phone's green camera dot) stayed on after AR Scan closed (a fix, 2026-10-29).
+  const streamRef = useRef(null);
+  const closedRef = useRef(false);
+  const attachStream = () => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream || video.srcObject === stream) return;
+    video.srcObject = stream;
+    video.play?.()?.catch?.(() => {});
+  };
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Started once per opening: a second request reuses the stream already running.
+      const stream = streamRef.current ?? await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' }
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play?.()?.catch?.(() => {});
+      // AR Scan closed while the camera was being asked for: let it go at once.
+      if (closedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
       }
+      streamRef.current = stream;
+      attachStream();
       setCameraError(false);
       onCameraStarted?.();
     } catch (err) {
@@ -170,16 +181,17 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
     startCamera();
   };
 
-  // Cleanup on unmount (device orientation listeners are torn down by useDeviceHeading itself).
-  // Capture the video node now rather than reading videoRef.current inside the cleanup —
-  // by the time cleanup runs, React may have already cleared the ref.
+  // The camera view appears once permissions are in: give it the stream if it arrived first.
+  useEffect(() => { attachStream(); });
+
+  // Cleanup on unmount (device orientation listeners are torn down by useDeviceHeading itself):
+  // the camera stops, whichever screen AR Scan was on.
   useEffect(() => {
-    const video = videoRef.current;
+    closedRef.current = false;
     return () => {
-      if (video && video.srcObject) {
-        const tracks = video.srcObject.getTracks();
-        tracks.forEach(track => track.stop());
-      }
+      closedRef.current = true;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     };
   }, []);
 
@@ -570,7 +582,8 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
             data-fidelity={features.arrow}
             className="w-48 h-48 flex items-center justify-center relative z-[22]"
           >
-            {features.arrow === 'realistic' ? (
+            {/* No arrow while the fix is too rough to aim from (useArPosition's lowAccuracy). */}
+            {lowAccuracy ? null : features.arrow === 'realistic' ? (
               <RealisticArrow rotation={displayRotation} spring={ARROW_SPRING} ringRef={ringRef} overlayEl={overlayEl} />
             ) : (
               <ARArrow3D rotation={displayRotation} transition={ARROW_SPRING} />
@@ -588,10 +601,12 @@ const ARCompass = ({ target, liveLocation: sharedLocation, speedMps = 0, squadMe
           aria-label={AR_READOUT.label(target.name)}
           className="ar-plate relative z-[30] mt-auto self-center rounded-card border border-border shadow-[var(--shadow-2)] px-5 py-3 flex flex-col items-center text-center font-ui text-text max-w-full"
         >
-          {liveLocation
-            ? <p data-testid="ar-readout-distance" className="text-[40px] leading-none font-semibold tabular-nums">{distanceLabel(formatMetres(shownDistance))}</p>
-            : <p data-testid="ar-readout-no-fix" className="text-body font-semibold">{AR_READOUT.noFix}</p>}
-          {(readoutDirection || readoutWalk) && (
+          {!liveLocation
+            ? <p data-testid="ar-readout-no-fix" className="text-body font-semibold">{AR_READOUT.noFix}</p>
+            : lowAccuracy
+              ? <p data-testid="ar-readout-rough" className="text-body font-semibold">{AR_READOUT.lowAccuracy}</p>
+              : <p data-testid="ar-readout-distance" className="text-[40px] leading-none font-semibold tabular-nums">{distanceLabel(formatMetres(shownDistance))}</p>}
+          {!lowAccuracy && (readoutDirection || readoutWalk) && (
             <p data-testid="ar-readout-way" className="mt-1.5 text-secondary text-text-secondary">
               {[readoutDirection, readoutWalk].filter(Boolean).join(' · ')}
             </p>

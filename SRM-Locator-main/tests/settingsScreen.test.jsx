@@ -205,7 +205,7 @@ describe('Alert sounds', () => {
     openSettings();
     expect(alertSounds().getAttribute('aria-checked')).toBe('true');
     act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
-    act(() => fakeSocket.receive('member-signal-lost', { targetId: 's-b', uid: 'u-b', name: 'Bravo', lastKnownLocation: { lat: 12.82, lng: 80.04 }, timeDelta: 0 }));
+    act(() => fakeSocket.receive('member-signal-lost', { targetId: 's-b', uid: 'u-b', name: 'Bravo', lastKnownLocation: { latitude: 12.82, longitude: 80.04 }, timeDelta: 0 }));
     expect(sounds).toBe(2);
   });
 
@@ -214,7 +214,7 @@ describe('Alert sounds', () => {
     fireEvent.click(alertSounds());
     expect(alertSounds().getAttribute('aria-checked')).toBe('false');
     act(() => fakeSocket.receive('receive-ping', { senderName: 'Bravo' }));
-    act(() => fakeSocket.receive('member-signal-lost', { targetId: 's-b', uid: 'u-b', name: 'Bravo', lastKnownLocation: { lat: 12.82, lng: 80.04 }, timeDelta: 0 }));
+    act(() => fakeSocket.receive('member-signal-lost', { targetId: 's-b', uid: 'u-b', name: 'Bravo', lastKnownLocation: { latitude: 12.82, longitude: 80.04 }, timeDelta: 0 }));
     expect(sounds).toBe(0);
     // The notices still come.
     expect(screen.getByText('Bravo is pinging you')).toBeTruthy();

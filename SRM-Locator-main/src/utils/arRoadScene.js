@@ -103,10 +103,13 @@ export const createRoadView = (canvas) => {
   return {
     setRoad: view.setRoad,
     setOrientation: view.setOrientation,
-    setView: ({ width, height, pixelRatio = 1 }) => {
+    // With the view's real field of view, the one the tags are placed with. It used to be dropped
+    // here, so the road was drawn for an assumed 60 deg lens: about half as wide as it should be on
+    // a phone in portrait, its end short of the destination tag (a fix, 2026-10-29).
+    setView: ({ width, height, horizontalFovDeg, pixelRatio = 1 }) => {
       renderer.setPixelRatio(Math.min(pixelRatio, 2));
       renderer.setSize(width, height, false);
-      view.setView({ width, height });
+      view.setView({ width, height, horizontalFovDeg });
     },
     render: () => renderer.render(view.scene, view.camera),
     dispose: () => {

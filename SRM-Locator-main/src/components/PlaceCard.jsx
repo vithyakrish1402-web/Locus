@@ -33,7 +33,7 @@ function ActionButton({ icon: Icon, label, look, ...props }) {
     <button
       type="button"
       style={{ height: ACTION_BUTTON_HEIGHT, borderRadius: ACTION_BUTTON_RADIUS }}
-      className={`min-w-0 px-1 flex flex-col items-center justify-center gap-1.5 font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${look}`}
+      className={`min-w-0 px-1 flex flex-col items-center justify-center gap-1.5 font-medium transition-colors duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${look}`}
       {...props}
     >
       <Icon size={18} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
@@ -67,6 +67,7 @@ export default function PlaceCard({
   const category = asset?.categoryDisplay || categoryLabel(place?.category);
   const photos = asset?.photos?.length > 0 ? asset.photos : asset?.image ? [asset.image] : ['/buildings/campus_main.jpg'];
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
+  const located = Number.isFinite(place?.lat) && Number.isFinite(place?.lng);
 
   const handlePrevPhoto = (e) => {
     e.stopPropagation();
@@ -171,6 +172,14 @@ export default function PlaceCard({
       {/* Bottom actions: Navigate (primary), Rally and AR Scan. Outside the photo, so the
           photo arrows and the close button are never in their way. */}
       <div className="p-3 bg-surface border-t border-border shrink-0">
+        {/* Nothing to go to without a position (a teammate who never shared one, say): the actions
+            are off, and say why. They used to send a meeting point with no position to the whole
+            Group, which stopped the free map on every phone. */}
+        {!located && (
+          <p className="text-text-secondary mb-2" style={{ fontSize: 13, lineHeight: '1.25rem' }} data-testid="place-no-location">
+            {PLACE.noLocation}
+          </p>
+        )}
         <div
           className="grid"
           style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: ACTION_BUTTON_GAP }}
@@ -180,6 +189,7 @@ export default function PlaceCard({
             label={PLACE.navigate}
             look={PRIMARY_LOOK}
             onClick={onNavigate}
+            disabled={!located}
             data-testid="place-navigate"
           />
           <ActionButton
@@ -187,6 +197,7 @@ export default function PlaceCard({
             label={rally.active ? PLACE.rallySet : PLACE.rally}
             look={rally.active ? ACTIVE_LOOK : SECONDARY_LOOK}
             onClick={rally.onPress}
+            disabled={!located}
             aria-pressed={rally.active}
             aria-label={rally.active ? PLACE.rallyClearLabel : PLACE.rallyLabel}
             data-testid="place-rally"
@@ -196,6 +207,7 @@ export default function PlaceCard({
             label={PLACE.arScan}
             look={SECONDARY_LOOK}
             onClick={onArScan}
+            disabled={!located}
             data-testid="place-ar-scan"
           />
         </div>

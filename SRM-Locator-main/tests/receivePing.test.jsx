@@ -163,7 +163,7 @@ describe('receiving a member ping', () => {
 });
 
 describe('a member losing connection', () => {
-  const lost = { targetId: 'sock-aarav', uid: 'u-aarav', name: 'Aarav', lastKnownLocation: { lat: 12.8231, lng: 80.0442 }, timeDelta: 0 };
+  const lost = { targetId: 'sock-aarav', uid: 'u-aarav', name: 'Aarav', lastKnownLocation: { latitude: 12.8231, longitude: 80.0442 }, timeDelta: 0 };
 
   it('is an amber notice in the feed, naming them as sent, that clears after six seconds', async () => {
     renderInSquad();

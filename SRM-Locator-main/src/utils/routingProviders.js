@@ -364,12 +364,16 @@ const remember = (key, route, ttl) => {
   while (routeCache.size > ROUTE_CACHE_MAX_ENTRIES) routeCache.delete(routeCache.keys().next().value);
 };
 
-// The route itself, no cache: free routers in order, then Google once, then the campus graph.
-const lookUpRoute = async (origin, destination) => {
+// How long the online routers get, all together, before the campus graph answers. Each has its
+// own timeout, and on a network that hangs (a captive portal) they used to add up to ~18 s.
+export const OFFLINE_ROUTE_TIMEOUT_MS = 8000;
+
+// The online routers in order: free ones, then Google once. A route, or null.
+const lookUpOnline = async (origin, destination) => {
   // 1-2. OpenStreetMap foot router, then the OSRM demo server.
   try {
     const free = await fetchOsrmWalkingRoute(origin, destination);
-    if (free?.path?.length >= 2) return { route: free, ttl: ROUTE_CACHE_TTL_MS };
+    if (free?.path?.length >= 2) return free;
   } catch {
     // Go on to Google
   }
@@ -378,14 +382,32 @@ const lookUpRoute = async (origin, destination) => {
   if (GOOGLE_MAPS_API_KEY) {
     try {
       const google = await fetchGoogleRoutesApi(origin, destination);
-      if (google?.path?.length >= 2) return { route: google, ttl: ROUTE_CACHE_TTL_MS };
+      if (google?.path?.length >= 2) return google;
     } catch {
       // Go on to the campus graph
     }
   }
+  return null;
+};
+
+// Consecutive points at the same spot made as one. The campus graph's path ends on a node that is
+// the destination itself, and two identical points have no bearing (0, "north"), which put a
+// "Turn left" of 0 m before "Arrive".
+const withoutRepeats = (path) => path.filter((point, i) => i === 0 || haversineMeters(path[i - 1], point) > 0.5);
+
+// The route itself, no cache: the online routers (up to OFFLINE_ROUTE_TIMEOUT_MS), then the campus graph.
+const lookUpRoute = async (origin, destination) => {
+  let timer;
+  const online = await Promise.race([
+    lookUpOnline(origin, destination),
+    new Promise((resolve) => { timer = setTimeout(() => resolve(null), OFFLINE_ROUTE_TIMEOUT_MS); }),
+  ]);
+  clearTimeout(timer);
+  if (online) return { route: online, ttl: ROUTE_CACHE_TTL_MS };
 
   // 4. Curated campus pedestrian graph fallback (offline).
-  const campusPath = findCampusPedestrianRoute(origin, destination);
+  const found = findCampusPedestrianRoute(origin, destination);
+  const campusPath = found ? withoutRepeats(found) : null;
   if (campusPath && campusPath.length >= 2) {
     const steps = generateStepsFromPath(campusPath, destination?.name);
     let meters = 0;
@@ -402,6 +424,9 @@ const lookUpRoute = async (origin, destination) => {
         distanceMeters: meters,
         durationSeconds: mins * 60,
         isRealRoute: true,
+        // Straight lines between hand-placed campus points, ending at a building's centre: fine
+        // on the map, but AR Scan drew it as a road straight through buildings (arRoadLine.js).
+        fromCampusGraph: true,
       },
       ttl: FALLBACK_ROUTE_TTL_MS,
     };

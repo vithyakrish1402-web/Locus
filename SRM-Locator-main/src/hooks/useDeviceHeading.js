@@ -185,8 +185,14 @@ export function useDeviceHeading({ camera = false, tilt: wantTilt = false } = {}
       if (hasTilt) {
         q = deviceQuaternion(event.alpha, event.beta, event.gamma, currentScreenAngle());
         next = headingFromQuaternion(q);
+      } else if (Number.isFinite(event.beta) && Number.isFinite(event.gamma)) {
+        // The same reading AR Scan takes: the top of the screen lying flat, where the back of
+        // the phone points held up, blended in between, and turned with the screen. Bare
+        // `360 - alpha` was the top of the phone, 90 deg out in landscape, and swung wildly
+        // held upright, so the own arrow and every "N o'clock" were off.
+        next = headingFromQuaternion(deviceQuaternion(event.alpha, event.beta, event.gamma, currentScreenAngle()));
       } else {
-        next = 360 - event.alpha;
+        next = (((360 - event.alpha + currentScreenAngle()) % 360) + 360) % 360;
       }
     }
     // If it's a relative event (event.absolute is false), ignore it.

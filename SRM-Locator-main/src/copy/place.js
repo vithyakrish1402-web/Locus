@@ -51,6 +51,8 @@ export const PLACE = {
   rallySet: 'Rally set',
   rallyLabel: 'Set as rally point',
   rallyClearLabel: 'Rally point set here. Clear it',
+  // A card for something with no known position (components/PlaceCard.jsx): its actions are off.
+  noLocation: "No known location yet, so you can't navigate, rally or scan to it.",
   more: 'More about this place',
   departments: 'Departments',
   floors: 'Floors',

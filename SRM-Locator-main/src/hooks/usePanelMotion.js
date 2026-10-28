@@ -204,7 +204,9 @@ export function usePanelMotion({ enabled, open, onOpen, onClose, panelRef, listR
     let gesture = null;
 
     const onStart = (event) => {
-      if (event.touches.length !== 1) { gesture = null; return; }
+      // Another finger landing is ignored: the drag under way carries on, and lifting settles it.
+      // It used to drop the drag without settling, which left the panel stuck half-way.
+      if (event.touches.length !== 1) return;
       const interrupted = Boolean(animation.current);
       // A touch mid-movement stops it where it is.
       stop();

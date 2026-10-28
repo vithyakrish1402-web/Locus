@@ -157,8 +157,9 @@ describe('AR Scan’s own GPS', () => {
     fix(HERE, 5);
     const fromHere = metresTo(HERE);
     expect(proximity()).toBe(fromHere);
-    fix(north(150), 60); // too vague: ignored
-    expect(proximity()).toBe(fromHere);
+    fix(north(150), 60); // too vague: ignored, and the readout says so instead of a stale distance
+    expect(screen.queryByTestId('ar-readout-distance')).toBeNull();
+    expect(screen.getByTestId('ar-readout-rough')).toBeTruthy();
     fix(north(1), 5); // the filter moves under a metre: held
     expect(proximity()).toBe(fromHere);
     for (let i = 0; i < 10; i++) {

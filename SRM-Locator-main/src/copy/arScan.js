@@ -28,6 +28,8 @@ export const AR_PICKER = {
 export const AR_READOUT = {
   label: (name) => `How far to ${name}`,
   noFix: 'Waiting for your location',
+  // GPS too rough to measure from (hooks/useArPosition.js): no distance from a stale spot.
+  lowAccuracy: 'Location is rough here. Distance will show when it settles.',
 };
 
 // ALIGN's answers, and the compass refusal: plain words, as a notice. A refusal is an

@@ -17,7 +17,7 @@ import { useMap } from 'react-leaflet';
  * positioning that node on pan/zoom; we only call setLatLng when the
  * lat/lng actually changes.
  */
-const LeafletReactMarker = ({ lat, lng, zIndexOffset, onClick, children }) => {
+const PlacedMarker = ({ lat, lng, zIndexOffset, onClick, children }) => {
   const map = useMap();
   const markerRef = useRef(null);
   const rootRef = useRef(null);
@@ -63,5 +63,11 @@ const LeafletReactMarker = ({ lat, lng, zIndexOffset, onClick, children }) => {
 
   return null;
 };
+
+// A marker with no real position draws nothing. Leaflet throws on one ("Invalid LatLng"), and the
+// map's crash guard then stopped the free map on every phone in the Group: a hidden member's lost
+// signal, or a meeting point set from a lost teammate's card, did it (a fix, 2026-10-29).
+const LeafletReactMarker = (props) =>
+  (Number.isFinite(props.lat) && Number.isFinite(props.lng) ? <PlacedMarker {...props} /> : null);
 
 export default LeafletReactMarker;

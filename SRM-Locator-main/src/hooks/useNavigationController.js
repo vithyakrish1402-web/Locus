@@ -9,6 +9,12 @@ export const OFF_ROUTE_CONFIRMATION_SAMPLES = 3;// Consecutive samples required 
 export const ARRIVAL_DISTANCE_THRESHOLD_M = 15; // Within 15 meters considered reached destination
 export const MANEUVER_ADVANCE_DISTANCE_M = 18;  // Switch to next maneuver within 18m of current waypoint
 export const MIN_REROUTE_INTERVAL_MS = 6000;    // Minimum time between reroute requests (debounce)
+// Reroutes in a row that never bring you back onto the route before it stops and says so. Far
+// from any mapped path (deep inside a building), every route starts where the path is, never
+// where you are: it used to say "Recalculating…" every few seconds, for good.
+export const REROUTE_MAX_TRIES = 3;
+// Why a route could not be had, for the card to say (components/navigation/NavigationHUD.jsx).
+export const ROUTE_FAILURE = { noRoute: 'no-route', unavailable: 'unavailable', noMappedPath: 'no-mapped-path' };
 
 export function useNavigationController({
   isNavigating,
@@ -32,6 +38,7 @@ export function useNavigationController({
 
   // Consecutive off-route counter
   const offRouteCountRef = useRef(0);
+  const rerouteTriesRef = useRef(0); // reroutes since last on the route (REROUTE_MAX_TRIES)
   const lastRerouteTimeRef = useRef(0);
   const rerouteInFlightRef = useRef(false);
   const hasInitialCenteredRef = useRef(false);
@@ -77,16 +84,21 @@ export function useNavigationController({
       // Check if destination is still valid
       if (requestId === requestIdRef.current && destinationRef.current?.lat === dest.lat && destinationRef.current?.lng === dest.lng) {
         if (route && route.path && route.path.length > 0) {
-          setActiveRoute(route);
-          setCurrentStepIndex(0);
+          // Back to the first instruction only for a different route. The same one comes back
+          // from the cache (or a lookup a moment ago), and starting its instructions over sent
+          // the card back to the first turn on every reroute.
+          if (route !== activeRouteRef.current) {
+            setActiveRoute(route);
+            setCurrentStepIndex(0);
+          }
           offRouteCountRef.current = 0;
           setRerouteError(null);
         } else {
-          setRerouteError('Unable to find walking route to destination');
+          setRerouteError(ROUTE_FAILURE.noRoute);
         }
       }
     } catch {
-      if (requestId === requestIdRef.current) setRerouteError('Routing service unavailable');
+      if (requestId === requestIdRef.current) setRerouteError(ROUTE_FAILURE.unavailable);
     } finally {
       if (requestId === requestIdRef.current) {
         rerouteInFlightRef.current = false;
@@ -103,6 +115,7 @@ export function useNavigationController({
       requestIdRef.current += 1; // Invalidate responses for a stopped/replaced session.
       rerouteInFlightRef.current = false;
       lastRerouteTimeRef.current = 0;
+      rerouteTriesRef.current = 0;
       activeRouteRef.current = null;
       setActiveRoute(null);
       hasInitialCenteredRef.current = false;
@@ -178,14 +191,22 @@ export function useNavigationController({
     if (nearest.crossTrackDistance > OFF_ROUTE_THRESHOLD_M) {
       offRouteCountRef.current += 1;
       if (offRouteCountRef.current >= OFF_ROUTE_CONFIRMATION_SAMPLES) {
-        // Sustained deviation confirmed -> trigger reroute
-        if (!rerouteInFlightRef.current && destinationRef.current) {
+        // Sustained deviation confirmed -> trigger reroute, at most REROUTE_MAX_TRIES times in a
+        // row; then it says there is no mapped path from here, and waits for a tap to try again.
+        if (rerouteTriesRef.current >= REROUTE_MAX_TRIES) {
+          setRerouteError(ROUTE_FAILURE.noMappedPath);
+        } else if (!rerouteInFlightRef.current && destinationRef.current
+          && Date.now() - lastRerouteTimeRef.current >= MIN_REROUTE_INTERVAL_MS) {
+          rerouteTriesRef.current += 1;
           triggerRouteCalculation(liveLocation, destinationRef.current);
         }
       }
     } else {
       // User is on track, reset counter
       offRouteCountRef.current = 0;
+      rerouteTriesRef.current = 0;
+      // Walked back onto the route: "No mapped path from here" is no longer true.
+      setRerouteError((error) => (error === ROUTE_FAILURE.noMappedPath ? null : error));
     }
   }, [isNavigating, liveLocation?.lat, liveLocation?.lng, activeRoute, currentStepIndex, triggerRouteCalculation]);
 
@@ -285,6 +306,16 @@ export function useNavigationController({
 
   const currentStep = activeRoute?.steps?.[currentStepIndex] || activeRoute?.steps?.[0] || null;
   const nextStep = activeRoute?.steps?.[currentStepIndex + 1] || null;
+  // What the turn card says (a fix, 2026-10-29). A step's instruction is the move made where the
+  // step *starts*; distanceToNextStepMeters is to where the current one *ends*, which is where the
+  // next move is made. The card used to pair the current step's instruction with that distance:
+  // "200 m · Turn left" for a turn already behind you. It says the next move, and how far to it;
+  // under it, the move after that, and the length of the stretch between the two.
+  const steps = activeRoute?.steps || [];
+  const upcomingStep = steps[currentStepIndex + 1] || currentStep;
+  const stepAfter = steps[currentStepIndex + 2]
+    ? { ...steps[currentStepIndex + 2], distanceMeters: steps[currentStepIndex + 1]?.distanceMeters ?? 0 }
+    : null;
 
   return {
     activeRoute,
@@ -293,6 +324,8 @@ export function useNavigationController({
     hasArrived,
     currentStep,
     nextStep,
+    upcomingStep,
+    stepAfter,
     currentStepIndex,
     totalSteps: activeRoute?.steps?.length || 0,
     remainingDistanceMeters,
@@ -303,6 +336,12 @@ export function useNavigationController({
     isFollowingCamera: autoFollow,
     handleUserMapInteraction,
     handleRecenter,
-    retryReroute: () => destinationRef.current && liveLocation && triggerRouteCalculation(liveLocation, destinationRef.current),
+    // A tap to try again: a fresh set of tries, and at once (the debounce is for automatic ones).
+    retryReroute: () => {
+      if (!destinationRef.current || !liveLocation) return;
+      rerouteTriesRef.current = 0;
+      lastRerouteTimeRef.current = 0;
+      triggerRouteCalculation(liveLocation, destinationRef.current);
+    },
   };
 }

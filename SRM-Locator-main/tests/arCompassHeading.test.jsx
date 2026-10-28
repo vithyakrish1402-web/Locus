@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 //
-// AR Scan points its arrow with the same fused heading as the live map marker: GPS course
-// while walking, the (smoothed) compass otherwise. It used to read the raw compass alone.
+// AR Scan points its arrow by where the camera points: the phone's own smoothed heading, walking
+// or not. It took the map marker's GPS course while walking (2026-10 to 1.1.82), which left the
+// arrow up to 90 deg off when the phone was turned away from the way you walked.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
 
@@ -44,9 +45,11 @@ const openAr = async (speedMps) => {
 };
 
 describe('ARCompass heading', () => {
-  it('while walking, trusts the GPS course over the compass', async () => {
+  it('while walking north with the phone facing south, follows the phone, not the walking direction', async () => {
     await openAr(2);
-    expect(rotation()).toBeCloseTo(90, 0); // target east, heading north
+    const declination = magneticDeclination(12.82, 80.04);
+    const bearing = calculateBearing(NORTH.lat, NORTH.lng, TARGET.lat, TARGET.lng); // ~90
+    expect(rotation()).toBeCloseTo(bearing - (180 + declination), 1);
   });
 
   it('standing still, uses the compass, corrected to true north', async () => {

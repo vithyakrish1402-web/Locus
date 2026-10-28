@@ -1217,16 +1217,22 @@ const App = () => {
   // ---  UPDATED: THE DEAD MAN'S SWITCH INTERCEPTOR ---
   useEffect(() => {
     socket.on('member-signal-lost', (emergencyData) => {
-      const { targetId, uid, name, photo, lastKnownLocation, timeDelta } = emergencyData;
-
-      if (typeof playSonarPing === 'function') {
-        playSonarPing();
-      }
+      const { targetId, uid, name, photo, lastKnownLocation, timeDelta } = emergencyData ?? {};
 
       // Match on uid as well as socket id. The socket that died may already have been
       // superseded by the same person's newer one, in which case filtering by targetId
       // alone removes nobody and leaves the roster carrying a node the server has dropped.
       setUsers(prev => prev.filter(u => u.id !== targetId && !(uid && u.uid === uid)));
+
+      // No position at all can only be a member sharing as Hidden (the server keeps none for them,
+      // and everyone else's heartbeat always carries one). Hidden means hidden: no marker, no sound
+      // and no "lost connection". Its marker used to be made with no position, which stopped the
+      // free map for everyone, and the notice told the Group that someone hidden had dropped off.
+      if (!Number.isFinite(lastKnownLocation?.latitude) || !Number.isFinite(lastKnownLocation?.longitude)) return;
+
+      if (typeof playSonarPing === 'function') {
+        playSonarPing();
+      }
 
       // Store the last-known fix, undisturbed: the marker stays exactly there, marked as lost,
       // however long they are gone (deriveGhostMembers). Nothing guesses where they went.
@@ -2027,7 +2033,14 @@ const App = () => {
     }
   };
 
+  // A tab switch ends the route, except the one a tap on a place makes to show its card
+  // (handleFocus): a building tapped mid-route used to end it without a word.
+  const keepRouteRef = useRef(false);
   useEffect(() => {
+    if (keepRouteRef.current) {
+      keepRouteRef.current = false;
+      return;
+    }
     clearRoute();
   }, [activeTab]);
 
@@ -2436,6 +2449,8 @@ const App = () => {
     if (item) {
       // The place card shows for the Buildings tab; a dot tapped while Members was the tab
       // (the dots show on a phone whatever the tab) must switch to it or no card appears.
+      // That switch keeps any route under way (keepRouteRef): only a real change of tab ends it.
+      if (activeTab !== 'buildings') keepRouteRef.current = true;
       setActiveTab('buildings');
       setSelectedItem(item);
       if (isMobile) setMobileView('grid');
@@ -2488,6 +2503,8 @@ const App = () => {
   // when it was the only way to share a place); since the redesign (P5c) it starts only
   // your own route.
   const publishSquadWaypoint = (destination) => {
+    // Never a meeting point without a real position (the server refuses one too).
+    if (!Number.isFinite(destination?.lat) || !Number.isFinite(destination?.lng)) return;
     const waypoint = { lat: destination.lat, lng: destination.lng, name: destination.name, description: destination.description || '' };
     setActiveWaypoint(waypoint);
     if (squadCode) {
@@ -2588,7 +2605,12 @@ const App = () => {
     return where && !where.here ? distanceLabel(where.shownDistance) : null;
   };
   // A lost-connection member, tapped: their card says who and when they were last seen.
+  // With where they were last seen, so its Navigate, Rally and AR Scan go there. It used to carry
+  // no position, and Rally sent a meeting point with none to the whole Group.
   const ghostFocusItem = (ghost) => ({
+    id: `ghost-${ghost.id}`,
+    lat: ghost.position?.lat,
+    lng: ghost.position?.lng,
     name: ghost.phase === 'expired' ? MARKERS.lastSeenTitle(ghost.name) : MARKERS.lostConnectionTitle(ghost.name),
     info: MARKERS.lastBattery(ghost.battery ?? 0),
   });
@@ -3542,8 +3564,9 @@ const App = () => {
           {isNavigatingMode && activeNavTarget ? (
             <motion.div key="turn-instruction-card" className="pointer-events-auto w-full" {...fade()}>
               <TurnInstructionCard
-                currentStep={navigationController.currentStep}
-                nextStep={navigationController.nextStep}
+                // The next move with the distance to it, then the one after (useNavigationController).
+                currentStep={navigationController.upcomingStep}
+                nextStep={navigationController.stepAfter}
                 distanceToNextMeters={navigationController.distanceToNextStepMeters}
                 isRerouting={navigationController.isRerouting}
                 rerouteError={navigationController.rerouteError}
@@ -3881,6 +3904,9 @@ const App = () => {
             className="absolute inset-x-3 bottom-[calc(11rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 z-[600] md:w-96 max-h-[60vh] md:max-h-[80vh] overflow-y-auto rounded-card pointer-events-auto"
           >
             <PlaceCard
+              // A new place is a new card: its photo starts at the first. One card used to keep the
+              // last place's photo, so the next could read "3/2".
+              key={selectedItem?.id ?? selectedItem?.name}
               place={selectedItem}
               onClose={() => setSelectedItem(null)}
               onNavigate={() => onCardNavigate(selectedItem)}
@@ -4006,12 +4032,21 @@ const App = () => {
         name={user?.displayName}
         recording={isRecordingPath}
         points={recordedCoords.length}
-        onRecord={() => { setIsRecordingPath(true); setShowAdminSettings(false); }}
+        // Recording a path and placing a new place both take map taps, and their bars stand in the
+        // same spot: one at a time. Recording used to take the taps meant for the place.
+        onRecord={() => { setIsPlacing(false); setIsRecordingPath(true); setShowAdminSettings(false); }}
         onPublish={publishRecordedRoute}
         onAbort={abortRecording}
         onClose={() => setShowAdminSettings(false)}
         added={addedPlaces}
-        onAddPlace={() => { setIsPlacing(true); setShowAdminSettings(false); }}
+        onAddPlace={() => {
+          if (isRecordingPath) {
+            notify.warning(ADD_PLACE_PROBLEMS.recording);
+            return;
+          }
+          setIsPlacing(true);
+          setShowAdminSettings(false);
+        }}
         onRemovePlace={removePlace}
       />
       {/* Add Place: choose the spot on the map, then name it (components/admin/AddPlace.jsx). */}

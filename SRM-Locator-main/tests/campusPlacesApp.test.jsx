@@ -119,6 +119,9 @@ const rows = () => screen.queryAllByTestId('building-row');
 const rowNames = () => rows().map((r) => within(r).getByRole('heading').textContent);
 
 beforeEach(() => {
+  // Each test starts in the lobby: the group the last one joined is remembered, and its next
+  // render skipped the lobby, so one failing test failed every one after it.
+  localStorage.removeItem('locus.group');
   fakeSocket.handlers.clear();
   fakeSocket.emit.mockClear();
   __resetNotifications();
@@ -286,5 +289,36 @@ describe('Add Place', () => {
     fireEvent.click(within(list).getByRole('button', { name: 'Remove TEST DENTAL FIELD' }));
     await waitFor(() => expect(store.remove).toHaveBeenCalledWith('cp-g1'));
     await waitFor(() => expect(screen.queryByTestId('added-places')).toBeNull());
+  });
+
+  // A map tap was both a path point and the new place's spot when the two overlapped.
+  const openAdminTools = () => {
+    fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
+    fireEvent.click(within(screen.getByTestId('settings')).getByRole('button', { name: new RegExp(SETTINGS.adminTools) }));
+  };
+
+  it('while a path is being recorded, Add Place says to finish it first, and a map tap is a path point', async () => {
+    who.user = { ...who.user, email: ADMIN };
+    render(<App />);
+    await joinAsMember();
+    openAdminTools();
+    fireEvent.click(screen.getByRole('button', { name: /INITIATE_RECORD_PATH/ }));
+    openAdminTools();
+    fireEvent.click(screen.getByRole('button', { name: /ADD_PLACE/ }));
+    expect(await screen.findByText(ADD_PLACE_PROBLEMS.recording)).toBeTruthy();
+    expect(screen.queryByTestId('placing-bar')).toBeNull();
+    fireEvent.click(screen.getByTestId('map-tap'));
+    expect(screen.queryByTestId('add-place')).toBeNull();
+    expect(screen.getByTestId('recording-bar').textContent).toMatch(/1/);
+  });
+
+  it('starting a recording while placing a place drops the placing', async () => {
+    await openAddPlace();
+    expect(screen.getByTestId('placing-bar')).toBeTruthy();
+    openAdminTools();
+    fireEvent.click(screen.getByRole('button', { name: /INITIATE_RECORD_PATH/ }));
+    expect(screen.queryByTestId('placing-bar')).toBeNull();
+    fireEvent.click(screen.getByTestId('map-tap'));
+    expect(screen.queryByTestId('add-place')).toBeNull();
   });
 });

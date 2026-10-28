@@ -6,10 +6,14 @@ import { createPositionFilter } from '../utils/arPosition';
 // vague. AR Scan needs better: it runs its own high-accuracy watch, drops vague fixes and
 // filters the rest (createPositionFilter).
 //
-// Returns { position, accuracy }: `position` the filtered { lat, lng }, or `fallback`
-// (App's liveLocation) until a fix has been accepted, or if geolocation is unavailable;
-// `accuracy` the latest fix's reported accuracy in metres, accepted or not (null before
-// any), for the debug overlay.
+// Returns { position, accuracy, lowAccuracy }: `position` the filtered { lat, lng }, or
+// `fallback` (App's liveLocation) until a fix has been accepted, or if geolocation is
+// unavailable; `accuracy` the latest fix's reported accuracy in metres, accepted or not (null
+// before any), for the debug overlay; `lowAccuracy` true while the latest fix is rougher than
+// AR_MIN_ACCURACY_M. Rough fixes are refused, so `position` then stays where the last good one
+// was, possibly far behind: AR Scan said distances from there as if exact (a fix, 2026-10-29).
+export const AR_MIN_ACCURACY_M = 25;
+
 export function useArPosition(fallback) {
   const filterRef = useRef(null);
   const [state, setState] = useState({ position: null, accuracy: null });
@@ -38,5 +42,9 @@ export function useArPosition(fallback) {
     return () => geo.clearWatch(id);
   }, []);
 
-  return { position: state.position ?? fallback ?? null, accuracy: state.accuracy };
+  return {
+    position: state.position ?? fallback ?? null,
+    accuracy: state.accuracy,
+    lowAccuracy: Number.isFinite(state.accuracy) && state.accuracy > AR_MIN_ACCURACY_M,
+  };
 }

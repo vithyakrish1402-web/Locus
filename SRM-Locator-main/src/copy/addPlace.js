@@ -11,6 +11,8 @@ export const CATEGORY_LABELS = {
 };
 
 export const ADD_PLACE_PROBLEMS = {
+  // Add a place while a path is being recorded: map taps belong to the recording.
+  recording: 'Finish or abort the path you are recording first, then add a place.',
   name: 'Give the place a name.',
   nameLong: `Keep the name under ${NAME_MAX} characters.`,
   category: 'Choose what kind of place it is.',
