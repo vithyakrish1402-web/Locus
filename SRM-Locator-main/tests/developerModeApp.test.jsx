@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // Developer mode in the real App.jsx: visible only to the admin account, only in the test build
-// (FLOOR7_DEMO, which is Vite mode 'sidetest'), only when signed in, verified and online; never
+// (FLOOR7_DEMO, which is Vite mode 'sidetest'), only when signed in as that account and online; never
 // loaded for anyone else; off after sign-out; and the old floating F7 pill is gone. In every
 // other build the flag is the constant `false`, none of its chunks is requested here and none
 // is in the output (tests/floor7Build.test.js proves the latter with a real build).
@@ -92,7 +92,7 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 vi.setConfig({ testTimeout: 20_000 });
 
 const ADMIN = 'vithyakrish1402@gmail.com';
-const admin = { uid: 'u-admin', displayName: 'Alpha', photoURL: null, email: ADMIN, emailVerified: true };
+const admin = { uid: 'u-admin', displayName: 'Alpha', photoURL: null, email: ADMIN, emailVerified: false };
 
 /** A fresh App with the test-build flag as given; the heavy Developer mode screens are stubs that count their loads. */
 async function loadApp({ demo }) {
@@ -224,13 +224,12 @@ describe('Developer mode in App.jsx', () => {
     expect(window.localStorage.getItem('locus.developerMode')).toBeNull(); // and the stale setting is forgotten
   });
 
-  it('hides it for an admin address that is not verified', async () => {
+  it('shows it to the admin\'s email and password account, which is never email-verified', async () => {
     auth.user = { ...admin, emailVerified: false };
     const App = await loadApp({ demo: true });
     await joinSquad(App);
     await openSettings();
-    await act(async () => {});
-    expect(screen.queryByRole('switch', { name: /Developer mode/ })).toBeNull();
+    expect(await screen.findByRole('switch', { name: /Developer mode/ })).toBeTruthy();
   });
 
   it('hides it while offline, without forgetting it, and brings it back online', async () => {
@@ -308,6 +307,7 @@ describe('how App.jsx wires it', () => {
   it('keeps the admin rule in one place: developerStatus, which fails closed', () => {
     const rule = readFileSync(`${process.cwd()}/src/utils/developerMode.js`, 'utf8');
     expect(rule).toContain("if (authLoading || !online) return 'unknown';");
-    expect(rule).toContain("user.email === adminEmail && user.emailVerified === true");
+    expect(rule).toContain("user && user.email === adminEmail");
+    expect(rule).not.toContain('emailVerified');
   });
 });
