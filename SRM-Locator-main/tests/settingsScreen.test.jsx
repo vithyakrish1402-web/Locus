@@ -228,13 +228,13 @@ describe('Alert sounds', () => {
     expect(sounds).toBeGreaterThan(0);
   });
 
-  it('shows Emergency alerts as always on, and it cannot be turned off', () => {
+  // UI audit A7b (2026-10-25): a fixed "Always on", not a switch that looks as if it could turn off.
+  it('shows Emergency alerts as always on, with nothing to turn off', () => {
     openSettings();
-    const emergency = screen.getByRole('switch', { name: new RegExp(`^${SETTINGS.emergencyAlerts}`) });
-    expect(emergency.getAttribute('aria-checked')).toBe('true');
-    expect(emergency.getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(emergency);
-    expect(emergency.getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByRole('switch', { name: new RegExp(`^${SETTINGS.emergencyAlerts}`) })).toBeNull();
+    const emergency = screen.getByTestId('emergency-alerts');
+    expect(emergency.textContent).toContain(SETTINGS.alwaysOn);
+    expect(within(emergency).queryByRole('button')).toBeNull();
   });
 });
 

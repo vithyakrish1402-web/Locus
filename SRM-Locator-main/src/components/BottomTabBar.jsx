@@ -66,7 +66,8 @@ function Tab({ tab, active, onSelect, reduceMotion }) {
  *   on the map while typing), but the Emergency button stays where it can be reached.
  */
 export default function BottomTabBar({ tabs, activeId, onSelect, sosTrigger = null, keyboardUp = false }) {
-  const reduceMotion = useReducedMotion();
+  const requestedReducedMotion = useReducedMotion();
+  const reduceMotion = requestedReducedMotion || document.documentElement.dataset.effects === 'reduced';
   // Says how tall the bar really is (--tab-bar-height, read by the group panel, which stands on
   // it), and keeps saying so as it changes (the gesture bar's inset, a larger text size).
   const barRef = useRef(null);

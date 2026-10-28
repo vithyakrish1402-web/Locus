@@ -24,6 +24,15 @@ export const SHARING_CHIP = {
   pausedNoSpot: 'Sharing paused · no spot shared yet',
 };
 
+// The same, in one word: beside the dot once the chip has folded, so it is never a bare dot.
+export const SHARING_CHIP_SHORT = {
+  ACTIVE: 'Live',
+  FROZEN: 'Paused',
+  GHOST: 'Hidden',
+  waiting: 'Waiting',
+  pausedNoSpot: 'Paused',
+};
+
 // The map's right-hand controls and the meeting point button.
 export const MAP_CONTROLS = {
   satellite: 'Satellite view',
@@ -92,4 +101,12 @@ export const BUILDING_LIST = {
   arScanFor: (place) => `AR Scan to ${place}`,
   navigate: 'Navigate',
   navigateTo: (place) => `Navigate to ${place}`,
+};
+
+// Over the map area only, when the map itself crashes; the rest of the app keeps working
+// (components/map/MapErrorBoundary.jsx). No error details on screen.
+export const MAP_PROBLEM = {
+  retrying: 'Map had a problem. Retrying…',
+  stopped: 'Map had a problem.',
+  retry: 'Retry',
 };

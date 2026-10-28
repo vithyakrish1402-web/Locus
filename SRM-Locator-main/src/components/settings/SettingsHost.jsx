@@ -20,20 +20,25 @@ export default function SettingsHost({ onSignOut, onAdmin, ...screenProps }) {
         // only closing fades it out. A moving element is its own stacking context, so with the motion
         // on an unlayered wrapper, Settings' z-index counted only inside it and the top and bottom
         // bars drew over Settings until the motion finished.
-        <motion.div key="settings" data-testid="settings-layer" className="fixed inset-0 bg-bg" style={{ zIndex: SETTINGS_Z }}>
-          <motion.div
-            initial={false}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reduceMotion ? 0.15 : 0.2, ease: 'easeOut' }}
-          >
-            <SettingsScreen
-              {...screenProps}
-              onClose={() => setSettingsOpen(false)}
-              onSignOut={() => { setSettingsOpen(false); onSignOut(); }}
-              onAdmin={onAdmin ? () => { setSettingsOpen(false); onAdmin(); } : undefined}
+        // Closing fades this layer itself, the opaque backing with it, so the map shows through as
+        // Settings goes. Only the screen inside used to fade, over the backing, which stayed opaque
+        // to the end: Back showed an empty dark frame for the length of the fade.
+        <motion.div
+          key="settings"
+          data-testid="settings-layer"
+          className="fixed inset-0 bg-bg"
+          style={{ zIndex: SETTINGS_Z }}
+          initial={false}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: reduceMotion ? 0.15 : 0.2, ease: 'easeOut' }}
+        >
+          <SettingsScreen
+            {...screenProps}
+            onClose={() => setSettingsOpen(false)}
+            onSignOut={() => { setSettingsOpen(false); onSignOut(); }}
+            onAdmin={onAdmin ? () => { setSettingsOpen(false); onAdmin(); } : undefined}
           />
-          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>

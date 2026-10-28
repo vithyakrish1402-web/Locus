@@ -44,12 +44,15 @@ export const SOS_DROPPED = {
   left: "You're no longer in the group, so your alert couldn't reach them. If you need help right now, call 112.",
 };
 
-// The button's own words (components/SosTrigger.jsx). It reads SOS through both holds; the
-// card above it says what is happening.
+// The button's own words (components/SosTrigger.jsx): one short word each, so the button keeps
+// one width and never cuts a word off (it used to read "HOLD...", which looked cut off). The card
+// above it says what is happening; a screen reader hears it in full (SOS_SPOKEN).
 export const SOS_BUTTON = {
   sos: 'SOS',
+  hold: 'Hold',
+  armed: 'Armed',
   sent: 'Sent',
-  held: 'Waiting for connection',
+  held: 'Waiting',
   early: 'Hold longer',
 };
 

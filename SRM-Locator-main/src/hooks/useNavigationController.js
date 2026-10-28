@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { haversineMeters, findNearestPointOnPath, interpolateHeading } from '../utils/navGeometry';
 import { fetchPedestrianRoute } from '../utils/routingProviders';
+import { isMapAttached } from '../utils/mapAttached';
 
 // Configurable thresholds for campus navigation
 export const OFF_ROUTE_THRESHOLD_M = 25;       // Sustained distance from path before rerouting
@@ -47,8 +48,9 @@ export function useNavigationController({
     requestIdRef.current += 1;
   }, []);
 
+  // A map whose engine has gone is never moved (utils/mapAttached.js).
   useEffect(() => {
-    if (!isNavigating) {
+    if (!isNavigating && isMapAttached(mapInstance)) {
       if (mapEngine === 'leaflet') mapInstance?.setBearing?.(0);
       else mapInstance?.setHeading?.(0);
     }
@@ -189,7 +191,7 @@ export function useNavigationController({
 
   // Recenter action: smoothly moves camera to user's live position & heading
   const handleRecenter = useCallback(() => {
-    if (!liveLocation || !mapInstance) return;
+    if (!liveLocation || !isMapAttached(mapInstance)) return;
 
     setAutoFollow(true);
     const targetCenter = { lat: liveLocation.lat, lng: liveLocation.lng };
@@ -231,7 +233,7 @@ export function useNavigationController({
   // Animate the native map directly, without rerendering the app on every frame.
   // A new GPS fix starts at the current view; cleanup cancels old animation on drag/stop.
   useEffect(() => {
-    if (!isNavigating || !autoFollow || !liveLocation || !mapInstance) return;
+    if (!isNavigating || !autoFollow || !liveLocation || !isMapAttached(mapInstance)) return;
     const target = { lat: liveLocation.lat, lng: liveLocation.lng };
     if (mapEngine === 'google' && typeof mapInstance.moveCamera === 'function') {
       const center = mapInstance.getCenter?.();
@@ -256,6 +258,7 @@ export function useNavigationController({
       const from = mapInstance.getBearing?.() || 0;
       const started = performance.now();
       const rotate = now => {
+        if (!isMapAttached(mapInstance)) return;
         const t = Math.min(1, (now - started) / 300);
         mapInstance.setBearing(interpolateHeading(from, -liveHeading, t));
         if (t < 1) bearingFrame = requestAnimationFrame(rotate);
