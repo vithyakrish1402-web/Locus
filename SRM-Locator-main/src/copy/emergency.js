@@ -57,6 +57,8 @@ export const SOS_BUTTON = {
   sos: 'SOS',
   hold: 'Hold',
   armed: 'Armed',
+  // Gone out, and the server hasn't said it got it yet (utils/sosOutbox.js): never "Sent" till it has.
+  sending: 'Sending',
   sent: 'Sent',
   held: 'Waiting',
   early: 'Hold longer',
@@ -77,6 +79,7 @@ export const SOS_SPOKEN = {
   arming: 'Keep holding.',
   armed: 'Armed. Hold again within 4 seconds to send an emergency alert.',
   confirming: 'Keep holding to send.',
+  sending: 'Sending your emergency alert.',
   fired: 'Emergency alert sent.',
   held: 'Waiting for connection. Your alert will send when you are back online.',
   early: 'Hold longer, until the ring fills.',

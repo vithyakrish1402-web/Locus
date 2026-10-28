@@ -14,6 +14,7 @@ const ARIA_LABELS = {
   arming: 'Keep holding to arm SOS beacon',
   armed: 'Armed. Press and hold again to confirm SOS beacon',
   confirming: 'Keep holding to confirm SOS beacon',
+  sending: 'Sending SOS beacon. Waiting for the server to confirm it',
   fired: 'SOS beacon sent',
 };
 
@@ -22,6 +23,7 @@ const PHASE_LOOK = {
   arming: 'bg-danger text-white border-danger shadow-[0_0_15px_rgba(239,68,68,0.5)]',
   armed: 'bg-white text-danger border-white shadow-[0_0_20px_rgba(255,255,255,0.7)]',
   confirming: 'bg-danger-pressed text-white border-danger shadow-[0_0_20px_rgba(220,38,38,0.8)]',
+  sending: 'bg-danger text-white border-danger',
   fired: 'bg-success text-white border-success shadow-[0_0_15px_rgba(34,197,94,0.5)]',
 };
 
@@ -84,6 +86,25 @@ const SosTrigger = ({
     clearTimeout(earlyTimeoutRef.current);
   }, []);
 
+  // The outbox says when the server has the alert ('sent'): only then "Sent", including for one
+  // that waited offline and went later. Anything else (refused, held, not yet answered, dropped)
+  // ends "Sending": the held prop shows "Waiting" while the outbox keeps trying.
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  useEffect(() => {
+    if (!outbox) return undefined;
+    const unsubscribe = outbox.subscribe(({ event }) => {
+      const now = phaseRef.current;
+      // Not over a new hold under way.
+      if (event === 'sent' && (now === 'idle' || now === 'sending')) showSent();
+      else if (event !== 'sent' && now === 'sending') {
+        setPhase('idle');
+        setHoldProgress(0);
+      }
+    });
+    return () => { unsubscribe(); };
+  }, [outbox]);
+
   const emitSosBroadcast = () => {
     const send = (coords) => {
       const payload = {
@@ -118,17 +139,25 @@ const SosTrigger = ({
     }
   };
 
+  // "Sent" for a while, then back to SOS.
+  const showSent = () => {
+    clearTimeout(firedTimeoutRef.current);
+    setPhase('fired');
+    firedTimeoutRef.current = setTimeout(() => {
+      setPhase((p) => (p === 'fired' ? 'idle' : p));
+      setHoldProgress(0);
+    }, FIRED_DISPLAY_MS);
+  };
+
   const fire = () => {
     clearAllTimers();
     haptic('confirm');
     const goingOutNow = !outbox || (outbox.canSend() && !outbox.isHolding());
-    if (goingOutNow) {
-      setPhase('fired');
-      firedTimeoutRef.current = setTimeout(() => {
-        setPhase('idle');
-        setHoldProgress(0);
-      }, FIRED_DISPLAY_MS);
-    } else {
+    // Through the outbox, "Sending" until the server has answered (the effect below). It used to
+    // say "Sent" right here, which a phone showed for an alert on a connection already dead.
+    if (goingOutNow && outbox) setPhase('sending');
+    else if (goingOutNow) showSent();
+    else {
       setPhase('idle');
       setHoldProgress(0);
     }
@@ -204,7 +233,7 @@ const SosTrigger = ({
     }
   };
 
-  const resting = phase === 'idle' || phase === 'fired';
+  const resting = phase === 'idle' || phase === 'sending' || phase === 'fired';
   const showHeld = held && resting;
   const showEarly = !showHeld && early && phase === 'idle';
   const view = showHeld ? 'held' : showEarly ? 'early' : phase;
@@ -218,6 +247,7 @@ const SosTrigger = ({
 
   let labelText = SOS_BUTTON.sos;
   if (view === 'fired') labelText = SOS_BUTTON.sent;
+  else if (view === 'sending') labelText = SOS_BUTTON.sending;
   else if (view === 'held') labelText = SOS_BUTTON.held;
   else if (view === 'early') labelText = SOS_BUTTON.early;
   else if (phase === 'armed') labelText = SOS_BUTTON.armed;

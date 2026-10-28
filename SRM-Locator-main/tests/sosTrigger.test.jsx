@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import SosTrigger from '../src/components/SosTrigger.jsx';
 import { LAYER } from '../src/utils/layers.js';
+import { createSosOutbox } from '../src/utils/sosOutbox.js';
 
 const HOLD = 1200;
 const WINDOW = 4000;
@@ -173,5 +174,51 @@ describe('where it stands', () => {
       if (name === 'emergency') expect(LAYER.emergencyButton).toBeLessThan(z);
       else expect(LAYER.emergencyButton, name).toBeGreaterThan(z);
     }
+  });
+});
+
+// Through the app's outbox (utils/sosOutbox.js), the button says "Sent" only once the server has
+// answered the alert. It used to say so the moment the second hold completed: seen on a phone,
+// it read "Sent" while the alert sat on a connection that had already died (2026-10-28).
+describe('with the outbox: "Sent" waits for the server', () => {
+  const sendViaOutbox = () => {
+    const handlers = {};
+    const wire = {
+      connected: true,
+      emit: vi.fn(),
+      on: (e, fn) => { (handlers[e] ??= new Set()).add(fn); },
+      off: (e, fn) => handlers[e]?.delete(fn),
+      receive: (e, payload) => act(() => { [...(handlers[e] ?? [])].forEach((fn) => fn(payload)); }),
+    };
+    const outbox = createSosOutbox(wire);
+    outbox.markInGroup();
+    socket = wire;
+    render(<SosTrigger outbox={outbox} getLocation={() => ({ lat: 12.82, lng: 80.04 })} roomCode="K7M2QX" senderName="Meera" />);
+    const button = screen.getByRole('button');
+    press(button);
+    wait(HOLD);
+    release(button);
+    press(button);
+    wait(HOLD);
+    release(button);
+    const clientId = wire.emit.mock.calls.find(([e]) => e === 'sos-broadcast')[1].clientId;
+    return { button, wire, clientId };
+  };
+
+  it('says Sending after the hold, and Sent only on the answer', () => {
+    const { button, wire, clientId } = sendViaOutbox();
+    expect(button.textContent).toMatch(/Sending/i);
+    expect(button.textContent).not.toMatch(/Sent/i);
+    wire.receive('alert-result', { type: 'sos', allowed: true, clientId });
+    expect(button.textContent).toMatch(/Sent/i);
+    wait(2000);
+    expect(button.textContent).toMatch(/SOS/);
+  });
+
+  it('a refusal never shows Sent', () => {
+    const { button, wire, clientId } = sendViaOutbox();
+    wire.receive('alert-result', { type: 'sos', allowed: false, reasonCode: 'COOLDOWN', clientId });
+    expect(button.textContent).not.toMatch(/Sent/i);
+    expect(button.textContent).toMatch(/SOS/);
   });
 });
