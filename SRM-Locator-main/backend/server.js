@@ -38,16 +38,71 @@ import {
 import { ACTIVITY, logActivity, activityOf, noteSharingMode, forgetSharingMode } from './activityLog.js';
 import { createJoinNotifier } from './joinNotify.js';
 import { createFriendsStore, friendsLoaderFromEnv, friendsStartupLine, sosAudience } from './friends.js';
+import { createRateLimiter } from './rateLimit.js';
 
 const app = express();
 app.use(cors());
 // One proxy hop (Render's): lets req.ip be the caller rather than the proxy, for rate limits.
 app.set('trust proxy', 1);
 
+// --- LIMITS ON ONE CONNECTION ---
+// What one phone (or a hand-made client) may ask of the server, so that nobody can grow its
+// memory without end, flood a Group or run up Firestore reads. Refusals are logged, never thrown.
+// Groups one person may found in an hour (a Commander's resume is free); the test servers raise it.
+const MAX_GROUPS_PER_HOUR = Number(process.env.LOCUS_MAX_GROUPS_PER_HOUR) || 5;
+const MAX_NAME_LENGTH = 40;             // a person's display name, cut to this
+const MAX_PLACE_NAME_LENGTH = 80;       // a meeting point's name (campus names reach 47)
+const MAX_PHOTO_URL_LENGTH = 2048;
+const MAX_ROOM_CODE_LENGTH = 64;        // the same cap the background endpoints use
+const MAX_FRIEND_LOOKUPS_PER_MIN = 10;  // friend-list reads one person may set off
+const MAX_MESSAGES_PER_SEC = 30;        // events a second from one connection; the rest are dropped
+const MAX_MESSAGE_BYTES = 100_000;      // one event's size (socket.io's own default is 1 MB)
+
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
+  cors: { origin: "*", methods: ["GET", "POST"] },
+  maxHttpBufferSize: MAX_MESSAGE_BYTES,
 });
+
+// --- WHO IS ON EACH CONNECTION ---
+// A phone proves who it is with its Firebase ID token on every 'request-join' (identity.js
+// checks it), and from then on the connection is that uid: roles, blocks, settings and SOS all
+// read it from socket.data.uid. The uid a payload names is never believed over a token.
+// Phones on 1.1.79 and older send no token. Until LOCUS_SOCKET_AUTH=require is set, a join
+// without one is still let in under the uid it names, but never as anyone who has already
+// proved themselves to this server since it started. Set it once the app that sends tokens
+// has reached every phone: every join without proof is then refused.
+const SOCKET_AUTH_REQUIRED = process.env.LOCUS_SOCKET_AUTH === 'require';
+const idTokenVerifier = createIdTokenVerifier();
+const provenUids = new Set();
+console.log(`[IDENTITY] Group joins: ${SOCKET_AUTH_REQUIRED ? 'a sign-in token is required' : 'a sign-in token is checked when sent (LOCUS_SOCKET_AUTH=require to insist)'}`);
+
+// Who a 'request-join' really comes from: { uid } (null for an old client that names nobody),
+// or { refused: reason }. `proof` is identity.js's answer for the token the join brought, or
+// null for none. A token that checks out wins over whatever the payload names; a bad one is never
+// a reason to believe the payload instead. Only "could not decide" (Google's keys out of reach)
+// falls through to the rules for a join that brings no token.
+function joinerUid(user, proof) {
+  const claimed = typeof user?.uid === 'string' && user.uid ? user.uid : null;
+  if (proof) {
+    if (proof.ok) {
+      provenUids.add(proof.uid);
+      return { uid: proof.uid };
+    }
+    if (proof.reason !== 'unavailable') return { refused: proof.reason };
+  }
+  if (SOCKET_AUTH_REQUIRED) return { refused: proof ? 'unavailable' : 'missing' };
+  if (claimed && provenUids.has(claimed)) return { refused: 'unproven' };
+  return { uid: claimed };
+}
+
+const groupsFounded = createRateLimiter({ limit: MAX_GROUPS_PER_HOUR, windowMs: 60 * 60 * 1000 });
+const friendLookups = createRateLimiter({ limit: MAX_FRIEND_LOOKUPS_PER_MIN, windowMs: 60 * 1000 });
+const cleanName = (name, max = MAX_NAME_LENGTH) => (typeof name === 'string' && name.trim() ? name.trim().slice(0, max) : null);
+const cleanPhoto = (url) => (typeof url === 'string' && url.length <= MAX_PHOTO_URL_LENGTH && /^https?:\/\//.test(url) ? url : null);
+// A real position: numbers, on the globe, and not the 0,0 a broken fix reports.
+const isRealFix = (lat, lng) =>
+  Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
 
 // --- STATE MANAGERS ---
 // Keyed by client-chosen room codes, so no prototype: on a plain {} a code like
@@ -71,7 +126,7 @@ const sosWatch = createSosWatch();
 app.use('/api/background', createBackgroundRouter({
   config: backgroundSettings,
   sosWatch,
-  verifyIdToken: createIdTokenVerifier().verifyIdToken,
+  verifyIdToken: idTokenVerifier.verifyIdToken,
   getSquad: (roomCode) => activeSquads[roomCode],
   accept: (roomCode, uid, report, now) => acceptBackgroundPosition(roomCode, uid, report, now),
   endSharing: (roomCode, uid) => endSharing(roomCode, uid),
@@ -522,6 +577,29 @@ export function acceptBackgroundPosition(roomCode, uid, report, now = Date.now()
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
 
+  // At most MAX_MESSAGES_PER_SEC events a second from this connection; the rest of that second
+  // is dropped, the connection kept. A phone back from a dead zone flushes everything it buffered
+  // at once, so joining, leaving, admitting and anything about an SOS count in a bucket of their
+  // own and are never crowded out by its stale positions.
+  const ALWAYS_THROUGH = new Set(['request-join', 'cancel-join', 'leave-squad', 'sos-broadcast', 'sos-sync', 'sos-ack', 'resolve-access', 'admit-all', 'kick-member', 'block-user']);
+  const sent = { usual: { start: 0, count: 0 }, vital: { start: 0, count: 0 } };
+  socket.use(([event], next) => {
+    const bucket = ALWAYS_THROUGH.has(event) ? sent.vital : sent.usual;
+    const now = Date.now();
+    if (now - bucket.start >= 1000) {
+      bucket.start = now;
+      bucket.count = 0;
+    }
+    bucket.count += 1;
+    if (bucket.count <= MAX_MESSAGES_PER_SEC) return next();
+    if (bucket.count === MAX_MESSAGES_PER_SEC + 1) console.warn(`[LIMIT] ${socket.id} sent over ${MAX_MESSAGES_PER_SEC} events in a second; dropping the rest of it`);
+  });
+  // While a join's sign-in token is being checked, whatever this connection sends next waits for
+  // it, so everything is still handled in the order it was sent (a position right behind the
+  // join is the join's, not a stranger's).
+  let joinChecked = null;
+  socket.use((packet, next) => (joinChecked ? joinChecked.then(() => next()) : next()));
+
   // A note on payloads: a handler that throws is an uncaught exception, which kills the
   // whole process (and every squad with it, since nothing is persisted). A client can
   // send no payload, or null, so every handler reads its payload through `?? {}` — a
@@ -568,18 +646,24 @@ socket.on('check-ping', (clientTimestamp) => {
     const sharingUid = uidOfPresenceKey(targetId);
     const targetIsSharing = Boolean(sharingUid) && Boolean(presenceOf(squad, sharingUid, Date.now()));
     if (!squad || !squad.members.includes(socket.id) || !(squad.members.includes(targetId) || targetIsSharing)) return;
+    // Whoever leads the Group (its Commander, or whoever holds command for them) is never voted out.
+    const targetUid = sharingUid || uidOfSocket(squad, targetId);
+    if (targetId === squad.ownerId || (targetUid && targetUid === commanderOf(squad))) return;
 
+    // One vote a person, however often they reconnect: votes are kept by who cast them (their
+    // uid), not by connection, and only those still on the roster are counted.
     if (!squad.kickVotes) squad.kickVotes = {};
     if (!squad.kickVotes[targetId]) squad.kickVotes[targetId] = new Set();
-    squad.kickVotes[targetId].add(socket.id);
+    squad.kickVotes[targetId].add(keyOf(squad, socket.id));
 
-    const requiredVotes = Math.max(2, Math.ceil(squad.members.length / 2)); 
-    const currentVotes = squad.kickVotes[targetId].size;
+    const requiredVotes = Math.max(2, Math.ceil(squad.members.length / 2));
+    const onRoster = new Set(squad.members.map((id) => keyOf(squad, id)));
+    const currentVotes = [...squad.kickVotes[targetId]].filter((voter) => onRoster.has(voter)).length;
 
     io.to(roomCode).emit('mutiny-status', { targetId, votes: currentVotes, required: requiredVotes });
 
     if (currentVotes >= requiredVotes) {
-      const exiledUid = sharingUid || uidOfSocket(squad, targetId);
+      const exiledUid = targetUid;
       recordActivity(roomCode, { kind: ACTIVITY.KICKED, uid: exiledUid, name: nameOf(squad, targetId), byName: 'Group vote' });
       dropModerator(squad, exiledUid);
       forgetSharingMode(squad, exiledUid);
@@ -647,13 +731,36 @@ socket.on('check-ping', (clientTimestamp) => {
   });
 
   // --- GATEKEEPER ENTRY PROTOCOL ---
+  // A join that brings a sign-in token is handled once the token is checked (see WHO IS ON EACH
+  // CONNECTION); one without is handled at once, as it always was. The check is async, so a
+  // throw after it would be an unhandled rejection, which ends the process as surely as an
+  // uncaught exception: caught and logged instead.
   socket.on('request-join', (data) => {
+    const { user, idToken } = data ?? {};
+    if (idToken == null) return requestJoin(data, joinerUid(user, null));
+    const checked = idTokenVerifier.verifyIdToken(idToken)
+      .then((proof) => {
+        if (socket.connected) requestJoin(data, joinerUid(user, proof));
+      })
+      .catch((err) => console.error(`[GATE] Join from ${socket.id} failed:`, err))
+      .finally(() => {
+        if (joinChecked === checked) joinChecked = null;
+      });
+    joinChecked = checked;
+  });
+  const requestJoin = (data, who) => {
     const { roomCode, user, intent } = data ?? {};
     // The code becomes an object key, so anything else was coerced into one: no code at
     // all created a squad called "undefined" with the sender as its Commander, and
     // whoever typed that code for real was queued behind them.
-    if (typeof roomCode !== 'string' || !roomCode) {
+    if (typeof roomCode !== 'string' || !roomCode || roomCode.length > MAX_ROOM_CODE_LENGTH) {
       console.warn(`[GATE] Dropped join from ${socket.id}: invalid room code`);
+      return;
+    }
+    // Who is asking (see WHO IS ON EACH CONNECTION).
+    if (who.refused) {
+      console.warn(`[GATE] Refused join from ${socket.id} to ${roomCode}: sign-in not proven (${who.refused})`);
+      socket.emit('join-refused', { roomCode, reason: 'identity', detail: who.refused });
       return;
     }
     const existing = activeSquads[roomCode];
@@ -665,16 +772,17 @@ socket.on('check-ping', (clientTimestamp) => {
     // "awaiting clearance" queue behind a "commander" who never asked to be one.
     // A stable per-person uid (Firebase uid, survives reconnects/new socket ids)
     // lets the server recognize "this is genuinely the same person who owns this
-    // squad" and let them straight back in, no race, no vote required.
-    const requesterUid = user?.uid || null;
+    // squad" and let them straight back in, no race, no vote required. That uid is the
+    // proven one (above), never simply the one the payload names.
+    const requesterUid = who.uid;
     socket.data.uid = requesterUid;
     // Their trusted friends, ready for an SOS (friends.js): never fetched while one is raised.
-    if (requesterUid) friendsStore.prefetch(requesterUid);
+    if (requesterUid && friendLookups.check(requesterUid).ok) friendsStore.prefetch(requesterUid);
     // Remember who this socket is independently of their telemetry. broadcastSquadUpdate
     // needs a name and photo for members who haven't got a GPS fix yet (indoors, location
     // permission denied, just joined) — they're on the roster, so they must be nameable
     // there, rather than being invisible until their first coordinate arrives.
-    socket.data.profile = { name: user?.name || null, photo: user?.photo || null };
+    socket.data.profile = { name: cleanName(user?.name), photo: cleanPhoto(user?.photo) };
 
     // Whatever this socket, or this person on an earlier connection, was still waiting on
     // is superseded by this request, wherever it was (a request that ends up pending below
@@ -700,6 +808,12 @@ socket.on('check-ping', (clientTimestamp) => {
     // members are all sharing from the background is not abandoned: starting afresh here would
     // wipe its roster out from under them.
     if (!existing || (existing.members.length === 0 && !hasPresence(existing, Date.now()))) {
+      // A Commander resuming after a restart is not founding anything new: only creates count.
+      if (intent !== 'resume' && !groupsFounded.check(requesterUid ?? socket.id).ok) {
+        console.warn(`[GATE] Refused a new Group ${roomCode} from ${socket.id}: over ${MAX_GROUPS_PER_HOUR} an hour`);
+        socket.emit('join-refused', { roomCode, reason: 'too-many-groups' });
+        return;
+      }
       activeSquads[roomCode] = {
         ownerId: socket.id,
         ownerUid: requesterUid,
@@ -836,12 +950,12 @@ socket.on('check-ping', (clientTimestamp) => {
 
     // Case 5: normal gatekeeper flow — a genuine new joiner needs the owner's approval.
     // Recorded, so that only a request still open can be approved (see resolve-access).
-    addPendingRequest(existing, socket.id, { uid: requesterUid, name: user?.name ?? null, photo: user?.photo ?? null });
+    addPendingRequest(existing, socket.id, { uid: requesterUid, ...socket.data.profile });
     // Every reply names its squad, so a client can ignore one about a squad it has left.
     socket.emit('access-pending', { roomCode });
     setJoinNotice(activeSquads[roomCode], roomCode, Object.keys(activeSquads[roomCode].pending ?? {}).length);
     joinNotifier.requested(roomCode);
-    const request = { targetId: socket.id, name: user?.name, photo: user?.photo, roomCode: roomCode };
+    const request = { targetId: socket.id, ...socket.data.profile, roomCode: roomCode };
     // Moderators admit too, so each connected one sees the request as the admin does.
     for (const id of socketsAllowed(existing, 'seeJoinQueue')) {
       if (id !== existing.ownerId) io.to(id).emit('access-request', request);
@@ -854,7 +968,7 @@ socket.on('check-ping', (clientTimestamp) => {
       // Commander back, or a member back as caretaker), and each of those sends the queue.
       promoteStandIn(existing, roomCode);
     }
-  });
+  };
 
   // ABORT HANDSHAKE: the joiner stops waiting. Withdrawn server-side, and the Commander
   // told, so a GRANT tapped later on a stale screen can't pull them in after all.
@@ -1043,6 +1157,8 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.on('friends-changed', (payload) => {
     const own = socket.data?.uid;
     if (!own) return;
+    // Each refresh is a Firestore read: a person may set off MAX_FRIEND_LOOKUPS_PER_MIN.
+    if (!friendLookups.check(own).ok) return;
     friendsStore.refresh(own);
     const other = payload?.uid;
     if (typeof other !== 'string' || other === own) return;
@@ -1081,11 +1197,17 @@ socket.on('check-ping', (clientTimestamp) => {
   socket.on('publish-waypoint', (data) => {
     const { roomCode, waypoint } = data ?? {};
     if (waypoint && activeSquads[roomCode] && activeSquads[roomCode].members.includes(socket.id)) {
+      // A meeting point with no real position broke every phone's map, and stayed on file for
+      // each later joiner: refused here, whatever the app sent.
+      if (!isRealFix(waypoint.lat, waypoint.lng)) {
+        console.warn(`[LIMIT] Refused a Rally Point from ${socket.id} in ${roomCode}: not a real position`);
+        return;
+      }
       console.log(`[🎯 TACTICAL] New Rally Point designated in ${roomCode} at ${waypoint.lat}, ${waypoint.lng}`);
       const rallyPoint = {
         lat: waypoint.lat,
         lng: waypoint.lng,
-        name: typeof waypoint.name === 'string' ? waypoint.name.slice(0, 120) : undefined,
+        name: cleanName(waypoint.name, MAX_PLACE_NAME_LENGTH) ?? undefined,
         ...(typeof waypoint.description === 'string' ? { description: waypoint.description.trim().slice(0, 160) } : {}),
         setBy: memberKey(socket.data?.uid, socket.id),
       };
@@ -1126,17 +1248,25 @@ socket.on('check-ping', (clientTimestamp) => {
     if (!squad || !squad.members.includes(socket.id)) {
       return;
     }
+    // Hidden: no position is kept, whatever an older app still sends.
+    const hidden = data.status === 'GHOST';
+    // A position that is no position (text, NaN, off the globe) is refused whole: everyone's
+    // map would otherwise be handed it.
+    if (!hidden && (lat != null || lng != null) && !isRealFix(lat, lng)) {
+      console.warn(`[LIMIT] Dropped a position from ${socket.id} in ${newRoom}: not a real fix`);
+      return;
+    }
     squad.lastActivity = Date.now();
+    const name = cleanName(data.name);
+    const photo = cleanPhoto(data.photo);
     const reporter = squad.memberUids?.[socket.id];
     if (reporter) {
       squad.profiles ??= Object.create(null);
-      squad.profiles[reporter] = { name: data.name ?? null, photo: data.photo ?? null };
+      squad.profiles[reporter] = { name, photo };
       // Going hidden, or coming back from it, goes in the activity log.
-      const changed = noteSharingMode(squad, { uid: reporter, name: data.name ?? null, status: data.status });
+      const changed = noteSharingMode(squad, { uid: reporter, name, status: data.status });
       if (changed) recordActivity(newRoom, changed);
     }
-    // Hidden: no position is kept, whatever an older app still sends.
-    const hidden = data.status === 'GHOST';
 
     const oldRoom = users[socket.id]?.roomCode;
 
@@ -1147,6 +1277,8 @@ socket.on('check-ping', (clientTimestamp) => {
     users[socket.id] = {
       ...data,
       ...(hidden ? { lat: undefined, lng: undefined, building: undefined, floor: undefined } : {}),
+      name,
+      photo,
       roomCode: newRoom,
       heading: heading || 0,       // Failsafe: Prevents NaN crashes on the frontend
       lastSeen: Date.now()         // Anchor: Records the exact millisecond of the last known ping

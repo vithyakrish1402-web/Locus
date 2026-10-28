@@ -13,11 +13,11 @@
 // or as owner) and haven't since left, been kicked, or been blocked. It is only ever
 // added to on admission and removed from on a deliberate exit — never by a disconnect.
 //
-// Trust note: the uid arrives in the client's own 'request-join' payload and isn't
-// verified against Firebase server-side (the owner-reconnect path already relies on the
-// same claim). Anyone who learns a member's uid and the squad code could present it.
-// uids aren't broadcast to other clients, but verifying the Firebase ID token on the
-// server would be the proper hardening.
+// Trust note: uids ARE sent to every member (each users-update entry carries one; the app
+// needs them for friends and to recognise a member coming back), so knowing one proves
+// nothing. A uid counts only once 'request-join' has checked the Firebase ID token behind
+// it (server.js, WHO IS ON EACH CONNECTION). Phones too old to send a token are still
+// believed until LOCUS_SOCKET_AUTH=require, but never as someone who has proved themselves.
 
 export const isKnownMember = (squad, uid) =>
   Boolean(uid) && Boolean(squad?.knownUids?.includes(uid));

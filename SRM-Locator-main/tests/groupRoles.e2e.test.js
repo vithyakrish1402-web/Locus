@@ -529,6 +529,9 @@ describe('malformed payloads', () => {
         bravo.emit(event, payload, () => {});
       }
     }
+    // 72 events a phone in one go is over the server's per-second limit, so the rest of that
+    // second is dropped: the check below waits for the next one.
+    await sleep(1100);
     await settle(alpha);
     await settle(bravo);
     expect(api.serverIsAlive()).toBe(true);
