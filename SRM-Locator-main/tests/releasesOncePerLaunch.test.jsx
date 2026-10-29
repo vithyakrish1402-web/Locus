@@ -20,6 +20,8 @@ vi.mock('../src/utils/locusUpdater', () => ({
   },
   isUpdaterAvailable: () => true,
   canShareInstaller: () => false,
+  // The real one waits for any earlier download to settle (utils/locusUpdater.js).
+  queueDownload: (task) => Promise.resolve().then(task),
 }));
 vi.mock('../src/utils/liveUpdater', () => ({
   isLiveUpdaterAvailable: () => true,

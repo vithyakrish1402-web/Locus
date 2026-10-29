@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LocusUpdater } from '../utils/locusUpdater';
+import { LocusUpdater, queueDownload } from '../utils/locusUpdater';
 import { APK_DOWNLOAD_STALL_TIMEOUT_MS } from './useAppUpdate';
 
 // Settings -> Send LOCUS to someone: LOCUS downloads the installer itself, checks it, and
@@ -35,6 +35,9 @@ export function useShareInstaller(installer, { enabled = true, stallTimeoutMs = 
   // a stall can never move the screen when it answers late.
   const attemptRef = useRef(0);
   const downloadingRef = useRef(false);
+  // Running now, not waiting its turn behind the app update: only then are progress events ours.
+  const runningRef = useRef(false);
+  const abandonRef = useRef(null);
   const stallTimerRef = useRef(null);
   const pathRef = useRef(null);
   const pathForRef = useRef(null);
@@ -59,6 +62,7 @@ export function useShareInstaller(installer, { enabled = true, stallTimeoutMs = 
         stallTimerRef.current = null;
         // Native cancel deletes the partial file.
         LocusUpdater.cancelDownload().catch(() => {});
+        abandonRef.current?.();
         fail('STALLED');
       }, stallTimeoutMs);
     },
@@ -96,16 +100,29 @@ export function useShareInstaller(installer, { enabled = true, stallTimeoutMs = 
     setProgress({ percent: -1, loaded: 0, total: installer.apkSize ?? 0 });
     setStatus(ShareStatus.DOWNLOADING);
     downloadingRef.current = true;
-    armStallTimer(attempt);
     try {
-      const { path } = await LocusUpdater.download({
-        url: installer.apkUrl,
-        sha256: installer.sha256,
-        // What the person receiving it sees.
-        fileName: `LOCUS-${installer.version}.apk`,
-        ...(typeof installer.apkSize === 'number' && installer.apkSize > 0 ? { size: installer.apkSize } : {}),
+      // After any app update download already running (queueDownload): they used to cancel
+      // each other. The stall countdown starts with this download, not while it waits.
+      const result = await queueDownload(() => {
+        if (attempt !== attemptRef.current) return null;
+        runningRef.current = true;
+        armStallTimer(attempt);
+        return new Promise((resolve, reject) => {
+          abandonRef.current = () => reject(Object.assign(new Error('Download given up'), { code: 'STALLED' }));
+          LocusUpdater.download({
+            url: installer.apkUrl,
+            sha256: installer.sha256,
+            // What the person receiving it sees.
+            fileName: `LOCUS-${installer.version}.apk`,
+            ...(typeof installer.apkSize === 'number' && installer.apkSize > 0 ? { size: installer.apkSize } : {}),
+          }).then(resolve, reject);
+        }).finally(() => {
+          runningRef.current = false;
+          abandonRef.current = null;
+        });
       });
-      if (attempt !== attemptRef.current) return;
+      if (attempt !== attemptRef.current || !result) return;
+      const { path } = result;
       downloadingRef.current = false;
       clearStallTimer();
       pathRef.current = path;
@@ -124,7 +141,7 @@ export function useShareInstaller(installer, { enabled = true, stallTimeoutMs = 
     let handle;
     let cancelled = false;
     LocusUpdater.addListener('downloadProgress', (event) => {
-      if (!downloadingRef.current) return;
+      if (!downloadingRef.current || !runningRef.current) return;
       armStallTimer(attemptRef.current);
       if (event?.stage === 'verifying') setStatus(ShareStatus.VERIFYING);
       setProgress({

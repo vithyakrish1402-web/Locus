@@ -51,7 +51,7 @@ describe('rebuilding the file', () => {
     const gh = fakeGh();
     const result = publishUpdateIndex({ dir, repo: REPO, run: gh.run, now: NOW });
     expect(result.ok).toBe(true);
-    expect(gh.calls[0]).toEqual(['api', `repos/${REPO}/releases?per_page=100`]);
+    expect(gh.calls[0]).toEqual(['api', '--paginate', '--slurp', `repos/${REPO}/releases?per_page=100`]);
     expect(gh.calls[1].slice(0, 3)).toEqual(['release', 'view', 'update-index']);
     expect(gh.calls[2]).toEqual(['release', 'upload', 'update-index', result.file, '--clobber', '--repo', REPO]);
     expect(gh.calls).toHaveLength(3);
@@ -143,7 +143,7 @@ describe('a failure is reported, never thrown', () => {
     const gh = fakeGh({ listing });
     const result = publishUpdateIndex({ dir, repo: fork, run: gh.run, now: NOW });
     expect(result.ok).toBe(true);
-    expect(gh.calls[0]).toEqual(['api', `repos/${fork}/releases?per_page=100`]);
+    expect(gh.calls[0]).toEqual(['api', '--paginate', '--slurp', `repos/${fork}/releases?per_page=100`]);
     expect(gh.calls[2]).toEqual(['release', 'upload', 'update-index', result.file, '--clobber', '--repo', fork]);
   });
 });

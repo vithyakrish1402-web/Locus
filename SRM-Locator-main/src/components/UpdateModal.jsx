@@ -111,9 +111,12 @@ const UpdateModal = ({ update }) => {
     tone = 'warning';
     title = installFailure ? UPDATE.failed.installTitle : UPDATE.failed.checkTitle;
     body = failureSentence(error?.code, { download: downloadFailure });
+    // A failed download or install downloads again; a failed check asks again. Try again was
+    // greyed out after a check that failed before finding a release, leaving nothing to tap.
+    const retry = installFailure ? update.startDownload : () => update.check({ manual: true });
     actions = (
       <>
-        <Button ref={primaryRef} block size="large" onClick={update.startDownload} disabled={!manifest}>{UPDATE.failed.tryAgain}</Button>
+        <Button ref={primaryRef} block size="large" onClick={retry} disabled={installFailure && !manifest}>{UPDATE.failed.tryAgain}</Button>
         {!mandatory && <Button variant="plain" block onClick={update.dismiss}>{UPDATE.failed.later}</Button>}
       </>
     );

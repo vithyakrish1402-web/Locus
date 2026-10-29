@@ -12,15 +12,24 @@
 //
 // Requires: the `gh` CLI, authenticated (`gh auth login`), and release signing
 // configured in android/local.properties (see UPDATER.md).
+//
+// Before building it refuses a build number (versionCode) not above the published APK's, and
+// notes the app would read as an instruction (scripts/lib/releaseChecks.mjs). The release is
+// tagged at the commit built and published as a draft first (scripts/lib/publishRelease.mjs).
+// If the push or the publish fails, run the same command again: it finds its own release
+// commit at HEAD and carries on from there without bumping again.
 
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { releaseVersionConflict } from '../src/utils/liveUpdateManifest.js';
+import { MANDATORY_LINE, MANDATORY_MARKER, compareVersions, releaseVersionCode } from '../src/utils/updateManifest.js';
 import { webBuildProblem } from './lib/webBuild.mjs';
 import { publishUpdateIndex, reportUpdateIndex } from './lib/updateIndex.mjs';
+import { notesProblem, versionCodeProblem } from './lib/releaseChecks.mjs';
+import { publishRelease } from './lib/publishRelease.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
@@ -88,6 +97,11 @@ if (!currentCodeMatch || !currentNameMatch) die('could not read versionCode/vers
 const currentCode = Number(currentCodeMatch[1]);
 const currentName = currentNameMatch[1];
 
+// A rerun after a failed push or publish: this version's release commit is already made.
+const resuming =
+  currentName === version && capture('git', ['log', '-1', '--pretty=%s']).stdout === `chore(release): v${version}`;
+if (resuming) console.log(`\n  Resuming v${version}: its release commit is at HEAD, so nothing is bumped again.`);
+
 // Tolerates the pre-updater "1.0" style as well as proper semver; missing parts are 0.
 const asTuple = (v) => {
   const parts = v.replace(/^v/i, '').split('.').map((p) => Number.parseInt(p, 10));
@@ -107,7 +121,7 @@ const isSameAsCurrent = nMaj === cMaj && nMin === cMin && nPatch === cPatch;
 const isFirstRelease = capture('git', ['tag', '--list', 'v*']).stdout === '';
 const isBaseline = isFirstRelease && isSameAsCurrent;
 
-if (!isNewer && !isBaseline) {
+if (!isNewer && !isBaseline && !resuming) {
   die(
     isSameAsCurrent
       ? `${version} matches the current versionName and v-tags already exist - pick a newer version`
@@ -116,22 +130,66 @@ if (!isNewer && !isBaseline) {
 }
 
 // Don't bump the code for a baseline that reuses the current versionName: publish
-// exactly what build.gradle already describes.
-const nextCode = isBaseline ? currentCode : currentCode + 1;
+// exactly what build.gradle already describes. Nor for a rerun: it was bumped already.
+const nextCode = isBaseline || resuming ? currentCode : currentCode + 1;
 
 const existingTag = capture('git', ['tag', '--list', `v${version}`]);
 if (existingTag.stdout) die(`tag v${version} already exists`);
 
 // Every release tag on GitHub, in both series. Releases are made with `gh release create`,
 // which tags on GitHub only, so the local clone's tags can't be trusted to be complete.
+// Drafts are left out: a draft is a failed run's leftover, which publishRelease replaces.
 const publishedTags = () => {
-  const listed = capture('gh', ['release', 'list', '--limit', '500', '--json', 'tagName', '--jq', '.[].tagName']);
+  const listed = capture('gh', ['release', 'list', '--limit', '500', '--json', 'tagName,isDraft', '--jq', '.[] | select(.isDraft | not) | .tagName']);
   if (listed.status !== 0) die('could not list the published releases (gh release list)');
   return listed.stdout.split(/\r?\n/).filter(Boolean);
 };
 // Above every JS bundle too: see releaseVersionConflict.
-const versionConflict = releaseVersionConflict(version, publishedTags());
+const tags = publishedTags();
+const versionConflict = releaseVersionConflict(version, tags);
 if (versionConflict) die(versionConflict);
+
+// The build number must be above the newest published APK's (releaseChecks.mjs), checked
+// before anything is built. Read from its VERSION_CODE line, or for a release older than that
+// line, from the APK itself with the Android SDK's aapt2.
+function aapt2Path() {
+  const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT ||
+    (process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Android', 'Sdk') : null);
+  const tools = sdk ? join(sdk, 'build-tools') : null;
+  if (!tools || !existsSync(tools)) return null;
+  const exe = IS_WINDOWS ? 'aapt2.exe' : 'aapt2';
+  const versions = readdirSync(tools).sort((a, b) => compareVersions(b, a) ?? 0);
+  const found = versions.map((v) => join(tools, v, exe)).find((p) => existsSync(p));
+  return found ?? null;
+}
+function publishedVersionCode(tag) {
+  const body = capture('gh', ['release', 'view', tag, '--json', 'body', '--jq', '.body']);
+  if (body.status === 0 && releaseVersionCode(body.stdout) !== null) return releaseVersionCode(body.stdout);
+  const aapt2 = aapt2Path();
+  if (!aapt2) return null;
+  const dir = join(STAGING_DIR, 'published-apk');
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  if (capture('gh', ['release', 'download', tag, '--pattern', APK_ASSET_NAME, '--dir', dir]).status !== 0) return null;
+  const badging = capture(aapt2, ['dump', 'badging', join(dir, APK_ASSET_NAME)]).stdout;
+  const match = /versionCode='(\d+)'/.exec(badging);
+  return match ? Number(match[1]) : null;
+}
+const newestApkTag = tags
+  .filter((tag) => /^v\d/i.test(tag) && compareVersions(tag, '0.0.0') !== null)
+  .sort((a, b) => compareVersions(b, a))[0];
+if (newestApkTag && !isBaseline) {
+  const codeRefused = versionCodeProblem(nextCode, publishedVersionCode(newestApkTag), newestApkTag);
+  if (codeRefused) die(codeRefused);
+}
+
+// The notes, checked now rather than after a build (releaseChecks.mjs).
+const humanNotes = notesFile
+  ? readFileSync(resolve(ROOT, notesFile), 'utf8').trim()
+  : capture('git', ['log', '--pretty=format:- %s', `v${currentName}..HEAD`]).stdout ||
+    capture('git', ['log', '--pretty=format:- %s', '-20']).stdout;
+const notesRefused = notesProblem(humanNotes);
+if (notesRefused) die(notesRefused);
 
 if (isBaseline) {
   console.log(`\n  LOCUS BASELINE release ${version} (code ${currentCode}) - first release, nothing bumped`);
@@ -204,15 +262,14 @@ console.log(`\n  ${APK_ASSET_NAME}  ${sizeMb} MB\n  SHA256: ${sha256}`);
 
 // ---------------------------------------------------------------- release body
 
-const humanNotes = notesFile
-  ? readFileSync(resolve(ROOT, notesFile), 'utf8').trim()
-  : capture('git', ['log', '--pretty=format:- %s', `v${currentName}..HEAD`]).stdout ||
-    capture('git', ['log', '--pretty=format:- %s', '-20']).stdout;
-
+// The mandatory gate is the MANDATORY_LINE, and nothing else (updateManifest.js). The old
+// marker goes on a line of its own too, for apps up to js-1.1.83, which look for that text.
 const body = [
   humanNotes,
   '',
-  mandatory ? '[MANDATORY]' : null,
+  mandatory ? MANDATORY_MARKER : null,
+  mandatory ? MANDATORY_LINE : null,
+  `VERSION_CODE: ${nextCode}`,
   `SHA256: ${sha256}`,
 ]
   .filter((line) => line !== null)
@@ -223,8 +280,8 @@ writeFileSync(bodyFile, body);
 console.log(`\n  --- release body ---\n${body}\n  --------------------`);
 
 if (dryRun) {
-  console.log(`\n  Dry run complete. Staged at ${STAGING_DIR}. Reverting the version bump.`);
-  writeFileSync(GRADLE_FILE, gradle);
+  console.log(`\n  Dry run complete. Staged at ${STAGING_DIR}.${gradleChanged ? ' Reverting the version bump.' : ''}`);
+  if (gradleChanged) writeFileSync(GRADLE_FILE, gradle);
   process.exit(0);
 }
 
@@ -236,18 +293,27 @@ if (gradleChanged) {
   run('git', ['add', GRADLE_FILE]);
   run('git', ['commit', '-m', `chore(release): v${version}`]);
 }
-run('git', ['push']);
+// The tag will point at this commit, so it must be on GitHub first. A failed push stops here
+// with nothing published; the same command run again resumes from this commit.
+console.log('\n  $ git push origin HEAD');
+if (spawnSync('git', ['push', 'origin', 'HEAD'], { cwd: ROOT, stdio: 'inherit' }).status !== 0) {
+  die(`the push failed, so nothing was published. The release commit for v${version} is at HEAD ` +
+    '(local only). Fix the push, then run the same command again: it carries on from that commit.');
+}
+const builtCommit = capture('git', ['rev-parse', 'HEAD']).stdout;
 
-run('gh', [
-  'release',
-  'create',
-  `v${version}`,
+const published = publishRelease({
+  tag: `v${version}`,
+  title: `LOCUS v${version}`,
   asset,
-  '--title',
-  `LOCUS v${version}`,
-  '--notes-file',
-  bodyFile,
-]);
+  notesFile: bodyFile,
+  target: builtCommit,
+});
+// Only the tag check fails after the release is public: then the index is still rebuilt below.
+if (!published.ok && published.step !== 'check the tag') die(`could not ${published.step}: ${published.error}\n  ${published.retry}`);
+console.log(published.ok
+  ? `\n  v${version} is tagged at the built commit ${builtCommit}.`
+  : `\n  WARNING: ${published.error}. ${published.retry}`);
 
 if (isBaseline) {
   console.log(`\n  Published the v${version} baseline.`);

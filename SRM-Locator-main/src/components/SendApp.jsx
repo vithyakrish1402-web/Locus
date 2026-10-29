@@ -9,7 +9,7 @@ import { copyText } from '../utils/clipboard';
 import { canShareInstaller } from '../utils/locusUpdater';
 import { ShareStatus, useShareInstaller } from '../hooks/useShareInstaller';
 import { UpdateStatus, displayPercent } from '../hooks/useAppUpdate';
-import { getReleases } from '../utils/releasesLookup';
+import { UPDATE_CHECK_TIMEOUT_MS, getReleases, withTimeout } from '../utils/releasesLookup';
 
 // Settings -> More -> Send LOCUS to someone: hand LOCUS to someone else. Finds the installer for the version
 // on this phone (see selectInstallerRelease), then either sends the file itself or copies
@@ -30,7 +30,8 @@ const formatSize = (bytes) => (Number.isFinite(bytes) ? `${(bytes / (1024 * 1024
 // shared releases list (utils/releasesLookup.js) always does; only a failed lookup asks again.
 async function findInstaller() {
   const installed = Capacitor.isNativePlatform() ? (await CapacitorApp.getInfo().catch(() => null))?.version ?? null : null;
-  const installer = selectInstallerRelease(await getReleases(), installed);
+  // Ends by UPDATE_CHECK_TIMEOUT_MS, so "Finding…" never spins for ever.
+  const installer = selectInstallerRelease(await withTimeout(getReleases(), UPDATE_CHECK_TIMEOUT_MS), installed);
   if (!installer) throw new Error('No installer has been published');
   return installer;
 }
@@ -45,7 +46,7 @@ function lookupFailure(e, now = Date.now()) {
     const at = e.resetAt instanceof Date && e.resetAt.getTime() > now && e.resetAt.getTime() - now <= BUSY_TIME_SHOWN_WITHIN_MS ? e.resetAt : null;
     return SEND_APP.busy(at ? at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null);
   }
-  return SEND_APP.error(e?.name === 'AbortError' ? 'GitHub took too long to answer' : e?.message || 'Lookup failed');
+  return SEND_APP.error(e?.name === 'AbortError' || e?.code === 'TIMEOUT' ? 'GitHub took too long to answer' : e?.message || 'Lookup failed');
 }
 
 /**

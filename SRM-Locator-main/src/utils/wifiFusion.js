@@ -53,6 +53,14 @@ export const WIFI_SCAN_MAX_AGE_MS = WIFI_SCAN_BUFFER_SIZE * WIFI_SCAN_INTERVAL_M
  */
 export const WIFI_ESTIMATE_MAX_AGE_MS = 2 * WIFI_SCAN_INTERVAL_MS;
 
+/**
+ * A scan with no answer by now is given up on (outcome 'scan-error', TIMEOUT), so the loop can
+ * scan again. The plugin ends its own scans by 60 s at most (WifiScanPlugin.java), so past that
+ * no scan can still be running when the next starts; this is for one that never answers at all,
+ * which used to leave the loop "busy" for good: no scan ever again.
+ */
+export const WIFI_SCAN_STUCK_MS = 65_000;
+
 // ---------------------------------------------------------------- the switch (pure)
 
 /**
@@ -123,6 +131,7 @@ export function startWifiFusion({
   bufferSize = WIFI_SCAN_BUFFER_SIZE,
   maxScanAgeMs = WIFI_SCAN_MAX_AGE_MS,
   maxEstimateAgeMs = WIFI_ESTIMATE_MAX_AGE_MS,
+  scanStuckMs = WIFI_SCAN_STUCK_MS,
   onCycle = () => {},
 } = {}) {
   let stopped = false;
@@ -154,11 +163,19 @@ export function startWifiFusion({
       if (scanBudget(acceptedAt, requestedAt).retryInMs > 0) return finish(null, 'budget');
 
       let result;
+      let stuckTimer;
       try {
-        result = await scan();
+        result = await Promise.race([
+          scan(),
+          new Promise((_, reject) => {
+            stuckTimer = setTimeout(() => reject(Object.assign(new Error('scan never answered'), { code: 'TIMEOUT' })), scanStuckMs);
+          }),
+        ]);
       } catch (err) {
-        // PERMISSION_DENIED, WIFI_OFF, LOCATION_OFF, SCAN_IN_PROGRESS...: no scan, so GPS.
+        // PERMISSION_DENIED, WIFI_OFF, LOCATION_OFF, SCAN_IN_PROGRESS, TIMEOUT...: no scan, so GPS.
         return finish(null, 'scan-error', { error: err?.code || err?.message || 'unknown' });
+      } finally {
+        clearTimeout(stuckTimer);
       }
       if (stopped) return;
       // Counted unless the plugin says the OS refused it: over-counting only delays a

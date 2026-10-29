@@ -97,6 +97,8 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 
 const { default: App } = await import('../src/App.jsx');
 const { NOTICES } = await import('../src/copy/notices.js');
+const { PING_REFUSED } = await import('../src/copy/emergency.js');
+const { __resetNotifications } = await import('../src/utils/notify.js');
 const { MEETING_POINT_CONFIRM } = await import('../src/copy/place.js');
 const { GROUP_TABS, MEMBER_OPTIONS, MEMBERS } = await import('../src/copy/group.js');
 
@@ -220,5 +222,54 @@ describe('the place card', () => {
     expect(card().getByText(/^2\//)).toBeTruthy();
     fireEvent.click(dots[1]);
     await waitFor(() => expect(card().getByText(/^1\//)).toBeTruthy());
+  });
+});
+
+// Phase 5 (kept here for this file's group-and-map harness): a Ping says "sent" only when the
+// server let it through. It played the sent sound on tap, whatever the cooldown or a mute did.
+describe('a Ping the server refused', () => {
+  // Notices outlive a test unless cleared.
+  beforeEach(() => __resetNotifications());
+  const sounds = () => {
+    const made = vi.fn();
+    const node = () => ({ connect() {}, start() {}, stop() {}, type: '', frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } });
+    vi.stubGlobal('AudioContext', function AudioContext() {
+      made();
+      return { currentTime: 0, destination: {}, createOscillator: node, createGain: node, close() {} };
+    });
+    return made;
+  };
+  const ping = async () => {
+    window.matchMedia = (q) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} });
+    await onTheMap();
+    fireEvent.click(screen.getByRole('radio', { name: GROUP_TABS.members }));
+    fireEvent.click(screen.getByRole('button', { name: MEMBERS.options('Bravo') }));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(MEMBER_OPTIONS.ping('Bravo')) }));
+    expect(emitted('ping-user')).toHaveLength(1);
+  };
+
+  it('plays no sound on tap, and says why when the cooldown stopped it', async () => {
+    const made = sounds();
+    await ping();
+    expect(made).not.toHaveBeenCalled();
+    act(() => fakeSocket.receive('alert-result', { type: 'ping', roomCode: code, allowed: false, mode: 'blocked', reasonCode: 'COOLDOWN', retryAfterSec: 20 }));
+    expect(await screen.findByText(PING_REFUSED.title)).toBeTruthy();
+    expect(screen.getByText(PING_REFUSED.cooldown(20))).toBeTruthy();
+    expect(made).not.toHaveBeenCalled();
+  });
+
+  it('says so when the Group Lead muted the sender', async () => {
+    sounds();
+    await ping();
+    act(() => fakeSocket.receive('alert-result', { type: 'ping', roomCode: code, allowed: false, mode: 'blocked', reasonCode: 'MEMBER_MUTED' }));
+    expect(await screen.findByText(PING_REFUSED.muted)).toBeTruthy();
+  });
+
+  it('plays the sent sound once the server lets it through', async () => {
+    const made = sounds();
+    await ping();
+    act(() => fakeSocket.receive('alert-result', { type: 'ping', roomCode: code, allowed: true, mode: 'allowed', reasonCode: null }));
+    expect(made).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(PING_REFUSED.title)).toBeNull();
   });
 });

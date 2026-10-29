@@ -40,11 +40,14 @@ const failed = (step, result) => ({
  */
 export function publishUpdateIndex({ dir, repo = UPDATE_REPO, run = gh, now = Date.now() }) {
   try {
-    // 100 is enough to find the newest 30 v* and js-* releases past anything else.
-    const listed = run(['api', `repos/${repo}/releases?per_page=100`]);
+    // Every page: the newest APK can be any distance down the list (buildUpdateIndex keeps it).
+    // --slurp answers one list per page.
+    const listed = run(['api', '--paginate', '--slurp', `repos/${repo}/releases?per_page=100`]);
     if (listed.status !== 0) return failed('list the releases', listed);
 
-    const index = buildUpdateIndex(JSON.parse(listed.stdout), { now });
+    const pages = JSON.parse(listed.stdout);
+    const releases = Array.isArray(pages) && pages.every(Array.isArray) ? pages.flat() : pages;
+    const index = buildUpdateIndex(releases, { now });
     const check = parseUpdateIndex(index, { repo, now });
     if (!check.ok) return { ok: false, step: 'check the new file the way the app does', error: check.reason };
 

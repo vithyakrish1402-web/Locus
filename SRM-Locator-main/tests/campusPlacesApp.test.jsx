@@ -28,7 +28,7 @@ const fakeSocket = vi.hoisted(() => {
   };
 });
 const who = vi.hoisted(() => ({ user: { uid: 'u-self', displayName: 'Alpha', photoURL: null, email: 'someone@example.com' } }));
-const store = vi.hoisted(() => ({ docs: [], save: null, remove: null }));
+const store = vi.hoisted(() => ({ docs: [], save: null, remove: null, newId: null }));
 const ADMIN = 'vithyakrish1402@gmail.com';
 
 vi.mock('socket.io-client', () => ({ io: () => fakeSocket }));
@@ -48,9 +48,16 @@ vi.mock('firebase/auth', () => ({
 vi.mock('../src/utils/campusPlacesStore.js', () => ({
   readCachedPlaces: () => [],
   fetchCampusPlaces: async () => store.docs.map((d) => ({ ...d })),
-  saveCampusPlace: (fields) => store.save(fields),
+  saveCampusPlace: (fields, id) => store.save(fields, id),
+  newCampusPlaceId: () => store.newId(),
   removeCampusPlace: (id) => store.remove(id),
 }));
+// The admin's save waits ADMIN_SAVE_TIMEOUT_MS (10 s) in the app; a short wait here, so the
+// offline tests take a moment rather than ten seconds each.
+vi.mock('../src/utils/campusPlaces.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, withinAdminSave: (promise) => actual.withinAdminSave(promise, 300) };
+});
 vi.mock('@capacitor/core', () => ({
   Capacitor: { isNativePlatform: () => false, getPlatform: () => 'web' },
   registerPlugin: () => ({}),
@@ -99,7 +106,7 @@ vi.mock('../src/hooks/useAppUpdate.js', async (importOriginal) => {
 const { default: App } = await import('../src/App.jsx');
 const { __resetNotifications } = await import('../src/utils/notify.js');
 const { SETTINGS } = await import('../src/copy/settings.js');
-const { ADD_PLACE_PROBLEMS } = await import('../src/copy/addPlace.js');
+const { ADD_PLACE_PROBLEMS, REMOVE_PLACE } = await import('../src/copy/addPlace.js');
 
 const GROUND = { id: 'cp-g1', name: 'TEST DENTAL FIELD', category: 'GROUNDS', lat: 12.8255, lng: 80.0485, info: 'Open ground by the Dental College.', aliases: ['dental maidan'], added: true };
 
@@ -129,6 +136,8 @@ beforeEach(() => {
   store.docs = [];
   store.save = vi.fn(async (fields) => { store.docs.push({ id: 'cp-new', ...fields, added: true }); return 'new'; });
   store.remove = vi.fn(async (id) => { store.docs = store.docs.filter((d) => d.id !== id); });
+  let ids = 0;
+  store.newId = vi.fn(() => `p${++ids}`);
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
     value: { getCurrentPosition: vi.fn(), watchPosition: vi.fn(() => 1), clearWatch: vi.fn() },
@@ -239,7 +248,7 @@ describe('Add Place', () => {
     await waitFor(() => expect(store.save).toHaveBeenCalledTimes(1));
     expect(store.save).toHaveBeenCalledWith({
       name: 'TEST FAB STUDIO', category: 'ENGINEERING', lat: 12.8212, lng: 80.0452, info: '', aliases: ['fab lab', 'FabLab'],
-    });
+    }, 'p1');
     await waitFor(() => expect(screen.queryByTestId('add-place')).toBeNull());
     expect(screen.getByTestId('map').dataset.draft).toBe('');
     // It is on the list at once, and findable by its short name.
@@ -287,6 +296,9 @@ describe('Add Place', () => {
     fireEvent.click(within(screen.getByTestId('settings')).getByRole('button', { name: new RegExp(SETTINGS.adminTools) }));
     const list = await screen.findByTestId('added-places');
     fireEvent.click(within(list).getByRole('button', { name: 'Remove TEST DENTAL FIELD' }));
+    // Asked first (Phase 5).
+    expect(store.remove).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByTestId('remove-place-confirm')).getByRole('button', { name: 'REMOVE' }));
     await waitFor(() => expect(store.remove).toHaveBeenCalledWith('cp-g1'));
     await waitFor(() => expect(screen.queryByTestId('added-places')).toBeNull());
   });
@@ -320,5 +332,92 @@ describe('Add Place', () => {
     expect(screen.queryByTestId('placing-bar')).toBeNull();
     fireEvent.click(screen.getByTestId('map-tap'));
     expect(screen.queryByTestId('add-place')).toBeNull();
+  });
+});
+
+// Phase 5: offline, Firestore holds a write and never answers. The form sat on "Saving…" for
+// good, the next form opened stuck, and "added" turned up whenever the signal came back.
+describe('Add place and Remove with no signal', () => {
+  const ADMIN_EMAIL = 'vithyakrish1402@gmail.com';
+  const never = () => new Promise(() => {});
+  const openForm = async () => {
+    who.user = { ...who.user, email: ADMIN_EMAIL };
+    render(<App />);
+    await joinAsMember();
+    fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
+    fireEvent.click(within(screen.getByTestId('settings')).getByRole('button', { name: new RegExp(SETTINGS.adminTools) }));
+    fireEvent.click(screen.getByRole('button', { name: /ADD_PLACE/ }));
+    fireEvent.click(screen.getByTestId('map-tap'));
+    const form = await screen.findByTestId('add-place');
+    fireEvent.change(within(form).getByLabelText('Name'), { target: { value: 'test fab studio' } });
+    return form;
+  };
+
+  it("says you're offline, gives the form back, and a late answer says nothing", async () => {
+    let answer;
+    store.save = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+    const form = await openForm();
+    fireEvent.click(within(form).getByRole('button', { name: 'SAVE PLACE' }));
+    expect(within(form).getByRole('button', { name: 'SAVING…' }).disabled).toBe(true);
+    expect((await within(form).findByRole('alert')).textContent).toBe(ADD_PLACE_PROBLEMS.offline);
+    expect(within(form).getByRole('button', { name: 'SAVE PLACE' }).disabled).toBe(false);
+
+    // The signal comes back and the held write lands: no "added" over the form still open.
+    await act(async () => answer('p1'));
+    await act(async () => {});
+    expect(screen.queryByText(/added for everyone/)).toBeNull();
+    expect(screen.getByTestId('add-place')).toBeTruthy();
+  });
+
+  it('a save answered after its form was closed says nothing', async () => {
+    let answer;
+    store.save = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+    const form = await openForm();
+    fireEvent.click(within(form).getByRole('button', { name: 'SAVE PLACE' }));
+    fireEvent.click(screen.getByTestId('add-place-close'));
+    // The answer comes before the wait is up, but for a form no longer there.
+    await act(async () => answer('p1'));
+    await act(async () => {});
+    expect(screen.queryByText(/added for everyone/)).toBeNull();
+  });
+
+  it('trying again saves the same place, never a second one', async () => {
+    store.save = vi.fn(never);
+    const form = await openForm();
+    fireEvent.click(within(form).getByRole('button', { name: 'SAVE PLACE' }));
+    await within(form).findByRole('alert');
+    fireEvent.click(within(form).getByRole('button', { name: 'SAVE PLACE' }));
+    await waitFor(() => expect(store.save).toHaveBeenCalledTimes(2));
+    expect(store.save.mock.calls.map(([, id]) => id)).toEqual(['p1', 'p1']);
+  });
+
+  it('closing the form while it saves leaves the next form ready', async () => {
+    store.save = vi.fn(never);
+    const form = await openForm();
+    fireEvent.click(within(form).getByRole('button', { name: 'SAVE PLACE' }));
+    fireEvent.click(screen.getByTestId('add-place-close'));
+    await waitFor(() => expect(screen.queryByTestId('add-place')).toBeNull());
+    fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
+    fireEvent.click(within(screen.getByTestId('settings')).getByRole('button', { name: new RegExp(SETTINGS.adminTools) }));
+    fireEvent.click(screen.getByRole('button', { name: /ADD_PLACE/ }));
+    fireEvent.click(screen.getByTestId('map-tap'));
+    const next = await screen.findByTestId('add-place');
+    expect(within(next).getByRole('button', { name: 'SAVE PLACE' }).disabled).toBe(false);
+  });
+
+  it("Remove says you're offline and gives the button back", async () => {
+    store.docs = [GROUND];
+    store.remove = vi.fn(never);
+    who.user = { ...who.user, email: ADMIN_EMAIL };
+    render(<App />);
+    await joinAsMember();
+    fireEvent.click(screen.getAllByRole('button', { name: SETTINGS.open })[0]);
+    fireEvent.click(within(screen.getByTestId('settings')).getByRole('button', { name: new RegExp(SETTINGS.adminTools) }));
+    const list = await screen.findByTestId('added-places');
+    fireEvent.click(within(list).getByRole('button', { name: 'Remove TEST DENTAL FIELD' }));
+    fireEvent.click(within(screen.getByTestId('remove-place-confirm')).getByRole('button', { name: 'REMOVE' }));
+    expect(within(list).getByRole('button', { name: 'Remove TEST DENTAL FIELD' }).textContent).toBe(REMOVE_PLACE.removing);
+    expect(await screen.findByText(REMOVE_PLACE.offline, {}, { timeout: 3000 })).toBeTruthy();
+    expect(within(list).getByRole('button', { name: 'Remove TEST DENTAL FIELD' }).disabled).toBe(false);
   });
 });

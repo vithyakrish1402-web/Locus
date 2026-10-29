@@ -37,8 +37,9 @@ permanent pre-release tagged **`update-index`**
   replaced file for up to two minutes.
 - **Same fields, same checks.** The file is laid out like GitHub's own listing, trimmed to what
   the update checks read (`tag_name`, `prerelease`, `body`, and each APK/bundle asset's `name`,
-  `browser_download_url` and `size`) for the newest 30 `v*` and `js-*` releases, so the same
-  parsers run on it unchanged.
+  `browser_download_url` and `size`) for the newest 30 `v*` and `js-*` releases, plus the newest
+  APK and the newest bundle wherever they are in the list (30 bundles in a row once pushed the
+  APK out, and the APK check went blind), so the same parsers run on it unchanged.
 - **Fails closed to the API.** The app uses the file only if it parses, has `formatVersion` 1,
   is no older than `UPDATE_INDEX_MAX_AGE_HOURS` (720, 30 days: a last-resort safety net, since the
   file is only rebuilt when a release is made), is not dated more than
@@ -73,7 +74,7 @@ copy of the releases list that the release scripts rebuild for you (see
 when it cannot be used, calls:
 
 ```
-GET https://api.github.com/repos/vithyakrish1402-web/Locus/releases?per_page=30
+GET https://api.github.com/repos/vithyakrish1402-web/Locus/releases?per_page=100
 ```
 
 then keeps only `v*` tags and picks the **highest version** among them.
@@ -103,7 +104,7 @@ From the selected release it reads three things:
 |---|---|
 | `tag_name` | the release version, compared against `App.getInfo().version` |
 | asset named `locus-latest.apk` | the download URL |
-| `body` | release notes, plus `SHA256: <64 hex>` and an optional `[MANDATORY]` marker |
+| `body` | release notes, plus `SHA256: <64 hex>`, `VERSION_CODE: <n>` and an optional `MANDATORY: true` line |
 
 A release missing the APK asset or the `SHA256:` line is **rejected** rather than offered —
 nothing unverified is ever handed to the installer. Version comparison also fails closed:
@@ -125,15 +126,27 @@ deletes the partial file, and the screen offers Try again, which starts from not
 
 **Check frequency is once per cold start plus the manual button.** No periodic background
 polling, deliberately — it would cost battery and network for a build that changes weekly
-at most.
+at most. A whole check ends by `UPDATE_CHECK_TIMEOUT_MS` (15 s), so "Checking…" never hangs;
+a manual check that timed out says "Couldn't check for updates", and its Try again checks
+again. A manual check also shows the update screen again after an earlier Later.
 
-### `[MANDATORY]` releases
+The checked APK's path and checksum are kept on the phone, so a relaunch before installing
+uses the same file instead of downloading it again; it is deleted once that version is
+installed. The app update and Send LOCUS share the one native downloader, so they take turns
+(`queueDownload` in `locusUpdater.js`) rather than cancelling each other.
 
-If the release body contains the literal string `[MANDATORY]`, the update modal becomes a
-full-screen gate: no LATER button, no Escape, Android Back is swallowed
-([useBackButtonGuard](src/hooks/useBackButtonGuard.js)), and it is returned *before* every
-other render branch in `App.jsx` — including the auth screen and the loading state. The
-only way into the app is to install.
+### Mandatory releases
+
+If the release body has the line `MANDATORY: true` (only `npm run release -- <v> --mandatory`
+writes it), the update modal becomes a full-screen gate: no LATER button, no Escape, Android
+Back is swallowed ([useBackButtonGuard](src/hooks/useBackButtonGuard.js)), and it is returned
+*before* every other render branch in `App.jsx` — including the auth screen and the loading
+state. The only way into the app is to install. The mandatory release is kept on the phone, so
+a launch with no signal still gates, as does a newer release until it is installed.
+
+Apps up to js-1.1.83 looked for the text `[MANDATORY]` *anywhere* in the notes, so notes that
+merely mentioned it locked those phones out. The script still writes `[MANDATORY]` on a line of
+its own with `--mandatory` (for those apps), and refuses notes that contain it otherwise.
 
 ### Where the code lives
 
@@ -230,14 +243,28 @@ npm run release -- 1.1.0
 That one command:
 
 1. Refuses to run on a dirty working tree, an already-used tag, or a non-newer version
-2. Bumps `versionCode` (+1) and `versionName` in `android/app/build.gradle`
-3. `npm run build` → `npx cap sync android` → `gradlew assembleRelease`
-4. Fails loudly if the APK came out unsigned
-5. Stages it as `locus-latest.apk` and computes the SHA-256
-6. Builds the release body: your notes + `SHA256:` + optionally `[MANDATORY]`
-7. Commits the version bump, pushes, and `gh release create`s the tag with the APK attached
-8. Rebuilds the [update index](#the-update-index-how-a-launch-finds-the-releases), last; a
+2. Refuses, before building, a `versionCode` not above the published APK's (read from its
+   `VERSION_CODE:` line, or from the APK itself with the Android SDK's `aapt2`; 1.1.36 shipped
+   below it), and notes containing `[MANDATORY]` or a line the app reads
+   (`scripts/lib/releaseChecks.mjs`)
+3. Bumps `versionCode` (+1) and `versionName` in `android/app/build.gradle`
+4. `npm run build` → `npx cap sync android` → `gradlew assembleRelease`
+5. Fails loudly if the APK came out unsigned
+6. Stages it as `locus-latest.apk` and computes the SHA-256
+7. Builds the release body: your notes + optionally `[MANDATORY]` and `MANDATORY: true` +
+   `VERSION_CODE:` + `SHA256:`
+8. Commits the version bump and pushes it. A failed push stops here with nothing published;
+   run the same command again and it carries on from its own release commit, without bumping
+9. Publishes through `scripts/lib/publishRelease.mjs`: a **draft** tagged at the built commit
+   (`--target`), its APK uploaded, and only then made public, and the tag read back and
+   compared with the built commit. A failure part way leaves at most a draft, which no phone
+   sees; running the same command again replaces it
+10. Rebuilds the [update index](#the-update-index-how-a-launch-finds-the-releases), last; a
    failure is reported loudly with the fix (`npm run release:index`) and never undoes the release
+
+`npm run release:bundle` publishes the same way (a clean tree, the built commit pushed, a
+draft tagged at it), and its `MIN_NATIVE` must be the version of a published APK. Releases
+made before Phase 5 were tagged at whatever `main` was then, not at what was built.
 
 Useful flags:
 
@@ -292,7 +319,7 @@ For an APK it checks:
   signs with APK Signature Scheme v2/v3 and skips legacy v1 JAR signing, and
   `keytool -printcert -jarfile` only understands v1. Pointed at a correctly signed modern
   APK, keytool reports "Not a signed jar file" and exits 0, which reads as unsigned.
-- whether `[MANDATORY]` is set — worth seeing before it locks everyone out
+- whether it is mandatory (`MANDATORY: true`) — worth seeing before it locks everyone out
 
 For a bundle it checks the checksum, that `index.html` is at the zip root, that no entry
 uses backslash separators, and that `MIN_NATIVE` is not gated above the shell it was

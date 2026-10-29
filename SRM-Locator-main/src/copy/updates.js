@@ -74,6 +74,7 @@ const FAILURE_SENTENCES = {
   PERMISSION_DENIED: 'Android didn\'t allow the install. Turn on "Allow from this source" for LOCUS, then try again.',
   NETWORK: "LOCUS couldn't reach the update server. Check your connection and try again.",
   RATE_LIMITED: 'The update server is busy. Try again in a few minutes.',
+  TIMEOUT: "Couldn't check for updates. Try again.",
 };
 const OTHER_FAILURE = "This update can't be installed right now. Nothing was changed.";
 

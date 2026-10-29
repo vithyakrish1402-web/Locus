@@ -32,10 +32,12 @@ export function useCampusPlaces(user) {
 
   const places = useMemo(() => mergeCampusPlaces(SRM_MASTER_DATABASE, added), [added]);
 
-  const add = useCallback(async (input) => {
+  // `id`: the document id the form keeps for its place (newCampusPlaceId), so a second try
+  // after a timeout saves the same place.
+  const add = useCallback(async (input, id) => {
     const checked = validateNewPlace(input, places);
     if (!checked.ok) return checked;
-    await saveCampusPlace(checked.fields);
+    await saveCampusPlace(checked.fields, id);
     await refresh();
     return { ok: true };
   }, [places, refresh]);

@@ -13,7 +13,12 @@
 // MIN_NATIVE defaults to the versionName currently in build.gradle, which is the right
 // answer whenever the bundle was built against the shell you have. Raise it by hand only
 // if you know the bundle needs something older shells lack — and if it needs a native
-// change at all, this is the wrong script: cut a Phase 1 APK release instead.
+// change at all, this is the wrong script: cut a Phase 1 APK release instead. Either way it
+// must be the version of a published APK (scripts/lib/releaseChecks.mjs), whatever the branch.
+//
+// The release is tagged at the commit that was built, so the working tree must be clean and
+// the commit is pushed first. It is published through scripts/lib/publishRelease.mjs: a draft
+// first, public only once complete, so a failure part way can be rerun.
 
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -24,6 +29,8 @@ import { zipDirectory } from './lib/zip.mjs';
 import { releaseVersionConflict } from '../src/utils/liveUpdateManifest.js';
 import { webBuildProblem } from './lib/webBuild.mjs';
 import { publishUpdateIndex, reportUpdateIndex } from './lib/updateIndex.mjs';
+import { minNativeProblem, notesProblem } from './lib/releaseChecks.mjs';
+import { publishRelease } from './lib/publishRelease.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
@@ -79,6 +86,11 @@ if (capture('gh', ['auth', 'status']).status !== 0) {
   die('the GitHub CLI is not installed or not authenticated - run `gh auth login`');
 }
 
+// The tag goes on the commit built, so what is built must be exactly that commit.
+if (!dryRun && capture('git', ['status', '--porcelain']).stdout) {
+  die('working tree is not clean - commit or stash first (the release is tagged at the commit that was built)');
+}
+
 const gradle = readFileSync(GRADLE_FILE, 'utf8');
 const nativeName = /versionName\s+"([^"]+)"/.exec(gradle)?.[1];
 if (!nativeName) die('could not read versionName from android/app/build.gradle');
@@ -99,15 +111,20 @@ if (capture('git', ['tag', '--list', `js-${version}`]).stdout) die(`tag js-${ver
 
 // Every release tag on GitHub, in both series. Releases are made with `gh release create`,
 // which tags on GitHub only, so the local clone's tags can't be trusted to be complete.
+// Drafts are left out: a draft is a failed run's leftover, which publishRelease replaces.
 const publishedTags = () => {
-  const listed = capture('gh', ['release', 'list', '--limit', '500', '--json', 'tagName', '--jq', '.[].tagName']);
+  const listed = capture('gh', ['release', 'list', '--limit', '500', '--json', 'tagName,isDraft', '--jq', '.[] | select(.isDraft | not) | .tagName']);
   if (listed.status !== 0) die('could not list the published releases (gh release list)');
   return listed.stdout.split(/\r?\n/).filter(Boolean);
 };
 // Above the APK this build.gradle describes as well as every release: a phone running
 // that APK's own JS counts as running its versionName (see releaseVersionConflict).
-const versionConflict = releaseVersionConflict(version, publishedTags(), [nativeName]);
+const tags = publishedTags();
+const versionConflict = releaseVersionConflict(version, tags, [nativeName]);
 if (versionConflict) die(versionConflict);
+// From the published APKs, not from whichever branch this is (releaseChecks.mjs).
+const minNativeRefused = minNativeProblem(minNative, tags);
+if (minNativeRefused) die(minNativeRefused);
 
 console.log(`\n  LOCUS JS bundle js-${version}`);
 console.log(`  Requires native shell >= ${minNative} (current native versionName: ${nativeName})`);
@@ -151,6 +168,8 @@ console.log(`\n  ${BUNDLE_ASSET_NAME}  ${(bytes.length / 1024).toFixed(0)} KB\n 
 const humanNotes = notesFile
   ? readFileSync(resolve(ROOT, notesFile), 'utf8').trim()
   : capture('git', ['log', '--pretty=format:- %s', '-10']).stdout;
+const notesRefused = notesProblem(humanNotes);
+if (notesRefused) die(notesRefused);
 
 const body = [humanNotes, '', `MIN_NATIVE: ${minNative}`, `SHA256: ${sha256}`].join('\n');
 const bodyFile = join(STAGING_DIR, 'BUNDLE_NOTES.md');
@@ -164,16 +183,24 @@ if (dryRun) {
 
 // ---------------------------------------------------------------- publish
 
-run('gh', [
-  'release',
-  'create',
-  `js-${version}`,
-  zipPath,
-  '--title',
-  `LOCUS JS bundle ${version}`,
-  '--notes-file',
-  bodyFile,
-]);
+// The commit built must be on GitHub before a tag can point at it. A failed push stops here,
+// before anything is published: rerun once it can push.
+console.log('\n  Pushing the built commit, so the tag can point at it.');
+run('git', ['push', 'origin', 'HEAD']);
+const builtCommit = capture('git', ['rev-parse', 'HEAD']).stdout;
+
+const published = publishRelease({
+  tag: `js-${version}`,
+  title: `LOCUS JS bundle ${version}`,
+  asset: zipPath,
+  notesFile: bodyFile,
+  target: builtCommit,
+});
+// Only the tag check fails after the release is public: then the index is still rebuilt below.
+if (!published.ok && published.step !== 'check the tag') die(`could not ${published.step}: ${published.error}\n  ${published.retry}`);
+console.log(published.ok
+  ? `\n  js-${version} is tagged at the built commit ${builtCommit}.`
+  : `\n  WARNING: ${published.error}. ${published.retry}`);
 
 console.log(`\n  Published js-${version}. Devices on native >= ${minNative} pick it up on their next cold start.\n`);
 

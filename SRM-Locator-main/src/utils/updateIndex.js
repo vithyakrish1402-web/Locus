@@ -40,7 +40,7 @@ export const UPDATE_INDEX_FORMAT_VERSION = 1;
 export const UPDATE_INDEX_MAX_AGE_HOURS = 720;
 export const UPDATE_INDEX_FUTURE_TOLERANCE_HOURS = 24;
 
-/** How many releases the file carries: as many as the API listing the app reads (per_page=30). */
+/** How many of the newest releases the file carries (plus the newest of each series, wherever they are). */
 export const UPDATE_INDEX_RELEASE_COUNT = 30;
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -75,17 +75,25 @@ export function isOwnReleaseLink(link, repo) {
 /**
  * Build the file from GitHub's releases list (newest first, as GitHub orders it): the newest
  * UPDATE_INDEX_RELEASE_COUNT v* and js-* releases, drafts left out, each trimmed to the fields
- * the update checks read. Used by the release scripts and release:verify.
+ * the update checks read, plus the newest APK and the newest bundle wherever they are in the
+ * list. Without those two, 30 bundles in a row pushed the APK out of the file: the app then
+ * refused the file (NO_USABLE_APK) and the API listing it fell back on had lost it too. Used by
+ * the release scripts and release:verify.
  */
 export function buildUpdateIndex(releases, { now = Date.now() } = {}) {
   if (!Array.isArray(releases)) throw new Error('the releases list is not a list');
   const wanted = new Set([APK_ASSET_NAME, BUNDLE_ASSET_NAME]);
+  const candidates = releases.filter((release) => release && typeof release === 'object' && !release.draft && isReleaseTag(release.tag_name));
+  const kept = candidates.slice(0, UPDATE_INDEX_RELEASE_COUNT);
+  for (const newest of [selectLatestApkRelease(candidates), selectLatestBundleRelease(candidates)]) {
+    if (newest && !kept.some((release) => release.tag_name === newest.tag)) {
+      kept.push(candidates.find((release) => release.tag_name === newest.tag));
+    }
+  }
   return {
     formatVersion: UPDATE_INDEX_FORMAT_VERSION,
     generatedAt: new Date(now).toISOString(),
-    releases: releases
-      .filter((release) => release && typeof release === 'object' && !release.draft && isReleaseTag(release.tag_name))
-      .slice(0, UPDATE_INDEX_RELEASE_COUNT)
+    releases: kept
       .map((release) => ({
         tag_name: release.tag_name,
         prerelease: Boolean(release.prerelease),

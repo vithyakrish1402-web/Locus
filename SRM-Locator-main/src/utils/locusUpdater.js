@@ -30,6 +30,21 @@ export const LocusUpdater = registerPlugin('LocusUpdater', {
   },
 });
 
+// One download at a time. The native downloader keeps a single download: starting one cancels
+// the one running, and a cancel stops whichever is running. So the app update and Send LOCUS
+// used to cancel each other. Each now waits here for the other to finish.
+let downloadQueue = Promise.resolve();
+
+/**
+ * Run `task` (which starts a LocusUpdater.download) once every download queued before it has
+ * settled. @returns the task's own promise
+ */
+export function queueDownload(task) {
+  const turn = downloadQueue.then(task, task);
+  downloadQueue = turn.catch(() => {});
+  return turn;
+}
+
 /** True only inside the native Android shell, where self-updating is possible at all. */
 export function isUpdaterAvailable() {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';

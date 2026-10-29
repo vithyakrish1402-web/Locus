@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Ban, Heart, HeartOff, MapPin, Navigation, Radio, ScanLine, ShieldCheck, ShieldOff, UserMinus } from 'lucide-react';
 import { Avatar, Button, ListRow, Sheet } from '../ui';
 import { memberStatus, memberWhere } from '../../utils/memberStatus';
+import { pushBackHandler } from '../../utils/backHandlers';
 import { FRIENDS, MEMBERS, MEMBER_OPTIONS, REMOVE_AND_BLOCK, REMOVE_MEMBER, firstName } from '../../copy/group';
 
 // A member's options: solid opaque bottom sheet without glassmorphism.
@@ -29,6 +30,13 @@ export default function MemberOptions({ member, me, heading, headingLive, isLead
   const blocking = confirmingRemoval?.block ?? true;
   const removal = blocking ? REMOVE_AND_BLOCK : REMOVE_MEMBER;
   const shown = member ?? confirming;
+  // Back with "Remove …?" open closes it, and only it. The options sheet has closed by then, so
+  // App's Back ladder skipped the confirmation and closed whatever was under it (the group
+  // panel), leaving the question on screen.
+  useEffect(() => {
+    if (!confirming) return undefined;
+    return pushBackHandler(() => { setConfirming(null); return true; });
+  }, [confirming]);
   const name = shown?.name || '?';
   const first = firstName(shown?.name);
 

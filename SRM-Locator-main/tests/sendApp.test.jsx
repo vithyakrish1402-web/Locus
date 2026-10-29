@@ -20,7 +20,13 @@ vi.mock('../src/utils/locusUpdater', () => {
     cancelDownload: vi.fn(async () => {}),
     addListener: vi.fn(),
   };
-  return { LocusUpdater: native.plugin, canShareInstaller: () => native.canShare, isUpdaterAvailable: () => native.canShare };
+  return {
+    LocusUpdater: native.plugin,
+    canShareInstaller: () => native.canShare,
+    isUpdaterAvailable: () => native.canShare,
+    // The real one waits for any earlier download to settle (utils/locusUpdater.js).
+    queueDownload: (task) => Promise.resolve().then(task),
+  };
 });
 
 const { default: SendApp } = await import('../src/components/SendApp.jsx');

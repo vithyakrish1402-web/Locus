@@ -61,9 +61,10 @@ import LeadTools from './components/group/LeadTools';
 import LocationsTable from './components/group/LocationsTable';
 import AdminTools, { RecordingBar } from './components/admin/AdminTools';
 import AddPlaceSheet, { PlacingBar } from './components/admin/AddPlace';
-import { ADD_PLACE_PROBLEMS } from './copy/addPlace';
+import { ADD_PLACE_PROBLEMS, REMOVE_PLACE } from './copy/addPlace';
 import { useCampusPlaces } from './hooks/useCampusPlaces';
-import { isGrounds } from './utils/campusPlaces';
+import { isGrounds, withinAdminSave } from './utils/campusPlaces';
+import { newCampusPlaceId } from './utils/campusPlacesStore';
 import JoinRequests from './components/group/JoinRequests';
 import ActivityLog from './components/group/ActivityLog';
 import BlockedList from './components/group/BlockedList';
@@ -144,7 +145,7 @@ import { generateRandomSquadCode } from './utils/squadCode';
 import { createSosOutbox } from './utils/sosOutbox';
 import { manageSendQueue } from './utils/sendQueue';
 import { rememberLeave, pendingLeave, forgetLeave } from './utils/pendingLeave';
-import { SOS_HELD, SOS_UNCONFIRMED, SOS_SENT, SOS_DROPPED, SOS_REFUSED } from './copy/emergency';
+import { SOS_HELD, SOS_UNCONFIRMED, SOS_SENT, SOS_DROPPED, SOS_REFUSED, PING_REFUSED } from './copy/emergency';
 
 // Leaflet (+ react-leaflet) is a real chunk of weight that's only needed if
 // Google Maps fails to load — code-split it so the common path never pays
@@ -558,6 +559,22 @@ const App = () => {
   useEffect(() => {
     const onSettings = (settings) => setGroupSettings(settings ?? null);
     const onResult = (result) => {
+      // A Ping's answer: the "sent" sound once the server let it through, or why not. A Ping
+      // the person being pinged has muted still counts as sent: they chose silence, and the
+      // sender is not told (backend/server.js 'ping-user').
+      if (result?.type === 'ping') {
+        if (result.allowed) {
+          playSonarPing();
+          return;
+        }
+        const body = result.reasonCode === 'COOLDOWN' ? PING_REFUSED.cooldown(result.retryAfterSec ?? 1)
+          : result.reasonCode === 'MEMBER_MUTED' ? PING_REFUSED.muted
+            : result.reasonCode === 'GROUP_DISABLED' ? PING_REFUSED.disabled
+              : result.reasonCode === 'QUIET_ZONE' ? PING_REFUSED.quietZone
+                : PING_REFUSED.other;
+        notify.warning(PING_REFUSED.title, { body });
+        return;
+      }
       // NOT_IN_GROUP only means a copy reached the server before this phone was back in its
       // Group: the outbox sends it again once it is (utils/sosOutbox.js), so it isn't a refusal.
       if (result?.type !== 'sos' || result.allowed || result.reasonCode === 'NOT_IN_GROUP') return;
@@ -792,31 +809,62 @@ const App = () => {
   };
 
   // Add Place (components/admin/AddPlace.jsx): saved to Firestore, so every phone gets it.
+  // Each save waits ADMIN_SAVE_TIMEOUT_MS at most, then says it is offline and gives the form
+  // back. An answer for a save given up on, cancelled or replaced (an older attempt number) is
+  // ignored, so no "added" turns up later over another form. The form keeps one document id, so
+  // trying again saves the same place.
+  const placeAttemptRef = useRef(0);
+  const placeDocIdRef = useRef(null);
   const saveDraftPlace = async (fields) => {
+    const attempt = ++placeAttemptRef.current;
+    placeDocIdRef.current ??= newCampusPlaceId();
     setSavingPlace(true);
     setPlaceProblem(null);
     try {
-      const result = await addCampusPlace(fields);
+      const result = await withinAdminSave(addCampusPlace(fields, placeDocIdRef.current));
+      if (attempt !== placeAttemptRef.current) return;
       if (!result.ok) {
         setPlaceProblem(ADD_PLACE_PROBLEMS[result.reason] ?? ADD_PLACE_PROBLEMS.failed);
         return;
       }
+      placeDocIdRef.current = null;
       setDraftPlace(null);
       notify.success(NOTICES.placeAdded(String(fields.name).toUpperCase()));
     } catch (err) {
-      setPlaceProblem(err?.code === 'permission-denied' ? ADD_PLACE_PROBLEMS.denied : ADD_PLACE_PROBLEMS.failed);
+      if (attempt !== placeAttemptRef.current) return;
+      setPlaceProblem(err?.code === 'timeout' ? ADD_PLACE_PROBLEMS.offline
+        : err?.code === 'permission-denied' ? ADD_PLACE_PROBLEMS.denied : ADD_PLACE_PROBLEMS.failed);
     } finally {
-      setSavingPlace(false);
+      if (attempt === placeAttemptRef.current) setSavingPlace(false);
     }
   };
-  const cancelAddPlace = () => { setIsPlacing(false); setDraftPlace(null); setPlaceProblem(null); };
+  // Closing the form forgets any save still out, so the next form never opens on "Saving…".
+  const cancelAddPlace = () => {
+    placeAttemptRef.current += 1;
+    placeDocIdRef.current = null;
+    setSavingPlace(false);
+    setIsPlacing(false);
+    setDraftPlace(null);
+    setPlaceProblem(null);
+  };
+  // The admin's Remove, after its confirmation (AdminTools). One at a time: a second tap while
+  // one is out does nothing, and it too stops waiting after ADMIN_SAVE_TIMEOUT_MS.
+  const [removingPlaceId, setRemovingPlaceId] = useState(null);
+  const removingPlaceRef = useRef(null);
   const removePlace = async (place) => {
+    if (removingPlaceRef.current) return;
+    removingPlaceRef.current = place.id;
+    setRemovingPlaceId(place.id);
     try {
-      await removeAddedPlace(place.id);
+      await withinAdminSave(removeAddedPlace(place.id));
       if (selectedItem?.id === place.id) setSelectedItem(null);
       notify.success(NOTICES.placeRemoved(place.name));
-    } catch {
-      notify.warning(NOTICES.placeNotRemoved);
+    } catch (err) {
+      if (err?.code === 'timeout') notify.warning(REMOVE_PLACE.offline);
+      else notify.warning(NOTICES.placeNotRemoved);
+    } finally {
+      removingPlaceRef.current = null;
+      setRemovingPlaceId(null);
     }
   };
 
@@ -2327,13 +2375,13 @@ const App = () => {
     });
   };
 
+  // The "sent" sound waits for the server's answer ('alert-result' above), which says whether
+  // the cooldown or a mute stopped it.
   const sendPing = (targetId) => {
     socket.emit('ping-user', {
       targetId: targetId,
       senderName: user ? user.displayName : "Ghost_Node"
     });
-
-    playSonarPing();
     console.log(`>> Signal transmitted to Node: ${targetId}`);
   };
 
@@ -4048,6 +4096,7 @@ const App = () => {
           setShowAdminSettings(false);
         }}
         onRemovePlace={removePlace}
+        removingId={removingPlaceId}
       />
       {/* Add Place: choose the spot on the map, then name it (components/admin/AddPlace.jsx). */}
       {isAdmin && isPlacing && <PlacingBar onCancel={cancelAddPlace} />}

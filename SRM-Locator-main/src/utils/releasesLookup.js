@@ -25,11 +25,26 @@ import { parseUpdateIndex, updateIndexUrl } from './updateIndex.js';
 const REPO = import.meta.env?.VITE_UPDATE_REPO || 'vithyakrish1402-web/Locus';
 // The listing rather than /releases/latest: "latest" is whichever release is newest overall,
 // and the v* and js-* series share the repo, so it would hide one series behind the other.
-// Each reader picks its own series out of the listing.
-export const RELEASES_API = `https://api.github.com/repos/${REPO}/releases?per_page=30`;
+// Each reader picks its own series out of the listing. 100, GitHub's most per page: with 30, a
+// run of 30 bundles pushed the newest APK off the page and the APK check went blind.
+export const RELEASES_API = `https://api.github.com/repos/${REPO}/releases?per_page=100`;
 const LOOKUP_TIMEOUT_MS = 15000;
 // The file is small; past this the API listing is asked instead. Exported for tests.
 export const UPDATE_INDEX_TIMEOUT_MS = 10000;
+// A whole check (the file, then the listing if needed) ends by this, so "Checking…" never
+// hangs: the two lookups above could take 25 s between them.
+export const UPDATE_CHECK_TIMEOUT_MS = 15000;
+
+/** `promise`, or a rejection with code TIMEOUT once `ms` pass. */
+export function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(lookupError('TIMEOUT', 'The update server took too long to answer')), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
 
 let launchAnswer = null;
 let inFlight = null;

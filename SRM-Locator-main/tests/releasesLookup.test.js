@@ -3,7 +3,7 @@
 // hour per public address, shared by everyone on the network (campus Wi-Fi), so a launch
 // asks once, and a refusal says when the limit refills.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getReleases, RELEASES_API, rateLimitResetAt, __resetReleasesLookup } from '../src/utils/releasesLookup.js';
+import { getReleases, RELEASES_API, UPDATE_CHECK_TIMEOUT_MS, rateLimitResetAt, withTimeout, __resetReleasesLookup } from '../src/utils/releasesLookup.js';
 
 const LISTING = [
   { tag_name: 'js-1.1.22', draft: false, prerelease: false, body: '', assets: [] },
@@ -46,7 +46,8 @@ describe('one lookup per launch', () => {
     await getReleases();
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(RELEASES_API);
-    expect(url).toMatch(/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/releases\?per_page=30$/);
+    // 100, not 30 (Phase 5): 30 bundles in a row pushed the newest APK off a page of 30.
+    expect(url).toMatch(/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/releases\?per_page=100$/);
     expect(init.headers).toEqual({ Accept: 'application/vnd.github+json' });
     expect(init.cache).toBe('no-store');
   });
@@ -127,5 +128,23 @@ describe('when GitHub refuses or fails', () => {
     expect(globalThis.fetch.mock.calls[0][1].signal.aborted).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     await outcome;
+  });
+});
+
+// Phase 5: a whole check ends by UPDATE_CHECK_TIMEOUT_MS, so "Checking…" never hangs.
+describe('withTimeout', () => {
+  it('rejects with TIMEOUT once the time is up, and passes an answer that comes in time', async () => {
+    vi.useFakeTimers();
+    expect(UPDATE_CHECK_TIMEOUT_MS).toBe(15000);
+    const never = withTimeout(new Promise(() => {}), UPDATE_CHECK_TIMEOUT_MS);
+    const caught = never.catch((e) => e);
+    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_TIMEOUT_MS - 1);
+    let settled = false;
+    caught.then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await caught).toMatchObject({ code: 'TIMEOUT' });
+    await expect(withTimeout(Promise.resolve(LISTING), UPDATE_CHECK_TIMEOUT_MS)).resolves.toBe(LISTING);
   });
 });

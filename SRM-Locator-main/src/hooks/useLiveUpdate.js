@@ -3,7 +3,76 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { CapacitorUpdater, isLiveUpdaterAvailable, notifyAppReady } from '../utils/liveUpdater';
 import { BUNDLE_TAG_PREFIX, selectLatestBundleRelease, shouldApplyBundle } from '../utils/liveUpdateManifest';
 import { UPDATES_OFF } from '../utils/buildMode';
-import { getReleases } from '../utils/releasesLookup';
+import { UPDATE_CHECK_TIMEOUT_MS, getReleases, withTimeout } from '../utils/releasesLookup';
+
+// How many downloaded bundles may wait on the phone besides the one running: the newest only.
+// Older ones are deleted when a newer one is found (and the plugin deletes the previous one
+// itself once a new one is applied, autoDeletePrevious).
+export const STALE_UPDATE_FILE_MAX_COUNT = 1;
+
+// A bundle that never started properly is rolled back by the plugin (appReadyTimeout), and was
+// then found, downloaded and offered again on every launch. The version being applied is noted
+// before the restart; a launch that comes back on any other version marks it as broken, and a
+// broken version is never offered again. A newer version is offered as usual.
+export const APPLYING_BUNDLE_KEY = 'locus.liveUpdate.applying';
+export const FAILED_BUNDLES_KEY = 'locus.liveUpdate.failed';
+
+const readFailed = () => {
+  try {
+    const list = JSON.parse(localStorage.getItem(FAILED_BUNDLES_KEY) ?? '[]');
+    return new Set(Array.isArray(list) ? list.filter((v) => typeof v === 'string') : []);
+  } catch {
+    return new Set();
+  }
+};
+
+/**
+ * The versions known to be broken, after noting the outcome of the last restart into a new
+ * version (the plugin's own record of a failed one, `failedEvent`, counts too).
+ */
+function noteFailedBundles(runningVersion, failedEvent) {
+  const failed = readFailed();
+  try {
+    const applying = localStorage.getItem(APPLYING_BUNDLE_KEY);
+    if (applying) {
+      if (applying !== runningVersion) failed.add(applying);
+      localStorage.removeItem(APPLYING_BUNDLE_KEY);
+    }
+    if (typeof failedEvent?.bundle?.version === 'string') failed.add(failedEvent.bundle.version);
+    localStorage.setItem(FAILED_BUNDLES_KEY, JSON.stringify([...failed]));
+  } catch { /* storage refused: nothing is remembered, as before */ }
+  return failed;
+}
+
+/** The plugin's record of a bundle that failed to start, or null (also on shells without it). */
+function failedUpdate() {
+  try {
+    return CapacitorUpdater.getFailedUpdate?.()?.catch?.(() => null) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const REUSABLE = new Set(['success', 'pending']);
+
+/**
+ * The downloaded bundle of `version` if one is waiting (a launch that downloaded it closed before
+ * the restart), and delete every other downloaded bundle but the running one. Never throws.
+ */
+async function reuseAndPrune(version, runningId) {
+  let bundles = [];
+  try {
+    bundles = (await CapacitorUpdater.list())?.bundles ?? [];
+  } catch {
+    return null;
+  }
+  const reusable = bundles.find((b) => b?.version === version && REUSABLE.has(b.status)) ?? null;
+  // The STALE_UPDATE_FILE_MAX_COUNT place is `version`'s, downloaded or about to be: every other
+  // bundle waiting goes.
+  const stale = bundles.filter((b) => b && b.id !== runningId && b !== reusable && b.status !== 'downloading');
+  await Promise.all(stale.map((b) => CapacitorUpdater.delete({ id: b.id }).catch(() => {})));
+  return reusable;
+}
 
 // Phase 2: JS-only live updates. Sits on top of Phase 1 and is deliberately separable —
 // delete this hook, LiveUpdateToast, liveUpdater.js, liveUpdateManifest.js,
@@ -73,16 +142,27 @@ export function useLiveUpdate() {
     setStatus(LiveUpdateStatus.CHECKING);
 
     try {
-      const [info, current] = await Promise.all([
+      // Asked together, so the releases lookup below still starts while the APK check's is out
+      // and shares it (releasesLookup.js). Older shells have no getFailedUpdate; the note kept
+      // before a restart is enough then.
+      const [info, current, failedEvent] = await Promise.all([
         CapacitorApp.getInfo(),
         CapacitorUpdater.current().catch(() => null),
+        failedUpdate(),
       ]);
       const nativeVersion = info?.version ?? null;
       const currentBundleVersion = current?.bundle?.version ?? null;
+      const failed = noteFailedBundles(currentBundleVersion, failedEvent);
 
       // This launch's shared answer (utils/releasesLookup.js); the APK check usually asked first.
-      const latest = selectLatestBundleRelease(await getReleases());
+      const latest = selectLatestBundleRelease(await withTimeout(getReleases(), UPDATE_CHECK_TIMEOUT_MS));
       const decision = shouldApplyBundle({ nativeVersion, currentBundleVersion, manifest: latest });
+
+      // A version that already failed to start is never offered again.
+      if (decision.apply && failed.has(latest.version)) {
+        setStatus(LiveUpdateStatus.IDLE);
+        return null;
+      }
 
       if (!decision.apply) {
         // NATIVE_TOO_OLD is surfaced (it means "go install the APK update"); everything
@@ -97,6 +177,14 @@ export function useLiveUpdate() {
       }
 
       setManifest(latest);
+      // Downloaded on an earlier launch that closed before the restart: that one, not a second
+      // download. Every other downloaded bundle is deleted here.
+      const waiting = await reuseAndPrune(latest.version, current?.bundle?.id);
+      if (waiting) {
+        stagedRef.current = waiting;
+        setStatus(LiveUpdateStatus.READY);
+        return latest;
+      }
       setDownload({ startedAt: Date.now(), percent: null });
       setStatus(LiveUpdateStatus.DOWNLOADING);
 
@@ -140,9 +228,13 @@ export function useLiveUpdate() {
     const staged = stagedRef.current;
     if (!staged) return;
     try {
+      // Read on the next launch (noteFailedBundles): coming back on another version means
+      // this one did not start.
+      try { localStorage.setItem(APPLYING_BUNDLE_KEY, staged.version); } catch { /* not remembered */ }
       await CapacitorUpdater.set(staged);
       // Not reached in practice: set() reloads into the new bundle from here.
     } catch (e) {
+      try { localStorage.removeItem(APPLYING_BUNDLE_KEY); } catch { /* nothing to undo */ }
       setError({ message: e?.message || 'Could not apply the update' });
       setStatus(LiveUpdateStatus.ERROR);
     }

@@ -44,6 +44,17 @@ export const SOS_REFUSED = {
   other: "The server didn't send your alert. If you need help right now, call 112.",
 };
 
+// A Ping the server refused (alert-result, backend/alertRules.js), said to whoever sent it. It
+// used to play the "sent" sound whatever the server decided.
+export const PING_REFUSED = {
+  title: 'Ping blocked',
+  cooldown: (sec) => `Cooldown: you can ping again in ${timeLeft(sec)}.`,
+  muted: 'Muted: your Group Lead has turned off your pings.',
+  disabled: 'Your Group Lead has turned pings off for this group.',
+  quietZone: "Pings can't be sent from a class building right now.",
+  other: "The server didn't send your ping.",
+};
+
 // A held alert that can never go: the group is gone from the server, or this phone left it.
 export const SOS_DROPPED = {
   gone: "Your group is no longer on the server, so your alert couldn't reach them. If you need help right now, call 112.",

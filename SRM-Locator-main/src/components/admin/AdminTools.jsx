@@ -1,9 +1,11 @@
-import React, { useId } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.div>, which this config can't see
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Crosshair, MapPin, Route, ShieldAlert, Terminal, X } from 'lucide-react';
 import { Button, IconButton } from '../ui';
 import { modalBackdrop, modalCard } from '../../utils/motion';
+import { pushBackHandler } from '../../utils/backHandlers';
+import { REMOVE_PLACE } from '../../copy/addPlace';
 
 // The owner's admin tools (the path recorder) and the bar shown on the map while recording, in
 // the new look (Stop 2 leftovers). Owner only. Their words are unchanged until the wording pass
@@ -36,11 +38,26 @@ export function RecordingBar({ points, onPublish, onAbort }) {
  * @param {{ open: boolean, email?: string|null, name?: string|null, recording: boolean,
  *   points: number, onRecord: () => void, onPublish: () => void, onAbort: () => void,
  *   onClose: () => void, added?: object[], onAddPlace?: () => void,
- *   onRemovePlace?: (place: object) => void }} props
+ *   onRemovePlace?: (place: object) => void, removingId?: string|null }} props
+ *   removingId: the place whose removal is out, if any: every Remove waits until it answers
  */
-export default function AdminTools({ open, email, name, recording, points, onRecord, onPublish, onAbort, onClose, added = [], onAddPlace = () => {}, onRemovePlace = () => {} }) {
+export default function AdminTools({ open, email, name, recording, points, onRecord, onPublish, onAbort, onClose, added = [], onAddPlace = () => {}, onRemovePlace = () => {}, removingId = null }) {
   const reduceMotion = useReducedMotion();
   const titleId = useId();
+  // The place whose Remove is waiting on its confirmation. Remove used to act on the first tap,
+  // for every phone, with no way back.
+  const [confirming, setConfirming] = useState(null);
+  // Closing the tools drops a question left open, so it is not there on the next opening.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (!open) setConfirming(null);
+  }
+  // Back with the confirmation open closes the confirmation, and only it.
+  useEffect(() => {
+    if (!confirming) return undefined;
+    return pushBackHandler(() => { setConfirming(null); return true; });
+  }, [confirming]);
   return (
     <AnimatePresence>
       {open && (
@@ -109,12 +126,25 @@ export default function AdminTools({ open, email, name, recording, points, onRec
                 <Button variant="tonal" block icon={MapPin} onClick={onAddPlace}>ADD_PLACE</Button>
                 {added.length > 0 && (
                   <ul data-testid="added-places" className="flex flex-col gap-2">
-                    {added.map((place) => (
+                    {added.map((place) => (confirming?.id === place.id ? (
+                      <li key={place.id} data-testid="remove-place-confirm" role="alertdialog" aria-label={REMOVE_PLACE.title(place.name)} className="flex flex-col gap-2 rounded-card border border-border px-3 py-3">
+                        <p className="text-label break-words">{REMOVE_PLACE.title(place.name)}</p>
+                        <p className="text-secondary text-text-secondary">{REMOVE_PLACE.body}</p>
+                        <div className="flex gap-2">
+                          {/* Not red: red is for the Emergency alert and actions on people (the
+                              note at the top of this file, tests/emergencyRedGuard.test.js). */}
+                          <Button block onClick={() => { setConfirming(null); onRemovePlace(place); }}>{REMOVE_PLACE.confirm}</Button>
+                          <Button block variant="secondary" onClick={() => setConfirming(null)}>{REMOVE_PLACE.cancel}</Button>
+                        </div>
+                      </li>
+                    ) : (
                       <li key={place.id} className="flex items-center gap-2 rounded-card border border-border px-3 py-2">
                         <span className="flex-1 min-w-0 break-words text-secondary">{place.name}</span>
-                        <Button variant="secondary" onClick={() => onRemovePlace(place)} aria-label={`Remove ${place.name}`} className="shrink-0">REMOVE</Button>
+                        <Button variant="secondary" onClick={() => setConfirming(place)} disabled={Boolean(removingId)} aria-label={`Remove ${place.name}`} className="shrink-0">
+                          {removingId === place.id ? REMOVE_PLACE.removing : 'REMOVE'}
+                        </Button>
                       </li>
-                    ))}
+                    )))}
                   </ul>
                 )}
               </section>

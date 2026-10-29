@@ -341,9 +341,12 @@ const SosTrigger = ({
             </>
           ) : (
             <>
+              {/* The button's own text colour (PHASE_LOOK): white on the red of a hold, red on
+                  the white of armed. It was always red, so it vanished on the red. */}
               <AlertTriangle
                 size={16}
-                className={phase === 'armed' ? 'text-danger animate-bounce' : 'text-danger'}
+                className={phase === 'armed' ? 'animate-bounce' : undefined}
+                data-testid="sos-icon"
                 aria-hidden="true"
               />
               {/* "Hold longer" may take two lines; every other word stays on one. */}

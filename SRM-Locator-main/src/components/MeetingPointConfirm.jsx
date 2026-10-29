@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button, Sheet } from './ui';
 import { MEETING_POINT_CONFIRM, RALLY_CLEAR_CONFIRM } from '../copy/place';
 
@@ -13,6 +13,17 @@ import { MEETING_POINT_CONFIRM, RALLY_CLEAR_CONFIRM } from '../copy/place';
 export default function MeetingPointConfirm({ place, onConfirm, onCancel, clearing = false }) {
   const [description, setDescription] = useState('');
   useEffect(() => setDescription(place?.description || ''), [place]);
+  // One answer per question. The sheet stays on screen while it slides away, so a quick second
+  // tap on Confirm sent the meeting point twice, the second time with the question already gone.
+  const answeredRef = useRef(false);
+  useEffect(() => {
+    if (place) answeredRef.current = false;
+  }, [place]);
+  const answer = (fn) => () => {
+    if (answeredRef.current || !place) return;
+    answeredRef.current = true;
+    fn();
+  };
   const words = clearing ? RALLY_CLEAR_CONFIRM : MEETING_POINT_CONFIRM;
   return (
     <Sheet open={Boolean(place)} onClose={onCancel} title={place ? words.title(place.name) : ''}>
@@ -24,7 +35,7 @@ export default function MeetingPointConfirm({ place, onConfirm, onCancel, cleari
             className="rounded-xl border border-border bg-surface p-3 text-text" />
           <span className="text-caption text-text-secondary">{description.length}/160 · visible to your group</span>
         </label>}
-        <Button block onClick={() => onConfirm(description.trim())}>{words.confirm}</Button>
+        <Button block onClick={answer(() => onConfirm(description.trim()))}>{words.confirm}</Button>
         <Button variant="secondary" block onClick={onCancel}>{words.cancel}</Button>
       </div>
     </Sheet>

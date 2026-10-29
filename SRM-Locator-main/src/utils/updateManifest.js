@@ -7,9 +7,12 @@
 //
 //   tag_name -> the version                      (e.g. "v1.2.0")
 //   assets[] -> the APK download URL             (asset named APK_ASSET_NAME)
-//   body     -> release notes, plus two markers the release script writes in:
+//   body     -> release notes, plus lines the release script writes in:
 //                 "SHA256: <64 hex>"  -> integrity check, verified before install
-//                 "[MANDATORY]"       -> blocks normal app use until updated
+//                 "MANDATORY: true"   -> blocks normal app use until updated
+//                 "VERSION_CODE: <n>" -> the APK's build number, for the next release's check
+//                 "[MANDATORY]"       -> the same gate for apps up to js-1.1.83, which looked for
+//                                        this text anywhere in the notes (scripts/release.mjs)
 //
 // Everything here is side-effect free so it can be unit tested without a device,
 // a network, or Capacitor (see tests/updateManifest.test.js).
@@ -17,8 +20,25 @@
 /** Release asset the updater looks for. Stable name, so no client change per release. */
 export const APK_ASSET_NAME = 'locus-latest.apk';
 
-/** Literal marker in the release body that makes an update non-dismissable. */
+/**
+ * The line that makes an update non-dismissable. Only this line, which only `npm run release --
+ * <version> --mandatory` writes: the gate used to close on "[MANDATORY]" anywhere in the notes,
+ * so notes that merely mentioned it locked every phone out.
+ */
+export const MANDATORY_LINE = 'MANDATORY: true';
+const MANDATORY_FLAG = /^[ \t]*MANDATORY[ \t]*:[ \t]*true[ \t]*$/im;
+
+/** What apps up to js-1.1.83 look for anywhere in the body. The script writes it as a line of its own, next to MANDATORY_LINE. */
 export const MANDATORY_MARKER = '[MANDATORY]';
+const MANDATORY_MARKER_LINE = /^[ \t]*\[MANDATORY\][ \t]*$/;
+
+const VERSION_CODE_LINE = /^[ \t]*VERSION_CODE[ \t]*:[ \t]*(\d+)[ \t]*$/m;
+
+/** The APK build number a release body states (VERSION_CODE line), or null. */
+export function releaseVersionCode(body) {
+  const match = typeof body === 'string' ? VERSION_CODE_LINE.exec(body) : null;
+  return match ? Number(match[1]) : null;
+}
 
 /**
  * Tag prefix that marks a native APK release, mirroring liveUpdateManifest's
@@ -79,7 +99,7 @@ export function extractNotes(body) {
   if (typeof body !== 'string') return '';
   return body
     .split(/\r?\n/)
-    .filter((line) => !SHA256_LINE.test(line) && !line.includes(MANDATORY_MARKER))
+    .filter((line) => !SHA256_LINE.test(line) && !MANDATORY_FLAG.test(line) && !MANDATORY_MARKER_LINE.test(line) && !VERSION_CODE_LINE.test(line))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -124,7 +144,7 @@ export function parseReleaseManifest(release, options = {}) {
       apkUrl: apk.browser_download_url,
       apkSize: typeof apk.size === 'number' ? apk.size : null,
       sha256: sha[1].toLowerCase(),
-      mandatory: body.includes(MANDATORY_MARKER),
+      mandatory: MANDATORY_FLAG.test(body),
       prerelease: Boolean(release.prerelease),
       notes: extractNotes(body),
     },

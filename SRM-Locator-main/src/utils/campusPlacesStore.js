@@ -14,7 +14,7 @@
 //
 // Without that rule every signed-in user could change the map for everyone.
 
-import { addDoc, collection, deleteDoc, doc, getDocsFromServer, serverTimestamp } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocsFromServer, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase.js';
 import { toCampusPlace } from './campusPlaces.js';
 
@@ -51,11 +51,21 @@ export async function fetchCampusPlaces() {
   return places;
 }
 
-/** Saves a place that validateNewPlace passed. Rejects with 'permission-denied' for anyone the rules don't allow. */
-export async function saveCampusPlace(fields) {
+/** A new place's document id, made on the phone (no network), so saving it again is the same place. */
+export function newCampusPlaceId() {
+  return doc(collection(db, COLLECTION)).id;
+}
+
+/**
+ * Saves a place that validateNewPlace passed, as document `id` (newCampusPlaceId). Rejects with
+ * 'permission-denied' for anyone the rules don't allow. Offline it never settles: Firestore
+ * holds the write until it is back online, so the caller stops waiting (App.jsx), and a second
+ * try writes the same document rather than a second place.
+ */
+export async function saveCampusPlace(fields, id) {
   const email = auth.currentUser?.email ?? null;
-  const ref = await addDoc(collection(db, COLLECTION), { ...fields, addedBy: email, addedAt: serverTimestamp() });
-  return ref.id;
+  await setDoc(doc(db, COLLECTION, id), { ...fields, addedBy: email, addedAt: serverTimestamp() });
+  return id;
 }
 
 /** Removes an added place by its `cp-` id. */

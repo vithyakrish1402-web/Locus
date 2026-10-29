@@ -10,7 +10,8 @@
       "responseTimeout": 30,
       "resetWhenUpdate": true,
       "autoDeleteFailed": true,
-      "autoDeletePrevious": true
+      "autoDeletePrevious": true,
+      "statsUrl": ""
     }
   }
 }

@@ -214,6 +214,30 @@ describe('building the file from the real releases', () => {
     expect(releases[29].tag_name).toBe('js-1.0.11');
   });
 
+  // Phase 5: 30 bundles in a row used to push the APK out of the file. The app then refused the
+  // file (NO_USABLE_APK), and the listing it fell back on had lost the APK too: the APK check
+  // went blind.
+  it('after 30 bundles in a row still carries the newest APK, and the app finds it', () => {
+    const listing = [
+      ...Array.from({ length: 35 }, (_, i) => github(bundle(`1.1.${80 - i}`))),
+      github(apk('1.1.45')),
+      github(apk('1.1.44')),
+    ];
+    const index = buildUpdateIndex(listing, { now: NOW });
+    expect(index.releases).toHaveLength(31);
+    expect(index.releases[30].tag_name).toBe('v1.1.45');
+    const trusted = parseUpdateIndex(index, { repo: REPO, now: NOW });
+    expect(trusted.ok).toBe(true);
+    expect(selectLatestApkRelease(trusted.releases).version).toBe('1.1.45');
+    expect(selectLatestBundleRelease(trusted.releases).version).toBe('1.1.80');
+  });
+
+  it('also carries the newest bundle when 30 APKs come first', () => {
+    const listing = [...Array.from({ length: 30 }, (_, i) => github(apk(`2.0.${40 - i}`))), github(bundle('1.9.9'))];
+    const { releases } = buildUpdateIndex(listing, { now: NOW });
+    expect(releases.map((r) => r.tag_name)).toContain('js-1.9.9');
+  });
+
   it('keeps the pre-release flag, so the update checks still skip a test release', () => {
     const listing = [github(apk('1.1.22', { prerelease: true })), github(apk('1.1.21')), github(bundle('1.1.24'))];
     const { releases } = buildUpdateIndex(listing, { now: NOW });

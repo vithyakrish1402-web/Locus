@@ -140,9 +140,8 @@ async function main() {
     // the APK check a tag it cannot parse — and the verifier has to look for a release
     // the same way the app does, or "the verifier passed" stops meaning anything.
     //
-    // 100 rather than the app's 30, still one request: the update index check below needs the
-    // newest 30 v* and js-* releases, and the update-index release can take one of the first
-    // 30 places. The newest releases, which the app picks from, are the same either way.
+    // 100, the same one request the app makes: the update index check below needs the newest
+    // 30 v* and js-* releases and the newest of each series.
     const api = `https://api.github.com/repos/${REPO}/releases?per_page=100`;
 
     const response = await fetch(api, { headers: { Accept: 'application/vnd.github+json' } });

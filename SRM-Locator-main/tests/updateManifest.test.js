@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   APK_ASSET_NAME,
+  MANDATORY_LINE,
   MANDATORY_MARKER,
   compareVersions,
+  releaseVersionCode,
   extractNotes,
   isUpdateAvailable,
   parseReleaseManifest,
@@ -109,13 +111,31 @@ describe('parseReleaseManifest', () => {
     expect(result.manifest.sha256).toBe(digest.toLowerCase());
   });
 
-  it('flags a mandatory release', () => {
+  // Phase 5: the gate is the script's own MANDATORY line, never the old marker text. The script
+  // writes both, so the notes lose both.
+  it('flags a mandatory release by its MANDATORY line, and strips the machine lines from the notes', () => {
     const result = parseReleaseManifest(
-      release({ body: `Critical fix.\n${MANDATORY_MARKER}\nSHA256: ${'d'.repeat(64)}` })
+      release({ body: `Critical fix.\n${MANDATORY_MARKER}\n${MANDATORY_LINE}\nVERSION_CODE: 12\nSHA256: ${'d'.repeat(64)}` })
     );
     expect(result.ok).toBe(true);
     expect(result.manifest.mandatory).toBe(true);
     expect(result.manifest.notes).toBe('Critical fix.');
+  });
+
+  it('is not mandatory for notes that only mention the marker, on its own line or in a sentence', () => {
+    for (const body of [
+      `Critical fix.\n${MANDATORY_MARKER}\nSHA256: ${'d'.repeat(64)}`,
+      `We no longer use ${MANDATORY_MARKER} for small fixes.\nSHA256: ${'d'.repeat(64)}`,
+      `MANDATORY: false\nSHA256: ${'d'.repeat(64)}`,
+    ]) {
+      expect(parseReleaseManifest(release({ body })).manifest.mandatory).toBe(false);
+    }
+  });
+
+  it('reads the build number from the VERSION_CODE line', () => {
+    expect(releaseVersionCode(`notes\nVERSION_CODE: 14\nSHA256: ${'d'.repeat(64)}`)).toBe(14);
+    expect(releaseVersionCode('notes with no line')).toBeNull();
+    expect(releaseVersionCode(undefined)).toBeNull();
   });
 
   it('rejects a release with no checksum, so nothing unverified can ever install', () => {

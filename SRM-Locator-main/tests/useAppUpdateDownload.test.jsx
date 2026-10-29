@@ -13,6 +13,18 @@ const native = vi.hoisted(() => ({
   plugin: null,
 }));
 
+// utils/locusUpdater.js's queueDownload, as it is, started afresh for each test: a test may
+// leave a download unanswered, which would hold every later one.
+const queue = vi.hoisted(() => {
+  let tail = Promise.resolve();
+  const run = (task) => {
+    const turn = tail.then(task, task);
+    tail = turn.catch(() => {});
+    return turn;
+  };
+  run.reset = () => { tail = Promise.resolve(); };
+  return run;
+});
 vi.mock('../src/utils/locusUpdater.js', () => {
   native.plugin = {
     getInstallPermissionStatus: vi.fn(async () => ({ granted: true })),
@@ -26,7 +38,8 @@ vi.mock('../src/utils/locusUpdater.js', () => {
       return { remove() {} };
     }),
   };
-  return { LocusUpdater: native.plugin, isUpdaterAvailable: () => true };
+  // The real queue (one download at a time), the fake plugin.
+  return { LocusUpdater: native.plugin, isUpdaterAvailable: () => true, queueDownload: queue };
 });
 vi.mock('@capacitor/app', () => ({
   App: {
@@ -89,6 +102,8 @@ async function startDownload(hook) {
 const shown = (hook) => displayPercent(hook.result.current.status, hook.result.current.progress.percent);
 
 beforeEach(() => {
+  queue.reset();
+  localStorage.clear();
   __resetColdStartThrottle();
   __resetReleasesLookup();
   vi.spyOn(globalThis, 'fetch').mockResolvedValue({ status: 200, ok: true, json: async () => [release] });

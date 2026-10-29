@@ -229,3 +229,26 @@ describe('UpdateModal', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: UPDATE.available.update }));
   });
 });
+
+// Phase 5: a check that got no answer said so with Try again greyed out (there was no release to
+// download), leaving nothing to tap. Its Try again now asks again.
+describe('a check that failed', () => {
+  it("says it couldn't check, and Try again checks again", () => {
+    const update = makeUpdate({ status: UpdateStatus.ERROR, manifest: null, error: { code: 'TIMEOUT', message: 'x' } });
+    render(<UpdateModal update={update} />);
+    expect(screen.getByText(failureSentence('TIMEOUT'))).toBeTruthy();
+    expect(failureSentence('TIMEOUT')).toBe("Couldn't check for updates. Try again.");
+    const retry = screen.getByRole('button', { name: UPDATE.failed.tryAgain });
+    expect(retry.disabled).toBe(false);
+    fireEvent.click(retry);
+    expect(update.check).toHaveBeenCalledWith({ manual: true });
+    expect(update.startDownload).not.toHaveBeenCalled();
+  });
+
+  it('a failed download still downloads again', () => {
+    const update = makeUpdate({ status: UpdateStatus.ERROR, error: { code: 'STALLED', message: 'x', during: 'download' } });
+    render(<UpdateModal update={update} />);
+    fireEvent.click(screen.getByRole('button', { name: UPDATE.failed.tryAgain }));
+    expect(update.startDownload).toHaveBeenCalled();
+  });
+});

@@ -109,3 +109,19 @@ export function placeMatches(place, query) {
 
 /** Open ground has no floors or AR building tag; everything else is a building. */
 export const isGrounds = (place) => place?.category === GROUNDS;
+
+// How long the admin's Add / Remove waits for the database. Offline, Firestore holds a write
+// until it is back online and never answers, so the form sat on "Saving…" for good and said
+// "added" whenever the signal came back.
+export const ADMIN_SAVE_TIMEOUT_MS = 10000;
+
+/** `promise`, or a rejection with code 'timeout' once ADMIN_SAVE_TIMEOUT_MS pass. */
+export function withinAdminSave(promise, ms = ADMIN_SAVE_TIMEOUT_MS) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(Object.assign(new Error('No answer from the database'), { code: 'timeout' })), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
