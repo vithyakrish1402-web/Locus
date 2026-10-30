@@ -130,7 +130,7 @@ describe('a failure is reported, never thrown', () => {
     const lines = [];
     reportUpdateIndex({ ok: false, step: 'upload the file', error: 'HTTP 422' }, { log: (s) => lines.push(s), repo: 'someone/Fork' });
     expect(lines.join('\n')).toContain('Fix it with:   npm run release:index -- --repo someone/Fork');
-    expect(updateIndexFixCommand(REPO)).toBe(UPDATE_INDEX_FIX_COMMAND);
+    expect(updateIndexFixCommand(REPO)).toBe(`${UPDATE_INDEX_FIX_COMMAND} -- --repo ${REPO}`);
   });
 
   it('lists, checks and uploads in the repo it is given, not the default one', () => {
@@ -151,13 +151,11 @@ describe('a failure is reported, never thrown', () => {
 describe('both release scripts rebuild the file as their very last step', () => {
   it.each([['scripts/release.mjs'], ['scripts/release-bundle.mjs']])('%s', (path) => {
     const source = readFileSync(resolve(import.meta.dirname, '..', path), 'utf8');
-    // The design line builds the arguments first, so --repo can be added to them.
-    expect(source).toMatch(/const releaseArgs = \[\s*'release',\s*'create',/);
-    const created = source.indexOf("run('gh', releaseArgs);");
-    // In the repo the release just went to (--repo / LOCUS_RELEASE_REPO), and the fix command
-    // printed on a failure names that repo too.
+    // The release goes through publishRelease, to the repo named with --repo. The index is
+    // rebuilt for that same repo, and the fix command printed on a failure names it too.
+    const created = source.indexOf('publishRelease({');
     const rebuilt = source.indexOf(
-      "reportUpdateIndex(publishUpdateIndex({ dir: join(STAGING_DIR, 'update-index'), repo: repoArg }), { repo: repoArg });"
+      "reportUpdateIndex(publishUpdateIndex({ dir: join(STAGING_DIR, 'update-index'), repo }), { repo });"
     );
     expect(created).toBeGreaterThan(0);
     // After the release is created, at the top level (not behind a dry run), and nothing after
@@ -168,10 +166,9 @@ describe('both release scripts rebuild the file as their very last step', () => 
     expect(after).not.toMatch(/\bdie\(|process\.exit|\brun\(|throw /);
   });
 
-  it('release:index takes --repo and LOCUS_RELEASE_REPO the way the release scripts do', () => {
+  it('release:index takes --repo (or UPDATE_REPO) the way the release scripts do, with no default', () => {
     const source = readFileSync(resolve(import.meta.dirname, '..', 'scripts/release-index.mjs'), 'utf8');
-    expect(source).toMatch(/argv\.indexOf\('--repo'\)/);
-    expect(source).toContain('process.env.LOCUS_RELEASE_REPO || UPDATE_REPO');
+    expect(source).toContain('targetRepo(process.argv.slice(2))');
     expect(source).toContain("publishUpdateIndex({ dir: join(ROOT, 'dist-release', 'update-index'), repo })");
     expect(source).toContain('reportUpdateIndex(result, { afterRelease: false, repo })');
   });

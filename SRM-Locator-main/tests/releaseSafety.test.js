@@ -68,7 +68,7 @@ function fakeGh({ existing = null, fail = null, taggedAt = 'BUILT' } = {}) {
   };
   return { run, calls };
 }
-const RELEASE = { tag: 'js-9.9.9', title: 'LOCUS JS bundle 9.9.9', asset: 'bundle.zip', notesFile: 'notes.md', target: 'BUILT' };
+const RELEASE = { tag: 'js-9.9.9', title: 'LOCUS JS bundle 9.9.9', asset: 'bundle.zip', notesFile: 'notes.md', target: 'BUILT', repo: 'o/Locus' };
 
 describe('9. the tag', () => {
   it('is made at the built commit (--target), and checked afterwards', () => {
@@ -76,7 +76,7 @@ describe('9. the tag', () => {
     expect(publishRelease({ ...RELEASE, run: gh.run })).toEqual({ ok: true });
     const create = gh.calls.find((a) => a[0] === 'release' && a[1] === 'create');
     expect(create).toEqual(expect.arrayContaining(['--target', 'BUILT']));
-    expect(gh.calls.at(-1)[1]).toBe('repos/{owner}/{repo}/git/ref/tags/js-9.9.9');
+    expect(gh.calls.at(-1)[1]).toBe('repos/o/Locus/git/ref/tags/js-9.9.9');
   });
 
   it('pointing anywhere else is reported', () => {
@@ -102,9 +102,9 @@ describe('10. a failure part way', () => {
     const gh = fakeGh();
     publishRelease({ ...RELEASE, run: gh.run });
     const steps = gh.calls.map((a) => a.slice(0, 2).join(' '));
-    expect(steps).toEqual(['release view', 'release create', 'release edit', 'api repos/{owner}/{repo}/git/ref/tags/js-9.9.9']);
+    expect(steps).toEqual(['release view', 'release create', 'release edit', 'api repos/o/Locus/git/ref/tags/js-9.9.9']);
     expect(gh.calls[1]).toContain('--draft');
-    expect(gh.calls[2]).toEqual(['release', 'edit', 'js-9.9.9', '--draft=false']);
+    expect(gh.calls[2]).toEqual(['release', 'edit', 'js-9.9.9', '--repo', 'o/Locus', '--draft=false']);
   });
 
   it('a failed upload stops before publishing, and says the same command can be run again', () => {
@@ -118,7 +118,7 @@ describe('10. a failure part way', () => {
   it('a rerun replaces the draft a failed run left', () => {
     const gh = fakeGh({ existing: 'draft' });
     expect(publishRelease({ ...RELEASE, run: gh.run })).toEqual({ ok: true });
-    expect(gh.calls[1]).toEqual(['release', 'delete', 'js-9.9.9', '--yes']);
+    expect(gh.calls[1]).toEqual(['release', 'delete', 'js-9.9.9', '--repo', 'o/Locus', '--yes']);
   });
 
   it('never touches a release already published', () => {

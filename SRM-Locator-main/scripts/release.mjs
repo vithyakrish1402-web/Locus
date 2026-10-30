@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 // Cut a LOCUS release that the in-app updater can consume.
 //
-//   npm run release -- 1.1.0
-//   npm run release -- 1.1.0 --mandatory --notes notes.md
-//   npm run release -- 1.1.0 --dry-run
+//   npm run release -- 1.1.0 --repo vithyakrish1402-web/Locus-Release
+//   npm run release -- 1.1.0 --repo vithyakrish1402-web/Locus --mandatory --notes notes.md
+//   npm run release -- 1.1.0 --repo vithyakrish1402-web/Locus --dry-run
+//
+// The repo to publish to is always named (--repo, or UPDATE_REPO); it is never taken from `origin`.
+// The version must be above every release in BOTH repos (scripts/lib/repos.mjs).
 //
 // The GitHub release IS the update manifest (see src/utils/updateManifest.js), so this
 // script is the only place the three things the client relies on are produced together:
@@ -28,6 +31,7 @@ import { releaseVersionConflict } from '../src/utils/liveUpdateManifest.js';
 import { MANDATORY_LINE, MANDATORY_MARKER, compareVersions, releaseVersionCode } from '../src/utils/updateManifest.js';
 import { webBuildProblem } from './lib/webBuild.mjs';
 import { publishUpdateIndex, reportUpdateIndex } from './lib/updateIndex.mjs';
+import { flagValue, originRepo, publishedTagsOfRepos, tagsBuiltCommit, targetRepo } from './lib/repos.mjs';
 import { notesProblem, versionCodeProblem } from './lib/releaseChecks.mjs';
 import { publishRelease } from './lib/publishRelease.mjs';
 
@@ -68,11 +72,12 @@ const flags = new Set(argv.filter((a) => a.startsWith('--')));
 const positional = argv.filter((a) => !a.startsWith('--'));
 const notesIndex = argv.indexOf('--notes');
 const notesFile = notesIndex !== -1 ? argv[notesIndex + 1] : null;
-const version = positional.find((a) => !a.startsWith('-') && a !== notesFile);
+const repoArg = flagValue(argv, '--repo');
+const version = positional.find((a) => !a.startsWith('-') && a !== notesFile && a !== repoArg);
 const mandatory = flags.has('--mandatory');
 const dryRun = flags.has('--dry-run');
 
-if (!version) die('usage: npm run release -- <version> [--mandatory] [--notes <file>] [--dry-run]');
+if (!version) die('usage: npm run release -- <version> --repo <owner/name> [--mandatory] [--notes <file>] [--dry-run]');
 if (!/^\d+\.\d+\.\d+$/.test(version)) {
   // The client parses the tag with a semver regex and fails closed on anything else,
   // so a malformed tag here means a release nobody is ever offered.
@@ -80,6 +85,10 @@ if (!/^\d+\.\d+\.\d+$/.test(version)) {
 }
 
 // ---------------------------------------------------------------- preflight
+
+const target = targetRepo(argv);
+if (!target.ok) die(target.error);
+const repo = target.repo;
 
 const gh = capture('gh', ['auth', 'status']);
 if (gh.status !== 0) die('the GitHub CLI is not installed or not authenticated - run `gh auth login`');
@@ -136,16 +145,15 @@ const nextCode = isBaseline || resuming ? currentCode : currentCode + 1;
 const existingTag = capture('git', ['tag', '--list', `v${version}`]);
 if (existingTag.stdout) die(`tag v${version} already exists`);
 
-// Every release tag on GitHub, in both series. Releases are made with `gh release create`,
-// which tags on GitHub only, so the local clone's tags can't be trusted to be complete.
-// Drafts are left out: a draft is a failed run's leftover, which publishRelease replaces.
-const publishedTags = () => {
-  const listed = capture('gh', ['release', 'list', '--limit', '500', '--json', 'tagName,isDraft', '--jq', '.[] | select(.isDraft | not) | .tagName']);
-  if (listed.status !== 0) die('could not list the published releases (gh release list)');
-  return listed.stdout.split(/\r?\n/).filter(Boolean);
-};
+// Every release tag on GitHub, in both series and in BOTH repos. Releases are made with
+// `gh release create`, which tags on GitHub only, so the local clone's tags can't be trusted to
+// be complete. Drafts are left out: a draft is a failed run's leftover, which publishRelease
+// replaces. An empty repo adds nothing; a repo that can't be asked stops the run.
+const ghRun = (args) => spawnSync('gh', args, { cwd: ROOT, encoding: 'utf8' });
+const publishedAll = publishedTagsOfRepos(ghRun);
+if (!publishedAll.ok) die(publishedAll.error);
 // Above every JS bundle too: see releaseVersionConflict.
-const tags = publishedTags();
+const tags = publishedAll.tags;
 const versionConflict = releaseVersionConflict(version, tags);
 if (versionConflict) die(versionConflict);
 
@@ -163,14 +171,16 @@ function aapt2Path() {
   return found ?? null;
 }
 function publishedVersionCode(tag) {
-  const body = capture('gh', ['release', 'view', tag, '--json', 'body', '--jq', '.body']);
+  // Read from whichever repo holds that release (the target's own first).
+  const holder = [repo, ...Object.keys(publishedAll.byRepo)].find((r) => publishedAll.byRepo[r]?.includes(tag)) ?? repo;
+  const body = capture('gh', ['release', 'view', tag, '--repo', holder, '--json', 'body', '--jq', '.body']);
   if (body.status === 0 && releaseVersionCode(body.stdout) !== null) return releaseVersionCode(body.stdout);
   const aapt2 = aapt2Path();
   if (!aapt2) return null;
   const dir = join(STAGING_DIR, 'published-apk');
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  if (capture('gh', ['release', 'download', tag, '--pattern', APK_ASSET_NAME, '--dir', dir]).status !== 0) return null;
+  if (capture('gh', ['release', 'download', tag, '--repo', holder, '--pattern', APK_ASSET_NAME, '--dir', dir]).status !== 0) return null;
   const badging = capture(aapt2, ['dump', 'badging', join(dir, APK_ASSET_NAME)]).stdout;
   const match = /versionCode='(\d+)'/.exec(badging);
   return match ? Number(match[1]) : null;
@@ -280,6 +290,16 @@ writeFileSync(bodyFile, body);
 console.log(`\n  --- release body ---\n${body}\n  --------------------`);
 
 if (dryRun) {
+  console.log(`
+  --- dry run summary (nothing is published) ---
+  target repo     ${repo}
+  tag             v${version}
+  asset           ${APK_ASSET_NAME}  (${bytes.length} bytes)
+  SHA-256         ${sha256}
+  MIN_NATIVE      not used by a native release
+  [MANDATORY]     ${mandatory ? 'YES' : 'no'}
+  version check   PASSED: ${version} is above all ${tags.length} releases published in both repos
+  ----------------------------------------------`);
   console.log(`\n  Dry run complete. Staged at ${STAGING_DIR}.${gradleChanged ? ' Reverting the version bump.' : ''}`);
   if (gradleChanged) writeFileSync(GRADLE_FILE, gradle);
   process.exit(0);
@@ -307,7 +327,9 @@ const published = publishRelease({
   title: `LOCUS v${version}`,
   asset,
   notesFile: bodyFile,
-  target: builtCommit,
+  // Only the repo the source lives in has the built commit; a releases-only repo does not.
+  target: tagsBuiltCommit(repo, originRepo({ cwd: ROOT })) ? builtCommit : null,
+  repo,
 });
 // Only the tag check fails after the release is public: then the index is still rebuilt below.
 if (!published.ok && published.step !== 'check the tag') die(`could not ${published.step}: ${published.error}\n  ${published.retry}`);
@@ -329,4 +351,4 @@ if (isBaseline) {
 
 // Last, and only once the release exists: phones read this file at launch
 // (src/utils/updateIndex.js). A failure is reported loudly but never undoes the release.
-reportUpdateIndex(publishUpdateIndex({ dir: join(STAGING_DIR, 'update-index') }));
+reportUpdateIndex(publishUpdateIndex({ dir: join(STAGING_DIR, 'update-index'), repo }), { repo });

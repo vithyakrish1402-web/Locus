@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // Publish a JS-only live update (Phase 2). No APK, no reinstall.
 //
-//   npm run release:bundle -- 1.0.1
-//   npm run release:bundle -- 1.0.1 --min-native 1.1.0 --dry-run
+//   npm run release:bundle -- 1.0.1 --repo vithyakrish1402-web/Locus-Release
+//   npm run release:bundle -- 1.0.1 --repo vithyakrish1402-web/Locus --min-native 1.1.0 --dry-run
+//
+// The repo to publish to is always named (--repo, or UPDATE_REPO); it is never taken from `origin`.
+// The version must be above every release in BOTH repos (scripts/lib/repos.mjs).
 //
 // Builds dist/, zips it, and publishes it as a `js-<version>` GitHub release whose body
 // carries the two lines the client parses (see src/utils/liveUpdateManifest.js):
@@ -31,6 +34,7 @@ import { webBuildProblem } from './lib/webBuild.mjs';
 import { publishUpdateIndex, reportUpdateIndex } from './lib/updateIndex.mjs';
 import { minNativeProblem, notesProblem } from './lib/releaseChecks.mjs';
 import { publishRelease } from './lib/publishRelease.mjs';
+import { originRepo, publishedTagsOfRepos, tagsBuiltCommit, targetRepo } from './lib/repos.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
@@ -72,15 +76,20 @@ const flagValue = (name) => {
 };
 const minNativeArg = flagValue('--min-native');
 const notesFile = flagValue('--notes');
+const repoArg = argv.includes('--repo') ? argv[argv.indexOf('--repo') + 1] : null;
 const dryRun = argv.includes('--dry-run');
-const version = argv.find((a) => !a.startsWith('--') && a !== minNativeArg && a !== notesFile);
+const version = argv.find((a) => !a.startsWith('--') && a !== minNativeArg && a !== notesFile && a !== repoArg);
 
 if (!version) {
-  die('usage: npm run release:bundle -- <version> [--min-native <version>] [--notes <file>] [--dry-run]');
+  die('usage: npm run release:bundle -- <version> --repo <owner/name> [--min-native <version>] [--notes <file>] [--dry-run]');
 }
 if (!/^\d+\.\d+\.\d+$/.test(version)) die(`"${version}" is not a three-part semver (e.g. 1.0.1)`);
 
 // ---------------------------------------------------------------- preflight
+
+const target = targetRepo(argv);
+if (!target.ok) die(target.error);
+const repo = target.repo;
 
 if (capture('gh', ['auth', 'status']).status !== 0) {
   die('the GitHub CLI is not installed or not authenticated - run `gh auth login`');
@@ -109,17 +118,16 @@ if (minMaj > natMaj || (minMaj === natMaj && (minMin > natMin || (minMin === nat
 
 if (capture('git', ['tag', '--list', `js-${version}`]).stdout) die(`tag js-${version} already exists`);
 
-// Every release tag on GitHub, in both series. Releases are made with `gh release create`,
-// which tags on GitHub only, so the local clone's tags can't be trusted to be complete.
-// Drafts are left out: a draft is a failed run's leftover, which publishRelease replaces.
-const publishedTags = () => {
-  const listed = capture('gh', ['release', 'list', '--limit', '500', '--json', 'tagName,isDraft', '--jq', '.[] | select(.isDraft | not) | .tagName']);
-  if (listed.status !== 0) die('could not list the published releases (gh release list)');
-  return listed.stdout.split(/\r?\n/).filter(Boolean);
-};
+// Every release tag on GitHub, in both series and in BOTH repos. Releases are made with
+// `gh release create`, which tags on GitHub only, so the local clone's tags can't be trusted to
+// be complete. Drafts are left out: a draft is a failed run's leftover, which publishRelease
+// replaces. An empty repo adds nothing; a repo that can't be asked stops the run.
+const ghRun = (args) => spawnSync('gh', args, { cwd: ROOT, encoding: 'utf8' });
+const publishedAll = publishedTagsOfRepos(ghRun);
+if (!publishedAll.ok) die(publishedAll.error);
 // Above the APK this build.gradle describes as well as every release: a phone running
 // that APK's own JS counts as running its versionName (see releaseVersionConflict).
-const tags = publishedTags();
+const tags = publishedAll.tags;
 const versionConflict = releaseVersionConflict(version, tags, [nativeName]);
 if (versionConflict) die(versionConflict);
 // From the published APKs, not from whichever branch this is (releaseChecks.mjs).
@@ -177,6 +185,16 @@ writeFileSync(bodyFile, body);
 console.log(`\n  --- release body ---\n${body}\n  --------------------`);
 
 if (dryRun) {
+  console.log(`
+  --- dry run summary (nothing is published) ---
+  target repo     ${repo}
+  tag             js-${version}
+  asset           ${BUNDLE_ASSET_NAME}  (${bytes.length} bytes)
+  SHA-256         ${sha256}
+  MIN_NATIVE      ${minNative}
+  [MANDATORY]     no (a bundle never carries it)
+  version check   PASSED: ${version} is above all ${tags.length} releases published in both repos
+  ----------------------------------------------`);
   console.log(`\n  Dry run complete. Staged at ${STAGING_DIR}.\n`);
   process.exit(0);
 }
@@ -194,7 +212,9 @@ const published = publishRelease({
   title: `LOCUS JS bundle ${version}`,
   asset: zipPath,
   notesFile: bodyFile,
-  target: builtCommit,
+  // Only the repo the source lives in has the built commit; a releases-only repo does not.
+  target: tagsBuiltCommit(repo, originRepo({ cwd: ROOT })) ? builtCommit : null,
+  repo,
 });
 // Only the tag check fails after the release is public: then the index is still rebuilt below.
 if (!published.ok && published.step !== 'check the tag') die(`could not ${published.step}: ${published.error}\n  ${published.retry}`);
@@ -208,4 +228,4 @@ console.log(`\n  Published js-${version}. Devices on native >= ${minNative} pick
 
 // Last, and only once the release exists: phones read this file at launch
 // (src/utils/updateIndex.js). A failure is reported loudly but never undoes the release.
-reportUpdateIndex(publishUpdateIndex({ dir: join(STAGING_DIR, 'update-index') }));
+reportUpdateIndex(publishUpdateIndex({ dir: join(STAGING_DIR, 'update-index'), repo }), { repo });

@@ -19,12 +19,15 @@ import { fileURLToPath } from 'node:url';
 
 import { APK_ASSET_NAME, selectLatestApkRelease } from '../src/utils/updateManifest.js';
 import { BUNDLE_ASSET_NAME, selectLatestBundleRelease } from '../src/utils/liveUpdateManifest.js';
+import { NEW_REPO, flagValue } from './lib/repos.mjs';
 import { UPDATE_INDEX_TAG, buildUpdateIndex, parseUpdateIndex, updateIndexUrl } from '../src/utils/updateIndex.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GRADLE_FILE = join(ROOT, 'android', 'app', 'build.gradle');
 const SCRATCH = join(ROOT, 'dist-release', '_verify');
-const REPO = process.env.VITE_UPDATE_REPO || 'vithyakrish1402-web/Locus';
+// Read-only. The repo to check: --repo, else UPDATE_REPO / VITE_UPDATE_REPO, else the repo the app
+// itself reads (src/utils/releasesLookup.js).
+const REPO = flagValue(process.argv.slice(2), '--repo') || process.env.UPDATE_REPO || process.env.VITE_UPDATE_REPO || NEW_REPO;
 const IS_WINDOWS = process.platform === 'win32';
 
 let failures = 0;
@@ -145,7 +148,7 @@ async function main() {
     const api = `https://api.github.com/repos/${REPO}/releases?per_page=100`;
 
     const response = await fetch(api, { headers: { Accept: 'application/vnd.github+json' } });
-    if (response.status === 404) die('repository or releases not visible - check VITE_UPDATE_REPO');
+    if (response.status === 404) die('repository or releases not visible - check --repo');
     if (response.status === 403 || response.status === 429) die('GitHub rate limit reached; try again shortly');
     if (!response.ok) die(`GitHub returned HTTP ${response.status}`);
     const payload = await response.json();

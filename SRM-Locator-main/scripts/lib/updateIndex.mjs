@@ -16,11 +16,9 @@ import {
   parseUpdateIndex,
 } from '../../src/utils/updateIndex.js';
 
-/** The repo the app reads releases from (src/utils/releasesLookup.js), as release:verify reads it. */
-export const UPDATE_REPO = process.env.VITE_UPDATE_REPO || 'vithyakrish1402-web/Locus';
-
-/** What to run when the rebuild failed. */
+/** What to run when the rebuild failed (the repo is always named: there is no default). */
 export const UPDATE_INDEX_FIX_COMMAND = 'npm run release:index';
+export const updateIndexFixCommand = (repo) => (repo ? `${UPDATE_INDEX_FIX_COMMAND} -- --repo ${repo}` : UPDATE_INDEX_FIX_COMMAND);
 
 // gh is a real executable, so no shell (see the release scripts on Windows shells).
 const gh = (args) => spawnSync('gh', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -38,7 +36,10 @@ const failed = (step, result) => ({
  *   dir: where to write the file before uploading it; run: runs gh (tests pass a fake)
  * @returns {{ok: true, file: string, index: object} | {ok: false, step: string, error: string}}
  */
-export function publishUpdateIndex({ dir, repo = UPDATE_REPO, run = gh, now = Date.now() }) {
+export function publishUpdateIndex({ dir, repo, run = gh, now = Date.now() }) {
+  // The file is built for ONE repo: its links must be that repo's, because a phone only accepts
+  // links under the repo address compiled into the JS it is running. No default, no guessing.
+  if (!repo) return { ok: false, step: 'choose the repo', error: 'no target repo' };
   try {
     // Every page: the newest APK can be any distance down the list (buildUpdateIndex keeps it).
     // --slurp answers one list per page.
@@ -86,7 +87,7 @@ export function publishUpdateIndex({ dir, repo = UPDATE_REPO, run = gh, now = Da
 }
 
 /** Print the outcome. A failure is loud, says what it means for phones and how to fix it. */
-export function reportUpdateIndex(result, { afterRelease = true, log = console.log } = {}) {
+export function reportUpdateIndex(result, { afterRelease = true, log = console.log, repo = null } = {}) {
   if (result.ok) {
     const tags = result.index.releases.map((release) => release.tag_name);
     log(`\n  Update index rebuilt: ${tags.length} releases, newest ${tags.slice(0, 3).join(', ')}.\n`);
@@ -105,7 +106,7 @@ export function reportUpdateIndex(result, { afterRelease = true, log = console.l
         : '  !!  Phones keep reading the old index at launch.',
       `  !!  Failed to ${result.step}: ${result.error}`,
       '  !!',
-      `  !!  Fix it with:   ${UPDATE_INDEX_FIX_COMMAND}`,
+      `  !!  Fix it with:   ${updateIndexFixCommand(repo)}`,
       bar,
       '',
     ].join('\n')

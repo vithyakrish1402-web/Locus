@@ -19,12 +19,16 @@ import { spawnSync } from 'node:child_process';
 const gh = (args) => spawnSync('gh', args, { encoding: 'utf8' });
 
 /**
- * @param {{tag: string, title: string, asset: string, notesFile: string, target: string,
+ * @param {{tag: string, title: string, asset: string, notesFile: string, target: string | null, repo: string,
  *   run?: (args: string[]) => {status: number, stdout?: string, stderr?: string}}} options
- *   target: the full sha of the built commit, already pushed; run: runs gh (tests pass a fake)
+ *   target: the full sha of the built commit, already pushed, or null for a releases-only repo;
+ *   repo: owner/name to publish to; run: runs gh (tests pass a fake)
  * @returns {{ok: true} | {ok: false, step: string, error: string, retry: string}}
  */
-export function publishRelease({ tag, title, asset, notesFile, target, run = gh }) {
+export function publishRelease({ tag, title, asset, notesFile, target, repo, run = gh }) {
+  // Every call names its repo: nothing here depends on which repo `origin` is.
+  if (!repo) return { ok: false, step: 'choose the repo', error: 'no target repo', retry: 'Nothing is public. Say where to publish with --repo.' };
+  const inRepo = ['--repo', repo];
   const failed = (step, result, retry) => ({
     ok: false,
     step,
@@ -33,27 +37,31 @@ export function publishRelease({ tag, title, asset, notesFile, target, run = gh 
   });
   const rerun = 'Nothing is public. Run the same release command again: it starts over from here.';
 
-  const existing = run(['release', 'view', tag, '--json', 'isDraft']);
+  const existing = run(['release', 'view', tag, ...inRepo, '--json', 'isDraft']);
   if (existing.status === 0) {
     let isDraft = false;
     try {
       isDraft = JSON.parse(existing.stdout || '{}').isDraft === true;
     } catch { /* unreadable: treated as published, the safe way */ }
     if (!isDraft) return { ok: false, step: 'check the tag is free', error: `${tag} is already published`, retry: 'Pick the next version.' };
-    const removed = run(['release', 'delete', tag, '--yes']);
+    const removed = run(['release', 'delete', tag, ...inRepo, '--yes']);
     if (removed.status !== 0) return failed(`delete the draft ${tag} left by an earlier run`, removed, `Delete the draft ${tag} on GitHub, then run the release command again.`);
   }
 
-  const created = run(['release', 'create', tag, asset, '--draft', '--target', target, '--title', title, '--notes-file', notesFile]);
+  // `target` is null for a releases-only repo, which doesn't hold the built commit: the tag then
+  // lands on its default branch and is not compared with the built commit.
+  const created = run(['release', 'create', tag, asset, ...inRepo, '--draft', ...(target ? ['--target', target] : []), '--title', title, '--notes-file', notesFile]);
   if (created.status !== 0) return failed('upload the release as a draft', created, rerun);
 
-  const published = run(['release', 'edit', tag, '--draft=false']);
+  const published = run(['release', 'edit', tag, ...inRepo, '--draft=false']);
   if (published.status !== 0) {
     return failed('publish the draft', published, `The draft ${tag} is uploaded but not public. Run the same release command again, or publish the draft on GitHub.`);
   }
 
+  if (!target) return { ok: true };
+
   // GitHub made the tag on publishing; it must be the commit that was built.
-  const ref = run(['api', `repos/{owner}/{repo}/git/ref/tags/${tag}`, '--jq', '.object.sha']);
+  const ref = run(['api', `repos/${repo}/git/ref/tags/${tag}`, '--jq', '.object.sha']);
   const tagged = (ref.stdout || '').trim();
   if (ref.status !== 0 || tagged !== target) {
     return {
