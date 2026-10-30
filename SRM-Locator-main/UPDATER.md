@@ -19,6 +19,21 @@ day-to-day fixes — can go out as a Phase 2 bundle with no reinstall at all.
 
 ## The update index (how a launch finds the releases)
 
+**Two repos.** The source repo (`vithyakrish1402-web/Locus`) is meant to become private, so the
+update files are served from a small public releases-only repo,
+`vithyakrish1402-web/Locus-Release`. A phone reads the repo address compiled into the JS it is
+running (`REPO` in releasesLookup.js) and accepts only download links under that repo, so:
+
+- Phones on older JS read `Locus`. Its `update-index` must keep listing `Locus` links.
+- Phones on the redirect bundle (and every build after it) read `Locus-Release`. Its
+  `update-index` must list `Locus-Release` links.
+- The release scripts never use `origin`: `--repo <owner/name>` (or `UPDATE_REPO`) is required,
+  and `release:index -- --repo <owner/name>` builds the index for that repo only. The
+  must-be-above-everything version rule reads **both** repos and stops if either can't be asked.
+- `node scripts/mirror-release.mjs --from <repo> --to <repo> --tag <tag> [--dry-run]` copies one
+  release (its real asset only, SHA-256 checked) between them; it never overwrites a tag.
+- Do not make `Locus` private until phones have taken the redirect bundle.
+
 Both tiers, and Send LOCUS to someone, read one list of releases per launch
 ([src/utils/releasesLookup.js](src/utils/releasesLookup.js)). GitHub's releases API allows only
 60 anonymous requests an hour per public internet address, shared by everyone behind it
@@ -74,7 +89,7 @@ copy of the releases list that the release scripts rebuild for you (see
 when it cannot be used, calls:
 
 ```
-GET https://api.github.com/repos/vithyakrish1402-web/Locus/releases?per_page=100
+GET https://api.github.com/repos/vithyakrish1402-web/Locus-Release/releases?per_page=100
 ```
 
 then keeps only `v*` tags and picks the **highest version** among them.

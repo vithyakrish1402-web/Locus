@@ -208,7 +208,7 @@ LOCUS/
 ### 9.2 Phase 1 — Native Full-APK Updater
 
 - **`LocusUpdaterPlugin.java`:** Capacitor plugin registered as `LocusUpdater`. Streams the APK into `cacheDir/updates`, computing SHA-256 concurrently with the write so verification costs no second pass. Emits throttled `downloadProgress` events. Exposes install-permission status, a deep link to Android's per-app consent screen, and the install trigger.
-- **`updateManifest.js`:** Parses the GitHub `releases/latest` payload. Extracts version from `tag_name`, download URL from the `locus-latest.apk` asset, and `SHA256:` / `[MANDATORY]` markers from the release body. Pure; no network or Capacitor dependency.
+- **`updateManifest.js`:** Parses the GitHub releases list (the app lists releases rather than reading `releases/latest`, and reads them from the releases-only repo; see UPDATER.md "Two repos"). Extracts version from `tag_name`, download URL from the `locus-latest.apk` asset, and `SHA256:` / `[MANDATORY]` markers from the release body. Pure; no network or Capacitor dependency.
 - **`useAppUpdate.js`:** Owns all policy — cold-start throttle, version comparison, permission sequencing, download orchestration and error mapping. The native layer holds no policy.
 - **`UpdateModal.jsx`:** HUD-styled modal. Renders version transition, release notes, package size and download progress. Under `[MANDATORY]` it becomes a full-viewport gate with no dismissal path.
 - **`release.mjs`:** Single-command release. Refuses a dirty tree, a reused tag, or a non-newer version; bumps `versionCode`/`versionName`, builds, syncs Capacitor, assembles a signed release APK, computes the SHA-256, and publishes the tagged GitHub Release with the checksum written into the body.
