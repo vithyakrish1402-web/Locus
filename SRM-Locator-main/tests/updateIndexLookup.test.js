@@ -15,7 +15,7 @@ vi.mock('@capacitor/core', () => ({
 
 const { getReleases, RELEASES_API, UPDATE_INDEX_TIMEOUT_MS, __resetReleasesLookup } = await import('../src/utils/releasesLookup.js');
 
-const REPO = 'vithyakrish1402-web/Locus';
+const REPO = 'vithyakrish1402-web/Locus-Release';
 const SHA = 'a'.repeat(64);
 const HOUR = 60 * 60 * 1000;
 const NOW = Date.parse('2026-10-13T12:00:00Z');

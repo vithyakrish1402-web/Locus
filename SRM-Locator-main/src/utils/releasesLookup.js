@@ -22,7 +22,8 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { parseUpdateIndex, updateIndexUrl } from './updateIndex.js';
 
-const REPO = import.meta.env?.VITE_UPDATE_REPO || 'vithyakrish1402-web/Locus';
+// Releases are served from the releases-only repo; the source repo may be private.
+const REPO = import.meta.env?.VITE_UPDATE_REPO || 'vithyakrish1402-web/Locus-Release';
 // The listing rather than /releases/latest: "latest" is whichever release is newest overall,
 // and the v* and js-* series share the repo, so it would hide one series behind the other.
 // Each reader picks its own series out of the listing. 100, GitHub's most per page: with 30, a

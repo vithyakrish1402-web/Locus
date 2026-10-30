@@ -47,7 +47,7 @@ const release = (tag, asset) => ({
   tag_name: tag,
   prerelease: false,
   body: `Notes.\n\nMIN_NATIVE: 1.1.21\nSHA256: ${SHA}`,
-  assets: [{ name: asset, browser_download_url: `https://github.com/vithyakrish1402-web/Locus/releases/download/${tag}/${asset}`, size: 5036092 }],
+  assets: [{ name: asset, browser_download_url: `https://github.com/vithyakrish1402-web/Locus-Release/releases/download/${tag}/${asset}`, size: 5036092 }],
 });
 const INDEX = {
   formatVersion: 1,
