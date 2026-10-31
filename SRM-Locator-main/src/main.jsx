@@ -15,6 +15,9 @@ installTheme()
 // App-wide "sonar ping" on every press (see src/utils/pressFeedback.js).
 installPressFeedback()
 
+// Names this web build, for anyone inspecting a phone. Nothing reads it and nothing shows it.
+window.__LOCUS_WEB_BUILD__ = 'js-1.1.86'
+
 // Device-check builds only (npm run device-check:wifi). Vite replaces MODE with a
 // constant, so in every other build this branch and its import are compiled out.
 if (import.meta.env.MODE === 'device-check') {
