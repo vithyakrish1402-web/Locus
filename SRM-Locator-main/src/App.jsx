@@ -51,7 +51,8 @@ import {
   ArrivalPanel,
 } from './components/navigation/NavigationHUD';
 import { useNavigationController } from './hooks/useNavigationController';
-import BuildingRow from './components/map/BuildingRow';
+import BuildingDirectory from './components/map/BuildingDirectory';
+import { useStableAction } from './hooks/useStableAction';
 import GroupHeader from './components/group/GroupHeader';
 import SharingControl from './components/group/SharingControl';
 import MemberOptions from './components/group/MemberOptions';
@@ -61,7 +62,7 @@ import AdminTools, { RecordingBar } from './components/admin/AdminTools';
 import AddPlaceSheet, { PlacingBar } from './components/admin/AddPlace';
 import { ADD_PLACE_PROBLEMS } from './copy/addPlace';
 import { useCampusPlaces } from './hooks/useCampusPlaces';
-import { isGrounds, placeMatches } from './utils/campusPlaces';
+import { isGrounds } from './utils/campusPlaces';
 import JoinRequests from './components/group/JoinRequests';
 import ActivityLog from './components/group/ActivityLog';
 import BlockedList from './components/group/BlockedList';
@@ -70,7 +71,7 @@ import { useFriends } from './hooks/useFriends';
 import { exportActivityLog } from './utils/activityLogExport';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
+import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -750,7 +751,6 @@ const App = () => {
     setTimeout(apply, 400);
   };
   const [selectedItem, setSelectedItem] = useState(null);
-  const [buildingCategoryFilter, setBuildingCategoryFilter] = useState('ALL');
 
   const [users, setUsers] = useState([]);
   // AR Scan aimed at a squad member follows them as they move, instead of pointing at
@@ -2274,6 +2274,10 @@ const App = () => {
     }
   };
 
+  const openDirectoryBuilding = useStableAction(handleBuildingTap);
+  const navigateDirectoryBuilding = useStableAction(handleWaypointSelect);
+  const scanDirectoryBuilding = useStableAction(building => setArTarget({ lat: building.lat, lng: building.lng, name: building.name }));
+
   // Keep routeStart synchronized when live GPS location updates
   useEffect(() => {
     if (liveLocation && routeStart?.name === 'MY_LOCATION') {
@@ -2523,7 +2527,6 @@ const App = () => {
   // The members search above.
   const matchesSearch = (name) => (name || '').toLowerCase().includes(searchQuery.trim().toLowerCase());
   // A place matches on its name or any short name students use for it. The top bar's search.
-  const matchesPlaceSearch = (place) => placeMatches(place, placeQuery);
   // Typing in the top bar's search brings the places list up: the panel opens on Buildings at
   // full height, where the results can be read.
   const searchPlaces = (text) => {
@@ -2884,9 +2887,9 @@ const App = () => {
           style={isMobile ? { top: BELOW_TOP_BAR, bottom: 'var(--tab-bar-height)', y: 0 } : undefined}
 
         >
-          <header className="shrink-0 px-4 py-4 flex items-center justify-between">
+          <header className="section-page-header shrink-0 px-5 py-4 flex items-center justify-between">
             <h1 className="text-xl font-semibold">{activeTab === 'buildings' ? 'Buildings' : 'Your group'}</h1>
-            {isMobile && <button type="button" onClick={() => setMobileView('grid')} className="p-3" aria-label="Back to map"><X size={20} /></button>}
+            {isMobile && <button type="button" onClick={() => setMobileView('grid')} className="section-close" aria-label="Back to map"><X size={20} /></button>}
           </header>
           {activeTab === 'users' && <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode} />}
           {/* List Content */}
@@ -2912,57 +2915,6 @@ const App = () => {
               (Members: it sits above the members list, under the controls, so a Group Lead's
               tools come higher at half height.) */}
 
-            {/* Category Filter Pills (Minimalist Apple/Glass Design) */}
-            {activeTab === 'buildings' && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar -mx-1 px-1">
-                {[
-                  { id: 'ALL', label: 'All' },
-                  { id: 'ACADEMIC', label: 'Academic' },
-                  { id: 'ENGINEERING', label: 'Engineering' },
-                  { id: 'MEDICAL', label: 'Medical' },
-                  { id: 'RESIDENTIAL', label: 'Hostels' },
-                  { id: 'LOGISTICS', label: 'Cafes & Hubs' },
-                  ...(campusPlaces.some(b => isGrounds(b)) ? [{ id: 'GROUNDS', label: 'Grounds' }] : []),
-                ].map((cat) => {
-                  const isSelected = buildingCategoryFilter === cat.id;
-                  const count = cat.id === 'ALL'
-                    ? campusPlaces.length
-                    : campusPlaces.filter(b => b.category === cat.id).length;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setBuildingCategoryFilter(cat.id)}
-                      className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium font-ui transition-all duration-150 flex items-center gap-1.5 cursor-pointer border ${isSelected
-                          ? 'bg-accent text-accent-on border-accent shadow-sm'
-                          : 'glass-pill text-text-secondary hover:text-text'
-                        }`}
-                    >
-                      <span>{cat.label}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-normal ${isSelected ? 'bg-white/20 text-accent-on' : 'bg-sunken text-text-secondary'}`}>
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Nearby Places Section Header */}
-            {activeTab === 'buildings' && (
-              <div className="flex items-center justify-between pt-1 pb-0.5">
-                <h3 className="text-sm font-semibold font-ui text-text flex items-center gap-2 tracking-tight">
-                  <span>Nearby Places</span>
-                  <span className="text-xs font-normal text-text-secondary">
-                    ({campusPlaces.filter(b => matchesPlaceSearch(b) && (buildingCategoryFilter === 'ALL' || b.category === buildingCategoryFilter)).length})
-                  </span>
-                </h3>
-              </div>
-            )}
-
-            {activeTab === 'buildings' && placeQuery.trim() && !campusPlaces.some(b => matchesPlaceSearch(b)) && (
-              <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="buildings-no-match">{GROUP_BUILDINGS_LIST.noMatch(placeQuery.trim())}</p>
-            )}
             {/* The Group Lead's tools come first, before Your location (the design has them after):
               at half height on a 360 px phone they would otherwise sit under the Emergency button,
               which stays above the panel. */}
@@ -3021,34 +2973,13 @@ const App = () => {
             {activeTab === 'users' && searchQuery.trim() && !users.some(u => !blockedUserIds.includes(u.id) && matchesSearch(u.name)) && !ghostMembers.some(g => matchesSearch(g.name)) && (users.length > 0 || ghostMembers.length > 0) && (
               <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="members-no-match">{GROUP_MEMBERS_LIST.noMatch(searchQuery.trim())}</p>
             )}
+            {activeTab === 'buildings' && (!isMobile || sheetOpen) && <BuildingDirectory
+              places={campusPlaces} query={placeQuery} onSearch={setPlaceQuery} me={liveLocation}
+              onOpen={openDirectoryBuilding} onNavigate={navigateDirectoryBuilding}
+              onArScan={scanDirectoryBuilding}
+            />}
             <AnimatePresence mode="popLayout" initial={false}>
-              {activeTab === 'buildings' ? (
-                campusPlaces
-                  .filter(b => matchesPlaceSearch(b) && (buildingCategoryFilter === 'ALL' || b.category === buildingCategoryFilter))
-                  .map((building, idx) => (
-                    <motion.div
-                      layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
-                      transition={{
-                        opacity: { duration: 0.22, ease: [0.22, 1, 0.36, 1] },
-                        y: { duration: 0.24, ease: [0.22, 1, 0.36, 1], delay: Math.min(idx, 5) * 0.03 },
-                        scale: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
-                        layout: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
-                      }}
-                      key={building.id}
-                    >
-                      <BuildingRow
-                        building={building}
-                        me={liveLocation}
-                        onOpen={() => handleBuildingTap(building)}
-                        onArScan={() => setArTarget({ lat: building.lat, lng: building.lng, name: building.name })}
-                        onNavigate={() => handleWaypointSelect(building)}
-                      />
-                    </motion.div>
-                  ))
-              ) : (
+              {activeTab === 'users' && (
                 // A flat array, not a <> fragment. AnimatePresence mode="popLayout" wraps
                 // each direct child in a ref-bearing element to measure it, and a Fragment
                 // cannot take a ref — React logged "Invalid prop `ref` supplied to
