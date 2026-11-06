@@ -160,6 +160,18 @@ describe('saved settings', () => {
     expect(afterRestart.restore('ROOM', 'uA')).toEqual(custom);
   });
 
+  it('that have expired are dropped when anything is saved, from memory and from the file', () => {
+    const filePath = tmpFile();
+    let now = 1_000_000;
+    const store = createSettingsStore({ filePath, ttlMs: HOUR, now: () => now });
+    for (let i = 0; i < 50; i += 1) store.save(`OLD${i}`, 'uA', custom);
+    now += HOUR + 1;
+    store.save('NEW', 'uA', custom);
+    expect(Object.keys(JSON.parse(fs.readFileSync(filePath, 'utf8')))).toEqual(['NEW']);
+    expect(store.has('OLD0')).toBe(false);
+    expect(store.restore('NEW', 'uA')).toEqual(custom);
+  });
+
   it('start empty rather than fail when the file is missing or damaged', () => {
     const filePath = tmpFile();
     expect(createSettingsStore({ filePath, ttlMs: HOUR }).restore('ROOM', 'uA')).toBeNull();

@@ -85,3 +85,14 @@ describe('friendsLoaderFromEnv', () => {
     expect(await load('uX')).toEqual([]);
   });
 });
+
+describe('the friend lists the server holds', () => {
+  it('are capped, dropping the oldest fetched first, however many uids it is asked about', async () => {
+    const store = createFriendsStore({ load: async () => [], maxKnown: 3, log: { warn() {} } });
+    for (const uid of ['u1', 'u2', 'u3', 'u4', 'u5']) await store.prefetch(uid);
+    expect(store.friendsOf('u1')).toBeNull();
+    expect(store.friendsOf('u2')).toBeNull();
+    expect(store.friendsOf('u5')).not.toBeNull();
+    expect(store.friendsOf('u3')).not.toBeNull();
+  });
+});

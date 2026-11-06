@@ -140,10 +140,16 @@ export function createSettingsStore({ filePath = null, ttlMs, now = Date.now } =
       return { ...defaultSettings(), ...record.settings, mutedPingers: [...(record.settings?.mutedPingers ?? [])] };
     },
     save(roomCode, commanderUid, settings) {
+      const at = now();
+      // Records past ttlMs can never be restored, so they go here: they used to be kept, and
+      // written out with every save, for as long as the process (or the file) lived.
+      for (const code of Object.keys(records)) {
+        if (at - records[code].savedAt > ttlMs) delete records[code];
+      }
       records[roomCode] = {
         commanderUid: commanderUid ?? null,
         settings: { ...settings, mutedPingers: [...settings.mutedPingers] },
-        savedAt: now(),
+        savedAt: at,
       };
       flush();
     },

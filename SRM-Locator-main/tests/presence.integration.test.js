@@ -510,3 +510,78 @@ describe('many people sharing at once', () => {
     await waitFor(() => keysOf(newest(alpha)).every((k) => !k.startsWith('bg:')));
   }, 20000);
 });
+
+describe('a vote against someone shown by their background sharing whose app is also open', () => {
+  // Bravo's app is connected but has sent no position; his paused (FROZEN) background sharing
+  // is what the Group sees, as 'bg:uB'. That is the entry the others can vote on.
+  const setUp = async () => {
+    const room = newRoom();
+    const alpha = await connect();
+    expect(await join(alpha, room, 'uA', 'Alpha', { intent: 'create' })).toMatchObject({ outcome: 'granted' });
+    const bravo = await connect();
+    await admit(alpha, bravo, room, 'uB', 'NuB');
+    const others = [];
+    for (const uid of ['uC', 'uD']) {
+      const s = await connect();
+      await admit(alpha, s, room, uid, `N${uid}`);
+      report(s, room, WHERE, `N${uid}`);
+      others.push(s);
+    }
+    report(alpha, room, WHERE, 'Alpha');
+    const keepSharing = setInterval(() => accept(room, 'uB', { ...WHERE, status: 'FROZEN', nextPostWithinSec: 0.3 }), 100);
+    accept(room, 'uB', { ...WHERE, status: 'FROZEN', nextPostWithinSec: 0.3 });
+    await waitFor(() => keysOf(newest(alpha)).includes('bg:uB') && !keysOf(newest(alpha)).includes(bravo.id));
+    return { room, alpha, bravo, others, keepSharing };
+  };
+
+  it('takes their open app out of the Group too', async () => {
+    const { room, alpha, bravo, others: [charlie, delta], keepSharing } = await setUp();
+    const waypoints = [];
+    bravo.on('new-waypoint', (p) => waypoints.push(p));
+    for (const voter of [alpha, charlie, delta]) voter.emit('vote-to-kick', { roomCode: room, targetId: 'bg:uB' });
+    clearInterval(keepSharing);
+    await waitFor(() => !keysOf(newest(alpha)).includes('bg:uB'));
+    await waitFor(() => bravo.exiled.length > 0);
+
+    const before = bravo.updates.length;
+    alpha.emit('publish-waypoint', { roomCode: room, waypoint: { lat: 12.83, lng: 80.05, name: 'Gate' } });
+    report(alpha, room, { lat: 12.8223, lng: 80.0437 }, 'Alpha');
+    await sleep(200);
+    expect(waypoints).toEqual([]);
+    expect(bravo.updates.length).toBe(before);
+    expect(keysOf(newest(alpha))).not.toContain(bravo.id);
+  });
+});
+
+describe('a safety ping', () => {
+  const pinged = (socket) => new Promise((resolve) => { socket.once('pong-bounce', resolve); socket.emit('check-ping', 1); });
+  const settledSize = async () => {
+    const { locationCacheSize } = await import('../backend/server.js');
+    await sleep(200); // earlier tests' connections finish leaving first
+    return locationCacheSize;
+  };
+
+  it('from a connection in no Group is not kept at all', async () => {
+    const size = await settledSize();
+    const before = size();
+    const stranger = await connect();
+    stranger.emit('safety-ping', { latitude: 12.8, longitude: 80.0, batteryLevel: 50 });
+    stranger.emit('safety-ping', { latitude: 'x'.repeat(10_000), longitude: 1 });
+    await pinged(stranger);
+    expect(size()).toBe(before);
+  });
+
+  it('from a member who never sent a position is gone once their connection is', async () => {
+    const size = await settledSize();
+    const room = newRoom();
+    const alpha = await connect();
+    await join(alpha, room, 'uA', 'Alpha', { intent: 'create' });
+    const before = size();
+    alpha.emit('safety-ping', { latitude: 12.8, longitude: 80.0, batteryLevel: 50 });
+    await pinged(alpha);
+    expect(size()).toBe(before + 1);
+    alpha.disconnect();
+    await sleep(150);
+    expect(size()).toBe(before);
+  });
+});
