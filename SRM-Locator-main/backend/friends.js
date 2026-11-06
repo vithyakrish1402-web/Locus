@@ -16,16 +16,18 @@
 export const FRIENDS_CACHE_TTL_MS = 60 * 1000;
 // The most a fetch may take; after that it counts as failed (and the old list, if any, stays).
 export const FRIENDS_LOOKUP_TIMEOUT_MS = 5000;
+// The most people whose friend lists are held at once; the oldest fetched are dropped first.
+export const FRIENDS_CACHE_MAX = 5000;
 
 export const FRIENDSHIPS_COLLECTION = 'friendships';
 
 /**
  * @param {{ load: ((uid: string) => Promise<string[]>) | null, ttlMs?: number, timeoutMs?: number,
- *   now?: () => number, log?: { warn: Function } }} options
+ *   now?: () => number, log?: { warn: Function }, maxKnown?: number }} options
  *   load: the uids `uid` is trusted friends with (accepted friendships only); null when there is
  *   no way to know, and then nothing is ever known
  */
-export function createFriendsStore({ load, ttlMs = FRIENDS_CACHE_TTL_MS, timeoutMs = FRIENDS_LOOKUP_TIMEOUT_MS, now = Date.now, log = console } = {}) {
+export function createFriendsStore({ load, ttlMs = FRIENDS_CACHE_TTL_MS, timeoutMs = FRIENDS_LOOKUP_TIMEOUT_MS, now = Date.now, log = console, maxKnown = FRIENDS_CACHE_MAX } = {}) {
   const known = new Map(); // uid -> { friends: Set<string>, at }
   const inflight = new Map(); // uid -> Promise
 
@@ -36,7 +38,11 @@ export function createFriendsStore({ load, ttlMs = FRIENDS_CACHE_TTL_MS, timeout
     const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timed out')), timeoutMs); });
     const job = Promise.race([load(uid), timeout])
       .then((uids) => {
-        if (Array.isArray(uids)) known.set(uid, { friends: new Set(uids.filter((u) => typeof u === 'string' && u !== uid)), at: now() });
+        if (!Array.isArray(uids)) return;
+        known.delete(uid);
+        known.set(uid, { friends: new Set(uids.filter((u) => typeof u === 'string' && u !== uid)), at: now() });
+        // Bounded: the oldest fetched go first. Without a cap, every uid ever seen stayed for good.
+        while (known.size > maxKnown) known.delete(known.keys().next().value);
       })
       .catch((err) => log.warn?.(`[FRIENDS] Could not read ${uid}'s friends: ${err?.message ?? err}`))
       .finally(() => {

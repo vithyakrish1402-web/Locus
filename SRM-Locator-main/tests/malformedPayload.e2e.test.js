@@ -101,3 +101,51 @@ describe('a room code that names a built-in object key', () => {
     });
   }
 });
+
+// A value that cannot be turned into a string: JSON gives an object whose own toString is a
+// number, so using it as a key or in a template literal throws. Any field a handler keys a
+// lookup by, or logs, could carry one.
+const NO_STRING = { toString: 1 };
+describe('a field that cannot be turned into a string', () => {
+  survives('as a room code, from a stranger', ({ stranger }) => {
+    for (const event of ['geofence-alert', 'publish-zone', 'publish-custom-route', 'vote-to-kick', 'resolve-access',
+      'admit-all', 'kick-member', 'block-user', 'get-blocked', 'unblock-user', 'set-moderator', 'get-activity-log',
+      'publish-waypoint', 'update-location', 'set-group-settings', 'get-alert-log', 'sos-broadcast']) {
+      stranger.emit(event, { roomCode: NO_STRING });
+    }
+    stranger.emit('request-telemetry', NO_STRING);
+    stranger.emit('clear-waypoint', NO_STRING);
+  });
+
+  survives('as a ping target, from a stranger', ({ stranger }) => {
+    stranger.emit('ping-user', { targetId: NO_STRING });
+  });
+
+  survives('as an SOS sender name, from a stranger and from a member', ({ room, bravo, stranger }) => {
+    stranger.emit('sos-broadcast', { senderName: NO_STRING });
+    bravo.emit('sos-broadcast', { roomCode: room, senderName: NO_STRING, clientId: 'x1' });
+  });
+
+  survives('as a battery level, read back by the Commander', ({ room, alpha }) => {
+    alpha.emit('safety-ping', { latitude: 1, longitude: 1, batteryLevel: NO_STRING });
+    alpha.emit('request-telemetry', room);
+  });
+});
+
+// A frame under the size limit can still nest tens of thousands of levels deep, and echoing
+// or relaying it walks it recursively. Written straight to the transport: the client's own
+// encoder would choke on it first. ('2' is a Socket.IO event; Engine.IO adds its own '4'.)
+const DEEP = '['.repeat(40_000) + ']'.repeat(40_000);
+describe('a payload nested far deeper than any real one', () => {
+  survives("'check-ping' from a stranger", ({ stranger }) => {
+    stranger.io.engine.write(`2["check-ping",${DEEP}]`);
+  });
+
+  survives("'geofence-alert' from a member", ({ room, bravo }) => {
+    bravo.io.engine.write(`2["geofence-alert",{"roomCode":"${room}","deep":${DEEP}}]`);
+  });
+
+  survives("'update-location' from a member", ({ room, bravo }) => {
+    bravo.io.engine.write(`2["update-location",{"roomCode":"${room}","lat":12.8,"lng":80.0,"deep":${DEEP}}]`);
+  });
+});

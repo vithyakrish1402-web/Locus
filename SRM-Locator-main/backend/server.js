@@ -112,6 +112,63 @@ const cleanPhoto = (url) => (typeof url === 'string' && url.length <= MAX_PHOTO_
 // A real position: numbers, on the globe, and not the 0,0 a broken fix reports.
 const isRealFix = (lat, lng) =>
   Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
+const finiteOr = (value, fallback) => (Number.isFinite(value) ? value : fallback);
+const shortText = (value, max) => (typeof value === 'string' && value.length <= max ? value : undefined);
+
+// --- THE SHAPE OF A PAYLOAD ---
+// No app payload nests more than a few levels (a custom route is an array of points). A frame
+// under the size limit could still nest tens of thousands deep, and echoing or relaying one walks
+// it recursively, which overflowed the stack inside a handler and ended the process.
+const MAX_PAYLOAD_DEPTH = 12;
+const tooDeep = (value) => {
+  const stack = [[value, 0]];
+  while (stack.length) {
+    const [node, depth] = stack.pop();
+    if (node === null || typeof node !== 'object') continue;
+    if (depth >= MAX_PAYLOAD_DEPTH) return true;
+    for (const child of Object.values(node)) stack.push([child, depth + 1]);
+  }
+  return false;
+};
+// The fields handlers use as keys, look-ups or log text. JSON can make any of them an object
+// whose own toString is not a function, and using that as a key or in a template literal throws,
+// which used to end the whole process from one stranger's message.
+const KEY_FIELDS = ['roomCode', 'targetId', 'uid', 'id', 'clientId', 'senderName', 'userName', 'zoneName', 'key'];
+const isPlainValue = (value) => value === null || value === undefined || ['string', 'number', 'boolean'].includes(typeof value);
+// Events whose first argument is itself a room code rather than a payload object.
+const ROOM_CODE_ARG_EVENTS = new Set(['request-telemetry', 'clear-waypoint']);
+function badPayload(event, args) {
+  if (args.some(tooDeep)) return 'nested too deep';
+  const [first] = args;
+  if (ROOM_CODE_ARG_EVENTS.has(event) && !isPlainValue(first)) return 'room code is not text';
+  if (first && typeof first === 'object' && KEY_FIELDS.some((field) => !isPlainValue(first[field]))) return 'a key field is not text';
+  return null;
+}
+
+// --- GROUPS THAT HAVE ENDED ---
+// Kept for a while after a Group ends (the sweep, the last member leaving): who commanded it and
+// who was blocked from it. A code is free again once its Group ends, but not to someone it blocked:
+// they could found it afresh as its Commander, and the old members' phones, which re-ask for their
+// remembered code on every reconnect, were queued to them. And only its own Commander's 'resume'
+// of it is free of the founding limit. In memory, so a restart forgets it, like everything else here.
+const ENDED_GROUP_MEMORY_MS = Number(process.env.LOCUS_ENDED_GROUP_MEMORY_MS) || 24 * 60 * 60 * 1000;
+const MAX_ENDED_GROUPS = 5000;
+const endedGroups = new Map(); // roomCode -> { commanderUid, blockedUids, at }
+function rememberEndedGroup(roomCode, squad) {
+  const commanderUid = commanderOf(squad);
+  if (!commanderUid) return;
+  endedGroups.delete(roomCode);
+  endedGroups.set(roomCode, { commanderUid, blockedUids: [...(squad.blockedUids ?? [])], at: Date.now() });
+  if (endedGroups.size > MAX_ENDED_GROUPS) endedGroups.delete(endedGroups.keys().next().value);
+}
+function endedGroupOf(roomCode) {
+  const ended = endedGroups.get(roomCode);
+  if (ended && Date.now() - ended.at > ENDED_GROUP_MEMORY_MS) {
+    endedGroups.delete(roomCode);
+    return null;
+  }
+  return ended ?? null;
+}
 
 // --- STATE MANAGERS ---
 // Keyed by client-chosen room codes, so no prototype: on a plain {} a code like
@@ -214,6 +271,7 @@ function deleteSquad(roomCode) {
   // and SOS to the old squad's phones.
   io.in(roomCode).socketsLeave(roomCode);
   joinNotifier.cancel(roomCode);
+  rememberEndedGroup(roomCode, squad);
   delete activeSquads[roomCode];
 }
 
@@ -245,6 +303,10 @@ const keyOf = (squad, socketId) =>
 const uidOfSocket = (squad, socketId) => squad?.memberUids?.[socketId] || io.sockets.sockets.get(socketId)?.data?.uid || null;
 const roleOfSocket = (squad, socketId) => roleOf(squad, socketId, uidOfSocket(squad, socketId));
 const ownAdmin = (squad, socketId) => isOwnAdmin(squad, socketId, uidOfSocket(squad, socketId), commanderOf(squad));
+// Whether the person named by `targetId` (a connection, or a 'bg:' key, with their uid) holds
+// command right now. By person, not by entry: the same person on another key used to slip past.
+const holdsCommand = (squad, targetId, targetUid) =>
+  targetId === squad.ownerId || (Boolean(targetUid) && targetUid === uidOfSocket(squad, squad.ownerId));
 // Whether the person on `socketId` may take `action` (groupRoles.js: by role, and the
 // own-admin-only actions never as a stand-in).
 const allowed = (squad, socketId, action) => mayDo(roleOfSocket(squad, socketId), action, ownAdmin(squad, socketId));
@@ -618,11 +680,26 @@ io.on('connection', (socket) => {
   // join is the join's, not a stranger's).
   let joinChecked = null;
   socket.use((packet, next) => (joinChecked ? joinChecked.then(() => next()) : next()));
+  // A payload no app sends (see THE SHAPE OF A PAYLOAD) is dropped before any handler sees it.
+  socket.use(([event, ...args], next) => {
+    const problem = badPayload(event, args);
+    if (!problem) return next();
+    console.warn(`[LIMIT] Dropped '${event}' from ${socket.id}: ${problem}`);
+  });
 
   // A note on payloads: a handler that throws is an uncaught exception, which kills the
   // whole process (and every squad with it, since nothing is persisted). A client can
   // send no payload, or null, so every handler reads its payload through `?? {}` — a
-  // `= {}` parameter default only covers the first of those.
+  // `= {}` parameter default only covers the first of those. And whatever is still missed,
+  // one handler's failure is logged and stays that handler's: every listener below is wrapped.
+  const listen = socket.on.bind(socket);
+  socket.on = (event, handler) => listen(event, (...args) => {
+    try {
+      return handler(...args);
+    } catch (err) {
+      console.error(`[GUARD] '${event}' from ${socket.id} failed:`, err);
+    }
+  });
 
   // Whether this socket is on the roster of `roomCode`. The relays below fan out to a
   // room the client names; they used to take that name on trust, so any socket — in no
@@ -648,8 +725,9 @@ io.on('connection', (socket) => {
 
   // --- BACKEND ---
 socket.on('check-ping', (clientTimestamp) => {
-  // Immediately bounce the exact same timestamp back to the client
-  socket.emit('pong-bounce', clientTimestamp);
+  // Bounce the timestamp straight back. Only a number: the app sends Date.now(), and an echo of
+  // anything else is just the server repeating whatever a client hands it.
+  if (Number.isFinite(clientTimestamp)) socket.emit('pong-bounce', clientTimestamp);
   // And count it as activity for the stale-squad sweep: every joined client sends this
   // every 2 seconds, with or without a GPS fix (see the sweep at the top of this file).
   const now = Date.now();
@@ -665,9 +743,10 @@ socket.on('check-ping', (clientTimestamp) => {
     const sharingUid = uidOfPresenceKey(targetId);
     const targetIsSharing = Boolean(sharingUid) && Boolean(presenceOf(squad, sharingUid, Date.now()));
     if (!squad || !squad.members.includes(socket.id) || !(squad.members.includes(targetId) || targetIsSharing)) return;
-    // Whoever leads the Group (its Commander, or whoever holds command for them) is never voted out.
+    // Whoever leads the Group (its Commander, or whoever holds command for them) is never voted out,
+    // by whichever entry names them: their 'bg:' key is them as much as their connection is.
     const targetUid = sharingUid || uidOfSocket(squad, targetId);
-    if (targetId === squad.ownerId || (targetUid && targetUid === commanderOf(squad))) return;
+    if (holdsCommand(squad, targetId, targetUid) || (targetUid && targetUid === commanderOf(squad))) return;
 
     // One vote a person, however often they reconnect: votes are kept by who cast them (their
     // uid), not by connection, and only those still on the roster are counted.
@@ -689,10 +768,24 @@ socket.on('check-ping', (clientTimestamp) => {
       io.to(targetId).emit('exiled');
       delete squad.kickVotes[targetId];
       if (targetIsSharing) {
-        // No socket to detach: off the roster and out of the map, and they must be admitted again.
+        // Off the roster and out of the map, and they must be admitted again.
         forgetMember(squad, sharingUid);
         removePresence(squad, sharingUid);
         endSession(squad, sharingUid);
+      }
+      // Every other connection of theirs as well, as a kick does: shown by their background
+      // sharing, they can still have the app open, and that connection used to stay in the Group,
+      // never told, getting everyone's positions and alerts until it next reconnected.
+      const otherConnections = exiledUid
+        ? Object.keys(squad.memberUids ?? {}).filter((id) => id !== targetId && squad.memberUids[id] === exiledUid)
+        : [];
+      squad.members = squad.members.filter((id) => !otherConnections.includes(id));
+      for (const id of otherConnections) {
+        delete squad.memberUids[id];
+        delete users[id];
+        delete locationCache[id];
+        io.to(id).emit('exiled');
+        io.sockets.sockets.get(id)?.leave(roomCode);
       }
       if (users[targetId]) {
         delete users[targetId];
@@ -713,9 +806,18 @@ socket.on('check-ping', (clientTimestamp) => {
     const { latitude, longitude, timestamp, batteryLevel } = data ?? {};
     // Hidden (the last update-location said GHOST): an older app still sends its position here.
     if (users[socket.id]?.status === 'GHOST') return;
+    // Only from a member of a Group, and only a real position: it is kept, and read back by the
+    // Lead's table and a lost-signal marker. Anyone's used to be kept, whatever it held.
+    const inAGroup = [...socket.rooms].some((room) => activeSquads[room]?.members.includes(socket.id));
+    if (!inAGroup || !isRealFix(latitude, longitude)) return;
     // Merge rather than overwrite: 'update-location' writes speed/heading/lastSeen
     // into this same cache entry, and clobbering it here would erase that trajectory data.
-    locationCache[socket.id] = { ...locationCache[socket.id], latitude, longitude, timestamp, batteryLevel: batteryLevel || 'Unknown' };
+    locationCache[socket.id] = {
+      ...locationCache[socket.id], latitude, longitude,
+      // The app sends these as text ('41%', an ISO time): a number or short text, nothing else.
+      timestamp: finiteOr(timestamp, shortText(timestamp, 40) ?? Date.now()),
+      batteryLevel: finiteOr(batteryLevel, shortText(batteryLevel, 8) ?? 'Unknown'),
+    };
   });
 
   // The Commander's telemetry matrix (SYNC_TELEMETRY). It used to answer only when the
@@ -776,6 +878,14 @@ socket.on('check-ping', (clientTimestamp) => {
       console.warn(`[GATE] Dropped join from ${socket.id}: invalid room code`);
       return;
     }
+    // Every connection has a Socket.IO room of its own, named by its id, and everything meant
+    // for one person (an SOS with its position, a ping, the join queue) is sent there. A Group
+    // code equal to someone's id joined its founder to that room; a code that is some other
+    // room that isn't a Group (or a background-sharing key) is no Group code either.
+    if (!activeSquads[roomCode] && (io.sockets.sockets.has(roomCode) || io.sockets.adapter.rooms.has(roomCode) || uidOfPresenceKey(roomCode))) {
+      console.warn(`[GATE] Dropped join from ${socket.id}: room code names a connection, not a Group`);
+      return;
+    }
     // Who is asking (see WHO IS ON EACH CONNECTION).
     if (who.refused) {
       console.warn(`[GATE] Refused join from ${socket.id} to ${roomCode}: sign-in not proven (${who.refused})`);
@@ -794,14 +904,6 @@ socket.on('check-ping', (clientTimestamp) => {
     // squad" and let them straight back in, no race, no vote required. That uid is the
     // proven one (above), never simply the one the payload names.
     const requesterUid = who.uid;
-    socket.data.uid = requesterUid;
-    // Their trusted friends, ready for an SOS (friends.js): never fetched while one is raised.
-    if (requesterUid && friendLookups.check(requesterUid).ok) friendsStore.prefetch(requesterUid);
-    // Remember who this socket is independently of their telemetry. broadcastSquadUpdate
-    // needs a name and photo for members who haven't got a GPS fix yet (indoors, location
-    // permission denied, just joined) — they're on the roster, so they must be nameable
-    // there, rather than being invisible until their first coordinate arrives.
-    socket.data.profile = { name: cleanName(user?.name), photo: cleanPhoto(user?.photo) };
 
     // Whatever this socket, or this person on an earlier connection, was still waiting on
     // is superseded by this request, wherever it was (a request that ends up pending below
@@ -823,14 +925,36 @@ socket.on('check-ping', (clientTimestamp) => {
       return;
     }
 
+    // Only a join that goes somewhere says who this connection is. It used to be set before the
+    // refusal above, so a member could re-label their own connection with any uid by asking for a
+    // code no Group has, and the SOS handlers then counted them as that person.
+    socket.data.uid = requesterUid;
+    // Their trusted friends, ready for an SOS (friends.js): never fetched while one is raised.
+    if (requesterUid && friendLookups.check(requesterUid).ok) friendsStore.prefetch(requesterUid);
+    // Remember who this socket is independently of their telemetry. broadcastSquadUpdate
+    // needs a name and photo for members who haven't got a GPS fix yet (indoors, location
+    // permission denied, just joined) — they're on the roster, so they must be nameable
+    // there, rather than being invisible until their first coordinate arrives.
+    socket.data.profile = { name: cleanName(user?.name), photo: cleanPhoto(user?.photo) };
+
     // Case 1: brand-new or fully abandoned room -> requester becomes the owner. A squad whose
     // members are all sharing from the background is not abandoned: starting afresh here would
     // wipe its roster out from under them. Nor is one kept for its admitted members while nobody
     // is connected (EMPTY_GROUP_GRACE_MS): its Commander comes back through Case 3, a member
     // through Case 4, as if someone had stayed on.
     if (!existing || (existing.members.length === 0 && !hasPresence(existing, Date.now()) && !isKept(existing))) {
-      // A Commander resuming after a restart is not founding anything new: only creates count.
-      if (intent !== 'resume' && !groupsFounded.check(requesterUid ?? socket.id).ok) {
+      // A Group that ended a short while ago (see GROUPS THAT HAVE ENDED): its code is free again,
+      // but not to anyone it blocked, who could otherwise come back as its Commander.
+      const ended = existing ? null : endedGroupOf(roomCode);
+      if (ended && requesterUid && ended.blockedUids.includes(requesterUid)) {
+        socket.emit('access-denied', { roomCode });
+        return;
+      }
+      // A Commander resuming their own Group is not founding anything new. Only a code this server
+      // knows they commanded counts as theirs: 'resume' on its own used to skip the limit for any code.
+      const resumesOwn = intent === 'resume' && Boolean(requesterUid)
+        && (ended?.commanderUid === requesterUid || Boolean(settingsStore.restore(roomCode, requesterUid)));
+      if (!resumesOwn && !groupsFounded.check(requesterUid ?? socket.id).ok) {
         console.warn(`[GATE] Refused a new Group ${roomCode} from ${socket.id}: over ${MAX_GROUPS_PER_HOUR} an hour`);
         socket.emit('join-refused', { roomCode, reason: 'too-many-groups' });
         return;
@@ -845,10 +969,12 @@ socket.on('check-ping', (clientTimestamp) => {
         members: [socket.id],
         memberUids: requesterUid ? { [socket.id]: requesterUid } : {},
         knownUids: requesterUid ? [requesterUid] : [],
-        blockedUids: existing?.blockedUids || [],
+        // Its own Commander setting it up again keeps who they had blocked.
+        blockedUids: existing?.blockedUids || (ended && ended.commanderUid === requesterUid ? ended.blockedUids : []),
         activeWaypoint: null,
         lastActivity: Date.now()
       };
+      endedGroups.delete(roomCode);
       // The same person setting this Group up again gets their switches back.
       const saved = settingsStore.restore(roomCode, requesterUid);
       if (saved) activeSquads[roomCode].settings = saved;
@@ -1095,7 +1221,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // (whose old connection is still on the roster while they're away) would turn
     // "temporarily" into "for good": a block is checked before the Commander's return.
     const target = {
-      isAdmin: squad.ownerId === targetId,
+      isAdmin: holdsCommand(squad, targetId, targetUid),
       isCommander: Boolean(targetUid) && targetUid === commanderOf(squad),
       isModerator: Boolean(targetUid) && Boolean(squad.moderatorUids?.includes(targetUid)),
     };
@@ -1240,7 +1366,8 @@ socket.on('check-ping', (clientTimestamp) => {
         lng: waypoint.lng,
         name: cleanName(waypoint.name, MAX_PLACE_NAME_LENGTH) ?? undefined,
         ...(typeof waypoint.description === 'string' ? { description: waypoint.description.trim().slice(0, 160) } : {}),
-        setBy: memberKey(socket.data?.uid, socket.id),
+        // By who they are on this Group's roster (keyOf), like every other per-person record.
+        setBy: keyOf(activeSquads[roomCode], socket.id),
       };
       activeSquads[roomCode].activeWaypoint = rallyPoint;
       socket.to(roomCode).emit('new-waypoint', rallyPoint);
@@ -1257,7 +1384,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const squad = activeSquads[roomCode];
     if (!squad || !squad.members.includes(socket.id)) return;
     const isCommander = squad.ownerId === socket.id;
-    const droppedIt = Boolean(squad.activeWaypoint) && squad.activeWaypoint.setBy === memberKey(socket.data?.uid, socket.id);
+    const droppedIt = Boolean(squad.activeWaypoint) && squad.activeWaypoint.setBy === keyOf(squad, socket.id);
     if (!isCommander && !droppedIt) return;
     console.log(`[🚫 TACTICAL] Rally Point cleared in ${roomCode}`);
     squad.activeWaypoint = null;
@@ -1305,13 +1432,24 @@ socket.on('check-ping', (clientTimestamp) => {
     socket.join(newRoom);
 
     // 👇 Armored Cache Assignment
+    // Only what the app sends and shows, each checked: this record goes to every member on every
+    // update. It used to be the whole payload (`...data`), so anything a phone attached, up to the
+    // 100 KB message limit, was stored and sent to everyone, members squared times a second.
     users[socket.id] = {
-      ...data,
-      ...(hidden ? { lat: undefined, lng: undefined, building: undefined, floor: undefined } : {}),
+      ...(hidden ? {} : {
+        lat, lng,
+        building: shortText(data.building, MAX_PLACE_NAME_LENGTH),
+        floor: Number.isFinite(data.floor) ? data.floor : shortText(data.floor, 16),
+        accuracy: finiteOr(data.accuracy, undefined),
+        positionSource: shortText(data.positionSource, 16),
+      }),
+      status: shortText(data.status, 16),
+      speed: finiteOr(speed, 0),
+      battery: finiteOr(battery, undefined),
       name,
       photo,
       roomCode: newRoom,
-      heading: heading || 0,       // Failsafe: Prevents NaN crashes on the frontend
+      heading: finiteOr(heading, 0), // Failsafe: Prevents NaN crashes on the frontend
       lastSeen: Date.now()         // Anchor: Records the exact millisecond of the last known ping
     };
 
@@ -1321,13 +1459,13 @@ socket.on('check-ping', (clientTimestamp) => {
     // Hidden: the position it had is dropped, so neither the Lead's table nor a lost-signal
     // marker can show where a hidden person is.
     locationCache[socket.id] = hidden
-      ? { battery: battery || 0, lastSeen: Date.now() }
+      ? { battery: finiteOr(battery, 0), lastSeen: Date.now() }
       : {
           ...locationCache[socket.id],
           lat, lng,
-          speed: speed || 0,
-          heading: heading || 0,
-          battery: battery || 0,
+          speed: finiteOr(speed, 0),
+          heading: finiteOr(heading, 0),
+          battery: finiteOr(battery, 0),
           lastSeen: Date.now()
         };
 
@@ -1398,11 +1536,11 @@ socket.on('check-ping', (clientTimestamp) => {
   // Every SOS is answered with 'alert-result', and the app says "sent" only once that answer has
   // come (utils/sosOutbox.js), naming the alert by the `clientId` it was sent with.
   socket.on('sos-broadcast', (payload) => {
-    const { senderName, lat, lng, roomCode: claimedRoomCode, timestamp } = payload ?? {};
+    const { lat: sentLat, lng: sentLng, roomCode: claimedRoomCode, timestamp: sentAt } = payload ?? {};
     const clientId = typeof payload?.clientId === 'string' && payload.clientId.length <= 64 ? payload.clientId : null;
     const roomCode = resolveSosRoom(activeSquads, users, socket.id, claimedRoomCode);
     if (!roomCode) {
-      console.warn(`[🚨 SOS] Dropped: ${socket.id} (${senderName}) is not a member of any squad`);
+      console.warn(`[🚨 SOS] Dropped: ${socket.id} (${cleanName(payload?.senderName)}) is not a member of any squad`);
       // Answered too: unanswered, the app would keep trying an alert nobody can be sent.
       socket.emit('alert-result', { type: 'sos', roomCode: typeof claimedRoomCode === 'string' ? claimedRoomCode : null, allowed: false, mode: 'blocked', reasonCode: 'NOT_IN_GROUP', ...(clientId ? { clientId } : {}) });
       return;
@@ -1411,7 +1549,18 @@ socket.on('check-ping', (clientTimestamp) => {
     // occasionally 1ms if the second Date.now() ticks over.
     const now = Date.now();
     const squad = activeSquads[roomCode];
-    const senderKey = memberKey(socket.data?.uid, socket.id);
+    // Who they are on this Group's roster, as every other alert rule reads it (keyOf): the uid this
+    // connection was admitted with, not whatever its latest join attempt elsewhere named.
+    const senderKey = keyOf(squad, socket.id);
+    // What everyone else is sent, made safe first: a display name cut like every other (or the one
+    // the Group knows them by), a real position or none, a time that is a number. Whatever a phone
+    // put in these used to be stored and replayed for 30 minutes, and an oversized one made other
+    // members' closed-app phones reject every SOS, ping and join notice until it expired.
+    const senderName = cleanName(payload?.senderName) ?? nameOf(squad, socket.id);
+    const hasFix = isRealFix(sentLat, sentLng);
+    const lat = hasFix ? sentLat : null;
+    const lng = hasFix ? sentLng : null;
+    const timestamp = finiteOr(sentAt, now);
     // The same alert again: the phone never heard the answer to its first copy (the connection
     // dropped), so it sent it once more. Answered as delivered, and neither relayed a second
     // time nor refused by the cooldown its first copy started.
@@ -1442,7 +1591,7 @@ socket.on('check-ping', (clientTimestamp) => {
     console.log(`[🚨 SOS] ${senderName} triggered a distress beacon in ${roomCode}`);
     // Only the sender's trusted friends, the main admin and moderators hear it (friends.js);
     // everyone, as before, when that cannot be told.
-    const audience = audienceOf(squad, socket.data?.uid);
+    const audience = audienceOf(squad, uidOfSocket(squad, socket.id));
     const details = {
       senderKey, senderId: socket.id, senderName, lat, lng, timestamp,
       flag: verdict.mode === 'guarded' ? verdict.reasonCode : null,
@@ -1524,7 +1673,8 @@ socket.on('check-ping', (clientTimestamp) => {
     const reply = typeof ack === 'function' ? ack : () => {};
     const { roomCode } = payload ?? {};
     const squad = activeSquads[roomCode];
-    if (!squad || squad.ownerId !== socket.id) return reply({ ok: false, reason: 'not-owner' });
+    // On the roster too: a connection removed from the Group must not keep reading its log.
+    if (!squad || squad.ownerId !== socket.id || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-owner' });
     const log = [...(squad.alertLog ?? [])];
     socket.emit('alert-log', { roomCode, log });
     reply({ ok: true });
@@ -1539,7 +1689,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const roomCode = resolveSosRoom(activeSquads, users, socket.id, null);
     if (!roomCode) return;
     const now = Date.now();
-    const key = memberKey(socket.data?.uid, socket.id);
+    const key = keyOf(activeSquads[roomCode], socket.id);
     for (const sos of pendingSosFor(activeSquads[roomCode], key, now)) {
       socket.emit('sos-received', toSosPayload(sos, now));
     }
@@ -1552,7 +1702,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const { id } = payload ?? {};
     const roomCode = resolveSosRoom(activeSquads, users, socket.id, null);
     if (!roomCode) return;
-    ackSos(activeSquads[roomCode], id, memberKey(socket.data?.uid, socket.id));
+    ackSos(activeSquads[roomCode], id, keyOf(activeSquads[roomCode], socket.id));
   });
 
   // Leaving means leaving: off every roster the socket is on, out of every room it is
@@ -1679,6 +1829,8 @@ socket.on('check-ping', (clientTimestamp) => {
       delete locationCache[socket.id];
       if (room) broadcastSquadUpdate(room);
     }
+    // Gone either way: a connection that never sent a position can still have a cache entry.
+    delete locationCache[socket.id];
 
     // NOTE: deliberately NOT calling handleSquadSuccession() here. A raw 'disconnect'
     // fires on any transient drop (app backgrounded, brief signal loss — routine on
@@ -1857,6 +2009,8 @@ server.listen(PORT, () => {
 
 // For tests that run this server inside their own process: the port it chose (PORT=0), and a
 // way to stop everything it started. Running `node backend/server.js` never uses either.
+// For the tests: how many connections the server is still holding a position cache for.
+export const locationCacheSize = () => Object.keys(locationCache).length;
 export const listening = new Promise((resolve) => server.once('listening', () => resolve(server.address().port)));
 export function stopServer() {
   clearInterval(sweepTimer);
