@@ -89,10 +89,10 @@ describe('a member who leaves', () => {
     let roster = {};
     alpha.on('users-update', (users) => { roster = users; });
     await reportLocation(bravo, room, 'Bravo');
-    await waitFor(() => Object.values(roster).some((u) => u.name === 'Bravo'));
+    await waitFor(() => Object.values(roster).some((u) => u.name === 'uB'));
 
     await leave(bravo);
-    await waitFor(() => !Object.values(roster).some((u) => u.name === 'Bravo'));
+    await waitFor(() => !Object.values(roster).some((u) => u.name === 'uB'));
   });
 });
 
