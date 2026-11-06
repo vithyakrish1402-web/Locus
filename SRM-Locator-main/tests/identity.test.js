@@ -22,7 +22,7 @@ const libraryError = (code, message = '') => Object.assign(new Error(message), {
 describe('a valid token', () => {
   it('gives back the uid the library found', async () => {
     const { verifyIdToken, auth } = withFake(async () => ({ uid: 'user-1' }));
-    expect(await verifyIdToken(TOKEN)).toEqual({ ok: true, uid: 'user-1' });
+    expect(await verifyIdToken(TOKEN)).toEqual({ ok: true, uid: 'user-1', name: 'Member' });
     expect(auth.verifyIdToken).toHaveBeenCalledWith(TOKEN, false);
   });
 

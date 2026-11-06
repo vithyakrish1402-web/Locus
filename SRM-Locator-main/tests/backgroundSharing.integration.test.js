@@ -35,6 +35,14 @@ beforeAll(async () => {
   await new Promise((resolve) => stub.listen(0, '127.0.0.1', resolve));
   const env = {
     PORT: '0',
+
+    // Not under test here: every client of this file shares one address and a few uids.
+
+    LOCUS_JOIN_ATTEMPTS_PER_MIN: '0',
+
+    LOCUS_JOIN_ATTEMPTS_PER_MIN_PER_ADDRESS: '0',
+
+    LOCUS_MAX_SOCKETS_PER_IP: '0',
     LOCUS_BACKGROUND_SHARING_ENABLED: 'true',
     LOCUS_DEVICE_TOKEN_SECRET: SECRET,
     FIREBASE_AUTH_EMULATOR_HOST: `127.0.0.1:${stub.address().port}`,

@@ -39,9 +39,30 @@ import { ACTIVITY, logActivity, activityOf, noteSharingMode, forgetSharingMode }
 import { createJoinNotifier } from './joinNotify.js';
 import { createFriendsStore, friendsLoaderFromEnv, friendsStartupLine, sosAudience } from './friends.js';
 import { createRateLimiter } from './rateLimit.js';
+import helmet from 'helmet';
+import { createHash } from 'node:crypto';
+import { cleanName, cleanPhoto, cleanRoute, cleanZone, cleanGeofenceAlert } from './sanitize.js';
+import { clientAddressOf, clientAddressConfig } from './clientAddress.js';
+
+// A whole number from the environment (0 is allowed, and means "off" where said so), else the default.
+const numberFromEnv = (name, fallback) => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
+};
+
+// Where a browser may call this server from. The Android app's WebView is https://localhost
+// (Capacitor's default), iOS capacitor://localhost, and http://localhost covers older shells. The
+// app's sockets are WebSocket-only and its background calls are native (no Origin), which this
+// list does not affect; it only decides which web pages may read an answer. Add more, comma
+// separated, with LOCUS_ALLOWED_ORIGINS (a development rig's Vite address, say).
+const ALLOWED_ORIGINS = (process.env.LOCUS_ALLOWED_ORIGINS ?? 'https://localhost,capacitor://localhost,http://localhost')
+  .split(',').map((origin) => origin.trim()).filter(Boolean);
 
 const app = express();
-app.use(cors());
+app.use(helmet());
+app.use(cors({ origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'] }));
 // One proxy hop (Render's): lets req.ip be the caller rather than the proxy, for rate limits.
 app.set('trust proxy', 1);
 
@@ -50,13 +71,17 @@ app.set('trust proxy', 1);
 // memory without end, flood a Group or run up Firestore reads. Refusals are logged, never thrown.
 // Groups one person may found in an hour (a Commander's resume is free); the test servers raise it.
 const MAX_GROUPS_PER_HOUR = Number(process.env.LOCUS_MAX_GROUPS_PER_HOUR) || 5;
-const MAX_NAME_LENGTH = 40;             // a person's display name, cut to this
 const MAX_PLACE_NAME_LENGTH = 80;       // a meeting point's name (campus names reach 47)
-const MAX_PHOTO_URL_LENGTH = 2048;
 const MAX_ROOM_CODE_LENGTH = 64;        // the same cap the background endpoints use
 const MAX_FRIEND_LOOKUPS_PER_MIN = 10;  // friend-list reads one person may set off
 const MAX_MESSAGES_PER_SEC = 30;        // events a second from one connection; the rest are dropped
 const MAX_MESSAGE_BYTES = 100_000;      // one event's size (socket.io's own default is 1 MB)
+const MAX_PENDING_PER_SQUAD = numberFromEnv('LOCUS_MAX_PENDING_PER_SQUAD', 50);       // join requests one Group's admitters may have waiting at once
+const JOIN_ATTEMPTS_PER_MIN = numberFromEnv('LOCUS_JOIN_ATTEMPTS_PER_MIN', 12);       // joins one person (uid) may ask for a minute; 0 = no limit
+const JOIN_ATTEMPTS_PER_MIN_PER_ADDRESS = numberFromEnv('LOCUS_JOIN_ATTEMPTS_PER_MIN_PER_ADDRESS', 100); // joins one network address may ask for a minute (campus Wi-Fi shares an address); 0 = no limit
+const MAX_ACTIVE_SQUADS = numberFromEnv('LOCUS_MAX_ACTIVE_SQUADS', 500);              // live Groups at once; above it no new Group is founded (joining one is unaffected)
+const MAX_SOCKETS_PER_IP = numberFromEnv('LOCUS_MAX_SOCKETS_PER_IP', 200);            // open connections from one network address (generous: a lecture hall shares one); 0 = no limit
+const PRE_JOIN_TIMEOUT_MS = numberFromEnv('LOCUS_PRE_JOIN_TIMEOUT_MS', 30_000);       // a connection that has not joined a Group by then is dropped; 0 = never
 // A dead phone is noticed within HEARTBEAT_INTERVAL_MS + HEARTBEAT_TIMEOUT_MS (15 s) rather
 // than socket.io's default 45 s, by the server and by the app alike (it follows these).
 const HEARTBEAT_INTERVAL_MS = 5000;
@@ -67,7 +92,7 @@ const EMPTY_GROUP_GRACE_MS = Number(process.env.LOCUS_EMPTY_GROUP_GRACE_MS) || 1
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
+  cors: { origin: ALLOWED_ORIGINS, methods: ["GET", "POST"] },
   maxHttpBufferSize: MAX_MESSAGE_BYTES,
   pingInterval: HEARTBEAT_INTERVAL_MS,
   pingTimeout: HEARTBEAT_TIMEOUT_MS,
@@ -96,7 +121,7 @@ function joinerUid(user, proof) {
   if (proof) {
     if (proof.ok) {
       provenUids.add(proof.uid);
-      return { uid: proof.uid };
+      return { uid: proof.uid, name: proof.name };
     }
     if (proof.reason !== 'unavailable') return { refused: proof.reason };
   }
@@ -107,8 +132,15 @@ function joinerUid(user, proof) {
 
 const groupsFounded = createRateLimiter({ limit: MAX_GROUPS_PER_HOUR, windowMs: 60 * 60 * 1000 });
 const friendLookups = createRateLimiter({ limit: MAX_FRIEND_LOOKUPS_PER_MIN, windowMs: 60 * 1000 });
-const cleanName = (name, max = MAX_NAME_LENGTH) => (typeof name === 'string' && name.trim() ? name.trim().slice(0, max) : null);
-const cleanPhoto = (url) => (typeof url === 'string' && url.length <= MAX_PHOTO_URL_LENGTH && /^https?:\/\//.test(url) ? url : null);
+// Joins asked for in a minute, by person and by network address (see JOIN_ATTEMPTS_PER_MIN).
+const joinsByPerson = JOIN_ATTEMPTS_PER_MIN > 0 ? createRateLimiter({ limit: JOIN_ATTEMPTS_PER_MIN, windowMs: 60 * 1000 }) : null;
+const joinsByAddress = JOIN_ATTEMPTS_PER_MIN_PER_ADDRESS > 0 ? createRateLimiter({ limit: JOIN_ATTEMPTS_PER_MIN_PER_ADDRESS, windowMs: 60 * 1000 }) : null;
+function joinAttemptAllowed(personKey, address) {
+  // Both are counted every time, so neither can be used up without the other noticing.
+  const person = joinsByPerson ? joinsByPerson.check(personKey).ok : true;
+  const place = joinsByAddress ? joinsByAddress.check(address).ok : true;
+  return person && place;
+}
 // A real position: numbers, on the globe, and not the 0,0 a broken fix reports.
 const isRealFix = (lat, lng) =>
   Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
@@ -199,6 +231,16 @@ app.use('/api/background', createBackgroundRouter({
   joinNoticeFor: (roomCode, uid) => joinNoticeFor(roomCode, uid),
 }));
 app.use(express.json());
+// The last word on any error a request raises: a generic answer, never a stack trace or the
+// error's own text (a body-parse error can quote the request). Details go to the log, which
+// carries no tokens, positions or query strings.
+app.use((err, req, res, next) => {
+  const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+  const frames = status >= 500 && typeof err?.stack === 'string' ? err.stack.split('\n').slice(1, 5).join(' | ') : '';
+  console.error(`[HTTP] ${req.method} ${req.path} answered ${status} (${err?.name ?? 'Error'}${err?.type ? `, ${err.type}` : ''})${frames ? ` ${frames}` : ''}`);
+  if (res.headersSent) return next(err);
+  res.status(status).json({ error: status >= 500 ? 'Internal error' : status === 413 ? 'Too large' : 'Bad request' });
+});
 
 // --- 🧹 STALE SQUAD SWEEP ---
 // Defense-in-depth against ghost rooms: mobile clients that get killed/backgrounded
@@ -655,8 +697,60 @@ export function acceptBackgroundPosition(roomCode, uid, report, now = Date.now()
   return { ok: true, leaseUntil: entry.leaseUntil };
 }
 
+// --- CONNECTIONS BEFORE SIGN-IN ---
+// A socket can be opened by anyone, with no token, and held. Two limits on that: how many one
+// network address may hold open (below), and how long a connection may go without joining a Group
+// (in the connection handler). The address is the caller's, not Render's proxy (clientAddress.js).
+const addressSettings = clientAddressConfig();
+const socketsByAddress = new Map(); // address -> open connections
+let addressSamplesLeft = 10;
+const addressOf = (socket) => (socket.data.address ??= clientAddressOf(socket.handshake, addressSettings));
+const addressTag = (address) => createHash('sha256').update(String(address)).digest('hex').slice(0, 6);
+io.use((socket, next) => {
+  const address = addressOf(socket);
+  if (addressSamplesLeft > 0) {
+    // So the first few connections after a deploy show whether callers are told apart (distinct
+    // tags). A short hash, never the address itself.
+    addressSamplesLeft -= 1;
+    const forwarded = String(socket.handshake.headers['x-forwarded-for'] ?? '').split(',').filter((part) => part.trim()).length;
+    console.log(`[ADDR] connection from caller #${addressTag(address)} (X-Forwarded-For entries: ${forwarded}, trusted hops: ${addressSettings.hops}${addressSettings.header ? `, header: ${addressSettings.header}` : ''})`);
+  }
+  if (MAX_SOCKETS_PER_IP > 0 && (socketsByAddress.get(address) ?? 0) >= MAX_SOCKETS_PER_IP) {
+    console.warn(`[LIMIT] Refused a connection from caller #${addressTag(address)}: ${MAX_SOCKETS_PER_IP} already open`);
+    return next(new Error('busy'));
+  }
+  next();
+});
+
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
+
+  const address = addressOf(socket);
+  socketsByAddress.set(address, (socketsByAddress.get(address) ?? 0) + 1);
+  // A connection that never joins a Group is dropped after PRE_JOIN_TIMEOUT_MS. Closed at the
+  // transport, not with disconnect(): the app opens its socket at launch and waits on its login
+  // and lobby screens, and a phone told to disconnect never reconnects by itself, where one whose
+  // connection simply dropped does (and the clock starts over). Cleared when a join goes
+  // somewhere (see requestJoin) and when the connection ends.
+  let preJoinTimer = null;
+  const endPreJoin = () => {
+    clearTimeout(preJoinTimer);
+    preJoinTimer = null;
+  };
+  if (PRE_JOIN_TIMEOUT_MS > 0) {
+    preJoinTimer = setTimeout(() => {
+      preJoinTimer = null;
+      console.warn(`[LIMIT] ${socket.id} did not join a Group within ${PRE_JOIN_TIMEOUT_MS} ms; closing its connection`);
+      socket.conn.close();
+    }, PRE_JOIN_TIMEOUT_MS);
+    preJoinTimer.unref?.();
+  }
+  socket.on('disconnect', () => {
+    endPreJoin();
+    const open = (socketsByAddress.get(address) ?? 1) - 1;
+    if (open > 0) socketsByAddress.set(address, open);
+    else socketsByAddress.delete(address);
+  });
 
   // At most MAX_MESSAGES_PER_SEC events a second from this connection; the rest of that second
   // is dropped, the connection kept. A phone back from a dead zone flushes everything it buffered
@@ -707,20 +801,25 @@ io.on('connection', (socket) => {
   const isMemberOf = (roomCode) => Boolean(activeSquads[roomCode]?.members.includes(socket.id));
 
   // --- GEOFENCE ALARM RELAY ---
+  // Only known fields, each checked, are relayed (sanitize.js); the name is the server's record of the sender.
   socket.on('geofence-alert', (data) => {
     if (!isMemberOf(data?.roomCode)) return;
-    console.log(`[🚨 BREACH] ${data.userName} ${data.type === 'ENTER' ? 'entered' : 'left'} ${data.zoneName}`);
+    const alert = cleanGeofenceAlert(data, nameOf(activeSquads[data.roomCode], socket.id));
+    if (!alert) return;
+    console.log(`[🚨 BREACH] ${alert.userName} ${alert.type === 'ENTER' ? 'entered' : 'left'} ${alert.zoneName}`);
     // Broadcast the alarm to everyone else in the squad
-    socket.to(data.roomCode).emit('geofence-alert', data);
+    socket.to(data.roomCode).emit('geofence-alert', { roomCode: data.roomCode, ...alert });
   });
 
   // --- TACTICAL ZONE RELAY ---
     socket.on('publish-zone', (data) => {
       if (!isMemberOf(data?.roomCode)) return;
+      const zone = cleanZone(data.zone);
+      if (!zone) return;
       console.log(`[SYS] Relaying new Tactical Zone to squad: ${data.roomCode}`);
 
       // Broadcasts the zone to everyone in the room EXCEPT the person who drew it
-      socket.to(data.roomCode).emit('new-zone', data.zone);
+      socket.to(data.roomCode).emit('new-zone', zone);
     });
 
   // --- BACKEND ---
@@ -892,6 +991,13 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.emit('join-refused', { roomCode, reason: 'identity', detail: who.refused });
       return;
     }
+    // How often this person, and this network address, may ask (JOIN_ATTEMPTS_PER_MIN). Answered
+    // with the generic sign-in refusal, so nothing says which limit it was.
+    if (!joinAttemptAllowed(who.uid ?? socket.id, addressOf(socket))) {
+      console.warn(`[LIMIT] Refused a join from ${socket.id}: too many attempts`);
+      socket.emit('join-refused', { roomCode, reason: 'identity', detail: 'unproven' });
+      return;
+    }
     const existing = activeSquads[roomCode];
     // Ownership used to be tracked purely by ephemeral socket.id. Any reconnect
     // (backgrounding the app, a signal blip — routine on mobile) killed the old
@@ -929,13 +1035,18 @@ socket.on('check-ping', (clientTimestamp) => {
     // refusal above, so a member could re-label their own connection with any uid by asking for a
     // code no Group has, and the SOS handlers then counted them as that person.
     socket.data.uid = requesterUid;
+    endPreJoin();
     // Their trusted friends, ready for an SOS (friends.js): never fetched while one is raised.
     if (requesterUid && friendLookups.check(requesterUid).ok) friendsStore.prefetch(requesterUid);
     // Remember who this socket is independently of their telemetry. broadcastSquadUpdate
     // needs a name and photo for members who haven't got a GPS fix yet (indoors, location
     // permission denied, just joined) — they're on the roster, so they must be nameable
     // there, rather than being invisible until their first coordinate arrives.
-    socket.data.profile = { name: cleanName(user?.name), photo: cleanPhoto(user?.photo) };
+    // The name is the one the sign-in vouches for (identity.js), never the one the phone sends: it is
+    // what an SOS, a ping, the member list and every notice show for this person from here on. Only
+    // while sign-in tokens are optional (LOCUS_SOCKET_AUTH not "require") can a join without a
+    // token still bring its own name, once, here.
+    socket.data.profile = { name: cleanName(who.name ?? user?.name), photo: cleanPhoto(user?.photo) };
 
     // Case 1: brand-new or fully abandoned room -> requester becomes the owner. A squad whose
     // members are all sharing from the background is not abandoned: starting afresh here would
@@ -954,6 +1065,11 @@ socket.on('check-ping', (clientTimestamp) => {
       // knows they commanded counts as theirs: 'resume' on its own used to skip the limit for any code.
       const resumesOwn = intent === 'resume' && Boolean(requesterUid)
         && (ended?.commanderUid === requesterUid || Boolean(settingsStore.restore(roomCode, requesterUid)));
+      if (!existing && Object.keys(activeSquads).length >= MAX_ACTIVE_SQUADS) {
+        console.warn(`[GATE] Refused a new Group ${roomCode} from ${socket.id}: ${MAX_ACTIVE_SQUADS} Groups are live`);
+        socket.emit('join-refused', { roomCode, reason: 'busy' });
+        return;
+      }
       if (!resumesOwn && !groupsFounded.check(requesterUid ?? socket.id).ok) {
         console.warn(`[GATE] Refused a new Group ${roomCode} from ${socket.id}: over ${MAX_GROUPS_PER_HOUR} an hour`);
         socket.emit('join-refused', { roomCode, reason: 'too-many-groups' });
@@ -1097,6 +1213,11 @@ socket.on('check-ping', (clientTimestamp) => {
 
     // Case 5: normal gatekeeper flow — a genuine new joiner needs the owner's approval.
     // Recorded, so that only a request still open can be approved (see resolve-access).
+    if (Object.keys(existing.pending ?? {}).length >= MAX_PENDING_PER_SQUAD) {
+      console.warn(`[GATE] Refused a request to ${roomCode} from ${socket.id}: ${MAX_PENDING_PER_SQUAD} are already waiting`);
+      socket.emit('join-refused', { roomCode, reason: 'busy' });
+      return;
+    }
     addPendingRequest(existing, socket.id, { uid: requesterUid, ...socket.data.profile });
     // Every reply names its squad, so a client can ignore one about a squad it has left.
     socket.emit('access-pending', { roomCode });
@@ -1336,7 +1457,14 @@ socket.on('check-ping', (clientTimestamp) => {
     // which leaked every squad's secret tactical routes to every other squad
     // connected to the server, regardless of room membership. And only from a member
     // of it: the room is the client's claim, so it's checked against the roster.
-    if (isMemberOf(payload?.roomCode)) socket.to(payload.roomCode).emit('new-custom-route', payload);
+    if (!isMemberOf(payload?.roomCode)) return;
+    // Only the route itself (key, distance, eta, a capped list of real points), never the rest of the message.
+    const route = cleanRoute(payload);
+    if (!route) {
+      console.warn(`[LIMIT] Dropped a route from ${socket.id} in ${payload.roomCode}: not a usable route`);
+      return;
+    }
+    socket.to(payload.roomCode).emit('new-custom-route', { roomCode: payload.roomCode, ...route });
   });
 
   // --- 🎯 RALLY POINT WAYPOINTS ---
@@ -1415,7 +1543,8 @@ socket.on('check-ping', (clientTimestamp) => {
       return;
     }
     squad.lastActivity = Date.now();
-    const name = cleanName(data.name);
+    // The name set when this connection joined; a name sent now is only used when none was.
+    const name = socket.data.profile?.name ?? cleanName(data.name);
     const photo = cleanPhoto(data.photo);
     const reporter = squad.memberUids?.[socket.id];
     if (reporter) {
@@ -1540,7 +1669,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const clientId = typeof payload?.clientId === 'string' && payload.clientId.length <= 64 ? payload.clientId : null;
     const roomCode = resolveSosRoom(activeSquads, users, socket.id, claimedRoomCode);
     if (!roomCode) {
-      console.warn(`[🚨 SOS] Dropped: ${socket.id} (${cleanName(payload?.senderName)}) is not a member of any squad`);
+      console.warn(`[🚨 SOS] Dropped: ${socket.id} (${socket.data.profile?.name ?? 'unknown'}) is not a member of any squad`);
       // Answered too: unanswered, the app would keep trying an alert nobody can be sent.
       socket.emit('alert-result', { type: 'sos', roomCode: typeof claimedRoomCode === 'string' ? claimedRoomCode : null, allowed: false, mode: 'blocked', reasonCode: 'NOT_IN_GROUP', ...(clientId ? { clientId } : {}) });
       return;
@@ -1556,7 +1685,8 @@ socket.on('check-ping', (clientTimestamp) => {
     // the Group knows them by), a real position or none, a time that is a number. Whatever a phone
     // put in these used to be stored and replayed for 30 minutes, and an oversized one made other
     // members' closed-app phones reject every SOS, ping and join notice until it expired.
-    const senderName = cleanName(payload?.senderName) ?? nameOf(squad, socket.id);
+    // Who sent it is the server's record of this connection (nameOf), whatever the message says.
+    const senderName = nameOf(squad, socket.id);
     const hasFix = isRealFix(sentLat, sentLng);
     const lat = hasFix ? sentLat : null;
     const lng = hasFix ? sentLng : null;
@@ -2005,6 +2135,9 @@ socket.on('check-ping', (clientTimestamp) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 LOCUS Server running on port ${PORT}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn('[SETUP] NODE_ENV is not "production": set it on the host. Error answers stay generic either way, but libraries behave differently.');
+  }
 });
 
 // For tests that run this server inside their own process: the port it chose (PORT=0), and a

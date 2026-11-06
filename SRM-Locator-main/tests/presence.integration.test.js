@@ -14,6 +14,14 @@ import { sleep, waitFor } from './helpers/e2eServer.js';
 // Set before the server loads: it reads its settings once, when it starts.
 Object.assign(process.env, {
   PORT: '0',
+
+  // Not under test here: every client of this file shares one address and a few uids.
+
+  LOCUS_JOIN_ATTEMPTS_PER_MIN: '0',
+
+  LOCUS_JOIN_ATTEMPTS_PER_MIN_PER_ADDRESS: '0',
+
+  LOCUS_MAX_SOCKETS_PER_IP: '0',
   LOCUS_LEASE_MIN_SEC: '0.4',
   LOCUS_LEASE_MAX_SEC: '1',
   LOCUS_PRESENCE_CHECK_MS: '30',
