@@ -24,7 +24,7 @@ describe('SOS routing', () => {
     fireSos(bravo, room);
 
     await waitFor(() => alpha.sos.length && charlie.sos.length);
-    expect(alpha.sos[0]).toMatchObject({ senderName: 'Bravo', lat: 12.8231, lng: 80.0442, ageMs: 0 });
+    expect(alpha.sos[0]).toMatchObject({ senderName: 'uB', lat: 12.8231, lng: 80.0442, ageMs: 0 });
     expect(alpha.sos[0].id).toBeTruthy();
     expect(charlie.sos[0].id).toBe(alpha.sos[0].id);
     await sleep(250);
@@ -67,7 +67,7 @@ describe('SOS routing', () => {
     expect(serverIsAlive()).toBe(true);
     alpha.sos.length = 0;
     fireSos(bravo, room);
-    await waitFor(() => alpha.sos.some((s) => s.senderName === 'Bravo'));
+    await waitFor(() => alpha.sos.some((s) => s.senderName === 'uB'));
   });
 });
 
@@ -87,7 +87,7 @@ describe('SOS replay for members who missed it', () => {
 
     await waitFor(() => charlie2.sos.length);
     expect(charlie2.sos[0].id).toBe(alpha.sos[0].id);
-    expect(charlie2.sos[0].senderName).toBe('Bravo');
+    expect(charlie2.sos[0].senderName).toBe('uB');
     expect(charlie2.sos[0].ageMs).toBeGreaterThanOrEqual(50);
   });
 
@@ -99,7 +99,7 @@ describe('SOS replay for members who missed it', () => {
     const newcomer = await connect();
     await admit(alpha, newcomer, room, 'uN');
     await waitFor(() => newcomer.sos.length);
-    expect(newcomer.sos[0].senderName).toBe('Bravo');
+    expect(newcomer.sos[0].senderName).toBe('uB');
   });
 
   it('does not replay to the sender, even after they reconnect', async () => {
@@ -160,7 +160,7 @@ describe('SOS acknowledgement', () => {
     alpha.sos.length = 0;
     alpha.emit('sos-sync');
     await waitFor(() => alpha.sos.length);
-    expect(alpha.sos[0].senderName).toBe('Bravo');
+    expect(alpha.sos[0].senderName).toBe('uB');
   });
 
   it('a re-triggered SOS is a new alert everyone still owes an acknowledgement for', async () => {

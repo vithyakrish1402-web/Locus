@@ -7,7 +7,8 @@
 //
 //   const verifier = createIdTokenVerifier();
 //   const result = await verifier.verifyIdToken(token);
-//   result: { ok: true, uid } | { ok: false, reason }
+//   result: { ok: true, uid, name } | { ok: false, reason }
+//     name: the display name the token vouches for (see verifiedNameOf), never one a phone typed
 //
 // reason (never an exception, never the token itself):
 //   'malformed'     not a string, empty, too long, or not shaped like a JWT: the library is not called
@@ -47,6 +48,20 @@ export const identityConfig = (env = process.env) => ({
   projectId: env.LOCUS_FIREBASE_PROJECT_ID || DEFAULT_PROJECT_ID,
   checkRevoked: env.LOCUS_CHECK_REVOKED_TOKENS === 'true',
 });
+
+// The name the sign-in itself vouches for, to show other people in place of anything a phone
+// says about itself: the token's display name, else the part of its email before the "@", else
+// a neutral "Member". (Firebase puts the display name in the token when the token is made, so a
+// brand-new account's first token can lack it until the phone refreshes the token, within an hour.)
+export const NEUTRAL_NAME = 'Member';
+export function verifiedNameOf(decoded) {
+  const text = (value) => (typeof value === 'string' ? value.trim() : '');
+  const name = text(decoded?.name);
+  if (name) return name;
+  const email = text(decoded?.email);
+  const local = email.includes('@') ? email.slice(0, email.indexOf('@')).trim() : '';
+  return local || NEUTRAL_NAME;
+}
 
 let appSeq = 0;
 
@@ -144,7 +159,7 @@ export function createIdTokenVerifier({
       const decoded = await auth.verifyIdToken(token, checkRevoked);
       const uid = decoded?.uid;
       if (typeof uid !== 'string' || uid.length === 0 || uid.length > MAX_UID_LENGTH) return refuse('invalid');
-      return { ok: true, uid };
+      return { ok: true, uid, name: verifiedNameOf(decoded) };
     } catch (err) {
       const reason = reasonFor(err);
       if (reason === 'unavailable') complain(`${typeof err?.code === 'string' ? err.code : 'error'}`);

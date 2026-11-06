@@ -127,7 +127,7 @@ describe('coming back after being removed', () => {
 
     sosFrom(charlie, room, 'Charlie');
     await waitFor(() => bravo.sos.length);
-    expect(bravo.sos[0].senderName).toBe('Charlie');
+    expect(bravo.sos[0].senderName).toBe('uC');
   });
 
   it('a blocked member is refused when they knock again, and stays out of the room', async () => {

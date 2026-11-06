@@ -11,6 +11,14 @@ import { sleep, waitFor } from './helpers/e2eServer.js';
  */
 Object.assign(process.env, {
   PORT: '0',
+
+  // Not under test here: every client of this file shares one address and a few uids.
+
+  LOCUS_JOIN_ATTEMPTS_PER_MIN: '0',
+
+  LOCUS_JOIN_ATTEMPTS_PER_MIN_PER_ADDRESS: '0',
+
+  LOCUS_MAX_SOCKETS_PER_IP: '0',
   LOCUS_LIVE_STALE_SEC: '0.25',
   LOCUS_SOURCE_DWELL_SEC: '1.2',
   LOCUS_LEASE_MIN_SEC: '10',
