@@ -12,6 +12,7 @@ import {
 import { PLACE, categoryLabel } from '../copy/place';
 import { getBuildingAsset } from '../data/srmBuildingAssets';
 import CampusBuildingImage from './map/CampusBuildingImage';
+import { displayPlaceName } from '../utils/placeName';
 
 // The action row at the bottom of the card. The old "More Info" button was 44 px tall inside
 // this same footer; the three buttons are taller (about 56 px, never under 48) so an icon and
@@ -23,7 +24,7 @@ export const ACTION_BUTTON_RADIUS = 12;
 // Flat and quiet, in the app's own accent (theme tokens, so it follows light and dark): one
 // solid colour for the primary action, hairline outlines for the others, no glow.
 const PRIMARY_LOOK = 'bg-accent hover:brightness-110 active:brightness-95 text-accent-on border border-accent';
-const SECONDARY_LOOK = 'bg-transparent hover:bg-white/[0.06] active:bg-white/10 text-slate-200 border border-white/15';
+const SECONDARY_LOOK = 'bg-sunken hover:bg-accent-soft active:bg-accent-soft text-text border border-border';
 const ACTIVE_LOOK = 'bg-accent-soft hover:brightness-110 text-accent border border-accent';
 
 // eslint-disable-next-line no-unused-vars -- Icon is used as <Icon />, which this config can't see
@@ -78,10 +79,11 @@ export default function PlaceCard({
   };
 
   return (
-    <div className="relative rounded-2xl bg-[#0b0f19]/85 dark:bg-[#0b0f19]/90 backdrop-blur-2xl border border-white/15 dark:border-white/10 shadow-[0_24px_50px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.12)] text-slate-100 font-ui flex flex-col overflow-hidden w-full max-w-sm">
+    <div className="relative rounded-2xl bg-surface border border-border shadow-lg text-text font-ui flex flex-col overflow-hidden w-full max-w-sm">
       {/* Top Hero Photo Gallery */}
       <div className="relative w-full h-44 sm:h-48 bg-black/50 shrink-0 overflow-hidden">
         <CampusBuildingImage
+          key={photos[activePhotoIdx] || asset?.image}
           src={photos[activePhotoIdx] || asset?.image}
           alt={place?.name || 'Building'}
           aspectRatio="aspect-auto"
@@ -89,7 +91,7 @@ export default function PlaceCard({
         />
 
         {/* Cinematic gradient overlay blending photo into card */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0b0f19] via-[#0b0f19]/25 to-black/30 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
 
         {/* Top Floating Controls */}
         <div className="absolute inset-x-0 top-0 p-3 flex items-center justify-between pointer-events-none">
@@ -137,14 +139,14 @@ export default function PlaceCard({
 
       {/* Card Content: Title & Tags */}
       <div className="p-4 flex flex-col gap-2.5">
-        <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white leading-tight break-words">
-          {place?.name}
+        <h2 className="text-lg sm:text-xl font-bold tracking-tight text-text leading-tight break-words">
+          {displayPlaceName(place?.name)}
         </h2>
 
         {/* Tags Section */}
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {category && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold tracking-wide bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-sm">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold tracking-wide bg-accent-soft text-accent">
               <Building2 size={12} className="shrink-0" />
               <span>{category}</span>
             </span>
@@ -153,14 +155,14 @@ export default function PlaceCard({
           {asset?.tags?.map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-normal bg-white/[0.04] text-slate-300 border border-white/5"
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-normal bg-sunken text-text-secondary border border-border"
             >
               {tag}
             </span>
           ))}
         </div>
         {asset?.description && (
-          <p className="text-slate-300" style={{ fontSize: 13, lineHeight: '1.25rem' }} data-testid="place-description">
+          <p className="text-text-secondary" style={{ fontSize: 13, lineHeight: '1.25rem' }} data-testid="place-description">
             {asset.description}
           </p>
         )}
@@ -168,7 +170,7 @@ export default function PlaceCard({
 
       {/* Bottom actions: Navigate (primary), Rally and AR Scan. Outside the photo, so the
           photo arrows and the close button are never in their way. */}
-      <div className="p-3 bg-black/40 backdrop-blur-xl border-t border-white/10 shrink-0">
+      <div className="p-3 bg-surface border-t border-border shrink-0">
         <div
           className="grid"
           style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: ACTION_BUTTON_GAP }}

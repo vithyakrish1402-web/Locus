@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-rotate';
@@ -90,11 +90,16 @@ const ViewController = ({ center, zoom }) => {
 // Hands the shared glide (utils/mapFocus.js) this map's own animated move.
 const FocusDriver = ({ onMapInstance, onUserInteraction, active = true }) => {
   const map = useMap();
+  // Handed back as null when the map goes, so App.jsx never keeps a removed map.
   useEffect(() => {
     onMapInstance?.(map);
+    return () => onMapInstance?.(null);
   }, [map, onMapInstance]);
   // The camera driver belongs to the visible map: this one steps aside while Google shows.
-  useEffect(() => {
+  // A layout effect, so that when the map closes mid-glide the glide is stopped while the map is
+  // still alive: react-leaflet removes the map in a passive effect that runs first, and stopping
+  // a removed map threw "reading '_leaflet_pos'" (the crash on 2026-10-25).
+  useLayoutEffect(() => {
     if (!active) return undefined;
     return registerMapDriver({
       element: map.getContainer(),

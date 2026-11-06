@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 // eslint-disable-next-line no-unused-vars -- motion is used as <motion.div>, which this config can't see
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { AlertCircle, AlertTriangle, Check, Info, Radio, X } from 'lucide-react';
@@ -6,6 +6,7 @@ import { subscribe, dismiss } from '../utils/notify';
 import { PANEL_SPRING, projectMomentum } from '../utils/motion';
 import { LAYER } from '../utils/layers';
 import { BELOW_TOP_BAR } from '../utils/mapChrome';
+import { useSettingsOpen } from '../utils/settingsOpen';
 import IconButton from './ui/IconButton';
 
 // Renders the notifications (src/utils/notify.js): the app's non-blocking replacement for
@@ -174,6 +175,39 @@ function Notice({ item, reduceMotion, coveredBy }) {
 const TOP = BELOW_TOP_BAR;
 export const TOP_OVER_AR_SCAN = '10rem';
 
+/** The gap between Settings' header (its Back button) and the first notice under it. */
+export const TOAST_TOP_OFFSET_PX = 8;
+
+// Over Settings the feed starts under Settings' own header, read from the page: that header is
+// not the map's top bar, and on a phone whose WebView reports no top inset through env() the
+// map's measure (BELOW_TOP_BAR) put "Emergency alert sent" right over Back. Settings scrolls,
+// taking its header with it, so it is read again on scroll, never higher than the status bar's
+// strip. null while Settings is closed.
+function useTopOverSettings(open) {
+  const [top, setTop] = useState(null);
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const measure = () => {
+      const header = document.querySelector('[data-settings-header]');
+      const cover = document.querySelector('[data-testid="settings-top-cover"]');
+      if (!header && !cover) return;
+      const bottom = Math.max(header?.getBoundingClientRect().bottom ?? 0, cover?.getBoundingClientRect().bottom ?? 0);
+      setTop(Math.round(bottom) + TOAST_TOP_OFFSET_PX);
+    };
+    measure();
+    const frame = requestAnimationFrame(measure); // in case Settings drew after this feed
+    document.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+      setTop(null);
+    };
+  }, [open]);
+  return top;
+}
+
 /**
  * @param {{ overArScan?: boolean, coveredBy?: React.RefObject<HTMLElement> | null }} props
  *   overArScan: AR Scan is open (see TOP_OVER_AR_SCAN)
@@ -186,6 +220,8 @@ export default function CommsFeed({ overArScan = false, coveredBy = null }) {
   const [items, setItems] = useState([]);
   const reduceMotion = useReducedMotion();
   useEffect(() => subscribe(setItems), []);
+  const topOverSettings = useTopOverSettings(useSettingsOpen());
+  const top = overArScan ? TOP_OVER_AR_SCAN : topOverSettings !== null ? `${topOverSettings}px` : TOP;
 
   return (
     <div
@@ -197,7 +233,7 @@ export default function CommsFeed({ overArScan = false, coveredBy = null }) {
       // LAYER.toast: over AR Scan, whose notices (ALIGN, compass access) used to be drawn
       // underneath it and expire unseen; under an update gate and an incoming SOS.
       // LAYER.underGroupPanel while the group panel is open on a phone (see coveredBy).
-      style={{ zIndex: under ? LAYER.underGroupPanel : LAYER.toast, top: overArScan ? TOP_OVER_AR_SCAN : TOP }}
+      style={{ zIndex: under ? LAYER.underGroupPanel : LAYER.toast, top }}
     >
       <div className="w-full max-w-md flex flex-col gap-3">
         <AnimatePresence initial={false}>

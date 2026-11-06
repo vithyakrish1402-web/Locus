@@ -43,6 +43,7 @@ const rememberDndExplained = () => {
 };
 import { SharingChip, TopBar } from './components/map/TopBar';
 import { MapControls, MeetingPointButton } from './components/map/MapControls';
+import MapErrorBoundary from './components/map/MapErrorBoundary';
 import { BELOW_TOP_BAR } from './utils/mapChrome';
 import { trimRouteBehind } from './utils/routeTrim';
 import RouteCard from './components/map/RouteCard';
@@ -51,7 +52,8 @@ import {
   ArrivalPanel,
 } from './components/navigation/NavigationHUD';
 import { useNavigationController } from './hooks/useNavigationController';
-import BuildingRow from './components/map/BuildingRow';
+import BuildingDirectory from './components/map/BuildingDirectory';
+import { useStableAction } from './hooks/useStableAction';
 import GroupHeader from './components/group/GroupHeader';
 import SharingControl from './components/group/SharingControl';
 import MemberOptions from './components/group/MemberOptions';
@@ -61,7 +63,7 @@ import AdminTools, { RecordingBar } from './components/admin/AdminTools';
 import AddPlaceSheet, { PlacingBar } from './components/admin/AddPlace';
 import { ADD_PLACE_PROBLEMS } from './copy/addPlace';
 import { useCampusPlaces } from './hooks/useCampusPlaces';
-import { isGrounds, placeMatches } from './utils/campusPlaces';
+import { isGrounds } from './utils/campusPlaces';
 import JoinRequests from './components/group/JoinRequests';
 import ActivityLog from './components/group/ActivityLog';
 import BlockedList from './components/group/BlockedList';
@@ -70,7 +72,7 @@ import { useFriends } from './hooks/useFriends';
 import { exportActivityLog } from './utils/activityLogExport';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, BUILDINGS_LIST as GROUP_BUILDINGS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
+import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -113,6 +115,7 @@ import { notify, dismiss as dismissNotice } from './utils/notify';
 import { logNavBuild } from './utils/navBuild';
 import { rallyAction, rallyIsAt } from './utils/rallyAction';
 import { mapEngineStatus } from './utils/mapEngineStatus';
+import { isMapAttached } from './utils/mapAttached';
 import { focusMapOn, registerMapDriver, MAP_FOCUS_BUILDING_ZOOM, MAP_FOCUS_RALLY_ZOOM, FOCUS_ZOOM_LEVEL, FOCUS_HIGHLIGHT_MS } from './utils/mapFocus';
 import { useIncomingSos } from './hooks/useIncomingSos';
 import { useClosedAppSos } from './hooks/useClosedAppSos';
@@ -227,8 +230,14 @@ const batteryReading = (cacheData) => {
 // so these must keep a stable identity across renders. Rebuilding them inside the
 // component made every render look like an options change and triggered a full
 // map.setOptions() restyle each time.
-const BASE_MAP_OPTIONS = {
+// Settings Google takes only when a map is made. Given again to a map that has drawn, even
+// unchanged, Google throws "Setting map 'renderingType' after instantiation is not supported."
+// (the full-screen crash on 2026-10-25), so these never go into a later setOptions.
+const GOOGLE_CREATION_OPTIONS = {
   renderingType: 'VECTOR',
+};
+
+const BASE_MAP_OPTIONS = {
   zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
   mapTypeId: 'roadmap',
   tilt: 0,
@@ -236,7 +245,6 @@ const BASE_MAP_OPTIONS = {
 };
 
 const SATELLITE_MAP_OPTIONS = {
-  renderingType: 'VECTOR',
   zoomControl: false, mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
   mapTypeId: 'hybrid', // This triggers the real satellite imagery
   tilt: 0,
@@ -433,7 +441,7 @@ const App = () => {
   const acknowledgeSos = useClosedAppSos({ current: incomingSos, pendingCount: pendingSosCount, receive: receiveSos, acknowledge: acknowledgeSosOnSocket });
 
   // An Emergency alert held for want of a connection (utils/sosOutbox.js): the button reads
-  // "Waiting for connection", and a notice says so until it goes, or can't.
+  // "Waiting", and a notice says "Waiting for connection" until it goes, or can't.
   const [sosHeld, setSosHeld] = useState(false);
   const heldNoticeRef = useRef(null);
   const sentNoticeRef = useRef(null); // the "alert sent" notice, taken back if the server refuses
@@ -744,13 +752,15 @@ const App = () => {
   // short: the panel's title and the Group Lead's buttons step aside until focus leaves, so the
   // box rises clear of the Emergency button (owner, Stop 2, keyboard option 1).
   const [searchFocused, setSearchFocused] = useState(false);
+  // The top bar's own search box has focus (typing there is what opens Buildings, so it stays up
+  // while someone types in it, even with Buildings open; see the top bar's render).
+  const [topSearchFocused, setTopSearchFocused] = useState(false);
   const afterTap = (stillSo, focused) => {
     const apply = () => { if (stillSo()) setSearchFocused(focused); };
     window.addEventListener('click', apply, { once: true });
     setTimeout(apply, 400);
   };
   const [selectedItem, setSelectedItem] = useState(null);
-  const [buildingCategoryFilter, setBuildingCategoryFilter] = useState('ALL');
 
   const [users, setUsers] = useState([]);
   // AR Scan aimed at a squad member follows them as they move, instead of pointing at
@@ -2157,7 +2167,7 @@ const App = () => {
     if (wasGoogleShownRef.current === googleShown) return;
     wasGoogleShownRef.current = googleShown;
     const from = googleShown ? leafletMapRef.current : mapRef.current;
-    if (!from) return;
+    if (!isMapAttached(from)) return;
     const c = googleShown ? from.getCenter?.() : { lat: from.getCenter?.().lat?.(), lng: from.getCenter?.().lng?.() };
     const zoom = from.getZoom?.();
     if (!c || !Number.isFinite(c.lat) || !Number.isFinite(c.lng) || !Number.isFinite(zoom)) return;
@@ -2269,10 +2279,14 @@ const App = () => {
     setIsNavigatingMode(true);
     setMobileView('grid');
     navigationController.handleRecenter();
-    if (leafletMapRef.current) {
+    if (isMapAttached(leafletMapRef.current)) {
       leafletMapRef.current.flyTo([origin.lat, origin.lng], 19, { duration: 1.0 });
     }
   };
+
+  const openDirectoryBuilding = useStableAction(handleBuildingTap);
+  const navigateDirectoryBuilding = useStableAction(handleWaypointSelect);
+  const scanDirectoryBuilding = useStableAction(building => setArTarget({ lat: building.lat, lng: building.lng, name: building.name }));
 
   // Keep routeStart synchronized when live GPS location updates
   useEffect(() => {
@@ -2523,7 +2537,6 @@ const App = () => {
   // The members search above.
   const matchesSearch = (name) => (name || '').toLowerCase().includes(searchQuery.trim().toLowerCase());
   // A place matches on its name or any short name students use for it. The top bar's search.
-  const matchesPlaceSearch = (place) => placeMatches(place, placeQuery);
   // Typing in the top bar's search brings the places list up: the panel opens on Buildings at
   // full height, where the results can be read.
   const searchPlaces = (text) => {
@@ -2551,6 +2564,62 @@ const App = () => {
     clickableIcons: false,
     draggableCursor: (isAdmin && (isRecordingPath || isPlacing)) ? 'crosshair' : 'grab',
   }), [isSatellite, resolvedTheme, isAdmin, isRecordingPath, isPlacing]);
+  // google-map-react is given one options function that never changes, so it never calls
+  // setOptions itself: it reads it once, when the map is made, creation-only settings included.
+  // Later changes reach the live map here, without them.
+  const mapOptionsRef = useRef(mapOptions);
+  mapOptionsRef.current = mapOptions;
+  const googleCreateOptions = useCallback(() => ({ ...GOOGLE_CREATION_OPTIONS, ...mapOptionsRef.current }), []);
+  useEffect(() => {
+    if (googleMounted && isMapReady) mapRef.current?.setOptions?.(mapOptions);
+  }, [mapOptions, googleMounted, isMapReady]);
+
+  // --- MAP CRASHES (components/map/MapErrorBoundary.jsx) ---
+  // What happened just before a map crash, for the console line it leaves (console only: no
+  // network, no storage). The last five, with the time.
+  const mapEventsRef = useRef([]);
+  const noteMapEvent = (what) => {
+    mapEventsRef.current = [...mapEventsRef.current.slice(-4), `${new Date().toISOString().slice(11, 19)} ${what}`];
+  };
+  useEffect(() => { noteMapEvent(isSatellite ? 'satellite on' : 'satellite off'); }, [isSatellite]);
+  useEffect(() => { noteMapEvent(`tab ${activeTab} / ${mobileView}`); }, [activeTab, mobileView]);
+  useEffect(() => { if (incomingSos) noteMapEvent('incoming SOS'); }, [incomingSos]);
+  useEffect(() => {
+    const onVisibility = () => noteMapEvent(document.visibilityState === 'visible' ? 'back from background' : 'to background');
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+  const reportMapCrash = (error, failures) => {
+    console.error('[SYS_MAP] map crashed', {
+      engine: googleShown ? 'google' : 'leaflet', // the one on screen
+      googleMounted,
+      // As of the render that crashed (its own change is not in recentEvents yet).
+      now: { satellite: isSatellite, tab: activeTab, view: mobileView, sos: Boolean(incomingSos), page: document.visibilityState },
+      recentEvents: mapEventsRef.current,
+      message: String(error?.message ?? error),
+      failures,
+    });
+  };
+  // A second crash tries the other engine once. On satellite with Google (showing, or still
+  // loading after the retry): satellite goes to the free map on Esri photos, for the rest of the
+  // session. On the free map: it stands down and Google's satellite shows instead, until
+  // satellite is turned off again, or Google fails too (then the free map is all there is).
+  const [freeMapStoodDown, setFreeMapStoodDown] = useState(false);
+  const switchMapEngineAfterCrash = () => {
+    if (googleMounted && isSatellite) {
+      failMapEngine('crashed');
+      return true;
+    }
+    if (googleUsable) {
+      setFreeMapStoodDown(true);
+      setIsSatellite(true);
+      return true;
+    }
+    return false;
+  };
+  useEffect(() => {
+    if (!isSatellite || !googleUsable) setFreeMapStoodDown(false);
+  }, [isSatellite, googleUsable]);
 
   // A theme switch shows the Google map only once it has redrawn its tiles in the new style
   // (theme.js registerThemeSettle): under the switch's cover, or veiled in the new theme
@@ -2856,18 +2925,25 @@ const App = () => {
   return (
     <div className="h-screen w-full bg-bg flex overflow-hidden text-text font-inter selection:bg-accent-soft bg-dots">
 
-      {/* Top bar and sharing chip (components/map/TopBar.jsx) */}
-      {!isNavigatingMode && (
+      {/* Top bar and sharing chip (components/map/TopBar.jsx). On a phone it goes, tap area and
+          all, while Buildings or Group is open (each has its own search box, so there were two at
+          once), and comes back when it closes: it follows sheetOpen, so every way of changing tab
+          does the same. Not while someone is typing in it: typing there is what opens Buildings. */}
+      {!isNavigatingMode && !(isMobile && sheetOpen && !topSearchFocused) && (
         <TopBar
           isSatellite={isSatellite}
           query={placeQuery}
           onQuery={hasJoinedSquad ? searchPlaces : undefined}
           // With the keyboard up the panel's header steps aside, so the results show above it.
-          onSearchFocus={setSearchFocused}
+          onSearchFocus={(focused) => { setSearchFocused(focused); setTopSearchFocused(focused); }}
         />
       )}
 
       {/* Buildings and Group are separate fixed pages on phones, with a sidebar on desktop. */}
+      {/* Closed on a phone, the page is not drawn at all (display: none), whichever way the tab
+          changed: the tab bar, Back, an SOS, a member's Navigate. It used to be only `invisible`,
+          still laid out and composited, and its two blurred parts with `transition: all` (the
+          Group Lead chip and the members search) were left floating over the map. */}
       {!isNavigatingMode && (
         <motion.div
           data-testid="section-page"
@@ -2875,7 +2951,7 @@ const App = () => {
           drag={false}
           ref={sheetRef}
           className={`${isMobile
-              ? `fixed inset-x-0 z-[900] flex flex-col bg-surface text-text ${sheetOpen ? 'pointer-events-auto' : 'pointer-events-none invisible'
+              ? `fixed inset-x-0 z-[900] flex-col bg-surface text-text ${sheetOpen ? 'flex pointer-events-auto' : 'hidden pointer-events-none'
               }`
               : 'hidden md:flex w-84 glass-floating text-text rounded-3xl fixed z-[900] flex-col pointer-events-auto top-20 left-6 bottom-6 h-auto'
             }`}
@@ -2884,16 +2960,16 @@ const App = () => {
           style={isMobile ? { top: BELOW_TOP_BAR, bottom: 'var(--tab-bar-height)', y: 0 } : undefined}
 
         >
-          <header className="shrink-0 px-4 py-4 flex items-center justify-between">
-            <h1 className="text-xl font-semibold">{activeTab === 'buildings' ? 'Buildings' : 'Your group'}</h1>
-            {isMobile && <button type="button" onClick={() => setMobileView('grid')} className="p-3" aria-label="Back to map"><X size={20} /></button>}
+          <header className="section-page-header shrink-0 px-5 py-4 flex items-center justify-between">
+            <h1 className="text-xl font-semibold">{activeTab === 'buildings' ? 'Buildings' : GROUP_HEADER.title}</h1>
+            {isMobile && <button type="button" onClick={() => setMobileView('grid')} className="section-close" aria-label="Back to map"><X size={20} /></button>}
           </header>
           {activeTab === 'users' && <GroupHeader isLead={squadRole === 'OWNER'} code={squadCode} />}
           {/* List Content */}
           {/* The page stays fixed while its list scrolls above the bottom tabs. */}
           <div
             data-testid="group-panel-list"
-            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pt-1 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
+            className={`sheet-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 md:pb-4 custom-scrollbar ${activeTab === 'buildings' ? 'space-y-3' : 'space-y-1'}`}
             style={isMobile ? { paddingBottom: 24 } : undefined}
           >
             {!isMobile && <SegmentedControl
@@ -2912,57 +2988,6 @@ const App = () => {
               (Members: it sits above the members list, under the controls, so a Group Lead's
               tools come higher at half height.) */}
 
-            {/* Category Filter Pills (Minimalist Apple/Glass Design) */}
-            {activeTab === 'buildings' && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar -mx-1 px-1">
-                {[
-                  { id: 'ALL', label: 'All' },
-                  { id: 'ACADEMIC', label: 'Academic' },
-                  { id: 'ENGINEERING', label: 'Engineering' },
-                  { id: 'MEDICAL', label: 'Medical' },
-                  { id: 'RESIDENTIAL', label: 'Hostels' },
-                  { id: 'LOGISTICS', label: 'Cafes & Hubs' },
-                  ...(campusPlaces.some(b => isGrounds(b)) ? [{ id: 'GROUNDS', label: 'Grounds' }] : []),
-                ].map((cat) => {
-                  const isSelected = buildingCategoryFilter === cat.id;
-                  const count = cat.id === 'ALL'
-                    ? campusPlaces.length
-                    : campusPlaces.filter(b => b.category === cat.id).length;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setBuildingCategoryFilter(cat.id)}
-                      className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium font-ui transition-all duration-150 flex items-center gap-1.5 cursor-pointer border ${isSelected
-                          ? 'bg-accent text-accent-on border-accent shadow-sm'
-                          : 'glass-pill text-text-secondary hover:text-text'
-                        }`}
-                    >
-                      <span>{cat.label}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-normal ${isSelected ? 'bg-white/20 text-accent-on' : 'bg-sunken text-text-secondary'}`}>
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Nearby Places Section Header */}
-            {activeTab === 'buildings' && (
-              <div className="flex items-center justify-between pt-1 pb-0.5">
-                <h3 className="text-sm font-semibold font-ui text-text flex items-center gap-2 tracking-tight">
-                  <span>Nearby Places</span>
-                  <span className="text-xs font-normal text-text-secondary">
-                    ({campusPlaces.filter(b => matchesPlaceSearch(b) && (buildingCategoryFilter === 'ALL' || b.category === buildingCategoryFilter)).length})
-                  </span>
-                </h3>
-              </div>
-            )}
-
-            {activeTab === 'buildings' && placeQuery.trim() && !campusPlaces.some(b => matchesPlaceSearch(b)) && (
-              <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="buildings-no-match">{GROUP_BUILDINGS_LIST.noMatch(placeQuery.trim())}</p>
-            )}
             {/* The Group Lead's tools come first, before Your location (the design has them after):
               at half height on a 360 px phone they would otherwise sit under the Emergency button,
               which stays above the panel. */}
@@ -3021,34 +3046,13 @@ const App = () => {
             {activeTab === 'users' && searchQuery.trim() && !users.some(u => !blockedUserIds.includes(u.id) && matchesSearch(u.name)) && !ghostMembers.some(g => matchesSearch(g.name)) && (users.length > 0 || ghostMembers.length > 0) && (
               <p className="py-3 font-ui text-secondary text-text-secondary" data-testid="members-no-match">{GROUP_MEMBERS_LIST.noMatch(searchQuery.trim())}</p>
             )}
+            {activeTab === 'buildings' && (!isMobile || sheetOpen) && <BuildingDirectory
+              places={campusPlaces} query={placeQuery} onSearch={setPlaceQuery} me={liveLocation}
+              onOpen={openDirectoryBuilding} onNavigate={navigateDirectoryBuilding}
+              onArScan={scanDirectoryBuilding}
+            />}
             <AnimatePresence mode="popLayout" initial={false}>
-              {activeTab === 'buildings' ? (
-                campusPlaces
-                  .filter(b => matchesPlaceSearch(b) && (buildingCategoryFilter === 'ALL' || b.category === buildingCategoryFilter))
-                  .map((building, idx) => (
-                    <motion.div
-                      layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
-                      transition={{
-                        opacity: { duration: 0.22, ease: [0.22, 1, 0.36, 1] },
-                        y: { duration: 0.24, ease: [0.22, 1, 0.36, 1], delay: Math.min(idx, 5) * 0.03 },
-                        scale: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
-                        layout: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
-                      }}
-                      key={building.id}
-                    >
-                      <BuildingRow
-                        building={building}
-                        me={liveLocation}
-                        onOpen={() => handleBuildingTap(building)}
-                        onArScan={() => setArTarget({ lat: building.lat, lng: building.lng, name: building.name })}
-                        onNavigate={() => handleWaypointSelect(building)}
-                      />
-                    </motion.div>
-                  ))
-              ) : (
+              {activeTab === 'users' && (
                 // A flat array, not a <> fragment. AnimatePresence mode="popLayout" wraps
                 // each direct child in a ref-bearing element to measure it, and a Fragment
                 // cannot take a ref — React logged "Invalid prop `ref` supplied to
@@ -3272,8 +3276,17 @@ const App = () => {
       />
       {/* FULLSCREEN MAP */}
       <div className="absolute inset-0 z-0 bg-[var(--color-map-land)]">
-        {/* The free map is always mounted and is the normal map. Google, once asked for by a
-            satellite tap, stays mounted for the session and is only hidden and shown. */}
+        {/* A map crash stays in here: the bar, SOS and the sheets above keep working. A retry
+            starts a fresh Google map, so it waits for that one to load before showing it. */}
+        <MapErrorBoundary
+          onCrash={reportMapCrash}
+          onSwitchEngine={switchMapEngineAfterCrash}
+          onRemount={() => setIsMapReady(false)}
+        >
+        {/* The free map is always mounted and is the normal map (unless it stood down after
+            crashing twice). Google, once asked for by a satellite tap, stays mounted for the
+            session and is only hidden and shown. */}
+        {!freeMapStoodDown && (
         <div
           className="absolute inset-0"
           style={{ visibility: googleShown ? 'hidden' : 'visible' }}
@@ -3329,6 +3342,7 @@ const App = () => {
             />
           </Suspense>
         </div>
+        )}
         {googleMounted && (
         <div
           className="absolute inset-0"
@@ -3339,7 +3353,7 @@ const App = () => {
           <GoogleMapReact
             bootstrapURLKeys={{ key: GOOGLE_MAPS_API_KEY }}
             center={mapProps.center}
-            options={mapOptions}
+            options={googleCreateOptions}
 
             onClick={handleMapClick}
 
@@ -3500,6 +3514,7 @@ const App = () => {
           </GoogleMapReact>
         </div>
         )}
+        </MapErrorBoundary>
         {/* PHASE 3: Satellite toggle pill removed — function reassigned to Bottom HUD GRID button */}
       </div>
 

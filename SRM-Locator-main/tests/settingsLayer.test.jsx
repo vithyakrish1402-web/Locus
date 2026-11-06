@@ -167,13 +167,17 @@ describe('Settings over the top and bottom bars', () => {
     expect(css).toMatch(/\.top-cover \{[^}]*background-color: var\(--color-bg\)/);
   });
 
-  it('closing: the layer stays opaque and above the bars while the screen fades out, then goes', async () => {
+  // UI audit A3 (2026-10-25): the screen used to fade out over the layer's opaque backing, which
+  // stayed to the end, so Back showed an empty dark frame for the length of the fade. Now the layer
+  // fades as a whole, backing and all, so the map shows through as Settings goes; it stays above
+  // the bars throughout.
+  it('closing: the whole layer fades, never the screen alone over an empty backing, above the bars, then goes', async () => {
     onTheMap();
     openSettings();
     await waitFor(() => expect([...settingsLayer().querySelectorAll('*')].some(faded)).toBe(false));
     const layer = settingsLayer();
     closeSettings();
-    // Every frame until it goes: still there at first, never faded, never dropped below the bars.
+    // Every frame until it goes: still there at first, never dropped below the bars.
     expect(layer.isConnected).toBe(true);
     const frames = [];
     const started = Date.now();
@@ -182,8 +186,9 @@ describe('Settings over the top and bottom bars', () => {
       await act(() => new Promise((resolve) => setTimeout(resolve, 16)));
     }
     expect(layer.isConnected).toBe(false);
-    expect(frames.some((f) => f.screenFaded)).toBe(true);
-    expect(frames.filter((f) => f.faded || f.z !== SETTINGS_Z)).toEqual([]);
+    expect(frames.some((f) => f.faded)).toBe(true);
+    expect(frames.filter((f) => f.screenFaded)).toEqual([]);
+    expect(frames.filter((f) => f.z !== SETTINGS_Z)).toEqual([]);
     expect(screen.queryByTestId('settings-layer')).toBeNull();
     expect(screen.queryByTestId('settings')).toBeNull();
     expect(topBar()).toBeTruthy();
