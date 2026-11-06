@@ -8,8 +8,12 @@ import { copyText } from './clipboard';
 // send it in a chat or by mail); in a browser, its own share sheet or a download. A phone whose
 // app predates shareTextFile copies the CSV to the clipboard instead.
 
+// A name is whatever a member typed, and a spreadsheet reads a cell that starts with = + - @ (or a
+// tab or return) as a formula, quoted or not. A leading apostrophe keeps such a cell as text.
+const FORMULA_START = /^[=+\-@\t\r]/;
 const cell = (value) => {
-  const text = value === null || value === undefined ? '' : String(value);
+  const raw = value === null || value === undefined ? '' : String(value);
+  const text = FORMULA_START.test(raw) ? `'${raw}` : raw;
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 };
 
