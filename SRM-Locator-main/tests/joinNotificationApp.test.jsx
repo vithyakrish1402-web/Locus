@@ -175,7 +175,7 @@ describe('dedicated mobile sections', () => {
   it('returns to the map when a building is chosen, so its card is visible', async () => {
     await onTheMap();
     fireEvent.click(tabBar().getByRole('button', { name: 'Buildings' }));
-    fireEvent.click(screen.getAllByTestId('building-row')[0]);
+    fireEvent.click(within(screen.getAllByTestId('building-row')[0]).getByRole('button', { name: /^View / }));
     expect(currentTab()).toBe('Map');
     expect(await screen.findByTestId('location-card')).toBeTruthy();
   });

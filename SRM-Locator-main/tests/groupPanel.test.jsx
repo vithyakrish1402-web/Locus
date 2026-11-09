@@ -124,7 +124,9 @@ afterEach(() => {
 describe('the header', () => {
   it('says "Your group", the Group Lead role and the code, spaced', async () => {
     await inAGroup();
-    expect(header().getByRole('heading', { name: GROUP_HEADER.title })).toBeTruthy();
+    // "Your group" is the page's title bar, once; the header under it no longer repeats it.
+    expect(screen.getByRole('heading', { name: GROUP_HEADER.title })).toBeTruthy();
+    expect(header().queryByRole('heading', { name: GROUP_HEADER.title })).toBeNull();
     expect(header().getByText(GROUP_HEADER.lead)).toBeTruthy();
     expect(header().getByTestId('group-code').textContent).toBe(`Code ${code.slice(0, 3)} ${code.slice(3)}`);
   });

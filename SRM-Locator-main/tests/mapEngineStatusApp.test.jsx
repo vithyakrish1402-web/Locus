@@ -295,8 +295,10 @@ describe('the Google map style', () => {
     enterMapScreen();
     tapSatellite();
     await screen.findByTestId('google-map');
-    expect(google.options.styles).toEqual([]);
-    expect(google.options.mapTypeId).toBe('hybrid');
+    // A function, read once when the map is made (see mapCrashApp.test.jsx).
+    const made = google.options();
+    expect(made.styles).toEqual([]);
+    expect(made.mapTypeId).toBe('hybrid');
   });
 });
 
