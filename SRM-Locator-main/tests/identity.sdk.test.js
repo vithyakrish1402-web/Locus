@@ -52,7 +52,7 @@ const verify = (t, options = {}) => verifierModule.createIdTokenVerifier({ log: 
 
 describe('the real library', () => {
   it('accepts a good token and returns its uid', async () => {
-    expect(await verify(token())).toEqual({ ok: true, uid: 'u1' });
+    expect(await verify(token())).toEqual({ ok: true, uid: 'u1', name: 'Member' });
   });
 
   it('rejects an expired token as expired', async () => {
@@ -90,7 +90,7 @@ describe('the real library', () => {
       account = { localId: 'u1', disabled: false, validSince: String(now() + 100) };
       expect(await verify(token(), { checkRevoked: true })).toEqual({ ok: false, reason: 'revoked' });
       account = { localId: 'u1', disabled: false, validSince: '0' };
-      expect(await verify(token(), { checkRevoked: true })).toEqual({ ok: true, uid: 'u1' });
+      expect(await verify(token(), { checkRevoked: true })).toEqual({ ok: true, uid: 'u1', name: 'Member' });
     } finally {
       account = { localId: 'u1', disabled: false, validSince: '0' };
     }

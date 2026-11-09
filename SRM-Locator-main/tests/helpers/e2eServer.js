@@ -55,15 +55,28 @@ export function e2eServer({ env = {} } = {}) {
   let url;
   const clients = [];
   let roomSeq = 0;
+  let output = ''; // everything the server has printed so far
 
   beforeAll(async () => {
     const port = await freePort();
     url = `http://localhost:${port}`;
     server = spawn(process.execPath, ['backend/server.js'], {
       cwd: ROOT,
-      env: { ...process.env, PORT: String(port), ...env },
+      // The per-minute join limits and the per-address connection cap are off here: every test client
+      // shares one address, and tests reuse the same few uids across dozens of rooms. A test of
+      // those limits turns them back on, with small numbers, through `env`.
+      env: {
+        ...process.env,
+        PORT: String(port),
+        LOCUS_JOIN_ATTEMPTS_PER_MIN: '0',
+        LOCUS_JOIN_ATTEMPTS_PER_MIN_PER_ADDRESS: '0',
+        LOCUS_MAX_SOCKETS_PER_IP: '0',
+        ...env,
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    server.stdout.on('data', (chunk) => { output += chunk; });
+    server.stderr.on('data', (chunk) => { output += chunk; });
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('server did not start')), 10000);
       server.once('exit', (code) => reject(new Error(`server exited early (${code})`)));
@@ -154,5 +167,13 @@ export function e2eServer({ env = {} } = {}) {
     squadOfThree,
     newRoom,
     serverIsAlive: () => server.exitCode === null,
+    url: () => url,
+    serverOutput: () => output,
+    // A connection the test manages itself (reconnection on or off, extra headers), tracked for clean-up.
+    connectWith: (options = {}) => {
+      const socket = io(url, { transports: ['websocket'], forceNew: true, reconnection: false, ...options });
+      clients.push(socket);
+      return socket;
+    },
   };
 }

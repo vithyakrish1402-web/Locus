@@ -74,29 +74,31 @@ describe('a previously approved member coming back skips re-approval', () => {
     const roster = once(bravo2, 'users-update');
     await requestJoin(bravo2, room, 'uB');
     const users = await roster;
-    expect(Object.values(users).map((u) => u.name)).toContain('Alpha');
+    expect(Object.values(users).map((u) => u.name)).toContain('uA');
   });
 
   it('does not leave a duplicate of them on everyone else\'s map', async () => {
     const { room, alpha, bravo } = await squadOfThree();
     let roster = {};
     alpha.on('users-update', (users) => { roster = users; });
-    const namesOnMap = () => Object.values(roster).map((u) => u.name);
+    // Bravo's markers that have a position. (A connection that has not reported one is listed too,
+    // under the same name: the name is the one Bravo joined with, whatever a position report says.)
+    const located = () => Object.values(roster).filter((u) => u.name === 'uB' && u.hasFix);
     const report = (socket) =>
       socket.emit('update-location', { name: 'Bravo', lat: 12.8, lng: 80.0, speed: 0, battery: 90, heading: 0, roomCode: room });
 
     report(bravo);
-    await waitFor(() => namesOnMap().includes('Bravo'));
+    await waitFor(() => located().length === 1);
 
     // Back on a new connection while the old one lingers: the old marker must go...
     const bravo2 = await connect();
     await requestJoin(bravo2, room, 'uB');
-    await waitFor(() => !namesOnMap().includes('Bravo'));
+    await waitFor(() => located().length === 0);
 
     // ...and once the new connection reports in, there's exactly one Bravo, not two.
     report(bravo2);
-    await waitFor(() => namesOnMap().includes('Bravo'));
-    expect(namesOnMap().filter((name) => name === 'Bravo')).toHaveLength(1);
+    await waitFor(() => located().length === 1);
+    expect(located()).toHaveLength(1);
   });
 
   it('does not raise a false "signal lost" when the superseded connection finally drops', async () => {
@@ -116,9 +118,9 @@ describe('a previously approved member coming back skips re-approval', () => {
     bravo.disconnect();
     charlie.disconnect();
 
-    await waitFor(() => signalLost.includes('Charlie')); // the detector works...
+    await waitFor(() => signalLost.includes('uC')); // the detector works...
     await sleep(250);
-    expect(signalLost).not.toContain('Bravo'); // ...and stays quiet for someone who's back
+    expect(signalLost).not.toContain('uB'); // ...and stays quiet for someone who's back
   });
 
   it('does not make the returning member a Commander', async () => {

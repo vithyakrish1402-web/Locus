@@ -416,7 +416,7 @@ describe('SOS repeats', () => {
     await waitFor(() => alpha.notices.length);
     await sleep(150);
     expect(alpha.notices).toEqual([
-      { roomCode: room, kind: 'sos-repeat', senderId: bravo.id, senderName: 'Bravo', count: 3, windowMin: 15 },
+      { roomCode: room, kind: 'sos-repeat', senderId: bravo.id, senderName: 'uB', count: 3, windowMin: 15 },
     ]);
     expect(charlie.notices).toEqual([]); // not an alarm for everyone
     expect(bravo.notices).toEqual([]);

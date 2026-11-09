@@ -93,13 +93,13 @@ describe('a member whose connection is re-labelled by a join that goes nowhere',
 describe('what an SOS carries to everyone else', () => {
   const api = e2eServer();
 
-  it('carries a name cut like any other, and only a real position', async () => {
+  it('carries the name the sender joined with (never the one in the message), and only a real position', async () => {
     const { room, bravo, charlie } = await api.squadOfThree();
     let deep = 1;
     for (let i = 0; i < 5; i += 1) deep = [deep]; // nested, but within what the server accepts at all
     bravo.emit('sos-broadcast', { roomCode: room, senderName: 'x'.repeat(40_000), lat: deep, lng: 80.0, timestamp: { a: 1 }, clientId: 'b1' });
     await waitFor(() => charlie.sos.length === 1);
-    expect(charlie.sos[0].senderName).toBe('x'.repeat(40));
+    expect(charlie.sos[0].senderName).toBe('uB');
     expect(charlie.sos[0].lat).toBeNull();
     expect(charlie.sos[0].lng).toBeNull();
     expect(typeof charlie.sos[0].timestamp).toBe('number');
@@ -208,11 +208,11 @@ describe('a payload nested deeper than the app ever sends', () => {
     let deep = [12.8, 80.0];
     for (let i = 0; i < 20; i += 1) deep = [deep];
     bravo.emit('publish-custom-route', { roomCode: room, key: 'deep', data: deep });
-    bravo.emit('publish-custom-route', { roomCode: room, key: 'flat', data: [[12.8, 80.0], [12.81, 80.01]] });
+    bravo.emit('publish-custom-route', { roomCode: room, key: 'flat', data: { distance: 'CUSTOM', eta: 'TACTICAL', path: [{ lat: 12.8, lng: 80.0 }, { lat: 12.81, lng: 80.01 }] } });
     await waitFor(() => routes.length >= 1);
     await settle(bravo);
     await settle(alpha);
-    expect(routes.map((r) => r.key ?? Object.keys(r)[0])).not.toContain('deep');
+    expect(routes.map((r) => r.key)).toEqual(['flat']);
   });
 });
 

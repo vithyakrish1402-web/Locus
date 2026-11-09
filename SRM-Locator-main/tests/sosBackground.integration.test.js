@@ -36,6 +36,14 @@ beforeAll(async () => {
   await new Promise((resolve) => stub.listen(0, '127.0.0.1', resolve));
   const env = {
     PORT: '0',
+
+    // Not under test here: every client of this file shares one address and a few uids.
+
+    LOCUS_JOIN_ATTEMPTS_PER_MIN: '0',
+
+    LOCUS_JOIN_ATTEMPTS_PER_MIN_PER_ADDRESS: '0',
+
+    LOCUS_MAX_SOCKETS_PER_IP: '0',
     LOCUS_BACKGROUND_SHARING_ENABLED: 'true',
     LOCUS_DEVICE_TOKEN_SECRET: SECRET,
     FIREBASE_AUTH_EMULATOR_HOST: `127.0.0.1:${stub.address().port}`,
@@ -222,7 +230,7 @@ describe('an SOS reaching a closed app', () => {
     expect(Date.now() - pressedAt).toBeLessThan(1000); // woken by the SOS, not by the timeout
     expect(answer.status).toBe(200);
     expect(answer.json.sos).toHaveLength(1);
-    expect(answer.json.sos[0]).toMatchObject({ senderName: 'Alpha', senderUid: 'uA', lat: 12.8231, lng: 80.0442 });
+    expect(answer.json.sos[0]).toMatchObject({ senderName: 'uA', senderUid: 'uA', lat: 12.8231, lng: 80.0442 });
     expect(answer.json.sos[0].ageMs).toBeLessThan(1000);
     expect(answer.json.sos[0].id).toBeTruthy();
     expect(answer.json.rev).toBe(answer.json.sos[0].rev);

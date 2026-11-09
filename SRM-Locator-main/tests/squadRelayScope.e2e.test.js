@@ -27,7 +27,7 @@ const RELAYS = [
   {
     event: 'publish-custom-route',
     received: 'new-custom-route',
-    payload: (roomCode) => ({ roomCode, key: 'A_B', data: [{ lat: 12.8, lng: 80.0 }] }),
+    payload: (roomCode) => ({ roomCode, key: 'A_B', data: { distance: 'CUSTOM', eta: 'TACTICAL', path: [{ lat: 12.8, lng: 80.0 }, { lat: 12.9, lng: 80.1 }] } }),
   },
 ];
 

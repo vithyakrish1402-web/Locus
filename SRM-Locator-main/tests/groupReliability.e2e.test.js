@@ -73,7 +73,7 @@ describe('an SOS sent again because its answer never came', () => {
     expect(answers.map((a) => [a.allowed, a.clientId])).toEqual([[true, 'alert-1'], [true, 'alert-1']]);
     expect(answers[1].duplicate).toBe(true);
     await sleep(100);
-    expect(alpha.sos.filter((s) => s.senderName === 'Bravo')).toHaveLength(1);
+    expect(alpha.sos.filter((s) => s.senderName === 'uB')).toHaveLength(1); // the name Bravo joined with, not the one in the message
   });
 });
 
