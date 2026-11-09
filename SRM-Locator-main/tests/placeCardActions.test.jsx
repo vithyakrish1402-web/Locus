@@ -127,6 +127,8 @@ let alertSpy;
 let gpsFix = null;
 
 beforeEach(() => {
+  // Each scenario starts in the lobby, without the previous test's remembered group.
+  localStorage.removeItem('locus.group');
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
   fakeSocket.handlers.clear();
   fakeSocket.emit.mockClear();
@@ -243,7 +245,7 @@ describe('Rally on the card', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: MEETING_POINT_CONFIRM.confirm }));
 
     expect(emitted('publish-waypoint')).toEqual([
-      [{ roomCode: 'KTR7X9', waypoint: { lat: building.lat, lng: building.lng, name: building.name } }],
+      [{ roomCode: 'KTR7X9', waypoint: { lat: building.lat, lng: building.lng, name: building.name, description: '' } }],
     ]);
     expect(pageText()).toContain(NOTICES.rally.set(building.name));
     expect(rallyButton().textContent).toBe(PLACE.rallySet);

@@ -37,6 +37,11 @@ export function installPressFeedback(doc = document) {
     if (event.button !== undefined && event.button !== 0) return; // primary press only
     if (!pressableFor(event.target)) return;
 
+    // Keep the tactile acknowledgement without adding an animated overlay on modest hardware.
+    if (doc.documentElement.dataset.effects === 'reduced') {
+      if (event.pointerType === 'touch' || event.pointerType === 'pen') haptic('tick');
+      return;
+    }
     if (live.size >= MAX_LIVE_PINGS) remove(live.values().next().value);
     const ring = doc.createElement('span');
     ring.className = 'locus-ping';
