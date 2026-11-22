@@ -75,7 +75,11 @@ import { MembersEmpty, MembersHeading, MembersLoading } from './components/group
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
 import { LeaveRequestWaiting } from './components/group/LeaveRequestStatus';
 import { useLeaveRequests } from './hooks/useLeaveRequests';
-import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS, TIMED_PRIVACY, LEAVE_REQUEST } from './copy/group';
+import { useDiscoverable } from './hooks/useDiscoverable';
+import { useNearbyScan } from './hooks/useNearbyScan';
+import { DiscoverableIndicator, DiscoverableToggle, InvitePrompt, NearbyButton, NearbySheet } from './components/nearby/Nearby';
+import { NEARBY_ENABLED } from './utils/nearby';
+import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS, TIMED_PRIVACY, LEAVE_REQUEST, NEARBY } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -1128,8 +1132,12 @@ const App = () => {
     // Don't do anything if the input is empty
     if (!squadCode || !squadCode.trim()) return;
 
-    const targetRoom = squadCode.trim().toUpperCase();
+    joinWith(squadCode.trim().toUpperCase(), squadMode);
+  };
 
+  // A join by code: the lobby's Create or Join, a group started from Nearby (`extra.nearby`: the server
+  // marks it as one), and an accepted Nearby invite (a join the server lets straight in).
+  const joinWith = (targetRoom, mode, extra = {}) => {
     // 1. Send the knock to the server FIRST
     emitJoin({
       roomCode: targetRoom,
@@ -1138,13 +1146,14 @@ const App = () => {
       // missing, join if present" for both: a JOIN for a code whose squad wasn't live yet
       // (its creator hadn't tapped INITIALIZE) made the joiner its Commander, and a CREATE
       // under a live code queued the creator for a stranger's approval.
-      intent: squadMode === 'create' ? 'create' : 'join',
+      intent: mode === 'create' ? 'create' : 'join',
+      ...extra,
     });
 
     setLobbyNotice(null);
     setHasJoinedSquad(true);
 
-    if (squadMode === 'create') {
+    if (mode === 'create') {
       //  INSTANT CLEARANCE FOR SQUAD CREATORS (0ms delay) — you can't need your
       // own approval to enter a squad you're creating.
       setAccessStatus('granted');
@@ -2295,6 +2304,55 @@ const App = () => {
     onApproved: () => handleLeaveSquad(),
   });
   const leaveIsRequest = leave.needsRequest && squadRole !== 'OWNER';
+
+  // Nearby Join (Stage 6, utils/nearby.js). Off (NEARBY_ENABLED), or the server saying Nearby is off,
+  // none of it shows and nothing is sent: as in js-1.1.87 with Stages 4 and 5.
+  const [nearbyServerOff, setNearbyServerOff] = useState(false);
+  const nearbyOn = NEARBY_ENABLED && !nearbyServerOff;
+  const [showNearby, setShowNearby] = useState(false);
+  const [nearbyAfterCreate, setNearbyAfterCreate] = useState(false);
+  const discoverable = useDiscoverable({
+    socket,
+    enabled: nearbyOn,
+    inLobby: Boolean(user) && !hasJoinedSquad,
+    user,
+    getIdToken: () => auth.currentUser?.getIdToken(),
+    onServerOff: () => setNearbyServerOff(true),
+    // The server has admitted them: the app joins that group the usual way, and is let straight in.
+    onAccepted: (roomCode) => {
+      setSquadMode('join');
+      setSquadCode(roomCode);
+      joinWith(roomCode, 'join');
+    },
+  });
+  const nearby = useNearbyScan({ socket, roomCode: hasJoinedSquad ? squadCode.trim().toUpperCase() : null, onServerOff: () => setNearbyServerOff(true) });
+  const openNearby = () => {
+    setShowNearby(true);
+    nearby.scan();
+  };
+  // Nearby from the lobby: first make sure the server has it on (a scan from no group is answered
+  // 'disabled' or 'not-in-squad'), then start a group the usual way, marked as made through Nearby,
+  // and scan once in.
+  const startNearbyGroup = () => {
+    socket.emit('nearby-scan', { roomCode: null }, (reply) => {
+      if (reply?.reason === 'disabled') {
+        setNearbyServerOff(true);
+        notify.info(NEARBY.unavailable, { haptic: false });
+        return;
+      }
+      const code = squadMode === 'create' && squadCode.trim() ? squadCode.trim().toUpperCase() : generateRandomSquadCode();
+      setSquadMode('create');
+      setSquadCode(code);
+      setNearbyAfterCreate(true);
+      joinWith(code, 'create', { nearby: true });
+    });
+  };
+  useEffect(() => {
+    if (!nearbyAfterCreate || !hasJoinedSquad || accessStatus !== 'granted' || squadRole !== 'OWNER') return;
+    setNearbyAfterCreate(false);
+    openNearby();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearbyAfterCreate, hasJoinedSquad, accessStatus, squadRole]);
   // The Leave sheet's button: a request where one is needed, falling back to the old Leave when the
   // server says this Group does not need one (or that this person holds command).
   const confirmLeave = () => {
@@ -3279,6 +3337,8 @@ const App = () => {
       >
         {beforeMapOverlay}
         <main className="w-full max-w-md mx-auto flex-1">
+          {/* While people nearby can find this person: said, all the while, with a one-tap off. */}
+          {nearbyOn && discoverable.on && <div className="mb-4 flex"><DiscoverableIndicator onOff={() => discoverable.setOn(false)} /></div>}
           <p className="text-body text-text-secondary">{LOBBY.hello(firstNameOf(user.displayName))}</p>
           <h1 className="mt-1 text-display">{LOBBY.title}</h1>
 
@@ -3328,6 +3388,15 @@ const App = () => {
               </>
             )}
           </Card>
+          {/* Nearby Join (Stage 6): start a group with people close by, and let them find you. */}
+          {nearbyOn && !joining && (
+            <div className="mt-4 flex flex-col gap-2">
+              <NearbyButton label={NEARBY.startButton} onClick={startNearbyGroup} />
+              <p className="px-1 text-secondary text-text-secondary">{NEARBY.startHelp}</p>
+            </div>
+          )}
+          {nearbyOn && <DiscoverableToggle on={discoverable.on} starting={discoverable.starting} onChange={discoverable.setOn} />}
+          {nearbyOn && <InvitePrompt invite={discoverable.invite} onRespond={discoverable.respond} />}
         </main>
 
         <div className="w-full max-w-md mx-auto mt-6">
@@ -3471,6 +3540,10 @@ const App = () => {
                   onCooldown: (ms) => changeGroupSettings({ sosCooldownMs: ms }),
                 } : undefined}
               />
+            )}
+            {/* Nearby Join (Stage 6): the Group Lead and moderators look for people close by. */}
+            {activeTab === 'users' && canModerate && nearbyOn && !keyboardUp && (
+              <div className="pt-1"><NearbyButton onClick={openNearby} /></div>
             )}
             {/* Your location: Live, Paused or Hidden (components/group/SharingControl.jsx). */}
             {activeTab === 'users' && (
@@ -4077,6 +4150,20 @@ const App = () => {
         }}
         onCancel={() => setRallyToClear(null)}
       />
+
+      {/* Nearby Join (Stage 6): who is close by, names only (components/nearby/Nearby.jsx). */}
+      {nearbyOn && (
+        <NearbySheet
+          open={showNearby && hasJoinedSquad && canModerate}
+          onClose={() => { setShowNearby(false); nearby.reset(); }}
+          state={nearby.state}
+          rows={nearby.rows}
+          onScan={nearby.scan}
+          onToggle={nearby.toggle}
+          onInvite={nearby.invite}
+          onInviteAll={nearby.inviteAll}
+        />
+      )}
 
       {/* The Group Lead's join requests (components/group/JoinRequests.jsx): Waiting only. */}
       <JoinRequests

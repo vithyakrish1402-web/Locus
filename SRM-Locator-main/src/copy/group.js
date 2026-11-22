@@ -289,6 +289,51 @@ export const LEAVE_REQUESTS = {
   },
 };
 
+// Nearby Join (Stage 6, utils/nearby.js). Names only, never where anyone is; nobody joins without
+// their own tap; and it is said so, in plain words, wherever it matters.
+export const NEARBY = {
+  // In the lobby, for someone in no group.
+  toggle: 'Let people nearby find me',
+  toggleHelp: 'Only your name is shown, only to someone within about 15 m who presses Nearby. Nobody can add you to a group without your own tap.',
+  permissionHelp: 'Turning this on asks for your location. It is used only to tell whether you are close to the person pressing Nearby, and only while this is on.',
+  permissionDenied: "LOCUS can't see your location, so people nearby can't find you. Allow location for LOCUS in your phone's settings to use this.",
+  finding: 'Finding your location…',
+  visible: 'Visible to people nearby',
+  turnOff: 'Turn off',
+  stoppedHidden: 'People nearby can no longer find you: LOCUS stopped while the app was in the background.',
+  unavailable: "Nearby isn't available right now.",
+  // The Nearby button.
+  button: 'Nearby',
+  startButton: 'Start a group with people nearby',
+  startHelp: "You'll be the Group Lead. LOCUS looks for people within about 15 m who have let people nearby find them.",
+  title: 'People nearby',
+  scanning: 'Looking for people nearby…',
+  eachAccepts: 'Each person gets an invite and joins only if they accept it.',
+  addAll: (count) => `Add all ${count}`,
+  inviteSelected: (count) => `Invite ${count}`,
+  scanAgain: 'Scan again',
+  empty: 'Nobody nearby has let people find them right now. They can turn on “Let people nearby find me” in LOCUS, then you can scan again.',
+  tooRough: "Your own position is too rough right now to tell who is close. Try moving outdoors or near a window, then scan again.",
+  tooMany: "You've scanned a lot just now. Try again in a moment.",
+  unreachable: "Couldn't reach the server. Try again in a moment.",
+  rowStatus: { invited: 'Invited', joined: 'Joined', declined: 'Declined', expired: 'Invite expired' },
+  select: (name) => `Select ${name}`,
+  joinedNotice: (name) => `${name || 'Someone'} joined your group`,
+  declinedNotice: (name) => `${name || 'Someone'} declined your invite`,
+  expiredNotice: (name) => `${name || 'Someone'} didn't answer in time; the invite expired`,
+  // An invite.
+  inviteTitle: (from) => `Join ${from || 'a'}'s group?`,
+  inviteBody: (from) => `${from || 'Someone nearby'} invited you to their LOCUS group. If you join, the group sees your location on its map. Leaving it may need the Group Lead's approval.`,
+  inviteExpiresIn: (left) => `This invite expires in ${left}.`,
+  accept: 'Join group',
+  decline: 'Not now',
+  inviteExpired: 'That invite has expired. You can ask them to send another.',
+  inviteUsed: 'That invite has already been answered.',
+  inviteGone: 'That invite is no longer open.',
+  inviteBlocked: "You can't join that group.",
+  inviteInGroup: "You're already in a group, so the invite wasn't used.",
+};
+
 // The Group Lead's join requests: Waiting only (there is no Unblock, so no Blocked tab).
 export const JOIN_REQUESTS = {
   title: 'Join requests',

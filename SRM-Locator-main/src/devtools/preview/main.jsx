@@ -30,6 +30,8 @@ import SharingControl from '../../components/group/SharingControl';
 import { LeaveRequestWaiting, LeaveRequestList } from '../../components/group/LeaveRequestStatus';
 import { LeaveGroupButton } from '../../components/group/LeaveGroup';
 import LeadTools from '../../components/group/LeadTools';
+import { DiscoverableIndicator, DiscoverableToggle, InvitePrompt, NearbyButton, NearbySheet } from '../../components/nearby/Nearby';
+import { NEARBY } from '../../copy/group';
 import { SharingChip } from '../../components/map/TopBar';
 import { TIMED_PRIVACY } from '../../copy/group';
 import { clockLabel } from '../../utils/timedPrivacy';
@@ -98,6 +100,18 @@ const SCREENS = {
   'emergency-received': {
     label: 'Emergency alert received (2 queued)',
     render: () => <SosOverlay {...SOS} onAcknowledge={() => {}} />,
+  },
+  'nearby-lobby': {
+    label: 'Nearby: in the lobby (Stage 6)',
+    render: () => <NearbyLobbyDemo />,
+  },
+  'nearby-list': {
+    label: 'Nearby: people close by (Stage 6)',
+    render: () => <NearbyListDemo />,
+  },
+  'nearby-invite': {
+    label: 'Nearby: an invite (Stage 6)',
+    render: () => <NearbyInviteDemo />,
   },
   'leave-requests': {
     label: 'Leave requests (Stage 5)',
@@ -660,6 +674,39 @@ function SheetDemo() {
       </Sheet>
     </div>
   );
+}
+
+// Nearby Join (Stage 6): the lobby's start button and opt-in (off, then on with its indicator).
+function NearbyLobbyDemo() {
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--color-bg)' }}>
+      <div className="px-4 pt-6 pb-8 flex flex-col gap-3">
+        <NearbyButton label={NEARBY.startButton} onClick={() => {}} />
+        <p className="px-1 text-secondary text-text-secondary">{NEARBY.startHelp}</p>
+        <DiscoverableToggle on={false} onChange={() => {}} />
+        <div className="mt-4 flex"><DiscoverableIndicator onOff={() => {}} /></div>
+        <DiscoverableToggle on onChange={() => {}} />
+      </div>
+    </div>
+  );
+}
+
+// The presser's list: two to choose from (one chosen), and three invites already answered.
+function NearbyListDemo() {
+  const rows = [
+    { id: 'a', name: 'Aarav Shah', selected: true, status: 'idle' },
+    { id: 'b', name: 'Ishita Rao', selected: false, status: 'idle' },
+    { id: 'c', name: 'Rohan Das', selected: false, status: 'joined' },
+    { id: 'd', name: 'Meera Iyer', selected: false, status: 'declined' },
+    { id: 'e', name: 'Kabir Nair', selected: false, status: 'expired' },
+  ];
+  return <div style={{ height: '100%', background: 'var(--color-bg)' }}><NearbySheet open onClose={() => {}} state="done" rows={rows} onScan={() => {}} onToggle={() => {}} onInvite={() => {}} onInviteAll={() => {}} /></div>;
+}
+
+// An invite, with two minutes to answer.
+function NearbyInviteDemo() {
+  const [invite] = useState(() => ({ inviteId: 'demo', fromName: 'Asha', expiresAt: Date.now() + 120_000, offset: 0, shownAt: Date.now() }));
+  return <div style={{ height: '100%', background: 'var(--color-bg)' }}><InvitePrompt invite={invite} onRespond={() => {}} /></div>;
 }
 
 // Request to leave (Stage 5): a member's "Request to leave" and their wait, then the Group Lead's
