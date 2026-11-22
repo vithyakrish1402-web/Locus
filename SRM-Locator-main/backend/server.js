@@ -42,11 +42,14 @@ import {
   leaveNeedsApproval, leaveRequestOf, leaveRequestsOf, fileLeaveRequest, takeLeaveRequest, dueLeaveRequests,
   mayAnswerLeave, seesLeaveRequest,
 } from './leaveRequests.js';
+import {
+  NEARBY_RADIUS_M, NEARBY_SCANS_PER_MIN, nearbyEnabled, nearbyTimings, cleanFix, isNearby, createInviteBook,
+} from './nearby.js';
 import { createJoinNotifier } from './joinNotify.js';
 import { createFriendsStore, friendsLoaderFromEnv, friendsStartupLine, sosAudience } from './friends.js';
 import { createRateLimiter } from './rateLimit.js';
 import helmet from 'helmet';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { cleanName, cleanPhoto, cleanRoute, cleanZone, cleanGeofenceAlert } from './sanitize.js';
 import { clientAddressOf, clientAddressConfig } from './clientAddress.js';
 
@@ -1043,6 +1046,39 @@ if (LEAVE_APPROVAL) {
   leaveTimer.unref?.();
 }
 
+// --- NEARBY JOIN (nearby.js) ---
+// Off unless LOCUS_NEARBY_ENABLED=true. Off, every nearby-* event answers 'disabled' and nothing else
+// changes: no connection is kept open past the pre-join close, and no lobby position is taken.
+const NEARBY = nearbyEnabled();
+const NEARBY_TIMINGS = nearbyTimings();
+const nearbyScans = createRateLimiter({ limit: numberFromEnv('LOCUS_NEARBY_SCANS_PER_MIN', NEARBY_SCANS_PER_MIN), windowMs: 60 * 1000 });
+const nearbyInvites = createInviteBook({ ttlMs: NEARBY_TIMINGS.inviteTtlMs });
+console.log(`[NEARBY] Nearby Join: ${NEARBY ? `ON (${NEARBY_RADIUS_M} m)` : 'off (LOCUS_NEARBY_ENABLED=true turns it on)'}`);
+if (NEARBY_TIMINGS.inviteTtlMs !== 2 * 60 * 1000 || NEARBY_TIMINGS.maxFixAgeMs !== 20_000) {
+  console.warn('[⚠️  GUARD] LOCUS_NEARBY_INVITE_TTL_MS / LOCUS_NEARBY_MAX_FIX_AGE_MS shorten Nearby timings. Tests only.');
+}
+
+// Discoverable people, by connection: { uid, name, fix }. The fix ({ lat, lng, accuracy, at }) is
+// their lobby position: in memory only, never logged, never sent to anyone, and gone with the entry.
+const discoverable = new Map();
+
+// Whether `uid` (on connection `socketId`) is in a Group: admitted to one (even with no connection
+// on its roster right now), or this connection on a roster.
+const inAnyGroup = (uid, socketId = null) => roomsOfUid(uid).length > 0
+  || Boolean(socketId) && Object.values(activeSquads).some((squad) => squad.members.includes(socketId));
+
+// Invites that ran out unanswered: the invited person's phones are told, so the prompt goes.
+if (NEARBY) {
+  const nearbyTimer = setInterval(() => {
+    for (const invite of nearbyInvites.sweep(Date.now())) {
+      for (const [id, entry] of discoverable) {
+        if (entry.uid === invite.uid) io.to(id).emit('nearby-invite-expired', { inviteId: invite.id });
+      }
+    }
+  }, 1000);
+  nearbyTimer.unref?.();
+}
+
 // --- LEAVING AND COMMAND (moved out of the connection handler, unchanged, so the leave-request
 // timer can use them; none of them depends on one connection) ---
 // Send a squad's open join requests to whoever is now its Commander: back on a new
@@ -1169,16 +1205,21 @@ io.on('connection', (socket) => {
     clearTimeout(preJoinTimer);
     preJoinTimer = null;
   };
-  if (PRE_JOIN_TIMEOUT_MS > 0) {
+  // Started when the connection opens, and again when someone in no Group stops being discoverable
+  // (Nearby Join), who then has the same time to join a Group as anyone else.
+  const startPreJoin = () => {
+    if (PRE_JOIN_TIMEOUT_MS <= 0 || preJoinTimer) return;
     preJoinTimer = setTimeout(() => {
       preJoinTimer = null;
       console.warn(`[LIMIT] ${socket.id} did not join a Group within ${PRE_JOIN_TIMEOUT_MS} ms; closing its connection`);
       socket.conn.close();
     }, PRE_JOIN_TIMEOUT_MS);
     preJoinTimer.unref?.();
-  }
+  };
+  startPreJoin();
   socket.on('disconnect', () => {
     endPreJoin();
+    discoverable.delete(socket.id);
     const open = (socketsByAddress.get(address) ?? 1) - 1;
     if (open > 0) socketsByAddress.set(address, open);
     else socketsByAddress.delete(address);
@@ -1472,6 +1513,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // code no Group has, and the SOS handlers then counted them as that person.
     socket.data.uid = requesterUid;
     endPreJoin();
+    discoverable.delete(socket.id); // in a Group (or asking to be): no longer discoverable
     // Their trusted friends, ready for an SOS (friends.js): never fetched while one is raised.
     if (requesterUid && friendLookups.check(requesterUid).ok) friendsStore.prefetch(requesterUid);
     // Remember who this socket is independently of their telemetry. broadcastSquadUpdate
@@ -1530,7 +1572,13 @@ socket.on('check-ping', (clientTimestamp) => {
       // The same person setting this Group up again gets their switches back.
       const saved = settingsStore.restore(roomCode, requesterUid);
       if (saved) activeSquads[roomCode].settings = saved;
-      // Tests only: a Group as if made through Nearby Join (leaveRequests.js; Stage 3 makes them).
+      // Made through Nearby Join (the person pressing Nearby with no Group): its members need
+      // approval to leave (leaveRequests.js). Only while Nearby Join is on.
+      if (NEARBY && data?.nearby === true && !activeSquads[roomCode].settings?.leaveApproval) {
+        markLeaveApproval(activeSquads[roomCode]);
+        persistGroupSettings(roomCode);
+      }
+      // Tests only: a Group as if made through Nearby Join.
       if (TEST_LEAVE_PREFIX && roomCode.startsWith(TEST_LEAVE_PREFIX) && !activeSquads[roomCode].settings?.leaveApproval) {
         markLeaveApproval(activeSquads[roomCode]);
         persistGroupSettings(roomCode);
@@ -2208,6 +2256,151 @@ socket.on('check-ping', (clientTimestamp) => {
     }
     sosWatch.notify(roomCode); // and the phones listening from the background
     reportAlert(socket, squad, roomCode, 'sos', verdict, now, { ...(coalesced ? { coalesced: true } : {}), ...(clientId ? { clientId } : {}) });
+  });
+
+  // --- NEARBY JOIN (nearby.js) ---
+  // Each answers { ok: false, reason: 'disabled' } while LOCUS_NEARBY_ENABLED is off.
+
+  // 'nearby-discoverable' { on, idToken?, user?, lat?, lng?, accuracy? } -> { ok: true, discoverable }
+  // or { ok: false, reason: 'disabled' | 'identity' | 'in-group' }. Only someone in no Group. On: their
+  // connection stays open past the pre-join close and their lobby position is taken. Off: the entry
+  // and its position are gone at once, and the pre-join close starts again.
+  socket.on('nearby-discoverable', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!NEARBY) return reply({ ok: false, reason: 'disabled' });
+    const { on: wanted, idToken, user } = payload ?? {};
+    if (wanted !== true) {
+      if (discoverable.delete(socket.id) && !socket.data.uid) startPreJoin();
+      return reply({ ok: true, discoverable: false });
+    }
+    const proceed = (who) => {
+      if (!socket.connected) return;
+      if (who.refused || !who.uid) return reply({ ok: false, reason: 'identity' });
+      if (inAnyGroup(who.uid, socket.id)) return reply({ ok: false, reason: 'in-group' });
+      const fix = cleanFix(payload, Date.now()) ?? discoverable.get(socket.id)?.fix ?? null;
+      discoverable.set(socket.id, { uid: who.uid, name: cleanName(who.name ?? user?.name), fix });
+      endPreJoin();
+      reply({ ok: true, discoverable: true });
+    };
+    if (idToken == null) return proceed(joinerUid(user, null));
+    idTokenVerifier.verifyIdToken(idToken)
+      .then((proof) => proceed(joinerUid(user, proof)))
+      .catch((err) => {
+        console.error(`[NEARBY] Discoverable check for ${socket.id} failed:`, err);
+        reply({ ok: false, reason: 'identity' });
+      });
+  });
+
+  // 'nearby-position' { lat, lng, accuracy }: a discoverable person's lobby position. Ignored from
+  // anyone else. Kept on their entry only (see `discoverable`).
+  socket.on('nearby-position', (payload) => {
+    if (!NEARBY) return;
+    const entry = discoverable.get(socket.id);
+    const fix = entry ? cleanFix(payload, Date.now()) : null;
+    if (fix) entry.fix = fix;
+  });
+
+  // 'nearby-scan' { roomCode, lat, lng, accuracy } -> { ok: true, people: [{ id, name }], hereUsable }
+  // or { ok: false, reason: 'disabled' | 'not-in-squad' | 'not-allowed' | 'too-many' (retryAfterSec) }.
+  // The admin or a moderator (the admit permission), from where they are now. Names only; each id is
+  // good for this scan only. hereUsable is false when the presser's own position is too rough to
+  // compare (the list is then empty).
+  socket.on('nearby-scan', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!NEARBY) return reply({ ok: false, reason: 'disabled' });
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!can(roleOfSocket(squad, socket.id), 'admitOne')) return reply({ ok: false, reason: 'not-allowed' });
+    const presser = uidOfSocket(squad, socket.id);
+    const limit = nearbyScans.check(presser ?? socket.id);
+    if (!limit.ok) return reply({ ok: false, reason: 'too-many', retryAfterSec: limit.retryAfterSec });
+    const now = Date.now();
+    const here = cleanFix(payload, now);
+    const hereUsable = Boolean(here) && Number.isFinite(here.accuracy) && here.accuracy <= NEARBY_RADIUS_M;
+    const found = new Map(); // uid -> name, one each however many phones
+    for (const [id, entry] of discoverable) {
+      if (!io.sockets.sockets.has(id)) { discoverable.delete(id); continue; }
+      if (!hereUsable || found.has(entry.uid) || entry.uid === presser) continue;
+      if (squad.blockedUids?.includes(entry.uid)) continue;
+      if (inAnyGroup(entry.uid, id)) continue;
+      if (TIMED_PRIVACY && holdStore.active(entry.uid, now)) continue; // Paused or Hidden
+      if (!isNearby(here, entry.fix, now, { maxAgeMs: NEARBY_TIMINGS.maxFixAgeMs })) continue;
+      found.set(entry.uid, entry.name);
+    }
+    const ids = new Map(); // scan id -> uid
+    const people = [...found].map(([uid, name]) => {
+      const id = randomUUID();
+      ids.set(id, uid);
+      return { id, name };
+    });
+    socket.data.nearbyScan = { roomCode, at: now, ids };
+    reply({ ok: true, people, hereUsable });
+  });
+
+  // 'nearby-invite' { roomCode, ids: [...] } or { roomCode, all: true } ("Add all": everyone in this
+  // connection's last scan) -> { ok: true, invited } or { ok: false, reason: 'disabled' | 'not-in-squad'
+  // | 'not-allowed' | 'scan-first' }. Each person gets 'nearby-invite' and must accept it themselves.
+  socket.on('nearby-invite', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!NEARBY) return reply({ ok: false, reason: 'disabled' });
+    const { roomCode, ids, all } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!can(roleOfSocket(squad, socket.id), 'admitOne')) return reply({ ok: false, reason: 'not-allowed' });
+    const now = Date.now();
+    const scan = socket.data.nearbyScan;
+    if (!scan || scan.roomCode !== roomCode || now - scan.at > NEARBY_TIMINGS.inviteTtlMs) return reply({ ok: false, reason: 'scan-first' });
+    const chosen = all === true ? [...scan.ids.keys()] : (Array.isArray(ids) ? ids.filter((id) => typeof id === 'string').slice(0, 100) : []);
+    const byUid = uidOfSocket(squad, socket.id);
+    const byName = nameOf(squad, socket.id);
+    let invited = 0;
+    for (const scanId of new Set(chosen)) {
+      const uid = scan.ids.get(scanId);
+      if (!uid || squad.blockedUids?.includes(uid) || inAnyGroup(uid)) continue;
+      const { invite, created } = nearbyInvites.offer({ roomCode, uid, byUid, byName }, now, randomUUID);
+      invited += 1;
+      if (!created) continue; // one open invite per person per Group
+      for (const [id, entry] of discoverable) {
+        if (entry.uid === uid) io.to(id).emit('nearby-invite', { inviteId: invite.id, fromName: byName, expiresAt: invite.expiresAt, serverNow: now });
+      }
+    }
+    reply({ ok: true, invited });
+  });
+
+  // 'nearby-respond' { inviteId, accept } -> { ok: true, roomCode? } or { ok: false, reason: 'disabled'
+  // | 'identity' | 'bad-answer' | 'no-invite' | 'used' | 'expired' | 'no-group' | 'blocked' |
+  // 'in-group' }. Accepting admits them at once, through the normal join flow without the approval
+  // queue (they are let in as an admitted member is). Declining only closes the invite. Whoever
+  // invited is told either way ('nearby-invite-answered').
+  socket.on('nearby-respond', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!NEARBY) return reply({ ok: false, reason: 'disabled' });
+    const { inviteId, accept } = payload ?? {};
+    const entry = discoverable.get(socket.id);
+    const uid = entry?.uid ?? socket.data.uid ?? null;
+    if (!uid) return reply({ ok: false, reason: 'identity' });
+    if (typeof inviteId !== 'string' || typeof accept !== 'boolean') return reply({ ok: false, reason: 'bad-answer' });
+    const used = nearbyInvites.use(inviteId, uid, Date.now());
+    if (!used.ok) return reply({ ok: false, reason: used.reason });
+    const { invite } = used;
+    const answered = (accepted) => {
+      for (const target of socketsOfUid(invite.byUid)) target.emit('nearby-invite-answered', { roomCode: invite.roomCode, name: entry?.name ?? null, accepted });
+    };
+    if (!accept) {
+      answered(false);
+      return reply({ ok: true });
+    }
+    const squad = activeSquads[invite.roomCode];
+    if (!squad) return reply({ ok: false, reason: 'no-group' });
+    if (squad.blockedUids?.includes(uid)) return reply({ ok: false, reason: 'blocked' });
+    if (inAnyGroup(uid, socket.id)) return reply({ ok: false, reason: 'in-group' });
+    // Their own tap is the approval: on the admitted list, then the join every app makes, which lets
+    // an admitted member straight in.
+    rememberMember(squad, uid);
+    requestJoin({ roomCode: invite.roomCode, user: { uid, name: entry?.name }, intent: 'join' }, { uid, name: entry?.name });
+    answered(true);
+    reply({ ok: true, roomCode: invite.roomCode });
   });
 
   // --- LEAVE REQUESTS (leaveRequests.js) ---

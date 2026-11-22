@@ -99,6 +99,25 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
   - `leave-request-pending` (`{ roomCode, requestedAt, deadline }`): to the requester's phones when they ask, and on every return, so a restart shows the same deadline.
   - `leave-request-withdrawn` (`{ roomCode, uid, reason: 'approved' | 'auto-approved' | 'rejected' | 'cancelled' | 'removed' | 'took-command' | 'gone' }`): to the whole Group when a request closes. `removed` means kicked, blocked or voted out. `took-command` means the requester now holds command and leaves directly; they also get `leave-request-cancelled` (`{ roomCode, reason }`).
   - `users-update` entries of anyone waiting carry `leaveRequestedUntil` (the deadline). `group-settings` carries `leaveApproval: true`.
+- **Nearby Join** (`backend/nearby.js`). Server switch `LOCUS_NEARBY_ENABLED`, **off** unless `"true"`. While it is off, every `nearby-*` event answers `{ ok: false, reason: 'disabled' }`, the `nearby` flag on `request-join` is ignored, and no lobby connection is kept open or position taken. Constants: `NEARBY_RADIUS_M` (15), `NEARBY_MAX_FIX_AGE_MS` (20 s), `NEARBY_INVITE_TTL_MS` (2 min), `NEARBY_SCANS_PER_MIN` (6).
+  - `nearby-discoverable` (`{ on, idToken?, user?, lat?, lng?, accuracy? }`, acknowledgement): only for someone in no Group, with their sign-in checked as for `request-join`. Answers `{ ok: true, discoverable }` or `{ ok: false, reason: 'disabled' | 'identity' | 'in-group' }`.
+    - On: their lobby connection stays open past the pre-join close, and their lobby position is taken.
+    - Off, disconnecting, or joining a Group (or asking to) ends it at once. The pre-join close then starts again for a connection that has never joined.
+    - The lobby position is kept in memory on that entry only. It is never logged, never sent to anyone, and is gone with the entry.
+  - `nearby-position` (`{ lat, lng, accuracy }`): a discoverable person's lobby position. Ignored from anyone else.
+  - `request-join` with `intent: 'create', nearby: true`: someone in no Group pressing Nearby creates a Group through the usual create, marked as needing approval to leave (`markLeaveApproval`).
+  - `nearby-scan` (`{ roomCode, lat, lng, accuracy }`, acknowledgement): the presser's current position. Only the admin or a moderator (the admit permission) may scan, and it is rate-limited per person.
+    - Answers `{ ok: true, people: [{ id, name }], hereUsable }`, or `{ ok: false, reason: 'disabled' | 'not-in-squad' | 'not-allowed' | 'too-many', retryAfterSec? }`.
+    - Names only. Each `id` is random and good for that scan only; it is never an account id. `hereUsable` is false, and the list empty, when the presser's own position is too rough or has no accuracy.
+    - Someone is listed only if they are discoverable, in no Group, not blocked by the presser's Group, and not Paused or Hidden (a timed hold from Stage 1). Both positions must be fresher than 20 s, each accuracy known and ≤ 15 m, and the distance ≤ 15 m. Anything else is left out quietly.
+  - `nearby-invite` (`{ roomCode, ids: [...] }` or `{ roomCode, all: true }` for "Add all", which means everyone in this connection's last scan, acknowledgement): `{ ok: true, invited }` or `{ ok: false, reason: 'disabled' | 'not-in-squad' | 'not-allowed' | 'scan-first' }`.
+    - The invite is recorded against each person's account: one open invite per person per Group, expiring after `NEARBY_INVITE_TTL_MS`.
+    - Their discoverable phones get `nearby-invite` (`{ inviteId, fromName, expiresAt, serverNow }`), and `nearby-invite-expired` (`{ inviteId }`) if it runs out unanswered.
+  - `nearby-respond` (`{ inviteId, accept }`, acknowledgement): `{ ok: true, roomCode? }` or `{ ok: false, reason: 'disabled' | 'identity' | 'bad-answer' | 'no-invite' | 'used' | 'expired' | 'no-group' | 'blocked' | 'in-group' }`.
+    - Accepting admits them at once. They are put on the admitted list and go through the usual join, so they get `access-granted` as `MEMBER`.
+    - Declining only closes the invite.
+    - An invite can be answered only by the person it is for, and only once. A used or expired invite is kept as a record for at least a minute, so a late answer is told `used` or `expired`.
+    - Whoever invited gets `nearby-invite-answered` (`{ roomCode, name, accepted }`). Nobody joins without their own Accept.
 
 ### 4.2 Telemetry & Position Engine
 - `update-location` (`{ roomCode, lat, lng, speed, battery, status, name, photo, heading }`): Operative position ping broadcasted every 1s-15s (based on telemetry mode).
