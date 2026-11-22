@@ -37,6 +37,11 @@ import {
 } from './groupRoles.js';
 import { ACTIVITY, logActivity, activityOf, noteSharingMode, notePausedMode, forgetSharingMode } from './activityLog.js';
 import { createHoldStore, holdMinuteMs, timedPrivacyEnabled, HOLD_MODES, END_REASON } from './sharingHolds.js';
+import {
+  LEAVE_AUTO_APPROVE_MINUTES, leaveApprovalEnabled, leaveMinuteMs, testLeaveApprovalPrefix, markLeaveApproval,
+  leaveNeedsApproval, leaveRequestOf, leaveRequestsOf, fileLeaveRequest, takeLeaveRequest, dueLeaveRequests,
+  mayAnswerLeave, seesLeaveRequest,
+} from './leaveRequests.js';
 import { createJoinNotifier } from './joinNotify.js';
 import { createFriendsStore, friendsLoaderFromEnv, friendsStartupLine, sosAudience } from './friends.js';
 import { createRateLimiter } from './rateLimit.js';
@@ -620,11 +625,14 @@ function reportAlert(socket, squad, roomCode, type, verdict, now, extra = {}) {
 
 // A Group's switches and mutes, as each member should see them.
 function sendGroupSettings(target, squad, roomCode) {
-  target.emit('group-settings', settingsFor(squad, roomCode, {
+  const view = settingsFor(squad, roomCode, {
     key: keyOf(squad, target.id),
     isLead: squad.ownerId === target.id,
     keyOf: (id) => keyOf(squad, id),
-  }));
+  });
+  // Only a Group that needs approval to leave says so (leaveRequests.js); every other is sent as before.
+  if (leaveGated(squad)) view.leaveApproval = true;
+  target.emit('group-settings', view);
 }
 function broadcastGroupSettings(roomCode) {
   const squad = activeSquads[roomCode];
@@ -790,6 +798,8 @@ function broadcastSquadUpdate(roomCode) {
       };
     }
   }
+  // Whoever is waiting to leave, in a Group that needs approval to leave (leaveRequests.js).
+  if (squad && leaveGated(squad)) for (const entry of Object.values(roomUsers)) Object.assign(entry, leaveMark(squad, entry.uid));
   io.to(roomCode).emit('users-update', roomUsers);
 }
 
@@ -884,6 +894,266 @@ io.use((socket, next) => {
   next();
 });
 
+// --- LEAVE REQUESTS (leaveRequests.js) ---
+// Only in a Group that needs approval to leave: LOCUS_LEAVE_APPROVAL_ENABLED=true on the server AND
+// the Group's own switch (set for Groups made through Nearby Join). Anywhere else nothing below
+// runs, and a Leave is what it always was.
+const LEAVE_APPROVAL = leaveApprovalEnabled();
+const LEAVE_AUTO_APPROVE_MS = LEAVE_AUTO_APPROVE_MINUTES * leaveMinuteMs();
+const TEST_LEAVE_PREFIX = testLeaveApprovalPrefix();
+console.log(`[LEAVE] Leave approval: ${LEAVE_APPROVAL ? 'ON for Groups made through Nearby Join' : 'off (LOCUS_LEAVE_APPROVAL_ENABLED=true turns it on)'}`);
+if (leaveMinuteMs() !== 60_000) console.warn(`[⚠️  GUARD] LOCUS_LEAVE_MINUTE_MS makes a leave "minute" ${leaveMinuteMs()} ms. Tests only.`);
+if (TEST_LEAVE_PREFIX) console.warn(`[⚠️  GUARD] LOCUS_TEST_LEAVE_APPROVAL_PREFIX: Groups whose code starts "${TEST_LEAVE_PREFIX}" need approval to leave. Tests only.`);
+
+const leaveGated = (squad) => leaveNeedsApproval(squad, LEAVE_APPROVAL);
+const isModeratorUid = (squad, uid) => Boolean(uid) && Boolean(squad?.moderatorUids?.includes(uid));
+
+// What an admin or moderator is sent about one request.
+const leaveRequestPayload = (squad, roomCode, request) => ({
+  roomCode,
+  uid: request.uid,
+  name: request.name,
+  requestedAt: request.requestedAt,
+  deadline: request.deadline,
+  fromModerator: isModeratorUid(squad, request.uid),
+  // Approved or left to run out, never refused (leaveRequests.js).
+  fromCommander: request.uid === commanderOf(squad),
+});
+
+// The connected sockets that may answer `request`: the admin and moderators, a moderator's own
+// request only the admin, and never the requester.
+const leaveAnswerers = (squad, request) => squad.members.filter((id) => io.sockets.sockets.has(id)
+  && seesLeaveRequest(roleOfSocket(squad, id), uidOfSocket(squad, id), request, isModeratorUid(squad, request.uid)));
+
+// Every open request `socketId` may answer, sent to it (on taking command, on becoming a
+// moderator, on coming back as one), as the join queue is.
+function sendLeaveQueue(squad, roomCode, socketId) {
+  if (!leaveGated(squad)) return;
+  for (const request of leaveRequestsOf(squad)) {
+    if (leaveAnswerers(squad, request).includes(socketId)) io.to(socketId).emit('leave-request', leaveRequestPayload(squad, roomCode, request));
+  }
+}
+
+// A request is decided or gone: off the list, and off every screen that may show it. Told to the
+// whole Group, not only to whoever may answer now: a stand-in demoted by the Commander's return (who
+// may be the reason it is gone) is a member again by the time it closes, and the member list already
+// shows everyone who is waiting.
+function closeLeaveRequest(squad, roomCode, uid, reason) {
+  const request = takeLeaveRequest(squad, uid);
+  if (!request) return null;
+  io.to(roomCode).emit('leave-request-withdrawn', { roomCode, uid, reason });
+  return request;
+}
+
+// Every phone signed in as `uid` hears it.
+const tellPerson = (uid, event, payload) => socketsOfUid(uid).forEach((target) => target.emit(event, payload));
+
+// `uid` asks to leave, or asks again (which never moves the deadline). Sent to whoever may answer;
+// with nobody holding command, a connected member who is not asking to leave stands in, as for a
+// join request; with nobody at all, it waits for whoever takes command, or its deadline.
+function fileLeave(squad, roomCode, uid, name, now = Date.now()) {
+  const { request, created } = fileLeaveRequest(squad, { uid, name }, now, LEAVE_AUTO_APPROVE_MS);
+  if (created) {
+    const payload = leaveRequestPayload(squad, roomCode, request);
+    for (const id of leaveAnswerers(squad, request)) io.to(id).emit('leave-request', payload);
+    if (!io.sockets.sockets.has(squad.ownerId)) promoteStandIn(squad, roomCode);
+    broadcastSquadUpdate(roomCode);
+  }
+  tellPerson(uid, 'leave-request-pending', { roomCode, requestedAt: request.requestedAt, deadline: request.deadline });
+  return request;
+}
+
+// A member with a request waiting who signs out, or presses an older app's Leave: their sharing
+// stops (off the roster's connections and the map, their background sharing ended), and they stay a
+// member, by account, until the request is approved.
+function stopSharingWhileWaiting(squad, roomCode, uid) {
+  for (const id of Object.keys(squad.memberUids ?? {})) {
+    if (squad.memberUids[id] !== uid) continue;
+    squad.members = squad.members.filter((member) => member !== id);
+    delete squad.memberUids[id];
+    io.sockets.sockets.get(id)?.leave(roomCode);
+    delete users[id];
+    delete locationCache[id];
+  }
+  removePresence(squad, uid);
+  endSession(squad, uid);
+  broadcastSquadUpdate(roomCode);
+}
+
+// Approved, by someone or by the clock: they leave as a Leave always has (leaveByUid), which also
+// ends their sharing, and their phones are told.
+function approveLeave(roomCode, uid, { byUid = null, byName = null, auto = false } = {}) {
+  const squad = activeSquads[roomCode];
+  if (!squad || !closeLeaveRequest(squad, roomCode, uid, auto ? 'auto-approved' : 'approved')) return false;
+  const phones = socketsOfUid(uid);
+  const left = leaveByUid(roomCode, uid, auto ? { byName: 'Approved automatically' } : { byUid, byName });
+  for (const target of phones) target.emit('leave-approved', { roomCode, auto });
+  if (left) {
+    broadcastGroupRoles(roomCode);
+    broadcastSquadUpdate(roomCode);
+  }
+  return true;
+}
+
+// Refused: they stay, and are told.
+function rejectLeave(roomCode, uid, { byName = null } = {}) {
+  const squad = activeSquads[roomCode];
+  if (!squad || !closeLeaveRequest(squad, roomCode, uid, 'rejected')) return false;
+  tellPerson(uid, 'leave-rejected', { roomCode, byName });
+  broadcastSquadUpdate(roomCode);
+  return true;
+}
+
+// Someone now holds command (the Commander back, a caretaker, a stand-in): a request of their own is
+// over, since the admin leaves directly, and they are handed the requests to answer.
+function commandTaken(squad, roomCode, socketId) {
+  if (!leaveGated(squad)) return;
+  const uid = uidOfSocket(squad, socketId);
+  if (closeLeaveRequest(squad, roomCode, uid, 'took-command')) {
+    tellPerson(uid, 'leave-request-cancelled', { roomCode, reason: 'took-command' });
+    broadcastSquadUpdate(roomCode);
+  }
+  sendLeaveQueue(squad, roomCode, socketId);
+}
+
+// Their own open request, told to a phone just let back in, so a restart shows the same deadline.
+function sendOwnLeaveRequest(target, roomCode) {
+  const squad = activeSquads[roomCode];
+  const request = leaveGated(squad) ? leaveRequestOf(squad, target?.data?.uid) : null;
+  if (request) target.emit('leave-request-pending', { roomCode, requestedAt: request.requestedAt, deadline: request.deadline });
+}
+
+// The member list marks whoever is waiting to leave (Stage 5 shows it).
+const leaveMark = (squad, uid) => {
+  const request = leaveGated(squad) ? leaveRequestOf(squad, uid) : null;
+  return request ? { leaveRequestedUntil: request.deadline } : {};
+};
+
+// Requests nobody answered are approved when their deadline comes.
+const LEAVE_SWEEP_MS = Number(process.env.LOCUS_LEAVE_SWEEP_MS) || 1000;
+if (LEAVE_APPROVAL) {
+  const leaveTimer = setInterval(() => {
+    const now = Date.now();
+    for (const roomCode of Object.keys(activeSquads)) {
+      const squad = activeSquads[roomCode];
+      if (!leaveGated(squad)) continue;
+      for (const uid of dueLeaveRequests(squad, now)) approveLeave(roomCode, uid, { auto: true });
+    }
+  }, LEAVE_SWEEP_MS);
+  leaveTimer.unref?.();
+}
+
+// --- LEAVING AND COMMAND (moved out of the connection handler, unchanged, so the leave-request
+// timer can use them; none of them depends on one connection) ---
+// Send a squad's open join requests to whoever is now its Commander: back on a new
+// socket (an app restart loses its own queue), a caretaker, or a member promoted when
+// the Commander left. Requests used to be addressed only to the Commander at the time,
+// so any change of hands left their joiners waiting on nobody.
+function sendJoinQueue(squad, roomCode, ownerId) {
+  for (const request of pendingRequestsOf(squad, roomCode)) {
+    io.to(ownerId).emit('access-request', request);
+  }
+}
+
+// A Leave sent after the fact (the phone was offline when the person left), by who they are
+// rather than by a connection. Ends the way a Leave on their own connection does: off the
+// roster, no longer remembered, and a departing Commander's Group handed for good to whoever
+// holds command. Returns whether they were in the Group.
+function leaveByUid(roomCode, uid, by = {}) {
+  const squad = activeSquads[roomCode];
+  if (!squad || !isKnownMember(squad, uid)) return false;
+  squad.memberUids ??= {};
+  const ids = Object.keys(squad.memberUids).filter((id) => squad.memberUids[id] === uid);
+  // Succession runs for one connection of theirs: one still on the roster, else the one holding
+  // command, else any, else a stand-in key for someone with none left (sharing from the background).
+  const departingId = ids.find((id) => squad.members.includes(id))
+    ?? (squad.ownerUid === uid && squad.ownerId ? squad.ownerId : undefined)
+    ?? ids[0] ?? presenceKey(uid);
+  squad.memberUids[departingId] = uid;
+  if (!squad.members.includes(departingId)) squad.members.push(departingId);
+  recordActivity(roomCode, { kind: ACTIVITY.LEFT, uid, name: nameOf(squad, departingId), ...by });
+  dropModerator(squad, uid);
+  forgetSharingMode(squad, uid);
+  for (const id of ids) {
+    if (id !== departingId) {
+      squad.members = squad.members.filter((member) => member !== id);
+      delete squad.memberUids[id];
+    }
+    io.sockets.sockets.get(id)?.leave(roomCode);
+    delete users[id];
+    delete locationCache[id];
+  }
+  handleSquadSuccession(departingId);
+  return true;
+}
+
+function handleSquadSuccession(disconnectedId) {
+  for (const roomCode in activeSquads) {
+    const squad = activeSquads[roomCode];
+
+    // Only reached on a deliberate exit (leave-squad, mutiny exile) — never on a raw
+    // disconnect. Forget them, so coming back means asking the Commander again.
+    const departingUid = squad.memberUids?.[disconnectedId];
+    if (departingUid) {
+      forgetMember(squad, departingUid);
+      removePresence(squad, departingUid);
+      endSession(squad, departingUid);
+      delete squad.memberUids[disconnectedId];
+    }
+
+    squad.members = squad.members.filter(id => id !== disconnectedId);
+
+    if (squad.members.length === 0) {
+      if (!hasPresence(squad, Date.now())) deleteSquad(roomCode);
+      // Members still sharing from the background keep the squad. Nobody connected holds
+      // command; whoever of the admitted comes back first takes it (request-join, Case 4).
+      else if (squad.ownerId === disconnectedId) {
+        squad.ownerId = null;
+        squad.ownerUid = null;
+      }
+    } else if (squad.ownerId === disconnectedId) {
+      // A connected member, if there is one. members[0] could be a dead socket still on
+      // the roster (typically the Commander's, while they're away), and promoting it
+      // left nobody holding command and the promotion addressed to no one.
+      squad.ownerId = squad.members.find(id => io.sockets.sockets.has(id)) ?? squad.members[0];
+      // Ownership goes by uid too. The departing Commander's uid used to stay on as
+      // ownerUid, so they could walk back in later and be made owner again (request-join
+      // Case 3), silently taking the squad from the member promoted here, whose client
+      // still said OWNER while every Commander action they took was refused.
+      squad.ownerUid = squad.memberUids?.[squad.ownerId] || io.sockets.sockets.get(squad.ownerId)?.data?.uid || null;
+      io.to(squad.ownerId).emit('promoted-to-owner', { roomCode });
+      sendJoinQueue(squad, roomCode, squad.ownerId);
+      commandTaken(squad, roomCode, squad.ownerId);
+    }
+
+    // The Commander leaving on purpose (or voted out) gives up the squad for good: it
+    // becomes the squad of whoever holds command now, who is then the one a return
+    // hands it back to. (A stand-in leaving changes nothing here: the squad is still
+    // the Commander's to reclaim.)
+    if (departingUid && departingUid === squad.commanderUid) {
+      squad.commanderUid = squad.ownerUid;
+      persistGroupSettings(roomCode);
+    }
+  }
+}
+
+// Put a connected member the Commander let in in charge while nobody holds command, and
+// hand them the join queue. First on the roster wins, the same order succession uses.
+// Returns whether anyone was promoted.
+function promoteStandIn(squad, roomCode) {
+  const standInId = squad.members.find(
+    // Never someone asking to leave (only ever in a Group that needs approval to leave).
+    id => io.sockets.sockets.has(id) && isKnownMember(squad, squad.memberUids?.[id]) && !leaveRequestOf(squad, squad.memberUids?.[id])
+  );
+  if (!standInId) return false;
+  squad.ownerId = standInId;
+  squad.ownerUid = squad.memberUids[standInId];
+  io.to(standInId).emit('promoted-to-owner', { roomCode });
+  sendJoinQueue(squad, roomCode, standInId);
+  commandTaken(squad, roomCode, standInId);
+  return true;
+}
+
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
 
@@ -918,7 +1188,7 @@ io.on('connection', (socket) => {
   // is dropped, the connection kept. A phone back from a dead zone flushes everything it buffered
   // at once, so joining, leaving, admitting and anything about an SOS count in a bucket of their
   // own and are never crowded out by its stale positions.
-  const ALWAYS_THROUGH = new Set(['request-join', 'cancel-join', 'leave-squad', 'sos-broadcast', 'sos-sync', 'sos-ack', 'resolve-access', 'admit-all', 'kick-member', 'block-user']);
+  const ALWAYS_THROUGH = new Set(['request-leave', 'resolve-leave', 'request-join', 'cancel-join', 'leave-squad', 'sos-broadcast', 'sos-sync', 'sos-ack', 'resolve-access', 'admit-all', 'kick-member', 'block-user']);
   const sent = { usual: { start: 0, count: 0 }, vital: { start: 0, count: 0 } };
   socket.use(([event], next) => {
     const bucket = ALWAYS_THROUGH.has(event) ? sent.vital : sent.usual;
@@ -1025,6 +1295,7 @@ socket.on('check-ping', (clientTimestamp) => {
       const exiledUid = targetUid;
       recordActivity(roomCode, { kind: ACTIVITY.KICKED, uid: exiledUid, name: nameOf(squad, targetId), byName: 'Group vote' });
       dropModerator(squad, exiledUid);
+      closeLeaveRequest(squad, roomCode, exiledUid, 'removed');
       forgetSharingMode(squad, exiledUid);
       io.to(targetId).emit('exiled');
       delete squad.kickVotes[targetId];
@@ -1259,11 +1530,17 @@ socket.on('check-ping', (clientTimestamp) => {
       // The same person setting this Group up again gets their switches back.
       const saved = settingsStore.restore(roomCode, requesterUid);
       if (saved) activeSquads[roomCode].settings = saved;
+      // Tests only: a Group as if made through Nearby Join (leaveRequests.js; Stage 3 makes them).
+      if (TEST_LEAVE_PREFIX && roomCode.startsWith(TEST_LEAVE_PREFIX) && !activeSquads[roomCode].settings?.leaveApproval) {
+        markLeaveApproval(activeSquads[roomCode]);
+        persistGroupSettings(roomCode);
+      }
       socket.join(roomCode);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
       sendRallyPoint(socket, activeSquads[roomCode]);
       sendGroupSettings(socket, activeSquads[roomCode], roomCode);
       sendSharingHold(socket, roomCode);
+      sendOwnLeaveRequest(socket, roomCode);
       sendGroupRole(socket, activeSquads[roomCode], roomCode);
       return;
     }
@@ -1311,9 +1588,11 @@ socket.on('check-ping', (clientTimestamp) => {
       // decision they took on it was refused.
       if (standInId) io.to(standInId).emit('demoted-to-member', { roomCode });
       sendJoinQueue(existing, roomCode, socket.id);
+      commandTaken(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
       sendSharingHold(socket, roomCode);
+      sendOwnLeaveRequest(socket, roomCode);
       broadcastSquadUpdate(roomCode);
       broadcastGroupRoles(roomCode);
       return;
@@ -1345,9 +1624,11 @@ socket.on('check-ping', (clientTimestamp) => {
       purgeStaleSockets(roomCode, staleIds);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
       sendJoinQueue(existing, roomCode, socket.id);
+      commandTaken(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
       sendSharingHold(socket, roomCode);
+      sendOwnLeaveRequest(socket, roomCode);
       broadcastSquadUpdate(roomCode);
       broadcastGroupRoles(roomCode);
       return;
@@ -1372,9 +1653,11 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.emit('access-granted', { role: returning.role, roomCode });
       // A moderator is handed the queue on every return, as the admin is.
       if (can(roleOfSocket(existing, socket.id), 'seeJoinQueue')) sendJoinQueue(existing, roomCode, socket.id);
+      sendLeaveQueue(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
       sendSharingHold(socket, roomCode);
+      sendOwnLeaveRequest(socket, roomCode);
       broadcastSquadUpdate(roomCode);
       broadcastGroupRoles(roomCode);
       return;
@@ -1474,6 +1757,7 @@ socket.on('check-ping', (clientTimestamp) => {
         sendRallyPoint(targetSocket, squad);
         sendGroupSettings(targetSocket, squad, roomCode);
         sendSharingHold(targetSocket, roomCode);
+        sendOwnLeaveRequest(targetSocket, roomCode);
         // Put them on everyone's roster now. Previously the squad only learned of a new
         // member when that member's first telemetry arrived, so a mid-session joiner was
         // missing from the list for a polling interval (up to 15s in eco mode) — and
@@ -1524,6 +1808,7 @@ socket.on('check-ping', (clientTimestamp) => {
     removePresence(squad, targetUid);
     endSession(squad, targetUid);
     dropModerator(squad, targetUid);
+    closeLeaveRequest(squad, roomCode, targetUid, 'removed');
     forgetSharingMode(squad, targetUid);
 
     // Every connection of theirs, not only the entry that was tapped: shown by their background
@@ -1596,6 +1881,7 @@ socket.on('check-ping', (clientTimestamp) => {
       broadcastGroupRoles(roomCode);
       // A new moderator admits from now on: hand them the queue.
       if (moderator) sendJoinQueue(squad, roomCode, targetId);
+      if (moderator) sendLeaveQueue(squad, roomCode, targetId);
     }
     reply({ ok: true });
   });
@@ -1924,6 +2210,65 @@ socket.on('check-ping', (clientTimestamp) => {
     reportAlert(socket, squad, roomCode, 'sos', verdict, now, { ...(coalesced ? { coalesced: true } : {}), ...(clientId ? { clientId } : {}) });
   });
 
+  // --- LEAVE REQUESTS (leaveRequests.js) ---
+  // Only in a Group that needs approval to leave; anywhere else each answers 'not-required' and the
+  // app leaves with 'leave-squad' as it always has.
+  //
+  // 'request-leave' { roomCode } -> { ok: true, requestedAt, deadline } or { ok: false, reason:
+  // 'not-in-squad' | 'not-required' | 'admin' (whoever holds command leaves directly) | 'no-identity' }.
+  // Asking again returns the same request and deadline.
+  socket.on('request-leave', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!leaveGated(squad)) return reply({ ok: false, reason: 'not-required' });
+    if (squad.ownerId === socket.id) return reply({ ok: false, reason: 'admin' });
+    const uid = uidOfSocket(squad, socket.id);
+    if (!isKnownMember(squad, uid)) return reply({ ok: false, reason: 'no-identity' });
+    const request = fileLeave(squad, roomCode, uid, nameOf(squad, socket.id));
+    reply({ ok: true, requestedAt: request.requestedAt, deadline: request.deadline });
+  });
+
+  // 'resolve-leave' { roomCode, uid, approved } -> { ok: true } or { ok: false, reason: 'not-in-squad'
+  // | 'not-required' | 'bad-answer' | 'no-request' | 'own-request' | 'not-allowed' | 'admin-only'
+  // (a moderator's request) | 'cannot-refuse-commander' }.
+  socket.on('resolve-leave', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode, uid, approved } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!leaveGated(squad)) return reply({ ok: false, reason: 'not-required' });
+    if (typeof approved !== 'boolean') return reply({ ok: false, reason: 'bad-answer' });
+    if (!leaveRequestOf(squad, uid)) {
+      socket.emit('leave-request-withdrawn', { roomCode, uid, reason: 'gone' });
+      return reply({ ok: false, reason: 'no-request' });
+    }
+    const answererUid = uidOfSocket(squad, socket.id);
+    const verdict = mayAnswerLeave({
+      answererRole: roleOfSocket(squad, socket.id), answererUid, requesterUid: uid,
+      requesterIsModerator: isModeratorUid(squad, uid), requesterIsCommander: uid === commanderOf(squad), approved,
+    });
+    if (!verdict.ok) return reply(verdict);
+    const by = { byUid: answererUid, byName: nameOf(squad, socket.id) };
+    if (approved) approveLeave(roomCode, uid, by);
+    else rejectLeave(roomCode, uid, by);
+    reply({ ok: true });
+  });
+
+  // 'get-leave-requests' { roomCode } -> { ok: true, requests: [...] }: the requests this admin or
+  // moderator may answer, as 'leave-request' sends them.
+  socket.on('get-leave-requests', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!leaveGated(squad)) return reply({ ok: false, reason: 'not-required' });
+    if (!can(roleOfSocket(squad, socket.id), 'admitOne')) return reply({ ok: false, reason: 'not-allowed' });
+    const requests = leaveRequestsOf(squad).filter((request) => leaveAnswerers(squad, request).includes(socket.id));
+    reply({ ok: true, requests: requests.map((request) => leaveRequestPayload(squad, roomCode, request)) });
+  });
+
   // --- TIMED PAUSE AND HIDDEN (sharingHolds.js) ---
   // { roomCode, mode: 'ACTIVE' | 'FROZEN' | 'GHOST', minutes }: Paused or Hidden for that many
   // minutes, or Live again now. Acknowledged with { ok: true, mode, until, allowanceLeftMs,
@@ -2069,6 +2414,14 @@ socket.on('check-ping', (clientTimestamp) => {
       idTokenVerifier.verifyIdToken(idToken)
         .then((proof) => {
           if (!proof.ok) return console.warn(`[GATE] Refused a late Leave from ${socket.id} for ${leftRoom}: ${proof.reason}`);
+          // A Group that needs approval to leave: unless they hold command, a request (or the one
+          // they made), their sharing stopped, still a member until it is approved.
+          const gatedSquad = activeSquads[leftRoom];
+          if (leaveGated(gatedSquad) && isKnownMember(gatedSquad, proof.uid) && gatedSquad.ownerUid !== proof.uid) {
+            fileLeave(gatedSquad, leftRoom, proof.uid, nameOfUid(gatedSquad, proof.uid));
+            stopSharingWhileWaiting(gatedSquad, leftRoom, proof.uid);
+            return;
+          }
           if (leaveByUid(leftRoom, proof.uid)) {
             broadcastGroupRoles(leftRoom);
             broadcastSquadUpdate(leftRoom);
@@ -2082,6 +2435,20 @@ socket.on('check-ping', (clientTimestamp) => {
     const rooms = new Set([...socket.rooms].filter(room => room !== socket.id));
     for (const roomCode in activeSquads) {
       if (activeSquads[roomCode].members.includes(socket.id)) rooms.add(roomCode);
+    }
+
+    // A Group that needs approval to leave (leaveRequests.js): unless this person holds command, their
+    // Leave (an older app's Leave button, or signing out) is a request, or stays the one they made.
+    // Their sharing stops, and they stay a member until it is approved.
+    for (const roomCode of [...rooms]) {
+      const squad = activeSquads[roomCode];
+      if (!leaveGated(squad) || !squad.members.includes(socket.id) || squad.ownerId === socket.id) continue;
+      const uid = uidOfSocket(squad, socket.id);
+      if (!isKnownMember(squad, uid)) continue;
+      fileLeave(squad, roomCode, uid, nameOf(squad, socket.id));
+      stopSharingWhileWaiting(squad, roomCode, uid);
+      socket.leave(roomCode);
+      rooms.delete(roomCode);
     }
 
     // A deliberate Leave, in the log of each Group they were on (not a dropped connection).
@@ -2189,7 +2556,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // A stand-in is temporary: the Commander still gets the squad back on return.
     for (const roomCode in activeSquads) {
       const squad = activeSquads[roomCode];
-      if (squad.ownerId === socket.id && Object.keys(squad.pending ?? {}).length > 0) {
+      if (squad.ownerId === socket.id && (Object.keys(squad.pending ?? {}).length > 0 || (leaveGated(squad) && leaveRequestsOf(squad).length > 0))) {
         promoteStandIn(squad, roomCode);
       }
     }
@@ -2207,16 +2574,6 @@ socket.on('check-ping', (clientTimestamp) => {
       for (const id of socketsAllowed(squad, 'seeJoinQueue')) {
         if (id !== ownerId) io.to(id).emit('access-request-withdrawn', { targetId, roomCode });
       }
-    }
-  }
-
-  // Send a squad's open join requests to whoever is now its Commander: back on a new
-  // socket (an app restart loses its own queue), a caretaker, or a member promoted when
-  // the Commander left. Requests used to be addressed only to the Commander at the time,
-  // so any change of hands left their joiners waiting on nobody.
-  function sendJoinQueue(squad, roomCode, ownerId) {
-    for (const request of pendingRequestsOf(squad, roomCode)) {
-      io.to(ownerId).emit('access-request', request);
     }
   }
 
@@ -2245,101 +2602,6 @@ socket.on('check-ping', (clientTimestamp) => {
     }
   }
 
-  // A Leave sent after the fact (the phone was offline when the person left), by who they are
-  // rather than by a connection. Ends the way a Leave on their own connection does: off the
-  // roster, no longer remembered, and a departing Commander's Group handed for good to whoever
-  // holds command. Returns whether they were in the Group.
-  function leaveByUid(roomCode, uid) {
-    const squad = activeSquads[roomCode];
-    if (!squad || !isKnownMember(squad, uid)) return false;
-    squad.memberUids ??= {};
-    const ids = Object.keys(squad.memberUids).filter((id) => squad.memberUids[id] === uid);
-    // Succession runs for one connection of theirs: one still on the roster, else the one holding
-    // command, else any, else a stand-in key for someone with none left (sharing from the background).
-    const departingId = ids.find((id) => squad.members.includes(id))
-      ?? (squad.ownerUid === uid && squad.ownerId ? squad.ownerId : undefined)
-      ?? ids[0] ?? presenceKey(uid);
-    squad.memberUids[departingId] = uid;
-    if (!squad.members.includes(departingId)) squad.members.push(departingId);
-    recordActivity(roomCode, { kind: ACTIVITY.LEFT, uid, name: nameOf(squad, departingId) });
-    dropModerator(squad, uid);
-    forgetSharingMode(squad, uid);
-    for (const id of ids) {
-      if (id !== departingId) {
-        squad.members = squad.members.filter((member) => member !== id);
-        delete squad.memberUids[id];
-      }
-      io.sockets.sockets.get(id)?.leave(roomCode);
-      delete users[id];
-      delete locationCache[id];
-    }
-    handleSquadSuccession(departingId);
-    return true;
-  }
-
-  function handleSquadSuccession(disconnectedId) {
-    for (const roomCode in activeSquads) {
-      const squad = activeSquads[roomCode];
-
-      // Only reached on a deliberate exit (leave-squad, mutiny exile) — never on a raw
-      // disconnect. Forget them, so coming back means asking the Commander again.
-      const departingUid = squad.memberUids?.[disconnectedId];
-      if (departingUid) {
-        forgetMember(squad, departingUid);
-        removePresence(squad, departingUid);
-        endSession(squad, departingUid);
-        delete squad.memberUids[disconnectedId];
-      }
-
-      squad.members = squad.members.filter(id => id !== disconnectedId);
-
-      if (squad.members.length === 0) {
-        if (!hasPresence(squad, Date.now())) deleteSquad(roomCode);
-        // Members still sharing from the background keep the squad. Nobody connected holds
-        // command; whoever of the admitted comes back first takes it (request-join, Case 4).
-        else if (squad.ownerId === disconnectedId) {
-          squad.ownerId = null;
-          squad.ownerUid = null;
-        }
-      } else if (squad.ownerId === disconnectedId) {
-        // A connected member, if there is one. members[0] could be a dead socket still on
-        // the roster (typically the Commander's, while they're away), and promoting it
-        // left nobody holding command and the promotion addressed to no one.
-        squad.ownerId = squad.members.find(id => io.sockets.sockets.has(id)) ?? squad.members[0];
-        // Ownership goes by uid too. The departing Commander's uid used to stay on as
-        // ownerUid, so they could walk back in later and be made owner again (request-join
-        // Case 3), silently taking the squad from the member promoted here, whose client
-        // still said OWNER while every Commander action they took was refused.
-        squad.ownerUid = squad.memberUids?.[squad.ownerId] || io.sockets.sockets.get(squad.ownerId)?.data?.uid || null;
-        io.to(squad.ownerId).emit('promoted-to-owner', { roomCode });
-        sendJoinQueue(squad, roomCode, squad.ownerId);
-      }
-
-      // The Commander leaving on purpose (or voted out) gives up the squad for good: it
-      // becomes the squad of whoever holds command now, who is then the one a return
-      // hands it back to. (A stand-in leaving changes nothing here: the squad is still
-      // the Commander's to reclaim.)
-      if (departingUid && departingUid === squad.commanderUid) {
-        squad.commanderUid = squad.ownerUid;
-        persistGroupSettings(roomCode);
-      }
-    }
-  }
-
-  // Put a connected member the Commander let in in charge while nobody holds command, and
-  // hand them the join queue. First on the roster wins, the same order succession uses.
-  // Returns whether anyone was promoted.
-  function promoteStandIn(squad, roomCode) {
-    const standInId = squad.members.find(
-      id => io.sockets.sockets.has(id) && isKnownMember(squad, squad.memberUids?.[id])
-    );
-    if (!standInId) return false;
-    squad.ownerId = standInId;
-    squad.ownerUid = squad.memberUids[standInId];
-    io.to(standInId).emit('promoted-to-owner', { roomCode });
-    sendJoinQueue(squad, roomCode, standInId);
-    return true;
-  }
 });
 
 const PORT = process.env.PORT || 5000;
