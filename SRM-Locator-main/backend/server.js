@@ -35,12 +35,22 @@ import {
   ROLE_ADMIN, ROLE_MODERATOR, roleOf, can, mayDo, refusal, canActOn, isOwnAdmin, setModerator, dropModerator,
   rememberBlocked, forgetBlocked, blockedList,
 } from './groupRoles.js';
-import { ACTIVITY, logActivity, activityOf, noteSharingMode, forgetSharingMode } from './activityLog.js';
+import { ACTIVITY, logActivity, activityOf, noteSharingMode, notePausedMode, forgetSharingMode } from './activityLog.js';
+import { createHoldStore, holdMinuteMs, timedPrivacyEnabled, HOLD_MODES, END_REASON } from './sharingHolds.js';
+import {
+  LEAVE_AUTO_APPROVE_MINUTES, leaveApprovalEnabled, leaveMinuteMs, testLeaveApprovalPrefix, markLeaveApproval,
+  leaveNeedsApproval, leaveRequestOf, leaveRequestsOf, fileLeaveRequest, takeLeaveRequest, dueLeaveRequests,
+  mayAnswerLeave, seesLeaveRequest,
+} from './leaveRequests.js';
+import {
+  NEARBY_RADIUS_M, NEARBY_SCANS_PER_MIN, nearbyEnabled, nearbyTimings, cleanFix, isNearby, createInviteBook,
+  noteNearbyAdmission, forgetNearbyAdmission, tooNewToStandIn,
+} from './nearby.js';
 import { createJoinNotifier } from './joinNotify.js';
 import { createFriendsStore, friendsLoaderFromEnv, friendsStartupLine, sosAudience } from './friends.js';
 import { createRateLimiter } from './rateLimit.js';
 import helmet from 'helmet';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { cleanName, cleanPhoto, cleanRoute, cleanZone, cleanGeofenceAlert } from './sanitize.js';
 import { clientAddressOf, clientAddressConfig } from './clientAddress.js';
 
@@ -385,6 +395,148 @@ function recordActivity(roomCode, entry) {
 const nameOf = (squad, socketId) =>
   io.sockets.sockets.get(socketId)?.data?.profile?.name ?? users[socketId]?.name ?? squad?.profiles?.[uidOfSocket(squad, socketId)]?.name ?? null;
 
+// --- TIMED PAUSE AND HIDDEN (sharingHolds.js) ---
+// Off unless LOCUS_TIMED_PRIVACY_ENABLED=true. Off, nothing below runs and every handler behaves as
+// it did: Paused and Hidden are whatever each phone reports. On, a Pause or Hidden is a hold the
+// server grants ('set-sharing-mode'), keeps on the person's account and ends itself, and what the
+// Group is shown of someone's sharing is read from that hold, never from what their phone says.
+const TIMED_PRIVACY = timedPrivacyEnabled();
+const holdStore = createHoldStore({ minuteMs: holdMinuteMs() });
+console.log(`[PRIVACY] Timed Pause and Hidden: ${TIMED_PRIVACY ? 'ON' : 'off (LOCUS_TIMED_PRIVACY_ENABLED=true turns it on)'}`);
+if (holdMinuteMs() !== 60_000) console.warn(`[⚠️  GUARD] LOCUS_HOLD_MINUTE_MS makes a hold "minute" ${holdMinuteMs()} ms. Tests only.`);
+
+const HOLD_STATUSES = new Set(HOLD_MODES);
+
+/**
+ * What the Group is shown of `uid`'s sharing at `now`, when their phone reports `reported`:
+ * { status, holdUntil?, spot?, withhold }. `withhold`: no position of theirs is kept or shown.
+ * - A running hold decides: Hidden shows no position; Paused shows only where they paused.
+ * - Paused or Hidden reported with no hold (an older app, a hold that has just ended, or a phone
+ *   claiming a pause it was never granted) is shown as Live without a position: listed, not on the
+ *   map, and never a stale spot presented as live.
+ */
+function heldSharing(uid, reported, now) {
+  const hold = uid ? holdStore.active(uid, now) : null;
+  if (hold) {
+    const spot = hold.mode === 'FROZEN' ? hold.spot : null;
+    return { status: hold.mode, holdUntil: hold.until, spot, withhold: !spot };
+  }
+  if (HOLD_STATUSES.has(reported)) return { status: 'ACTIVE', withhold: true };
+  return { status: reported, withhold: false };
+}
+
+// The connected sockets signed in as `uid`, in any Group or none.
+const socketsOfUid = (uid) => [...io.sockets.sockets.values()].filter((s) => uid && s.data?.uid === uid);
+
+// Every live Group `uid` is a member of (by account, not by connection).
+const roomsOfUid = (uid) => Object.keys(activeSquads).filter((room) => uid && isKnownMember(activeSquads[room], uid));
+
+// The name a Group knows `uid` by.
+function nameOfUid(squad, uid) {
+  const id = Object.keys(squad?.memberUids ?? {}).find((socketId) => squad.memberUids[socketId] === uid);
+  return (id && nameOf(squad, id)) ?? squad?.profiles?.[uid]?.name ?? presenceOf(squad, uid, Date.now())?.name ?? null;
+}
+
+// Where `uid` is now, as the server last heard it: their newest real fix on any connection, else
+// their background sharing's. Null when there is none (a Pause then holds no spot).
+function latestSpotOf(uid, now) {
+  let best = null;
+  for (const room of roomsOfUid(uid)) {
+    const squad = activeSquads[room];
+    for (const [id, owner] of Object.entries(squad.memberUids ?? {})) {
+      const entry = owner === uid ? users[id] : null;
+      if (entry && isRealFix(entry.lat, entry.lng) && (!best || entry.lastSeen > best.at)) best = { lat: entry.lat, lng: entry.lng, at: entry.lastSeen };
+    }
+    const bg = presenceOf(squad, uid, now);
+    if (bg && isRealFix(bg.lat, bg.lng) && (!best || bg.lastSeen > best.at)) best = { lat: bg.lat, lng: bg.lng, at: bg.lastSeen };
+  }
+  return best ? { lat: best.lat, lng: best.lng } : null;
+}
+
+// What the person's phone is told about their own hold. serverNow lets it count down in step
+// with the server whatever its own clock says.
+const holdState = (uid, now) => {
+  const hold = holdStore.active(uid, now);
+  return {
+    mode: hold?.mode ?? 'ACTIVE',
+    until: hold?.until ?? null,
+    allowanceLeftMs: holdStore.leftMs(uid, now),
+    serverNow: now,
+  };
+};
+
+// Tells one connection (just let into a Group) the hold its account has, if timed holds are on.
+function sendSharingHold(target, roomCode) {
+  const uid = target?.data?.uid;
+  if (!TIMED_PRIVACY || !uid) return;
+  target.emit('sharing-hold', { roomCode, ...holdState(uid, Date.now()) });
+}
+
+// The Group's view of `uid` changed (a hold began or ended): every stored position of theirs is
+// brought in line with it (Hidden keeps none; Paused keeps only the spot), the change goes in each
+// Group's activity log, and everyone is sent the new member list.
+function applySharingChange(uid, now) {
+  const held = holdStore.active(uid, now);
+  const spot = held?.mode === 'FROZEN' ? held.spot : null;
+  for (const room of roomsOfUid(uid)) {
+    const squad = activeSquads[room];
+    for (const [id, owner] of Object.entries(squad.memberUids ?? {})) {
+      if (owner !== uid || !users[id]) continue;
+      // eslint-disable-next-line no-unused-vars
+      const { lat, lng, building, floor, accuracy, positionSource, ...rest } = users[id];
+      const noPosition = { battery: locationCache[id]?.battery ?? 0, lastSeen: locationCache[id]?.lastSeen ?? now };
+      if (held && !spot) {
+        // Hidden, or Paused with no spot to hold: nothing of where they are is kept.
+        users[id] = { ...rest, status: held.mode };
+        locationCache[id] = noPosition;
+      } else if (held) {
+        users[id] = { ...rest, lat: spot.lat, lng: spot.lng, status: 'FROZEN' };
+        locationCache[id] = { ...locationCache[id], lat: spot.lat, lng: spot.lng };
+      } else {
+        // Ended: Live again, with no position until the phone sends a live one.
+        users[id] = { ...rest, status: 'ACTIVE' };
+      }
+    }
+    logSharingMode(room, squad, uid, nameOfUid(squad, uid), held?.mode ?? 'ACTIVE');
+    broadcastSquadUpdate(room);
+  }
+}
+
+// Going hidden or paused, and coming back, in a Group's activity log. Pause is only logged while
+// timed holds are on: an older app has no words for it.
+function logSharingMode(roomCode, squad, uid, name, status) {
+  const hidden = noteSharingMode(squad, { uid, name, status });
+  const paused = TIMED_PRIVACY ? notePausedMode(squad, { uid, name, status }) : null;
+  // Coming back from one is logged before going into the other (Paused straight to Hidden).
+  const changes = [hidden, paused].filter(Boolean).sort((a, b) => Number(isReturn(b)) - Number(isReturn(a)));
+  for (const change of changes) recordActivity(roomCode, change);
+}
+const isReturn = (entry) => entry.kind === ACTIVITY.BACK_FROM_HIDDEN || entry.kind === ACTIVITY.BACK_FROM_PAUSED;
+
+// Ends `uid`'s hold now, for `reason`, and tells every phone signed in as them.
+function endHold(uid, reason, now) {
+  const ended = holdStore.end(uid, now);
+  if (!ended) return null;
+  holdEnded(uid, ended, reason, now);
+  return ended;
+}
+function holdEnded(uid, hold, reason, now) {
+  applySharingChange(uid, now);
+  for (const target of socketsOfUid(uid)) {
+    target.emit('sharing-hold-ended', { reason, endedMode: hold.mode, ...holdState(uid, now) });
+  }
+}
+
+// Holds that have run out are ended within this long. (Only the e2e tests shorten it.)
+const HOLD_SWEEP_MS = Number(process.env.LOCUS_HOLD_SWEEP_MS) || 1000;
+if (TIMED_PRIVACY) {
+  const holdTimer = setInterval(() => {
+    const now = Date.now();
+    for (const { uid, hold } of holdStore.expire(now)) holdEnded(uid, hold, END_REASON.EXPIRED, now);
+  }, HOLD_SWEEP_MS);
+  holdTimer.unref?.();
+}
+
 // --- JOIN REQUESTS WAITING (joinNotify.js) ---
 // One message per burst of requests to everyone who may admit, with how many are waiting then:
 // connected admitters on their socket, and admitters whose app is closed through the same route
@@ -477,11 +629,14 @@ function reportAlert(socket, squad, roomCode, type, verdict, now, extra = {}) {
 
 // A Group's switches and mutes, as each member should see them.
 function sendGroupSettings(target, squad, roomCode) {
-  target.emit('group-settings', settingsFor(squad, roomCode, {
+  const view = settingsFor(squad, roomCode, {
     key: keyOf(squad, target.id),
     isLead: squad.ownerId === target.id,
     keyOf: (id) => keyOf(squad, id),
-  }));
+  });
+  // Only a Group that needs approval to leave says so (leaveRequests.js); every other is sent as before.
+  if (leaveGated(squad)) view.leaveApproval = true;
+  target.emit('group-settings', view);
 }
 function broadcastGroupSettings(roomCode) {
   const squad = activeSquads[roomCode];
@@ -587,23 +742,34 @@ function broadcastSquadUpdate(roomCode) {
     // No position on this connection, one from the background: that one is shown below, never both.
     if (!telemetry && uid && fixless.has(uid)) return;
     const profile = live?.data?.profile || {};
+    // Timed holds on: what the Group sees is the person's hold, not what their phone last said
+    // (heldSharing). Each entry of someone holding Paused or Hidden carries when it ends.
+    const held = TIMED_PRIVACY ? heldSharing(uid, telemetry?.status ?? 'ACTIVE', Date.now()) : null;
+    const holdUntil = held?.holdUntil ? { holdUntil: held.holdUntil } : {};
     // Hidden means hidden: a member sharing as GHOST is listed, but nobody is sent where they are.
-    const hidden = telemetry?.status === 'GHOST';
+    const hidden = held ? held.status === 'GHOST' : telemetry?.status === 'GHOST';
+    // Listed without a position: a Pause with no spot to hold, a pause or hide never granted, or one
+    // whose hold has just ended and whose phone has not yet sent a live position (stored as Live
+    // with none, which must not be sent as having one).
+    const withheld = Boolean(held) && !hidden && (held.withhold || !isRealFix(telemetry?.lat, telemetry?.lng));
     roomUsers[id] = telemetry
       ? (hidden
-          ? { uid, roomCode, name: telemetry.name, photo: telemetry.photo, status: 'GHOST', speed: 0, heading: 0, battery: telemetry.battery, lastSeen: telemetry.lastSeen, hasFix: false, role: roleOf(squad, id, uid) }
-          : { ...telemetry, uid, hasFix: true, role: roleOf(squad, id, uid) })
+          ? { uid, roomCode, name: telemetry.name, photo: telemetry.photo, status: 'GHOST', speed: 0, heading: 0, battery: telemetry.battery, lastSeen: telemetry.lastSeen, hasFix: false, role: roleOf(squad, id, uid), ...holdUntil }
+          : withheld
+            ? { uid, roomCode, name: telemetry.name, photo: telemetry.photo, status: held.status, speed: 0, heading: 0, battery: telemetry.battery, lastSeen: telemetry.lastSeen, hasFix: false, role: roleOf(squad, id, uid), ...holdUntil }
+            : { ...telemetry, ...(held ? { status: held.status } : {}), ...(held?.spot ? { lat: held.spot.lat, lng: held.spot.lng } : {}), uid, hasFix: true, role: roleOf(squad, id, uid), ...holdUntil })
       : {
           uid,
           roomCode,
           name: profile.name,
           photo: profile.photo,
-          status: 'ACTIVE',
+          status: held?.holdUntil ? held.status : 'ACTIVE',
           speed: 0,
           heading: 0,
           battery: 0,
           hasFix: false,
           role: roleOf(squad, id, uid),
+          ...holdUntil,
         };
   });
 
@@ -614,24 +780,30 @@ function broadcastSquadUpdate(roomCode) {
     const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
     for (const entry of livePresence(squad, Date.now())) {
       if (connected.has(entry.uid) && !winners.has(entry.uid) && !fixless.has(entry.uid)) continue;
+      // Timed holds on: the hold decides here too (heldSharing). Hidden, or a pause never granted,
+      // shows no position; Paused shows only where they paused.
+      const held = TIMED_PRIVACY ? heldSharing(entry.uid, entry.status, Date.now()) : null;
+      const position = !held ? { lat: entry.lat, lng: entry.lng } : held.withhold ? null : (held.spot ?? { lat: entry.lat, lng: entry.lng });
       roomUsers[presenceKey(entry.uid)] = {
         uid: entry.uid,
         roomCode,
         name: entry.name,
         photo: entry.photo,
-        lat: entry.lat,
-        lng: entry.lng,
-        speed: entry.speed,
-        heading: entry.heading,
+        ...(position ? { lat: position.lat, lng: position.lng } : {}),
+        speed: position ? entry.speed : 0,
+        heading: position ? entry.heading : 0,
         battery: entry.battery,
-        ...(entry.accuracy === null ? {} : { accuracy: entry.accuracy }),
-        status: entry.status,
+        ...(entry.accuracy === null || !position ? {} : { accuracy: entry.accuracy }),
+        status: held ? held.status : entry.status,
         lastSeen: entry.lastSeen,
-        hasFix: true,
+        hasFix: Boolean(position),
         presence: true,
+        ...(held?.holdUntil ? { holdUntil: held.holdUntil } : {}),
       };
     }
   }
+  // Whoever is waiting to leave, in a Group that needs approval to leave (leaveRequests.js).
+  if (squad && leaveGated(squad)) for (const entry of Object.values(roomUsers)) Object.assign(entry, leaveMark(squad, entry.uid));
   io.to(roomCode).emit('users-update', roomUsers);
 }
 
@@ -646,6 +818,10 @@ function expireLeases(now) {
     const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
     for (const entry of expired) {
       if (connected.has(entry.uid)) continue;
+      // Timed holds on: someone whose position is withheld (Hidden above all) is not announced with
+      // the position they are holding back, as a Hidden member's dropped connection never is.
+      const held = TIMED_PRIVACY ? heldSharing(entry.uid, entry.status, now) : null;
+      if (held?.withhold) continue;
       io.to(roomCode).emit('member-signal-lost', {
         targetId: presenceKey(entry.uid),
         uid: entry.uid,
@@ -654,8 +830,8 @@ function expireLeases(now) {
         // Where they last really were. No speed or heading: those only ever fed the app's
         // dead reckoning, which moved a lost member's marker to places they were never seen.
         lastKnownLocation: {
-          latitude: entry.lat,
-          longitude: entry.lng,
+          latitude: held?.spot?.lat ?? entry.lat,
+          longitude: held?.spot?.lng ?? entry.lng,
           batteryLevel: entry.battery,
         },
         timeDelta: (now - entry.lastSeen) / 1000,
@@ -722,6 +898,319 @@ io.use((socket, next) => {
   next();
 });
 
+// --- LEAVE REQUESTS (leaveRequests.js) ---
+// Only in a Group that needs approval to leave: LOCUS_LEAVE_APPROVAL_ENABLED=true on the server AND
+// the Group's own switch (set for Groups made through Nearby Join). Anywhere else nothing below
+// runs, and a Leave is what it always was.
+const LEAVE_APPROVAL = leaveApprovalEnabled();
+const LEAVE_AUTO_APPROVE_MS = LEAVE_AUTO_APPROVE_MINUTES * leaveMinuteMs();
+const TEST_LEAVE_PREFIX = testLeaveApprovalPrefix();
+console.log(`[LEAVE] Leave approval: ${LEAVE_APPROVAL ? 'ON for Groups made through Nearby Join' : 'off (LOCUS_LEAVE_APPROVAL_ENABLED=true turns it on)'}`);
+if (leaveMinuteMs() !== 60_000) console.warn(`[⚠️  GUARD] LOCUS_LEAVE_MINUTE_MS makes a leave "minute" ${leaveMinuteMs()} ms. Tests only.`);
+if (TEST_LEAVE_PREFIX) console.warn(`[⚠️  GUARD] LOCUS_TEST_LEAVE_APPROVAL_PREFIX: Groups whose code starts "${TEST_LEAVE_PREFIX}" need approval to leave. Tests only.`);
+
+const leaveGated = (squad) => leaveNeedsApproval(squad, LEAVE_APPROVAL);
+const isModeratorUid = (squad, uid) => Boolean(uid) && Boolean(squad?.moderatorUids?.includes(uid));
+
+// What an admin or moderator is sent about one request.
+const leaveRequestPayload = (squad, roomCode, request) => ({
+  roomCode,
+  uid: request.uid,
+  name: request.name,
+  requestedAt: request.requestedAt,
+  deadline: request.deadline,
+  fromModerator: isModeratorUid(squad, request.uid),
+  // Approved or left to run out, never refused (leaveRequests.js).
+  fromCommander: request.uid === commanderOf(squad),
+  // The server's clock now, so a phone counts down to `deadline` by it, whatever its own says.
+  serverNow: Date.now(),
+});
+
+// The connected sockets that may answer `request`: the admin and moderators, a moderator's own
+// request only the admin, and never the requester.
+const leaveAnswerers = (squad, request) => squad.members.filter((id) => io.sockets.sockets.has(id)
+  && seesLeaveRequest(roleOfSocket(squad, id), uidOfSocket(squad, id), request, isModeratorUid(squad, request.uid)));
+
+// Every open request `socketId` may answer, sent to it (on taking command, on becoming a
+// moderator, on coming back as one), as the join queue is.
+function sendLeaveQueue(squad, roomCode, socketId) {
+  if (!leaveGated(squad)) return;
+  for (const request of leaveRequestsOf(squad)) {
+    if (leaveAnswerers(squad, request).includes(socketId)) io.to(socketId).emit('leave-request', leaveRequestPayload(squad, roomCode, request));
+  }
+}
+
+// A request is decided or gone: off the list, and off every screen that may show it. Told to the
+// whole Group, not only to whoever may answer now: a stand-in demoted by the Commander's return (who
+// may be the reason it is gone) is a member again by the time it closes, and the member list already
+// shows everyone who is waiting.
+function closeLeaveRequest(squad, roomCode, uid, reason) {
+  const request = takeLeaveRequest(squad, uid);
+  if (!request) return null;
+  io.to(roomCode).emit('leave-request-withdrawn', { roomCode, uid, reason });
+  return request;
+}
+
+// Every phone signed in as `uid` hears it.
+const tellPerson = (uid, event, payload) => socketsOfUid(uid).forEach((target) => target.emit(event, payload));
+
+// `uid` asks to leave, or asks again (which never moves the deadline). Sent to whoever may answer;
+// with nobody holding command, a connected member who is not asking to leave stands in, as for a
+// join request; with nobody at all, it waits for whoever takes command, or its deadline.
+function fileLeave(squad, roomCode, uid, name, now = Date.now()) {
+  const { request, created } = fileLeaveRequest(squad, { uid, name }, now, LEAVE_AUTO_APPROVE_MS);
+  if (created) {
+    const payload = leaveRequestPayload(squad, roomCode, request);
+    for (const id of leaveAnswerers(squad, request)) io.to(id).emit('leave-request', payload);
+    if (!io.sockets.sockets.has(squad.ownerId)) promoteStandIn(squad, roomCode);
+    broadcastSquadUpdate(roomCode);
+  }
+  tellPerson(uid, 'leave-request-pending', { roomCode, requestedAt: request.requestedAt, deadline: request.deadline, serverNow: Date.now() });
+  return request;
+}
+
+// A member with a request waiting who signs out, or presses an older app's Leave: their sharing
+// stops (off the roster's connections and the map, their background sharing ended), and they stay a
+// member, by account, until the request is approved.
+function stopSharingWhileWaiting(squad, roomCode, uid) {
+  for (const id of Object.keys(squad.memberUids ?? {})) {
+    if (squad.memberUids[id] !== uid) continue;
+    squad.members = squad.members.filter((member) => member !== id);
+    delete squad.memberUids[id];
+    io.sockets.sockets.get(id)?.leave(roomCode);
+    delete users[id];
+    delete locationCache[id];
+  }
+  removePresence(squad, uid);
+  endSession(squad, uid);
+  broadcastSquadUpdate(roomCode);
+}
+
+// Approved, by someone or by the clock: they leave as a Leave always has (leaveByUid), which also
+// ends their sharing, and their phones are told.
+function approveLeave(roomCode, uid, { byUid = null, byName = null, auto = false } = {}) {
+  const squad = activeSquads[roomCode];
+  if (!squad || !closeLeaveRequest(squad, roomCode, uid, auto ? 'auto-approved' : 'approved')) return false;
+  const phones = socketsOfUid(uid);
+  const left = leaveByUid(roomCode, uid, auto ? { byName: 'Approved automatically' } : { byUid, byName });
+  for (const target of phones) target.emit('leave-approved', { roomCode, auto });
+  if (left) {
+    broadcastGroupRoles(roomCode);
+    broadcastSquadUpdate(roomCode);
+  }
+  return true;
+}
+
+// Refused: they stay, and are told.
+function rejectLeave(roomCode, uid, { byName = null } = {}) {
+  const squad = activeSquads[roomCode];
+  if (!squad || !closeLeaveRequest(squad, roomCode, uid, 'rejected')) return false;
+  tellPerson(uid, 'leave-rejected', { roomCode, byName });
+  broadcastSquadUpdate(roomCode);
+  return true;
+}
+
+// Someone now holds command (the Commander back, a caretaker, a stand-in): a request of their own is
+// over, since the admin leaves directly, and they are handed the requests to answer.
+function commandTaken(squad, roomCode, socketId) {
+  if (!leaveGated(squad)) return;
+  const uid = uidOfSocket(squad, socketId);
+  if (closeLeaveRequest(squad, roomCode, uid, 'took-command')) {
+    tellPerson(uid, 'leave-request-cancelled', { roomCode, reason: 'took-command' });
+    broadcastSquadUpdate(roomCode);
+  }
+  sendLeaveQueue(squad, roomCode, socketId);
+}
+
+// Their own open request, told to a phone just let back in, so a restart shows the same deadline.
+function sendOwnLeaveRequest(target, roomCode) {
+  const squad = activeSquads[roomCode];
+  const request = leaveGated(squad) ? leaveRequestOf(squad, target?.data?.uid) : null;
+  if (request) target.emit('leave-request-pending', { roomCode, requestedAt: request.requestedAt, deadline: request.deadline, serverNow: Date.now() });
+}
+
+// The member list marks whoever is waiting to leave (Stage 5 shows it).
+const leaveMark = (squad, uid) => {
+  const request = leaveGated(squad) ? leaveRequestOf(squad, uid) : null;
+  return request ? { leaveRequestedUntil: request.deadline } : {};
+};
+
+// Requests nobody answered are approved when their deadline comes.
+const LEAVE_SWEEP_MS = Number(process.env.LOCUS_LEAVE_SWEEP_MS) || 1000;
+if (LEAVE_APPROVAL) {
+  const leaveTimer = setInterval(() => {
+    const now = Date.now();
+    for (const roomCode of Object.keys(activeSquads)) {
+      const squad = activeSquads[roomCode];
+      if (!leaveGated(squad)) continue;
+      for (const uid of dueLeaveRequests(squad, now)) approveLeave(roomCode, uid, { auto: true });
+    }
+  }, LEAVE_SWEEP_MS);
+  leaveTimer.unref?.();
+}
+
+// --- NEARBY JOIN (nearby.js) ---
+// Off unless LOCUS_NEARBY_ENABLED=true. Off, every nearby-* event answers 'disabled' and nothing else
+// changes: no connection is kept open past the pre-join close, and no lobby position is taken.
+const NEARBY = nearbyEnabled();
+const NEARBY_TIMINGS = nearbyTimings();
+const nearbyScans = createRateLimiter({ limit: numberFromEnv('LOCUS_NEARBY_SCANS_PER_MIN', NEARBY_SCANS_PER_MIN), windowMs: 60 * 1000 });
+const nearbyInvites = createInviteBook({ ttlMs: NEARBY_TIMINGS.inviteTtlMs });
+console.log(`[NEARBY] Nearby Join: ${NEARBY ? `ON (${NEARBY_RADIUS_M} m)` : 'off (LOCUS_NEARBY_ENABLED=true turns it on)'}`);
+if (NEARBY_TIMINGS.inviteTtlMs !== 2 * 60 * 1000 || NEARBY_TIMINGS.maxFixAgeMs !== 20_000) {
+  console.warn('[⚠️  GUARD] LOCUS_NEARBY_INVITE_TTL_MS / LOCUS_NEARBY_MAX_FIX_AGE_MS shorten Nearby timings. Tests only.');
+}
+
+// Discoverable people, by connection: { uid, name, fix }. The fix ({ lat, lng, accuracy, at }) is
+// their lobby position: in memory only, never logged, never sent to anyone, and gone with the entry.
+const discoverable = new Map();
+
+// Whether `uid` (on connection `socketId`) is in a Group: admitted to one (even with no connection
+// on its roster right now), or this connection on a roster.
+const inAnyGroup = (uid, socketId = null) => roomsOfUid(uid).length > 0
+  || Boolean(socketId) && Object.values(activeSquads).some((squad) => squad.members.includes(socketId));
+
+// Invites that ran out unanswered: the invited person's phones are told, so the prompt goes, and so
+// is whoever invited them, so their list says so.
+if (NEARBY) {
+  const nearbyTimer = setInterval(() => {
+    for (const invite of nearbyInvites.sweep(Date.now())) {
+      for (const [id, entry] of discoverable) {
+        if (entry.uid === invite.uid) io.to(id).emit('nearby-invite-expired', { inviteId: invite.id });
+      }
+      for (const target of socketsOfUid(invite.byUid)) {
+        target.emit('nearby-invite-answered', { roomCode: invite.roomCode, inviteId: invite.id, name: invite.name, accepted: false, expired: true });
+      }
+    }
+  }, 1000);
+  nearbyTimer.unref?.();
+}
+
+// --- LEAVING AND COMMAND (moved out of the connection handler, unchanged, so the leave-request
+// timer can use them; none of them depends on one connection) ---
+// Send a squad's open join requests to whoever is now its Commander: back on a new
+// socket (an app restart loses its own queue), a caretaker, or a member promoted when
+// the Commander left. Requests used to be addressed only to the Commander at the time,
+// so any change of hands left their joiners waiting on nobody.
+function sendJoinQueue(squad, roomCode, ownerId) {
+  for (const request of pendingRequestsOf(squad, roomCode)) {
+    io.to(ownerId).emit('access-request', request);
+  }
+}
+
+// A Leave sent after the fact (the phone was offline when the person left), by who they are
+// rather than by a connection. Ends the way a Leave on their own connection does: off the
+// roster, no longer remembered, and a departing Commander's Group handed for good to whoever
+// holds command. Returns whether they were in the Group.
+function leaveByUid(roomCode, uid, by = {}) {
+  const squad = activeSquads[roomCode];
+  if (!squad || !isKnownMember(squad, uid)) return false;
+  squad.memberUids ??= {};
+  const ids = Object.keys(squad.memberUids).filter((id) => squad.memberUids[id] === uid);
+  // Succession runs for one connection of theirs: one still on the roster, else the one holding
+  // command, else any, else a stand-in key for someone with none left (sharing from the background).
+  const departingId = ids.find((id) => squad.members.includes(id))
+    ?? (squad.ownerUid === uid && squad.ownerId ? squad.ownerId : undefined)
+    ?? ids[0] ?? presenceKey(uid);
+  squad.memberUids[departingId] = uid;
+  if (!squad.members.includes(departingId)) squad.members.push(departingId);
+  recordActivity(roomCode, { kind: ACTIVITY.LEFT, uid, name: nameOf(squad, departingId), ...by });
+  dropModerator(squad, uid);
+  forgetSharingMode(squad, uid);
+  for (const id of ids) {
+    if (id !== departingId) {
+      squad.members = squad.members.filter((member) => member !== id);
+      delete squad.memberUids[id];
+    }
+    io.sockets.sockets.get(id)?.leave(roomCode);
+    delete users[id];
+    delete locationCache[id];
+  }
+  handleSquadSuccession(departingId);
+  return true;
+}
+
+function handleSquadSuccession(disconnectedId) {
+  for (const roomCode in activeSquads) {
+    const squad = activeSquads[roomCode];
+
+    // Only reached on a deliberate exit (leave-squad, mutiny exile) — never on a raw
+    // disconnect. Forget them, so coming back means asking the Commander again.
+    const departingUid = squad.memberUids?.[disconnectedId];
+    if (departingUid) {
+      forgetMember(squad, departingUid);
+      removePresence(squad, departingUid);
+      endSession(squad, departingUid);
+      delete squad.memberUids[disconnectedId];
+    }
+
+    squad.members = squad.members.filter(id => id !== disconnectedId);
+
+    if (squad.members.length === 0) {
+      if (!hasPresence(squad, Date.now())) deleteSquad(roomCode);
+      // Members still sharing from the background keep the squad. Nobody connected holds
+      // command; whoever of the admitted comes back first takes it (request-join, Case 4).
+      else if (squad.ownerId === disconnectedId) {
+        squad.ownerId = null;
+        squad.ownerUid = null;
+      }
+    } else if (squad.ownerId === disconnectedId) {
+      // Who may take over: not someone admitted through a Nearby invite within
+      // NEARBY_CARETAKER_WAIT_MS (nearby.js), as for a stand-in. Everyone else, as before.
+      const now = Date.now();
+      const eligible = (id) => !tooNewToStandIn(squad, squad.memberUids?.[id] || io.sockets.sockets.get(id)?.data?.uid, now, NEARBY_TIMINGS.caretakerWaitMs);
+      // A connected member, if there is one. members[0] could be a dead socket still on
+      // the roster (typically the Commander's, while they're away), and promoting it
+      // left nobody holding command and the promotion addressed to no one.
+      const successor = squad.members.find(id => io.sockets.sockets.has(id) && eligible(id)) ?? squad.members.find(eligible) ?? null;
+      if (successor === null) {
+        // Only new Nearby invitees are left: nobody holds command for now, as when everyone has
+        // gone. Whoever of the admitted may take it comes back first takes it (request-join Case 4).
+        squad.ownerId = null;
+        squad.ownerUid = null;
+      } else {
+        squad.ownerId = successor;
+        // Ownership goes by uid too. The departing Commander's uid used to stay on as
+        // ownerUid, so they could walk back in later and be made owner again (request-join
+        // Case 3), silently taking the squad from the member promoted here, whose client
+        // still said OWNER while every Commander action they took was refused.
+        squad.ownerUid = squad.memberUids?.[squad.ownerId] || io.sockets.sockets.get(squad.ownerId)?.data?.uid || null;
+        io.to(squad.ownerId).emit('promoted-to-owner', { roomCode });
+        sendJoinQueue(squad, roomCode, squad.ownerId);
+        commandTaken(squad, roomCode, squad.ownerId);
+      }
+    }
+
+    // The Commander leaving on purpose (or voted out) gives up the squad for good: it
+    // becomes the squad of whoever holds command now, who is then the one a return
+    // hands it back to. (A stand-in leaving changes nothing here: the squad is still
+    // the Commander's to reclaim.)
+    if (departingUid && departingUid === squad.commanderUid) {
+      squad.commanderUid = squad.ownerUid;
+      persistGroupSettings(roomCode);
+    }
+  }
+}
+
+// Put a connected member the Commander let in in charge while nobody holds command, and
+// hand them the join queue. First on the roster wins, the same order succession uses.
+// Returns whether anyone was promoted.
+function promoteStandIn(squad, roomCode) {
+  const standInId = squad.members.find(
+    // Never someone asking to leave (only ever in a Group that needs approval to leave).
+    // Nor someone admitted through a Nearby invite within NEARBY_CARETAKER_WAIT_MS.
+    id => io.sockets.sockets.has(id) && isKnownMember(squad, squad.memberUids?.[id]) && !leaveRequestOf(squad, squad.memberUids?.[id])
+      && !tooNewToStandIn(squad, squad.memberUids?.[id], Date.now(), NEARBY_TIMINGS.caretakerWaitMs)
+  );
+  if (!standInId) return false;
+  squad.ownerId = standInId;
+  squad.ownerUid = squad.memberUids[standInId];
+  io.to(standInId).emit('promoted-to-owner', { roomCode });
+  sendJoinQueue(squad, roomCode, standInId);
+  commandTaken(squad, roomCode, standInId);
+  return true;
+}
+
 io.on('connection', (socket) => {
   console.log(`🟢 Node Connected: ${socket.id}`);
 
@@ -737,16 +1226,21 @@ io.on('connection', (socket) => {
     clearTimeout(preJoinTimer);
     preJoinTimer = null;
   };
-  if (PRE_JOIN_TIMEOUT_MS > 0) {
+  // Started when the connection opens, and again when someone in no Group stops being discoverable
+  // (Nearby Join), who then has the same time to join a Group as anyone else.
+  const startPreJoin = () => {
+    if (PRE_JOIN_TIMEOUT_MS <= 0 || preJoinTimer) return;
     preJoinTimer = setTimeout(() => {
       preJoinTimer = null;
       console.warn(`[LIMIT] ${socket.id} did not join a Group within ${PRE_JOIN_TIMEOUT_MS} ms; closing its connection`);
       socket.conn.close();
     }, PRE_JOIN_TIMEOUT_MS);
     preJoinTimer.unref?.();
-  }
+  };
+  startPreJoin();
   socket.on('disconnect', () => {
     endPreJoin();
+    discoverable.delete(socket.id);
     const open = (socketsByAddress.get(address) ?? 1) - 1;
     if (open > 0) socketsByAddress.set(address, open);
     else socketsByAddress.delete(address);
@@ -756,7 +1250,7 @@ io.on('connection', (socket) => {
   // is dropped, the connection kept. A phone back from a dead zone flushes everything it buffered
   // at once, so joining, leaving, admitting and anything about an SOS count in a bucket of their
   // own and are never crowded out by its stale positions.
-  const ALWAYS_THROUGH = new Set(['request-join', 'cancel-join', 'leave-squad', 'sos-broadcast', 'sos-sync', 'sos-ack', 'resolve-access', 'admit-all', 'kick-member', 'block-user']);
+  const ALWAYS_THROUGH = new Set(['request-leave', 'cancel-leave', 'resolve-leave', 'request-join', 'cancel-join', 'leave-squad', 'sos-broadcast', 'sos-sync', 'sos-ack', 'resolve-access', 'admit-all', 'kick-member', 'block-user']);
   const sent = { usual: { start: 0, count: 0 }, vital: { start: 0, count: 0 } };
   socket.use(([event], next) => {
     const bucket = ALWAYS_THROUGH.has(event) ? sent.vital : sent.usual;
@@ -863,6 +1357,7 @@ socket.on('check-ping', (clientTimestamp) => {
       const exiledUid = targetUid;
       recordActivity(roomCode, { kind: ACTIVITY.KICKED, uid: exiledUid, name: nameOf(squad, targetId), byName: 'Group vote' });
       dropModerator(squad, exiledUid);
+      closeLeaveRequest(squad, roomCode, exiledUid, 'removed');
       forgetSharingMode(squad, exiledUid);
       io.to(targetId).emit('exiled');
       delete squad.kickVotes[targetId];
@@ -943,7 +1438,10 @@ socket.on('check-ping', (clientTimestamp) => {
     const fixless = fixlessPresenceUids(squad, roomCode, Date.now());
     for (const entry of livePresence(squad, Date.now())) {
       if (connected.has(entry.uid) && !winners.has(entry.uid) && !fixless.has(entry.uid)) continue;
-      const record = toTelemetryRecord({ lat: entry.lat, lng: entry.lng, lastSeen: entry.lastSeen, battery: entry.battery });
+      // Timed holds on: nothing for someone whose position is withheld; a Pause's spot for a pause.
+      const held = TIMED_PRIVACY ? heldSharing(entry.uid, entry.status, Date.now()) : null;
+      if (held?.withhold) continue;
+      const record = toTelemetryRecord({ lat: held?.spot?.lat ?? entry.lat, lng: held?.spot?.lng ?? entry.lng, lastSeen: entry.lastSeen, battery: entry.battery });
       if (record) squadTelemetry[presenceKey(entry.uid)] = record;
     }
     socket.emit('telemetry-sync-complete', squadTelemetry);
@@ -1036,6 +1534,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // code no Group has, and the SOS handlers then counted them as that person.
     socket.data.uid = requesterUid;
     endPreJoin();
+    discoverable.delete(socket.id); // in a Group (or asking to be): no longer discoverable
     // Their trusted friends, ready for an SOS (friends.js): never fetched while one is raised.
     if (requesterUid && friendLookups.check(requesterUid).ok) friendsStore.prefetch(requesterUid);
     // Remember who this socket is independently of their telemetry. broadcastSquadUpdate
@@ -1094,10 +1593,23 @@ socket.on('check-ping', (clientTimestamp) => {
       // The same person setting this Group up again gets their switches back.
       const saved = settingsStore.restore(roomCode, requesterUid);
       if (saved) activeSquads[roomCode].settings = saved;
+      // Made through Nearby Join (the person pressing Nearby with no Group): its members need
+      // approval to leave (leaveRequests.js). Only while Nearby Join is on.
+      if (NEARBY && data?.nearby === true && !activeSquads[roomCode].settings?.leaveApproval) {
+        markLeaveApproval(activeSquads[roomCode]);
+        persistGroupSettings(roomCode);
+      }
+      // Tests only: a Group as if made through Nearby Join.
+      if (TEST_LEAVE_PREFIX && roomCode.startsWith(TEST_LEAVE_PREFIX) && !activeSquads[roomCode].settings?.leaveApproval) {
+        markLeaveApproval(activeSquads[roomCode]);
+        persistGroupSettings(roomCode);
+      }
       socket.join(roomCode);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
       sendRallyPoint(socket, activeSquads[roomCode]);
       sendGroupSettings(socket, activeSquads[roomCode], roomCode);
+      sendSharingHold(socket, roomCode);
+      sendOwnLeaveRequest(socket, roomCode);
       sendGroupRole(socket, activeSquads[roomCode], roomCode);
       return;
     }
@@ -1145,8 +1657,11 @@ socket.on('check-ping', (clientTimestamp) => {
       // decision they took on it was refused.
       if (standInId) io.to(standInId).emit('demoted-to-member', { roomCode });
       sendJoinQueue(existing, roomCode, socket.id);
+      commandTaken(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
+      sendSharingHold(socket, roomCode);
+      sendOwnLeaveRequest(socket, roomCode);
       broadcastSquadUpdate(roomCode);
       broadcastGroupRoles(roomCode);
       return;
@@ -1160,7 +1675,9 @@ socket.on('check-ping', (clientTimestamp) => {
     // code, arriving while the Commander's phone had dropped off, made them Commander
     // with no approval. A stranger's request now waits (Case 5).
     const ownerIsLive = io.sockets.sockets.has(existing.ownerId);
-    if (!ownerIsLive && isKnownMember(existing, requesterUid)) {
+    // Not someone admitted through a Nearby invite within NEARBY_CARETAKER_WAIT_MS: they come back as a
+    // member (Case 4b), and the Group has no stand-in for now.
+    if (!ownerIsLive && isKnownMember(existing, requesterUid) && !tooNewToStandIn(existing, requesterUid, Date.now(), NEARBY_TIMINGS.caretakerWaitMs)) {
       // The caretaker may themselves be arriving on a new socket, so tear their old one
       // down here too — same reason as Case 3 above.
       const staleIds = collectStaleSocketIds(existing, requesterUid, socket.id);
@@ -1178,8 +1695,11 @@ socket.on('check-ping', (clientTimestamp) => {
       purgeStaleSockets(roomCode, staleIds);
       socket.emit('access-granted', { role: 'OWNER', roomCode });
       sendJoinQueue(existing, roomCode, socket.id);
+      commandTaken(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
+      sendSharingHold(socket, roomCode);
+      sendOwnLeaveRequest(socket, roomCode);
       broadcastSquadUpdate(roomCode);
       broadcastGroupRoles(roomCode);
       return;
@@ -1204,8 +1724,11 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.emit('access-granted', { role: returning.role, roomCode });
       // A moderator is handed the queue on every return, as the admin is.
       if (can(roleOfSocket(existing, socket.id), 'seeJoinQueue')) sendJoinQueue(existing, roomCode, socket.id);
+      sendLeaveQueue(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
+      sendSharingHold(socket, roomCode);
+      sendOwnLeaveRequest(socket, roomCode);
       broadcastSquadUpdate(roomCode);
       broadcastGroupRoles(roomCode);
       return;
@@ -1302,8 +1825,11 @@ socket.on('check-ping', (clientTimestamp) => {
         squad.memberUids[targetId] = targetSocket.data?.uid || null;
         // Approved once; remembered by uid so a reconnect isn't a fresh request.
         rememberMember(squad, targetSocket.data?.uid);
+        forgetNearbyAdmission(squad, targetSocket.data?.uid); // approved the usual way: a member like any other
         sendRallyPoint(targetSocket, squad);
         sendGroupSettings(targetSocket, squad, roomCode);
+        sendSharingHold(targetSocket, roomCode);
+        sendOwnLeaveRequest(targetSocket, roomCode);
         // Put them on everyone's roster now. Previously the squad only learned of a new
         // member when that member's first telemetry arrived, so a mid-session joiner was
         // missing from the list for a polling interval (up to 15s in eco mode) — and
@@ -1354,6 +1880,7 @@ socket.on('check-ping', (clientTimestamp) => {
     removePresence(squad, targetUid);
     endSession(squad, targetUid);
     dropModerator(squad, targetUid);
+    closeLeaveRequest(squad, roomCode, targetUid, 'removed');
     forgetSharingMode(squad, targetUid);
 
     // Every connection of theirs, not only the entry that was tapped: shown by their background
@@ -1426,6 +1953,7 @@ socket.on('check-ping', (clientTimestamp) => {
       broadcastGroupRoles(roomCode);
       // A new moderator admits from now on: hand them the queue.
       if (moderator) sendJoinQueue(squad, roomCode, targetId);
+      if (moderator) sendLeaveQueue(squad, roomCode, targetId);
     }
     reply({ ok: true });
   });
@@ -1522,7 +2050,7 @@ socket.on('check-ping', (clientTimestamp) => {
   // --- 🌐 LOCATION & ROOM ENGINE (CENTRALIZED) ---
   socket.on('update-location', (data) => {
     if (!data) return;
-    const { lat, lng, speed, battery, heading } = data;
+    const { speed, battery, heading } = data;
     const newRoom = data.roomCode || 'GLOBAL';
 
     // 🔒 GATEKEEPER ENFORCEMENT: this used to join any roomCode the client sent,
@@ -1534,11 +2062,19 @@ socket.on('check-ping', (clientTimestamp) => {
     if (!squad || !squad.members.includes(socket.id)) {
       return;
     }
-    // Hidden: no position is kept, whatever an older app still sends.
-    const hidden = data.status === 'GHOST';
+    // Timed holds on (sharingHolds.js): the person's hold decides what is kept, never the status the
+    // phone sends. Off: the reported status, as it always was.
+    const held = TIMED_PRIVACY ? heldSharing(squad.memberUids?.[socket.id] || socket.data?.uid, data.status, Date.now()) : null;
+    const status = held ? held.status : data.status;
+    // Hidden: no position is kept, whatever an older app still sends. Nor while one is withheld.
+    const hidden = status === 'GHOST';
+    const keepsNoPosition = hidden || Boolean(held?.withhold);
+    // Paused under a hold: only the spot they paused at, whatever the phone sends now.
+    const lat = held?.spot ? held.spot.lat : data.lat;
+    const lng = held?.spot ? held.spot.lng : data.lng;
     // A position that is no position (text, NaN, off the globe) is refused whole: everyone's
     // map would otherwise be handed it.
-    if (!hidden && (lat != null || lng != null) && !isRealFix(lat, lng)) {
+    if (!keepsNoPosition && (lat != null || lng != null) && !isRealFix(lat, lng)) {
       console.warn(`[LIMIT] Dropped a position from ${socket.id} in ${newRoom}: not a real fix`);
       return;
     }
@@ -1550,9 +2086,8 @@ socket.on('check-ping', (clientTimestamp) => {
     if (reporter) {
       squad.profiles ??= Object.create(null);
       squad.profiles[reporter] = { name, photo };
-      // Going hidden, or coming back from it, goes in the activity log.
-      const changed = noteSharingMode(squad, { uid: reporter, name, status: data.status });
-      if (changed) recordActivity(newRoom, changed);
+      // Going hidden (and, with timed holds on, paused), or coming back, goes in the activity log.
+      logSharingMode(newRoom, squad, reporter, name, status);
     }
 
     const oldRoom = users[socket.id]?.roomCode;
@@ -1565,14 +2100,14 @@ socket.on('check-ping', (clientTimestamp) => {
     // update. It used to be the whole payload (`...data`), so anything a phone attached, up to the
     // 100 KB message limit, was stored and sent to everyone, members squared times a second.
     users[socket.id] = {
-      ...(hidden ? {} : {
+      ...(keepsNoPosition ? {} : held?.spot ? { lat, lng } : {
         lat, lng,
         building: shortText(data.building, MAX_PLACE_NAME_LENGTH),
         floor: Number.isFinite(data.floor) ? data.floor : shortText(data.floor, 16),
         accuracy: finiteOr(data.accuracy, undefined),
         positionSource: shortText(data.positionSource, 16),
       }),
-      status: shortText(data.status, 16),
+      status: shortText(status, 16),
       speed: finiteOr(speed, 0),
       battery: finiteOr(battery, undefined),
       name,
@@ -1587,7 +2122,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // actually has real speed/heading/lastSeen instead of permanently-undefined fields.
     // Hidden: the position it had is dropped, so neither the Lead's table nor a lost-signal
     // marker can show where a hidden person is.
-    locationCache[socket.id] = hidden
+    locationCache[socket.id] = keepsNoPosition
       ? { battery: finiteOr(battery, 0), lastSeen: Date.now() }
       : {
           ...locationCache[socket.id],
@@ -1698,6 +2233,10 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.emit('alert-result', { type: 'sos', roomCode, allowed: true, mode: 'allow', reasonCode: null, clientId, duplicate: true });
       return;
     }
+    // An SOS ends any Pause or Hidden of the sender's (sharingHolds.js), whether or not it is relayed,
+    // and their phone is told. Who hears it is unchanged: trusted friends, the main admin and
+    // moderators (audienceOf), however they were sharing.
+    if (TIMED_PRIVACY) endHold(uidOfSocket(squad, socket.id), END_REASON.SOS, now);
     // The only way an SOS is relayed: asked of alertRules.js first (see decideAlert). An
     // SOS is only ever refused by the Group Lead's switch, or by the quiet-zone setting
     // when that is 'blocked'; otherwise at worst it goes out flagged.
@@ -1741,6 +2280,260 @@ socket.on('check-ping', (clientTimestamp) => {
     }
     sosWatch.notify(roomCode); // and the phones listening from the background
     reportAlert(socket, squad, roomCode, 'sos', verdict, now, { ...(coalesced ? { coalesced: true } : {}), ...(clientId ? { clientId } : {}) });
+  });
+
+  // --- NEARBY JOIN (nearby.js) ---
+  // Each answers { ok: false, reason: 'disabled' } while LOCUS_NEARBY_ENABLED is off.
+
+  // 'nearby-discoverable' { on, idToken?, user?, lat?, lng?, accuracy? } -> { ok: true, discoverable }
+  // or { ok: false, reason: 'disabled' | 'identity' | 'in-group' }. Only someone in no Group. On: their
+  // connection stays open past the pre-join close and their lobby position is taken. Off: the entry
+  // and its position are gone at once, and the pre-join close starts again.
+  socket.on('nearby-discoverable', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!NEARBY) return reply({ ok: false, reason: 'disabled' });
+    const { on: wanted, idToken, user } = payload ?? {};
+    if (wanted !== true) {
+      if (discoverable.delete(socket.id) && !socket.data.uid) startPreJoin();
+      return reply({ ok: true, discoverable: false });
+    }
+    const proceed = (who) => {
+      if (!socket.connected) return;
+      if (who.refused || !who.uid) return reply({ ok: false, reason: 'identity' });
+      if (inAnyGroup(who.uid, socket.id)) return reply({ ok: false, reason: 'in-group' });
+      const fix = cleanFix(payload, Date.now()) ?? discoverable.get(socket.id)?.fix ?? null;
+      discoverable.set(socket.id, { uid: who.uid, name: cleanName(who.name ?? user?.name), fix });
+      endPreJoin();
+      reply({ ok: true, discoverable: true });
+    };
+    if (idToken == null) return proceed(joinerUid(user, null));
+    idTokenVerifier.verifyIdToken(idToken)
+      .then((proof) => proceed(joinerUid(user, proof)))
+      .catch((err) => {
+        console.error(`[NEARBY] Discoverable check for ${socket.id} failed:`, err);
+        reply({ ok: false, reason: 'identity' });
+      });
+  });
+
+  // 'nearby-position' { lat, lng, accuracy }: a discoverable person's lobby position. Ignored from
+  // anyone else. Kept on their entry only (see `discoverable`).
+  socket.on('nearby-position', (payload) => {
+    if (!NEARBY) return;
+    const entry = discoverable.get(socket.id);
+    const fix = entry ? cleanFix(payload, Date.now()) : null;
+    if (fix) entry.fix = fix;
+  });
+
+  // 'nearby-scan' { roomCode, lat, lng, accuracy } -> { ok: true, people: [{ id, name }], hereUsable }
+  // or { ok: false, reason: 'disabled' | 'not-in-squad' | 'not-allowed' | 'too-many' (retryAfterSec) }.
+  // The admin or a moderator (the admit permission), from where they are now. Names only; each id is
+  // good for this scan only. hereUsable is false when the presser's own position is too rough to
+  // compare (the list is then empty).
+  socket.on('nearby-scan', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!NEARBY) return reply({ ok: false, reason: 'disabled' });
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!can(roleOfSocket(squad, socket.id), 'admitOne')) return reply({ ok: false, reason: 'not-allowed' });
+    const presser = uidOfSocket(squad, socket.id);
+    const limit = nearbyScans.check(presser ?? socket.id);
+    if (!limit.ok) return reply({ ok: false, reason: 'too-many', retryAfterSec: limit.retryAfterSec });
+    const now = Date.now();
+    const here = cleanFix(payload, now);
+    const hereUsable = Boolean(here) && Number.isFinite(here.accuracy) && here.accuracy <= NEARBY_RADIUS_M;
+    const found = new Map(); // uid -> name, one each however many phones
+    for (const [id, entry] of discoverable) {
+      if (!io.sockets.sockets.has(id)) { discoverable.delete(id); continue; }
+      if (!hereUsable || found.has(entry.uid) || entry.uid === presser) continue;
+      if (squad.blockedUids?.includes(entry.uid)) continue;
+      if (inAnyGroup(entry.uid, id)) continue;
+      if (TIMED_PRIVACY && holdStore.active(entry.uid, now)) continue; // Paused or Hidden
+      if (!isNearby(here, entry.fix, now, { maxAgeMs: NEARBY_TIMINGS.maxFixAgeMs })) continue;
+      found.set(entry.uid, entry.name);
+    }
+    const ids = new Map(); // scan id -> uid
+    const people = [...found].map(([uid, name]) => {
+      const id = randomUUID();
+      ids.set(id, uid);
+      return { id, name };
+    });
+    socket.data.nearbyScan = { roomCode, at: now, ids };
+    reply({ ok: true, people, hereUsable });
+  });
+
+  // 'nearby-invite' { roomCode, ids: [...] } or { roomCode, all: true } ("Add all": everyone in this
+  // connection's last scan) -> { ok: true, invited } or { ok: false, reason: 'disabled' | 'not-in-squad'
+  // | 'not-allowed' | 'scan-first' }. Each person gets 'nearby-invite' and must accept it themselves.
+  socket.on('nearby-invite', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!NEARBY) return reply({ ok: false, reason: 'disabled' });
+    const { roomCode, ids, all } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!can(roleOfSocket(squad, socket.id), 'admitOne')) return reply({ ok: false, reason: 'not-allowed' });
+    const now = Date.now();
+    const scan = socket.data.nearbyScan;
+    if (!scan || scan.roomCode !== roomCode || now - scan.at > NEARBY_TIMINGS.inviteTtlMs) return reply({ ok: false, reason: 'scan-first' });
+    const chosen = all === true ? [...scan.ids.keys()] : (Array.isArray(ids) ? ids.filter((id) => typeof id === 'string').slice(0, 100) : []);
+    const byUid = uidOfSocket(squad, socket.id);
+    const byName = nameOf(squad, socket.id);
+    let invited = 0;
+    const sent = []; // { id (the scan's), inviteId }: which answer ('nearby-invite-answered') is whose
+    for (const scanId of new Set(chosen)) {
+      const uid = scan.ids.get(scanId);
+      if (!uid || squad.blockedUids?.includes(uid) || inAnyGroup(uid)) continue;
+      const name = [...discoverable.values()].find((entry) => entry.uid === uid)?.name ?? null;
+      const { invite, created } = nearbyInvites.offer({ roomCode, uid, name, byUid, byName }, now, randomUUID);
+      invited += 1;
+      sent.push({ id: scanId, inviteId: invite.id });
+      if (!created) continue; // one open invite per person per Group
+      for (const [id, entry] of discoverable) {
+        if (entry.uid === uid) io.to(id).emit('nearby-invite', { inviteId: invite.id, fromName: byName, expiresAt: invite.expiresAt, serverNow: now });
+      }
+    }
+    reply({ ok: true, invited, sent });
+  });
+
+  // 'nearby-respond' { inviteId, accept } -> { ok: true, roomCode? } or { ok: false, reason: 'disabled'
+  // | 'identity' | 'bad-answer' | 'no-invite' | 'used' | 'expired' | 'no-group' | 'blocked' |
+  // 'in-group' }. Accepting admits them at once, through the normal join flow without the approval
+  // queue (they are let in as an admitted member is). Declining only closes the invite. Whoever
+  // invited is told either way ('nearby-invite-answered').
+  socket.on('nearby-respond', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!NEARBY) return reply({ ok: false, reason: 'disabled' });
+    const { inviteId, accept } = payload ?? {};
+    const entry = discoverable.get(socket.id);
+    const uid = entry?.uid ?? socket.data.uid ?? null;
+    if (!uid) return reply({ ok: false, reason: 'identity' });
+    if (typeof inviteId !== 'string' || typeof accept !== 'boolean') return reply({ ok: false, reason: 'bad-answer' });
+    const used = nearbyInvites.use(inviteId, uid, Date.now());
+    if (!used.ok) return reply({ ok: false, reason: used.reason });
+    const { invite } = used;
+    const answered = (accepted) => {
+      for (const target of socketsOfUid(invite.byUid)) target.emit('nearby-invite-answered', { roomCode: invite.roomCode, inviteId: invite.id, name: entry?.name ?? invite.name ?? null, accepted });
+    };
+    if (!accept) {
+      answered(false);
+      return reply({ ok: true });
+    }
+    const squad = activeSquads[invite.roomCode];
+    if (!squad) return reply({ ok: false, reason: 'no-group' });
+    if (squad.blockedUids?.includes(uid)) return reply({ ok: false, reason: 'blocked' });
+    if (inAnyGroup(uid, socket.id)) return reply({ ok: false, reason: 'in-group' });
+    // Their own tap is the approval: on the admitted list, then the join every app makes, which lets
+    // an admitted member straight in.
+    rememberMember(squad, uid);
+    noteNearbyAdmission(squad, uid, Date.now());
+    requestJoin({ roomCode: invite.roomCode, user: { uid, name: entry?.name }, intent: 'join' }, { uid, name: entry?.name });
+    answered(true);
+    reply({ ok: true, roomCode: invite.roomCode });
+  });
+
+  // --- LEAVE REQUESTS (leaveRequests.js) ---
+  // Only in a Group that needs approval to leave; anywhere else each answers 'not-required' and the
+  // app leaves with 'leave-squad' as it always has.
+  //
+  // 'request-leave' { roomCode } -> { ok: true, requestedAt, deadline } or { ok: false, reason:
+  // 'not-in-squad' | 'not-required' | 'admin' (whoever holds command leaves directly) | 'no-identity' }.
+  // Asking again returns the same request and deadline.
+  socket.on('request-leave', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!leaveGated(squad)) return reply({ ok: false, reason: 'not-required' });
+    if (squad.ownerId === socket.id) return reply({ ok: false, reason: 'admin' });
+    const uid = uidOfSocket(squad, socket.id);
+    if (!isKnownMember(squad, uid)) return reply({ ok: false, reason: 'no-identity' });
+    const request = fileLeave(squad, roomCode, uid, nameOf(squad, socket.id));
+    reply({ ok: true, requestedAt: request.requestedAt, deadline: request.deadline, serverNow: Date.now() });
+  });
+
+  // 'cancel-leave' { roomCode } -> { ok: true } or { ok: false, reason: 'not-in-squad' | 'not-required'
+  // | 'no-request' }: the person takes back their own request before it is answered (only their own:
+  // the request is found by who this connection is, never by a uid in the message). It closes, every
+  // list that shows it is told, and they go on as a member as before.
+  socket.on('cancel-leave', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!leaveGated(squad)) return reply({ ok: false, reason: 'not-required' });
+    const uid = uidOfSocket(squad, socket.id);
+    if (!closeLeaveRequest(squad, roomCode, uid, 'cancelled')) return reply({ ok: false, reason: 'no-request' });
+    tellPerson(uid, 'leave-request-cancelled', { roomCode, reason: 'cancelled' });
+    broadcastSquadUpdate(roomCode);
+    reply({ ok: true });
+  });
+
+  // 'resolve-leave' { roomCode, uid, approved } -> { ok: true } or { ok: false, reason: 'not-in-squad'
+  // | 'not-required' | 'bad-answer' | 'no-request' | 'own-request' | 'not-allowed' | 'admin-only'
+  // (a moderator's request) | 'cannot-refuse-commander' }.
+  socket.on('resolve-leave', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode, uid, approved } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!leaveGated(squad)) return reply({ ok: false, reason: 'not-required' });
+    if (typeof approved !== 'boolean') return reply({ ok: false, reason: 'bad-answer' });
+    if (!leaveRequestOf(squad, uid)) {
+      socket.emit('leave-request-withdrawn', { roomCode, uid, reason: 'gone' });
+      return reply({ ok: false, reason: 'no-request' });
+    }
+    const answererUid = uidOfSocket(squad, socket.id);
+    const verdict = mayAnswerLeave({
+      answererRole: roleOfSocket(squad, socket.id), answererUid, requesterUid: uid,
+      requesterIsModerator: isModeratorUid(squad, uid), requesterIsCommander: uid === commanderOf(squad), approved,
+    });
+    if (!verdict.ok) return reply(verdict);
+    const by = { byUid: answererUid, byName: nameOf(squad, socket.id) };
+    if (approved) approveLeave(roomCode, uid, by);
+    else rejectLeave(roomCode, uid, by);
+    reply({ ok: true });
+  });
+
+  // 'get-leave-requests' { roomCode } -> { ok: true, requests: [...] }: the requests this admin or
+  // moderator may answer, as 'leave-request' sends them.
+  socket.on('get-leave-requests', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!leaveGated(squad)) return reply({ ok: false, reason: 'not-required' });
+    if (!can(roleOfSocket(squad, socket.id), 'admitOne')) return reply({ ok: false, reason: 'not-allowed' });
+    const requests = leaveRequestsOf(squad).filter((request) => leaveAnswerers(squad, request).includes(socket.id));
+    reply({ ok: true, requests: requests.map((request) => leaveRequestPayload(squad, roomCode, request)), serverNow: Date.now() });
+  });
+
+  // --- TIMED PAUSE AND HIDDEN (sharingHolds.js) ---
+  // { roomCode, mode: 'ACTIVE' | 'FROZEN' | 'GHOST', minutes }: Paused or Hidden for that many
+  // minutes, or Live again now. Acknowledged with { ok: true, mode, until, allowanceLeftMs,
+  // serverNow } or { ok: false, reason, allowanceLeftMs? }: 'disabled' (timed holds are off),
+  // 'not-in-squad', 'no-identity', 'bad-mode', 'bad-minutes', or 'allowance' (more than is left of
+  // the rolling hour; allowanceLeftMs says how much is). Every phone signed in as the person is
+  // sent 'sharing-hold' with the same state.
+  socket.on('set-sharing-mode', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!TIMED_PRIVACY) return reply({ ok: false, reason: 'disabled' });
+    const { roomCode, mode, minutes } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    const uid = uidOfSocket(squad, socket.id);
+    if (!uid) return reply({ ok: false, reason: 'no-identity' });
+    const now = Date.now();
+    if (mode === 'ACTIVE') {
+      endHold(uid, END_REASON.RESUMED, now);
+      return reply({ ok: true, ...holdState(uid, now) });
+    }
+    // A Pause holds the spot of a Pause already running, else where they last were.
+    const spot = holdStore.active(uid, now)?.spot ?? latestSpotOf(uid, now);
+    const started = holdStore.start(uid, { mode, minutes, spot }, now);
+    if (!started.ok) return reply({ ok: false, reason: started.reason, allowanceLeftMs: started.leftMs });
+    applySharingChange(uid, now);
+    for (const target of socketsOfUid(uid)) target.emit('sharing-hold', { roomCode, ...holdState(uid, now) });
+    reply({ ok: true, ...holdState(uid, now) });
   });
 
   // --- GROUP SWITCHES AND MUTES ---
@@ -1859,6 +2652,14 @@ socket.on('check-ping', (clientTimestamp) => {
       idTokenVerifier.verifyIdToken(idToken)
         .then((proof) => {
           if (!proof.ok) return console.warn(`[GATE] Refused a late Leave from ${socket.id} for ${leftRoom}: ${proof.reason}`);
+          // A Group that needs approval to leave: unless they hold command, a request (or the one
+          // they made), their sharing stopped, still a member until it is approved.
+          const gatedSquad = activeSquads[leftRoom];
+          if (leaveGated(gatedSquad) && isKnownMember(gatedSquad, proof.uid) && gatedSquad.ownerUid !== proof.uid) {
+            fileLeave(gatedSquad, leftRoom, proof.uid, nameOfUid(gatedSquad, proof.uid));
+            stopSharingWhileWaiting(gatedSquad, leftRoom, proof.uid);
+            return;
+          }
           if (leaveByUid(leftRoom, proof.uid)) {
             broadcastGroupRoles(leftRoom);
             broadcastSquadUpdate(leftRoom);
@@ -1872,6 +2673,20 @@ socket.on('check-ping', (clientTimestamp) => {
     const rooms = new Set([...socket.rooms].filter(room => room !== socket.id));
     for (const roomCode in activeSquads) {
       if (activeSquads[roomCode].members.includes(socket.id)) rooms.add(roomCode);
+    }
+
+    // A Group that needs approval to leave (leaveRequests.js): unless this person holds command, their
+    // Leave (an older app's Leave button, or signing out) is a request, or stays the one they made.
+    // Their sharing stops, and they stay a member until it is approved.
+    for (const roomCode of [...rooms]) {
+      const squad = activeSquads[roomCode];
+      if (!leaveGated(squad) || !squad.members.includes(socket.id) || squad.ownerId === socket.id) continue;
+      const uid = uidOfSocket(squad, socket.id);
+      if (!isKnownMember(squad, uid)) continue;
+      fileLeave(squad, roomCode, uid, nameOf(squad, socket.id));
+      stopSharingWhileWaiting(squad, roomCode, uid);
+      socket.leave(roomCode);
+      rooms.delete(roomCode);
     }
 
     // A deliberate Leave, in the log of each Group they were on (not a dropped connection).
@@ -1979,7 +2794,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // A stand-in is temporary: the Commander still gets the squad back on return.
     for (const roomCode in activeSquads) {
       const squad = activeSquads[roomCode];
-      if (squad.ownerId === socket.id && Object.keys(squad.pending ?? {}).length > 0) {
+      if (squad.ownerId === socket.id && (Object.keys(squad.pending ?? {}).length > 0 || (leaveGated(squad) && leaveRequestsOf(squad).length > 0))) {
         promoteStandIn(squad, roomCode);
       }
     }
@@ -1997,16 +2812,6 @@ socket.on('check-ping', (clientTimestamp) => {
       for (const id of socketsAllowed(squad, 'seeJoinQueue')) {
         if (id !== ownerId) io.to(id).emit('access-request-withdrawn', { targetId, roomCode });
       }
-    }
-  }
-
-  // Send a squad's open join requests to whoever is now its Commander: back on a new
-  // socket (an app restart loses its own queue), a caretaker, or a member promoted when
-  // the Commander left. Requests used to be addressed only to the Commander at the time,
-  // so any change of hands left their joiners waiting on nobody.
-  function sendJoinQueue(squad, roomCode, ownerId) {
-    for (const request of pendingRequestsOf(squad, roomCode)) {
-      io.to(ownerId).emit('access-request', request);
     }
   }
 
@@ -2035,101 +2840,6 @@ socket.on('check-ping', (clientTimestamp) => {
     }
   }
 
-  // A Leave sent after the fact (the phone was offline when the person left), by who they are
-  // rather than by a connection. Ends the way a Leave on their own connection does: off the
-  // roster, no longer remembered, and a departing Commander's Group handed for good to whoever
-  // holds command. Returns whether they were in the Group.
-  function leaveByUid(roomCode, uid) {
-    const squad = activeSquads[roomCode];
-    if (!squad || !isKnownMember(squad, uid)) return false;
-    squad.memberUids ??= {};
-    const ids = Object.keys(squad.memberUids).filter((id) => squad.memberUids[id] === uid);
-    // Succession runs for one connection of theirs: one still on the roster, else the one holding
-    // command, else any, else a stand-in key for someone with none left (sharing from the background).
-    const departingId = ids.find((id) => squad.members.includes(id))
-      ?? (squad.ownerUid === uid && squad.ownerId ? squad.ownerId : undefined)
-      ?? ids[0] ?? presenceKey(uid);
-    squad.memberUids[departingId] = uid;
-    if (!squad.members.includes(departingId)) squad.members.push(departingId);
-    recordActivity(roomCode, { kind: ACTIVITY.LEFT, uid, name: nameOf(squad, departingId) });
-    dropModerator(squad, uid);
-    forgetSharingMode(squad, uid);
-    for (const id of ids) {
-      if (id !== departingId) {
-        squad.members = squad.members.filter((member) => member !== id);
-        delete squad.memberUids[id];
-      }
-      io.sockets.sockets.get(id)?.leave(roomCode);
-      delete users[id];
-      delete locationCache[id];
-    }
-    handleSquadSuccession(departingId);
-    return true;
-  }
-
-  function handleSquadSuccession(disconnectedId) {
-    for (const roomCode in activeSquads) {
-      const squad = activeSquads[roomCode];
-
-      // Only reached on a deliberate exit (leave-squad, mutiny exile) — never on a raw
-      // disconnect. Forget them, so coming back means asking the Commander again.
-      const departingUid = squad.memberUids?.[disconnectedId];
-      if (departingUid) {
-        forgetMember(squad, departingUid);
-        removePresence(squad, departingUid);
-        endSession(squad, departingUid);
-        delete squad.memberUids[disconnectedId];
-      }
-
-      squad.members = squad.members.filter(id => id !== disconnectedId);
-
-      if (squad.members.length === 0) {
-        if (!hasPresence(squad, Date.now())) deleteSquad(roomCode);
-        // Members still sharing from the background keep the squad. Nobody connected holds
-        // command; whoever of the admitted comes back first takes it (request-join, Case 4).
-        else if (squad.ownerId === disconnectedId) {
-          squad.ownerId = null;
-          squad.ownerUid = null;
-        }
-      } else if (squad.ownerId === disconnectedId) {
-        // A connected member, if there is one. members[0] could be a dead socket still on
-        // the roster (typically the Commander's, while they're away), and promoting it
-        // left nobody holding command and the promotion addressed to no one.
-        squad.ownerId = squad.members.find(id => io.sockets.sockets.has(id)) ?? squad.members[0];
-        // Ownership goes by uid too. The departing Commander's uid used to stay on as
-        // ownerUid, so they could walk back in later and be made owner again (request-join
-        // Case 3), silently taking the squad from the member promoted here, whose client
-        // still said OWNER while every Commander action they took was refused.
-        squad.ownerUid = squad.memberUids?.[squad.ownerId] || io.sockets.sockets.get(squad.ownerId)?.data?.uid || null;
-        io.to(squad.ownerId).emit('promoted-to-owner', { roomCode });
-        sendJoinQueue(squad, roomCode, squad.ownerId);
-      }
-
-      // The Commander leaving on purpose (or voted out) gives up the squad for good: it
-      // becomes the squad of whoever holds command now, who is then the one a return
-      // hands it back to. (A stand-in leaving changes nothing here: the squad is still
-      // the Commander's to reclaim.)
-      if (departingUid && departingUid === squad.commanderUid) {
-        squad.commanderUid = squad.ownerUid;
-        persistGroupSettings(roomCode);
-      }
-    }
-  }
-
-  // Put a connected member the Commander let in in charge while nobody holds command, and
-  // hand them the join queue. First on the roster wins, the same order succession uses.
-  // Returns whether anyone was promoted.
-  function promoteStandIn(squad, roomCode) {
-    const standInId = squad.members.find(
-      id => io.sockets.sockets.has(id) && isKnownMember(squad, squad.memberUids?.[id])
-    );
-    if (!standInId) return false;
-    squad.ownerId = standInId;
-    squad.ownerUid = squad.memberUids[standInId];
-    io.to(standInId).emit('promoted-to-owner', { roomCode });
-    sendJoinQueue(squad, roomCode, standInId);
-    return true;
-  }
 });
 
 const PORT = process.env.PORT || 5000;

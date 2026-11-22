@@ -11,6 +11,8 @@ export const ACTIVITY_LOG_MAX_ENTRIES = 300;
 export const ACTIVITY = Object.freeze({
   WENT_HIDDEN: 'went-hidden',
   BACK_FROM_HIDDEN: 'back-from-hidden',
+  WENT_PAUSED: 'went-paused', // only logged while timed Pause and Hidden are on (sharingHolds.js)
+  BACK_FROM_PAUSED: 'back-from-paused',
   LEFT: 'left-group', // a deliberate Leave
   CONNECTION_LOST: 'connection-lost', // the connection dropped; not a decision to leave
   KICKED: 'kicked',
@@ -58,7 +60,24 @@ export function noteSharingMode(squad, { uid, name, status, at = Date.now() }) {
   return { at, kind: isHidden ? ACTIVITY.WENT_HIDDEN : ACTIVITY.BACK_FROM_HIDDEN, uid, name };
 }
 
-/** Someone gone from the Group is no longer "hidden": coming back starts afresh. */
+/**
+ * The same for Paused (status 'FROZEN'): the entry for pausing or coming back from a pause, or
+ * null when nothing changed. Kept apart from Hidden, so going from Paused straight to Hidden logs
+ * both "back from paused" and "went hidden".
+ */
+export function notePausedMode(squad, { uid, name, status, at = Date.now() }) {
+  if (!squad || !uid) return null;
+  squad.pausedUids = squad.pausedUids || [];
+  const wasPaused = squad.pausedUids.includes(uid);
+  const isPaused = status === 'FROZEN';
+  if (isPaused === wasPaused) return null;
+  if (isPaused) squad.pausedUids.push(uid);
+  else squad.pausedUids = squad.pausedUids.filter((p) => p !== uid);
+  return { at, kind: isPaused ? ACTIVITY.WENT_PAUSED : ACTIVITY.BACK_FROM_PAUSED, uid, name };
+}
+
+/** Someone gone from the Group is no longer "hidden" or "paused": coming back starts afresh. */
 export function forgetSharingMode(squad, uid) {
   if (squad?.hiddenUids) squad.hiddenUids = squad.hiddenUids.filter((h) => h !== uid);
+  if (squad?.pausedUids) squad.pausedUids = squad.pausedUids.filter((p) => p !== uid);
 }
