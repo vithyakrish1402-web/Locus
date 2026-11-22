@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Eye,
   Info,
+  Lock,
   LogOut,
   Map as MapIcon,
   Moon,
@@ -18,7 +19,7 @@ import {
   UserRound,
   Volume2
 } from 'lucide-react';
-import { Button, Card, IconButton, ListRow, RadioList, SectionLabel, SegmentedControl, Switch } from '../ui';
+import { Button, Card, Chip, IconButton, ListRow, RadioList, SectionLabel, SegmentedControl, Switch } from '../ui';
 import SendApp from '../SendApp';
 import BackgroundSharingSection from './BackgroundSharingSection';
 import { SETTINGS } from '../../copy/settings';
@@ -78,8 +79,7 @@ export default function SettingsScreen({
   useEffect(() => subscribeTheme(({ preference }) => setTheme(preference)), []);
   useEffect(() => { headingRef.current?.focus(); }, []);
 
-  // theme.js runs the switch (one effect per phone); the pressed option is where a
-  // circular reveal would start.
+  // Apply immediately through the same store as the light/dark shortcut.
   const handleThemeChange = (next) => transitionTheme(next);
 
   const checking = update.status === 'checking';
@@ -99,7 +99,8 @@ export default function SettingsScreen({
       <div data-testid="settings-top-cover" className="top-cover sticky top-0 z-20" aria-hidden="true" />
       <div className="max-w-xl mx-auto px-4 pb-8">
         {/* Header Bar */}
-        <div className="pt-3 -ml-2 flex items-center justify-between">
+        {/* data-settings-header: notices stand under this row, never over Back (CommsFeed). */}
+        <div data-settings-header className="pt-3 -ml-2 flex items-center justify-between">
           <IconButton label={SETTINGS.back} icon={ChevronLeft} size={26} onClick={onClose} />
         </div>
         <h1 id={titleId} ref={headingRef} tabIndex={-1} style={{ '--i': 1 }} className="settings-reveal mt-2 mb-6 text-display font-semibold outline-none tracking-tight">
@@ -197,7 +198,15 @@ export default function SettingsScreen({
           <Card padded={false} className="divide-y divide-border shadow-sm">
             <Switch label={SETTINGS.alertSounds} description={SETTINGS.alertSoundsHelp} checked={alertSounds} onChange={onAlertSounds} />
             <Switch label={SETTINGS.inAppDnd} description={SETTINGS.inAppDndHelp} checked={inAppDnd} onChange={setInAppDnd} />
-            <Switch label={SETTINGS.emergencyAlerts} description={SETTINGS.emergencyAlertsHelp} checked locked />
+            {/* Not a switch: it can't be turned off, so it shows a fixed "Always on" instead of a
+                control that looks like it could be. */}
+            <div data-testid="emergency-alerts" className="flex items-center justify-between gap-4 px-4 py-3 min-h-14 font-ui">
+              <span className="min-w-0 flex-1">
+                <span className="block text-body font-medium text-text">{SETTINGS.emergencyAlerts}</span>
+                <span className="block text-secondary text-text-secondary mt-0.5">{SETTINGS.emergencyAlertsHelp}</span>
+              </span>
+              <Chip icon={Lock} className="shrink-0">{SETTINGS.alwaysOn}</Chip>
+            </div>
             {dndAccess !== null && (
               <div data-testid="dnd-access" className="flex items-center justify-between gap-4 px-4 py-3 min-h-14 font-ui">
                 <span className="min-w-0 flex-1">

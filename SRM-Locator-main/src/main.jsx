@@ -4,10 +4,12 @@ import './index.css'
 import App from './App.jsx'
 import ColdStartSplash from './components/ColdStartSplash.jsx'
 import { installPressFeedback } from './utils/pressFeedback.js'
+import { installPerformanceMode } from './utils/performanceMode.js'
 import { installTheme } from './theme/theme.js'
 
 // Light or dark: the saved choice, else the phone's own setting, followed live while the
 // choice is System (index.html already set it once, before first paint).
+installPerformanceMode()
 installTheme()
 
 // App-wide "sonar ping" on every press (see src/utils/pressFeedback.js).

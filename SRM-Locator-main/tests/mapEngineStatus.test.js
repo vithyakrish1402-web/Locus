@@ -10,7 +10,7 @@ describe('mapEngineStatus', () => {
     expect(mapEngineStatus(null, false)).toEqual({ engine: 'free', reason: 'ok' });
   });
 
-  it.each(['no-key', 'timeout', 'key-rejected'])('is the backup, with its reason, for %s', (reason) => {
+  it.each(['no-key', 'timeout', 'key-rejected', 'crashed'])('is the backup, with its reason, for %s', (reason) => {
     expect(mapEngineStatus(reason)).toEqual({ engine: 'backup', reason });
     expect(MAP_STATUS_REASON_TEXT[reason]).toBeTruthy();
   });
@@ -25,6 +25,7 @@ describe('mapEngineStatus', () => {
       'no-key': 'No Google Maps key in this build',
       timeout: 'Google map could not load (slow or no connection)',
       'key-rejected': 'Google rejected the map key',
+      crashed: 'Google map stopped working',
     });
   });
 });

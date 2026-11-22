@@ -1,13 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Users } from 'lucide-react';
-import { Button, Skeleton } from '../ui';
-import { copyText } from '../../utils/clipboard';
+import React, { useEffect, useState } from 'react';
+import { Users } from 'lucide-react';
+import { Skeleton } from '../ui';
 import { MEMBERS_LIST } from '../../copy/group';
 
 // The members list's heading and its states (redesign Group panel batch, piece 7): "Members ·
 // 4" and when the list last came in; while it hasn't yet, a few placeholder rows; and in a
-// group of one, "Just you so far" with the code to copy (Copy only: sharing is on the Later
-// list).
+// group of one, "Just you so far" and how others join. The code is copied from the code chip in
+// the header just above (GroupHeader); this card's own "Copy code" button did the same thing, so
+// it went.
 
 /** Re-renders every `ms`, so "Updated 2 min ago" keeps counting. */
 function useNow(ms) {
@@ -53,15 +53,6 @@ export function MembersLoading() {
 
 /** @param {{ code: string, isLead: boolean }} props */
 export function MembersEmpty({ code, isLead }) {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef(null);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const copy = async () => {
-    if (!(await copyText(code))) return;
-    setCopied(true);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setCopied(false), 1800);
-  };
   return (
     <div data-testid="members-empty" className="mt-2 rounded-card border border-dashed border-border-control p-6 flex flex-col items-center text-center gap-3 font-ui text-text">
       <span className="flex items-center justify-center w-14 h-14 rounded-full bg-accent-soft text-accent" aria-hidden="true">
@@ -69,7 +60,6 @@ export function MembersEmpty({ code, isLead }) {
       </span>
       <p className="text-heading">{MEMBERS_LIST.emptyTitle}</p>
       <p className="text-body text-text-secondary">{isLead ? MEMBERS_LIST.emptyLead(code) : MEMBERS_LIST.emptyMember(code)}</p>
-      <Button icon={copied ? Check : Copy} onClick={copy}>{copied ? MEMBERS_LIST.codeCopied : MEMBERS_LIST.copyCode}</Button>
     </div>
   );
 }

@@ -14,6 +14,20 @@ const shared = [
   { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
 ];
 
+// Place names (the campus's buildings are Google's points of interest) in the theme's full text
+// colour on a halo of the map's casing colour, so they read over every part of the map; roads and
+// the rest keep the quieter secondary colour. Contrast of the fill, worst case over any map colour
+// below: dark 12.4:1 (over roads, #262C35), light 13.2:1 (over water, #CFE0EE). Their casing is
+// Google's own data, which no style can change.
+export const MAP_LABEL_FILL = { light: '#14181F', dark: '#EEF1F5' }; // --color-text
+export const MAP_LABEL_HALO = { light: '#FFFFFF', dark: '#0E1116' }; // --color-map-casing
+export const MAP_LABEL_HALO_WIDTH_PX = 3;
+
+const placeLabels = (theme) => [
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: MAP_LABEL_FILL[theme] }] },
+  { featureType: 'poi', elementType: 'labels.text.stroke', stylers: [{ color: MAP_LABEL_HALO[theme] }, { weight: MAP_LABEL_HALO_WIDTH_PX }] },
+];
+
 export const LIGHT_MAP_STYLES = [
   { elementType: 'geometry', stylers: [{ color: '#EEF0EC' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#566070' }] },
@@ -22,6 +36,7 @@ export const LIGHT_MAP_STYLES = [
   { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#FFFFFF' }] },
   { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#DDE1E6' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#CFE0EE' }] },
+  ...placeLabels('light'),
   ...shared,
 ];
 
@@ -33,6 +48,7 @@ export const DARK_MAP_STYLES = [
   { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#262C35' }] },
   { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#20252D' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#142230' }] },
+  ...placeLabels('dark'),
   ...shared,
 ];
 

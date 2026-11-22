@@ -39,7 +39,8 @@ export const SETTINGS = {
   dndAccessOff: "Not allowed yet. An SOS rings at full alarm volume, but your phone's Do Not Disturb can still hold it back.",
   dndAccessAllow: 'Allow',
   emergencyAlerts: 'Emergency alerts',
-  emergencyAlertsHelp: 'Always on. An emergency alert always sounds, whatever you choose above.',
+  emergencyAlertsHelp: 'An emergency alert always sounds, whatever you choose above.',
+  alwaysOn: 'Always on',
 
   about: 'About',
   version: 'Version',
@@ -105,12 +106,15 @@ export const SEND_APP = {
 export const BACKGROUND_SHARING = {
   section: 'Sharing when LOCUS is closed',
   switchLabel: 'Keep sharing when the app is closed',
-  help: 'Needs a Group. Also delivers pings and join-request notifications while the app is closed. It ends when you leave the Group. Pause or stop it from the notification, or here.',
+  help: 'Needs a Group, and ends when you leave it. Also brings pings and join requests while the app is closed. Pause or stop it from the notification, or here.',
   // Under it, its own switch: hearing a teammate's SOS while the app is closed.
   sos: {
     label: 'SOS alerts when the app is closed',
     description: "If a teammate sends an SOS, you'll be alerted even if you've closed the app.",
-    needsSharing: 'Works only while "Keep sharing when the app is closed" is on. If you turn that off, these alerts stop too.',
+    // While sharing is off, in place of the row's own line; the row is greyed out.
+    offReason: 'Turn on sharing first.',
+    // While sharing is on, under the card.
+    needsSharing: 'If you turn sharing off, these alerts stop too.',
     notAudible: "SOS alerts are turned off or silenced for LOCUS in your phone's notification settings. Turn them back on, or you won't hear one.",
     noFullScreen: "Your phone won't let LOCUS take over a locked screen, so an SOS shows as a ringing banner instead.",
   },

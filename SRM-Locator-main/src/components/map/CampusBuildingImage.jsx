@@ -32,12 +32,12 @@ export default function CampusBuildingImage({
       className={`relative overflow-hidden bg-slate-100 dark:bg-slate-800/60 ${aspectRatio} ${containerClassName}`}
     >
       {/* Shimmer skeleton while loading */}
-      {!loaded && !failed && (
+      {!loaded && !failed && src && (
         <div className="absolute inset-0 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 animate-pulse" />
       )}
 
-      {failed ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-blue-50/80 to-indigo-100/80 dark:from-slate-800 dark:to-slate-900 text-blue-600 dark:text-blue-400 p-2 text-center select-none">
+      {(failed || !src) ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-blue-50/80 to-indigo-100/80 dark:from-slate-800 dark:to-slate-900 text-accent p-2 text-center select-none">
           <div className="w-10 h-10 rounded-xl bg-white/80 dark:bg-slate-800/80 shadow-xs flex items-center justify-center border border-white/60 dark:border-white/10 mb-1">
             <Building2 size={20} className="stroke-[1.75]" />
           </div>
@@ -51,8 +51,8 @@ export default function CampusBuildingImage({
           decoding="async"
           onLoad={() => setLoaded(true)}
           onError={handleError}
-          className={`w-full h-full object-cover transition-all duration-300 ${
-            loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
+          className={`w-full h-full object-cover transition-opacity duration-200 ${
+            loaded ? 'opacity-100' : 'opacity-0'
           } ${className}`}
         />
       )}

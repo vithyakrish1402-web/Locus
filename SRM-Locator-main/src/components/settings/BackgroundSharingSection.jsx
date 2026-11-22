@@ -39,12 +39,16 @@ export default function BackgroundSharingSection({ backgroundSharing, group, lay
           onChange={requestChange}
         />
         {sosAlerts && (
-          // Heard by the same service, so it can only be on while sharing is: shown as off and locked
-          // otherwise, with the reason in words.
-          <div className="border-t border-border" data-testid="sos-alerts">
+          // Heard by the same service, so it can only be on while sharing is: otherwise the whole
+          // row is greyed out and takes no taps, and says why in one line in place of its own.
+          <div
+            className={`border-t border-border ${on ? '' : 'opacity-50 pointer-events-none'}`}
+            data-testid="sos-alerts"
+            data-unavailable={on ? undefined : true}
+          >
             <Switch
               label={COPY.sos.label}
-              description={COPY.sos.description}
+              description={on ? COPY.sos.description : COPY.sos.offReason}
               checked={on && sosAlerts.on}
               locked={!on}
               onChange={sosAlerts.setOn}
@@ -53,7 +57,7 @@ export default function BackgroundSharingSection({ backgroundSharing, group, lay
         )}
       </Card>
       <p className="mt-2 px-1 text-caption text-text-secondary">{COPY.help}</p>
-      {sosAlerts && <p className="mt-2 px-1 text-caption text-text-secondary" data-testid="sos-alerts-note">{COPY.sos.needsSharing}</p>}
+      {sosAlerts && on && <p className="mt-2 px-1 text-caption text-text-secondary" data-testid="sos-alerts-note">{COPY.sos.needsSharing}</p>}
       {sosAlerts && on && sosAlerts.on && !sosAlerts.audible && (
         <p className="mt-2 px-1 text-caption text-warning" data-testid="sos-alerts-silenced">{COPY.sos.notAudible}</p>
       )}

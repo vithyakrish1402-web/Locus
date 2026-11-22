@@ -220,9 +220,8 @@ const SosTrigger = ({
   if (view === 'fired') labelText = SOS_BUTTON.sent;
   else if (view === 'held') labelText = SOS_BUTTON.held;
   else if (view === 'early') labelText = SOS_BUTTON.early;
-  else if (phase === 'armed') labelText = 'ARMED';
-  else if (phase === 'confirming') labelText = 'CONFIRMING';
-  else if (phase === 'arming') labelText = 'HOLD...';
+  else if (phase === 'armed') labelText = SOS_BUTTON.armed;
+  else if (phase === 'arming' || phase === 'confirming') labelText = SOS_BUTTON.hold;
 
   return (
     <>
@@ -281,9 +280,10 @@ const SosTrigger = ({
         onContextMenu={(e) => e.preventDefault()}
         aria-label={showHeld ? HELD_ARIA_LABEL : ARIA_LABELS[phase]}
         className={`relative overflow-hidden select-none touch-none pointer-events-auto flex items-center justify-center font-ui font-bold rounded-xl border transition-all duration-200 active:scale-95 ${
+          // One width in every state (the widest word fits), so the tabs beside it never shift.
           layout === 'tab'
-            ? 'h-11 px-3.5 my-auto self-center'
-            : 'h-12 px-6 rounded-2xl shadow-lg'
+            ? 'h-11 w-28 px-2 my-auto self-center'
+            : 'h-12 min-w-36 px-6 rounded-2xl shadow-lg'
         } ${PHASE_LOOK[phase]} ${className}`}
         style={layerStyle}
       >
@@ -316,7 +316,8 @@ const SosTrigger = ({
                 className={phase === 'armed' ? 'text-danger animate-bounce' : 'text-danger'}
                 aria-hidden="true"
               />
-              <span className="text-xs font-black tracking-widest uppercase">{labelText}</span>
+              {/* "Hold longer" may take two lines; every other word stays on one. */}
+              <span className={`text-xs font-black tracking-widest uppercase ${view === 'early' ? 'text-center leading-tight' : 'whitespace-nowrap'}`}>{labelText}</span>
             </>
           )}
         </div>

@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Search, X } from 'lucide-react';
 import BrandMark from '../access/BrandMark';
 import { StatusDot } from '../ui';
-import { SHARING_CHIP, TOP_BAR } from '../../copy/map';
+import { SHARING_CHIP, SHARING_CHIP_SHORT, TOP_BAR } from '../../copy/map';
 import { TOP_BAR_HEIGHT, TOP_BAR_TOP } from '../../utils/mapChrome';
 
 /** How long the sharing chip stays open on its text, once it has opened, before folding to its dot. */
@@ -162,6 +162,16 @@ export function SharingChip({ mode, waiting = false, pausedNoSpot = false, hidde
     return () => { clearTimeout(settle); clearTimeout(hold); };
   }, [key]);
 
+  // Folded, a one-word name stays beside the dot (it used to be a bare dot nobody could read). It
+  // comes only once the long label has faded and its room has gone, so the chip never holds both.
+  const fadeMs = reduceMotion ? 0 : LABEL_FADE_MS;
+  const [showShort, setShowShort] = useState(false);
+  useEffect(() => {
+    if (expanded) return undefined;
+    const after = setTimeout(() => setShowShort(true), fadeMs);
+    return () => { clearTimeout(after); setShowShort(false); };
+  }, [expanded, fadeMs]);
+
   if (hidden) return null;
 
   const dotStatus = key === 'waiting' ? 'waiting' : DOT[mode] ?? 'live';
@@ -208,6 +218,16 @@ export function SharingChip({ mode, waiting = false, pausedNoSpot = false, hidde
             <span className="block pl-2.5 whitespace-nowrap truncate text-label text-text font-medium">{labelText}</span>
           </span>
         </span>
+        {!expanded && showShort && (
+          <span
+            data-testid="sharing-chip-short"
+            aria-hidden="true"
+            className="pl-2 whitespace-nowrap text-label text-text font-medium"
+            style={fadeMs ? { animation: `locus-member-fade-in ${fadeMs}ms ease both` } : undefined}
+          >
+            {SHARING_CHIP_SHORT[key] ?? SHARING_CHIP_SHORT.ACTIVE}
+          </span>
+        )}
       </motion.button>
     </div>
   );
