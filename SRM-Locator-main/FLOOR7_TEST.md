@@ -52,7 +52,7 @@ another branch is checked out there.)
 ### Seeing the overlay
 
 10. Open **Settings** (the sliders icon at the top) and switch on **Developer mode**. The row is
-    only there for the admin account (signed in with Google, online), and only in LOCUS Test.
+    only there for the admin account (signed in with the admin email, online), and only in LOCUS Test.
     It is off after sign-out. A badge **Developer mode on** appears under the top bar; tap it
     to come back to the Developer mode screen.
 11. To see the floor drawing on the main map screen, open the card **Floor 7 map overlay** and
