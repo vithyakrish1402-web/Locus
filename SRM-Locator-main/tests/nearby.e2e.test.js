@@ -246,7 +246,7 @@ describe('an invite', () => {
     const roster = collect(alpha, 'users-update');
     const person = await lobby(on, 'Tess');
     const { people } = await scan(alpha, room);
-    expect(await ask(alpha, 'nearby-invite', { roomCode: room, ids: [people[0].id] })).toEqual({ ok: true, invited: 1 });
+    expect(await ask(alpha, 'nearby-invite', { roomCode: room, ids: [people[0].id] })).toMatchObject({ ok: true, invited: 1 });
     await waitFor(() => person.invites.length);
     const invite = person.invites[0];
     expect(invite).toMatchObject({ fromName: 'Alpha' });
@@ -317,6 +317,25 @@ describe('an invite', () => {
     expect(await ask(person, 'nearby-respond', { inviteId, accept: true })).toEqual({ ok: false, reason: 'expired' });
   });
 
+  it('tells whoever invited which invite each answer is for, including one that runs out', async () => {
+    const { room, alpha } = await leader(on);
+    const [yes, no, quiet] = [await lobby(on, 'Yes'), await lobby(on, 'No'), await lobby(on, 'Quiet')];
+    const { people } = await scan(alpha, room);
+    const reply = await ask(alpha, 'nearby-invite', { roomCode: room, all: true });
+    expect(reply.sent.map((s) => s.id).sort()).toEqual(people.map((p) => p.id).sort());
+    const inviteOf = (person) => person.invites[0]?.inviteId;
+    await waitFor(() => inviteOf(yes) && inviteOf(no) && inviteOf(quiet));
+    expect(reply.sent.map((s) => s.inviteId).sort()).toEqual([inviteOf(yes), inviteOf(no), inviteOf(quiet)].sort());
+    await ask(yes, 'nearby-respond', { inviteId: inviteOf(yes), accept: true });
+    await ask(no, 'nearby-respond', { inviteId: inviteOf(no), accept: false });
+    await waitFor(() => alpha.answers.some((a) => a.inviteId === inviteOf(quiet) && a.expired === true), { timeout: INVITE_TTL + 1500 });
+    expect(alpha.answers.find((a) => a.inviteId === inviteOf(yes))).toMatchObject({ accepted: true, name: 'Yes' });
+    expect(alpha.answers.find((a) => a.inviteId === inviteOf(no))).toMatchObject({ accepted: false, name: 'No' });
+    expect(alpha.answers.find((a) => a.inviteId === inviteOf(quiet))).toMatchObject({ accepted: false, expired: true, name: 'Quiet' });
+    // Answered ones are not reported as expired later.
+    expect(alpha.answers.filter((a) => a.expired)).toHaveLength(1);
+  });
+
   it('is one open invite per person per Group: asking again sends no second prompt', async () => {
     const { room, alpha } = await leader(on);
     const person = await lobby(on, 'Xan');
@@ -333,7 +352,7 @@ describe('an invite', () => {
     const roster = collect(alpha, 'users-update');
     const [p1, p2] = [await lobby(on, 'Yara'), await lobby(on, 'Zed')];
     await scan(alpha, room);
-    expect(await ask(alpha, 'nearby-invite', { roomCode: room, all: true })).toEqual({ ok: true, invited: 2 });
+    expect(await ask(alpha, 'nearby-invite', { roomCode: room, all: true })).toMatchObject({ ok: true, invited: 2 });
     await waitFor(() => p1.invites.length && p2.invites.length);
     await sleep(50);
     const inRoster = (uid) => roster.some((list) => Object.values(list).some((e) => e.uid === uid));
@@ -349,7 +368,7 @@ describe('an invite', () => {
     expect(await ask(alpha, 'nearby-invite', { roomCode: room, all: true })).toEqual({ ok: false, reason: 'scan-first' });
     const person = await lobby(on, 'Abe');
     await scan(alpha, room);
-    expect(await ask(alpha, 'nearby-invite', { roomCode: room, ids: [person.uid, 'made-up'] })).toEqual({ ok: true, invited: 0 });
+    expect(await ask(alpha, 'nearby-invite', { roomCode: room, ids: [person.uid, 'made-up'] })).toMatchObject({ ok: true, invited: 0 });
     await settle(person);
     expect(person.invites).toEqual([]);
   });

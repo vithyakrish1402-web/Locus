@@ -1070,12 +1070,16 @@ const discoverable = new Map();
 const inAnyGroup = (uid, socketId = null) => roomsOfUid(uid).length > 0
   || Boolean(socketId) && Object.values(activeSquads).some((squad) => squad.members.includes(socketId));
 
-// Invites that ran out unanswered: the invited person's phones are told, so the prompt goes.
+// Invites that ran out unanswered: the invited person's phones are told, so the prompt goes, and so
+// is whoever invited them, so their list says so.
 if (NEARBY) {
   const nearbyTimer = setInterval(() => {
     for (const invite of nearbyInvites.sweep(Date.now())) {
       for (const [id, entry] of discoverable) {
         if (entry.uid === invite.uid) io.to(id).emit('nearby-invite-expired', { inviteId: invite.id });
+      }
+      for (const target of socketsOfUid(invite.byUid)) {
+        target.emit('nearby-invite-answered', { roomCode: invite.roomCode, inviteId: invite.id, name: invite.name, accepted: false, expired: true });
       }
     }
   }, 1000);
@@ -2375,17 +2379,20 @@ socket.on('check-ping', (clientTimestamp) => {
     const byUid = uidOfSocket(squad, socket.id);
     const byName = nameOf(squad, socket.id);
     let invited = 0;
+    const sent = []; // { id (the scan's), inviteId }: which answer ('nearby-invite-answered') is whose
     for (const scanId of new Set(chosen)) {
       const uid = scan.ids.get(scanId);
       if (!uid || squad.blockedUids?.includes(uid) || inAnyGroup(uid)) continue;
-      const { invite, created } = nearbyInvites.offer({ roomCode, uid, byUid, byName }, now, randomUUID);
+      const name = [...discoverable.values()].find((entry) => entry.uid === uid)?.name ?? null;
+      const { invite, created } = nearbyInvites.offer({ roomCode, uid, name, byUid, byName }, now, randomUUID);
       invited += 1;
+      sent.push({ id: scanId, inviteId: invite.id });
       if (!created) continue; // one open invite per person per Group
       for (const [id, entry] of discoverable) {
         if (entry.uid === uid) io.to(id).emit('nearby-invite', { inviteId: invite.id, fromName: byName, expiresAt: invite.expiresAt, serverNow: now });
       }
     }
-    reply({ ok: true, invited });
+    reply({ ok: true, invited, sent });
   });
 
   // 'nearby-respond' { inviteId, accept } -> { ok: true, roomCode? } or { ok: false, reason: 'disabled'
@@ -2405,7 +2412,7 @@ socket.on('check-ping', (clientTimestamp) => {
     if (!used.ok) return reply({ ok: false, reason: used.reason });
     const { invite } = used;
     const answered = (accepted) => {
-      for (const target of socketsOfUid(invite.byUid)) target.emit('nearby-invite-answered', { roomCode: invite.roomCode, name: entry?.name ?? null, accepted });
+      for (const target of socketsOfUid(invite.byUid)) target.emit('nearby-invite-answered', { roomCode: invite.roomCode, inviteId: invite.id, name: entry?.name ?? invite.name ?? null, accepted });
     };
     if (!accept) {
       answered(false);

@@ -112,12 +112,12 @@ export function createInviteBook({ ttlMs = NEARBY_INVITE_TTL_MS } = {}) {
   return {
     ttlMs,
     /** Invites `uid` to `roomCode`, unless they already hold an open one (which is kept as it is). */
-    offer({ roomCode, uid, byUid = null, byName = null }, now, makeId) {
+    offer({ roomCode, uid, name = null, byUid = null, byName = null }, now, makeId) {
       const current = open.get(keyOf(roomCode, uid));
       if (current && current.expiresAt > now) return { invite: current, created: false };
       if (current) close(current);
       seq += 1;
-      const invite = { id: makeId ? makeId() : `inv${seq}`, roomCode, uid, byUid, byName, createdAt: now, expiresAt: now + ttlMs, used: false, lapsed: false };
+      const invite = { id: makeId ? makeId() : `inv${seq}`, roomCode, uid, name, byUid, byName, createdAt: now, expiresAt: now + ttlMs, used: false, lapsed: false };
       open.set(keyOf(roomCode, uid), invite);
       byId.set(invite.id, invite);
       return { invite, created: true };

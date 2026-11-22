@@ -111,14 +111,14 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
     - Answers `{ ok: true, people: [{ id, name }], hereUsable }`, or `{ ok: false, reason: 'disabled' | 'not-in-squad' | 'not-allowed' | 'too-many', retryAfterSec? }`.
     - Names only. Each `id` is random and good for that scan only; it is never an account id. `hereUsable` is false, and the list empty, when the presser's own position is too rough or has no accuracy.
     - Someone is listed only if they are discoverable, in no Group, not blocked by the presser's Group, and not Paused or Hidden (a timed hold from Stage 1). Both positions must be fresher than 20 s, each accuracy known and ≤ 15 m, and the distance ≤ 15 m. Anything else is left out quietly.
-  - `nearby-invite` (`{ roomCode, ids: [...] }` or `{ roomCode, all: true }` for "Add all", which means everyone in this connection's last scan, acknowledgement): `{ ok: true, invited }` or `{ ok: false, reason: 'disabled' | 'not-in-squad' | 'not-allowed' | 'scan-first' }`.
+  - `nearby-invite` (`{ roomCode, ids: [...] }` or `{ roomCode, all: true }` for "Add all", which means everyone in this connection's last scan, acknowledgement): `{ ok: true, invited, sent: [{ id, inviteId }] }` (which invite went to which listed person) or `{ ok: false, reason: 'disabled' | 'not-in-squad' | 'not-allowed' | 'scan-first' }`.
     - The invite is recorded against each person's account: one open invite per person per Group, expiring after `NEARBY_INVITE_TTL_MS`.
     - Their discoverable phones get `nearby-invite` (`{ inviteId, fromName, expiresAt, serverNow }`), and `nearby-invite-expired` (`{ inviteId }`) if it runs out unanswered.
   - `nearby-respond` (`{ inviteId, accept }`, acknowledgement): `{ ok: true, roomCode? }` or `{ ok: false, reason: 'disabled' | 'identity' | 'bad-answer' | 'no-invite' | 'used' | 'expired' | 'no-group' | 'blocked' | 'in-group' }`.
     - Accepting admits them at once. They are put on the admitted list and go through the usual join, so they get `access-granted` as `MEMBER`.
     - Declining only closes the invite.
     - An invite can be answered only by the person it is for, and only once. A used or expired invite is kept as a record for at least a minute, so a late answer is told `used` or `expired`.
-    - Whoever invited gets `nearby-invite-answered` (`{ roomCode, name, accepted }`). Nobody joins without their own Accept.
+    - Whoever invited gets `nearby-invite-answered` (`{ roomCode, inviteId, name, accepted, expired? }`): on Accept, on Decline, and (`expired: true`) when it runs out unanswered. Nobody joins without their own Accept.
   - Someone admitted through a Nearby invite is not picked to stand in for an absent admin until `NEARBY_CARETAKER_WAIT_MS` (24 h) after joining. That covers both a caretaker on return (request-join Case 4) and a member promoted to hold the join or leave queue. They come back as a member, and with nobody else connected the Group has no stand-in for now. Admitted the usual way (approved by the admin) clears this. The same goes for a deliberate exit by whoever holds command (`handleSquadSuccession`): a fresh invitee is skipped, and with only fresh invitees left the Group has no leader for now.
 
 ### 4.2 Telemetry & Position Engine
