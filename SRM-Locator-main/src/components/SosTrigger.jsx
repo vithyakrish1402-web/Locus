@@ -45,6 +45,7 @@ const SosTrigger = ({
   outbox = null,
   held = false,
   sharingMode = 'ACTIVE',
+  onSend = null, // told as an alert goes (a timed Pause or Hidden ends at once)
   layout = 'tab', // 'tab' | 'floating'
 }) => {
   const [phase, setPhase] = useState('idle');
@@ -106,6 +107,7 @@ const SosTrigger = ({
   }, [outbox]);
 
   const emitSosBroadcast = () => {
+    onSend?.();
     const send = (coords) => {
       const payload = {
         lat: coords?.lat ?? null,

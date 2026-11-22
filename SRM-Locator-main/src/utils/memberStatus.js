@@ -3,13 +3,21 @@
 import { freshness, locateTarget } from './direction';
 import { directionLabel, distanceLabel } from '../copy/place';
 import { MEMBERS } from '../copy/group';
+import { TIMED_PRIVACY_ENABLED, clockLabel, serverOffset } from './timedPrivacy';
 
 /**
  * What a member's dot and words say: their mode, how recent their location is, or that none
  * has come yet. Amber for a location going stale, never red.
  * @returns {{ text: string, dot: 'live'|'paused'|'stale'|'none' }}
  */
-export function memberStatus(member, now = Date.now()) {
+export function memberStatus(member, now = Date.now(), { timed = TIMED_PRIVACY_ENABLED } = {}) {
+  // A timed Pause or Hidden (Stage 4): when the group sees them again, in this phone's own clock.
+  // Said instead of a silent disappearance; never where they are.
+  if (timed && Number.isFinite(member.holdUntil)) {
+    const clock = clockLabel(member.holdUntil, serverOffset());
+    if (member.status === 'GHOST') return { text: MEMBERS.hiddenUntil(clock), dot: 'none' };
+    if (member.status === 'FROZEN') return { text: MEMBERS.pausedUntil(clock), dot: 'paused' };
+  }
   if (!member.hasFix) return { text: MEMBERS.waiting, dot: 'none' };
   if (member.status === 'FROZEN') return { text: MEMBERS.paused, dot: 'paused' };
   const fresh = freshness(member.lastSeen, now);

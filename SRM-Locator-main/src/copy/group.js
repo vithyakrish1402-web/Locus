@@ -2,6 +2,7 @@
 // Buildings tabs, your sharing control, the Group Lead's tools, member rows and their options,
 // join requests, leaving, and the panel's states. One place, so the wording is reviewed whole.
 import { spacedCode } from './access';
+import { MAX_HOLD_MINUTES, wholeMinutes } from '../utils/timedPrivacy';
 
 export const GROUP_HEADER = {
   // There is no group name in the data: every group is "Your group" (owner, 2026-10-05).
@@ -47,6 +48,29 @@ export const SHARING_CONTROL = {
   },
 };
 
+// Timed Pause and Hidden (Stage 4, utils/timedPrivacy.js). Plain words for how long, how much is
+// left, and when the group sees you again. Only ever about your own sharing.
+const minutesWord = (m) => `${m} min`;
+export const TIMED_PRIVACY = {
+  pickTitle: { FROZEN: 'Pause for how long?', GHOST: 'Hide for how long?' },
+  minutes: minutesWord,
+  cancel: 'Cancel',
+  allowanceLeft: (ms) => `${minutesWord(wholeMinutes(ms))} of Pause and Hidden left this hour`,
+  allowanceNone: `You've used all ${MAX_HOLD_MINUTES} minutes of Pause and Hidden for this hour. More frees up as the hour goes on.`,
+  refused: (ms) => (wholeMinutes(ms) >= 1
+    ? `Only ${minutesWord(wholeMinutes(ms))} of Pause and Hidden is left this hour. Pick that or less.`
+    : `You've used all ${MAX_HOLD_MINUTES} minutes of Pause and Hidden for this hour. More frees up as the hour goes on.`),
+  unreachable: "Couldn't reach the server, so nothing changed. Try again in a moment.",
+  countdown: { FROZEN: (left, clock) => `Paused for ${left} more, until ${clock}`, GHOST: (left, clock) => `Hidden for ${left} more, until ${clock}` },
+  headsUp: (clock) => `You'll be visible again at ${clock}`,
+  again: { FROZEN: 'Pause again', GHOST: 'Hide again' },
+  ended: {
+    expired: "You're visible to your group again.",
+    resumed: "You're visible to your group again.",
+    sos: "You're visible to your group again: sharing resumed because you sent an SOS.",
+  },
+};
+
 // A member's row and their options sheet.
 export const MEMBERS = {
   liveNow: 'Live now',
@@ -54,6 +78,9 @@ export const MEMBERS = {
   paused: 'Paused',
   // No coordinates have come through for them yet (owner's wording).
   waiting: 'Waiting for location',
+  // A timed Pause or Hidden (Stage 4), in this phone's own clock.
+  pausedUntil: (clock) => `Paused until ${clock}`,
+  hiddenUntil: (clock) => `Hidden until ${clock}`,
   lastUpdate: (minutes) => `Last update ${minutes} min ago`,
   withYou: 'With you',
   lostConnection: (elapsed) => `Lost connection ${elapsed} ago`,
@@ -142,6 +169,8 @@ export const ACTIVITY_LOG = {
   kinds: {
     'went-hidden': 'Hid their location',
     'back-from-hidden': 'Showed their location again',
+    'went-paused': 'Paused their location',
+    'back-from-paused': 'Shared their location again after a pause',
     'left-group': 'Left the group',
     'connection-lost': 'Lost connection',
     kicked: 'Was removed',

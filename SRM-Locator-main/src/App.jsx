@@ -73,7 +73,7 @@ import { useFriends } from './hooks/useFriends';
 import { exportActivityLog } from './utils/activityLogExport';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
+import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS, TIMED_PRIVACY } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -127,6 +127,8 @@ import { pushBackHandler } from './utils/backHandlers';
 import { useBlurOnKeyboardHide } from './hooks/useBlurOnKeyboardHide';
 import { useWifiFusion } from './hooks/useWifiFusion';
 import { useBackgroundSharing } from './hooks/useBackgroundSharing';
+import { useTimedPrivacy } from './hooks/useTimedPrivacy';
+import { TIMED_PRIVACY_ENABLED, MAX_HOLD_MINUTES, wholeMinutes } from './utils/timedPrivacy';
 import { stopBackgroundSharing, LocusBackground } from './utils/backgroundSharing';
 import { rememberGroup, rememberedGroup, forgetGroup } from './utils/rememberedGroup';
 import { useIndoorView } from './hooks/useIndoorView';
@@ -1041,6 +1043,8 @@ const App = () => {
   const canModerateRef = useRef(false);
   canModerateRef.current = canModerate;
   const liveLocationRef = useRef(null);
+  // The GPS accuracy (metres) of the latest fix, sent with every position (Nearby needs it).
+  const liveAccuracyRef = useRef(null);
   // Shared with ARCompass.jsx (src/hooks/useDeviceHeading.js) so both the AR
   // targeting view and this device's own map marker read the compass the same way.
   // `heading` is throttled for rendering; `headingRef` always holds the newest
@@ -1456,7 +1460,9 @@ const App = () => {
           if (id === socket.id) return;
           if (data.uid && myUidRef.current && data.uid === myUidRef.current) return;
           if (data.roomCode !== squadCode) return;
-          if (data.status === 'GHOST') return;
+          // Timed holds (Stage 4): someone Hidden for a set time stays listed, with when they are
+          // back and no position, rather than silently disappearing. Untimed, as before.
+          if (data.status === 'GHOST' && !(TIMED_PRIVACY_ENABLED && Number.isFinite(data.holdUntil))) return;
 
           // A member with no fix yet (indoors, location permission denied, just approved)
           // is still a member: they belong on the roster, just not on the map. Dropping
@@ -1477,6 +1483,8 @@ const App = () => {
             battery: data.battery || 0,
             status: data.status || 'ACTIVE',
             lastSeen: memberSeenRef.current[id]?.local ?? null,
+            // When a timed Pause or Hidden ends (server clock), for "Paused until 14:05".
+            ...(TIMED_PRIVACY_ENABLED && Number.isFinite(data.holdUntil) ? { holdUntil: data.holdUntil } : {}),
             // WiFi Arc Stage 7: the member's building + floor, when their latest update
             // carried them (they are left out, never null, when they didn't). Absent here
             // too in that case, so their floor chip and pill go as soon as they leave
@@ -1850,6 +1858,10 @@ const App = () => {
   // still goes, so the group (and the activity log) know this member is hidden; the position
   // used to go too, every few seconds, and was relayed to everyone (2026-10 fix).
   const sharedPosition = (fix) => (telemetryModeRef.current === 'GHOST' ? {} : positionFor(fix));
+  // A position goes with how accurate it is, when the phone said (none while Hidden: no position).
+  const withAccuracy = (position) => (
+    Number.isFinite(position?.lat) && Number.isFinite(liveAccuracyRef.current) ? { ...position, accuracy: liveAccuracyRef.current } : position
+  );
 
   /// 2. Broadcast your live GPS data to the network
   // 2. Broadcast your live GPS data to the network
@@ -1879,6 +1891,7 @@ const App = () => {
         setLiveLocation(fix);
         liveLocationRef.current = fix;
         setLiveAccuracy(accuracy || null);
+        liveAccuracyRef.current = Number.isFinite(accuracy) && accuracy > 0 ? accuracy : null;
         setLocationError(null);
         noteRealFix();
 
@@ -1886,7 +1899,7 @@ const App = () => {
         if (telemetryModeRef.current === 'FROZEN') return;
         emitLive('update-location', {
           name: user.displayName, photo: user.photoURL,
-          ...sharedPosition(fix),
+          ...withAccuracy(sharedPosition(fix)),
           speed: 0, battery: 100,
           status: telemetryModeRef.current,
           roomCode: squadCode,
@@ -1932,7 +1945,7 @@ const App = () => {
       if (telemetryModeRef.current === 'ACTIVE') {
         emitLive('update-location', {
           name: user.displayName, photo: user.photoURL,
-          ...positionFor(currentLoc),
+          ...withAccuracy(positionFor(currentLoc)),
           speed: 0, battery: currentBattery,
           status: telemetryModeRef.current,
           roomCode: squadCode,
@@ -1951,6 +1964,7 @@ const App = () => {
         liveLocationRef.current = fix;
         setLiveSpeed(speed || 0);
         setLiveAccuracy(accuracy || null);
+        liveAccuracyRef.current = Number.isFinite(accuracy) && accuracy > 0 ? accuracy : null;
         setLocationError(null);
         noteRealFix();
 
@@ -1971,7 +1985,7 @@ const App = () => {
         // to override movement-based updates, you'd need to clear this watch and rely purely on the interval.
         emitLive('update-location', {
           name: user.displayName, photo: user.photoURL,
-          ...sharedPosition(fix),
+          ...withAccuracy(sharedPosition(fix)),
           speed: speed ? Math.round(speed * 3.6) : 0,
           battery: batteryLevel,
           status: telemetryModeRef.current,
@@ -2016,7 +2030,7 @@ const App = () => {
     setPausedHasSpot(pausedPositionRef.current !== null);
     emitLive('update-location', {
       name: user.displayName, photo: user.photoURL,
-      ...(telemetryMode === 'GHOST' ? {} : position),
+      ...(telemetryMode === 'GHOST' ? {} : withAccuracy(position)),
       speed: 0, battery: 100,
       status: telemetryMode, // use state here — this effect re-runs when it changes
       roomCode: squadCode,
@@ -2335,11 +2349,37 @@ const App = () => {
 
   // Live, Paused or Hidden, chosen in the app. Background sharing follows, so the notification,
   // this screen and the Group always agree (Hidden stops it: see useBackgroundSharing).
-  const changeSharingMode = (mode) => {
+  const changeSharingMode = (mode, { minutes = 0 } = {}) => {
     telemetryModeRef.current = mode;
     setTelemetryMode(mode);
-    if (mode === 'FROZEN') backgroundSharing.pause();
+    if (mode === 'FROZEN') backgroundSharing.pause(minutes);
     else if (mode === 'ACTIVE') backgroundSharing.resume();
+  };
+
+  // Timed Pause and Hidden (Stage 4, hooks/useTimedPrivacy.js): the server keeps the time and ends
+  // it. Off (TIMED_PRIVACY_ENABLED), or the server's own switch off, Pause and Hidden are as in
+  // js-1.1.87, so the app and the server can ship in either order.
+  const timed = useTimedPrivacy({
+    socket,
+    roomCode: squadCode,
+    inGroup: Boolean(user && hasJoinedSquad && accessStatus === 'granted'),
+    applyMode: (mode, options) => changeSharingMode(mode, options),
+  });
+  // A pick in the sharing control. Live is always allowed at once (and ends a hold on the server);
+  // Paused or Hidden is asked of the server, and only happens once it agrees.
+  const pickSharingMode = (mode, minutes) => {
+    if (!timed.active) {
+      changeSharingMode(mode);
+      return;
+    }
+    if (mode === 'ACTIVE') {
+      changeSharingMode('ACTIVE');
+      if (timed.hold) timed.request('ACTIVE');
+      return;
+    }
+    timed.request(mode, minutes).then((answer) => {
+      if (answer?.reason === 'disabled') changeSharingMode(mode); // the server's switch is off: as before
+    });
   };
 
   // ... and the other way: Pause, Resume, or a pause running out, on the sharing notification.
@@ -2354,10 +2394,24 @@ const App = () => {
     if (backgroundState === 'paused' && mode === 'ACTIVE') {
       telemetryModeRef.current = 'FROZEN';
       setTelemetryMode('FROZEN');
+      // Timed: the notification's Pause is a hold like any other, as long as what is left allows
+      // (at most MAX_HOLD_MINUTES). Refused, sharing goes on: Live again, the service resumed.
+      if (timed.active) {
+        const minutes = Math.min(MAX_HOLD_MINUTES, timed.allowanceLeftMs == null ? MAX_HOLD_MINUTES : wholeMinutes(timed.allowanceLeftMs));
+        if (minutes < 1) {
+          notify.warning(TIMED_PRIVACY.refused(0));
+          changeSharingMode('ACTIVE');
+        } else {
+          timed.request('FROZEN', minutes).then((answer) => {
+            if (!answer?.ok && answer?.reason !== 'disabled') changeSharingMode('ACTIVE');
+          });
+        }
+      }
     } else if (backgroundState === 'running' && mode === 'FROZEN') {
       if (before === 'paused') {
         telemetryModeRef.current = 'ACTIVE';
         setTelemetryMode('ACTIVE');
+        if (timed.active && timed.hold) timed.request('ACTIVE');
       } else {
         // Sharing has just started while the app is paused: the service pauses too.
         backgroundSharing.pause();
@@ -3389,7 +3443,8 @@ const App = () => {
             {activeTab === 'users' && (
               <SharingControl
                 mode={telemetryMode}
-                onChange={changeSharingMode}
+                onChange={pickSharingMode}
+                timed={timed.active ? { ...timed, onPick: pickSharingMode } : null}
                 waiting={!liveLocation}
                 pausedNoSpot={!pausedHasSpot}
                 polling={sysConfig.polling}
@@ -3582,7 +3637,9 @@ const App = () => {
           mode={telemetryMode}
           waiting={!liveLocation}
           pausedNoSpot={!pausedHasSpot}
-          hidden={isNavigatingMode || (isTargetingMode && isMobile) || Boolean(locationError) || showDeclinedCard}
+          // Timed (Stage 4): while Paused or Hidden it stays up over the banners too, so nobody is
+          // unsure whether they are being shared. Not while navigating: the route takes the top.
+          hidden={isNavigatingMode || ((!TIMED_PRIVACY_ENABLED || telemetryMode === 'ACTIVE') && ((isTargetingMode && isMobile) || Boolean(locationError) || showDeclinedCard))}
         />
         <AnimatePresence initial={false}>
           {/* Choosing a meeting point (a phone's meeting point button). */}
@@ -4158,6 +4215,7 @@ const App = () => {
                 outbox={sosOutbox}
                 held={sosHeld}
                 sharingMode={telemetryMode}
+                onSend={timed.onSosSent}
                 layout="tab"
               />
             ) : null
@@ -4259,6 +4317,7 @@ const App = () => {
             outbox={sosOutbox}
             held={sosHeld}
             sharingMode={telemetryMode}
+            onSend={timed.onSosSent}
             layout="floating"
           />
         </div>

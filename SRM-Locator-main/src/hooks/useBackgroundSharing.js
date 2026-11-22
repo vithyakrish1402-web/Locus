@@ -222,9 +222,11 @@ export function useBackgroundSharing({ uid, inGroup, hidden = false, roomCode, g
   // Until resumed, like the app's own Paused. The service answers with its new state (stateChanged),
   // which is what bg.status then says: nothing is assumed here. A service that is not running yet
   // ignores it, and the app pauses it once it says it is running (see App.jsx).
-  const pause = useCallback(() => {
+  // `minutes`: a timed Pause (Stage 4) ends itself on the phone too, app closed or not; 0 is until
+  // resumed, as before. The v1.1.75 shell already takes it.
+  const pause = useCallback((minutes = 0) => {
     if (!active) return;
-    Promise.resolve(plugin.pause?.({ minutes: 0 })).catch(() => {});
+    Promise.resolve(plugin.pause?.({ minutes: Number.isFinite(minutes) && minutes > 0 ? Math.ceil(minutes) : 0 })).catch(() => {});
   }, [active, plugin]);
 
   const resume = useCallback(() => {

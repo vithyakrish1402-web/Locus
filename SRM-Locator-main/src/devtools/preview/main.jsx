@@ -26,6 +26,10 @@ import AdminTools, { RecordingBar } from '../../components/admin/AdminTools';
 import AddPlaceSheet, { PlacingBar } from '../../components/admin/AddPlace';
 import SosOverlay from '../../components/SosOverlay';
 import CommsFeed from '../../components/CommsFeed';
+import SharingControl from '../../components/group/SharingControl';
+import { SharingChip } from '../../components/map/TopBar';
+import { TIMED_PRIVACY } from '../../copy/group';
+import { clockLabel } from '../../utils/timedPrivacy';
 import UpdateModal from '../../components/UpdateModal';
 import LiveUpdateToast from '../../components/LiveUpdateToast';
 import SquadMemberCard from '../../components/SquadMemberCard';
@@ -91,6 +95,10 @@ const SCREENS = {
   'emergency-received': {
     label: 'Emergency alert received (2 queued)',
     render: () => <SosOverlay {...SOS} onAcknowledge={() => {}} />,
+  },
+  'timed-sharing': {
+    label: 'Timed Pause and Hidden (Stage 4)',
+    render: () => <TimedSharingDemo />,
   },
   notifications: {
     label: 'Notifications (all four types)',
@@ -643,6 +651,30 @@ function SheetDemo() {
           <Button variant="secondary" block onClick={() => setOpen(false)}>Cancel</Button>
         </div>
       </Sheet>
+    </div>
+  );
+}
+
+// Timed Pause and Hidden (Stage 4): the sharing chip while Paused, the sharing control counting
+// down (tap Paused or Hidden on the middle one to see the duration picker), one with nothing left,
+// and the heads-up with its "Hide again" button over them.
+function TimedSharingDemo() {
+  const [until] = useState(() => Date.now() + 7 * 60_000);
+  useEffect(() => {
+    __resetNotifications();
+    notify.info(TIMED_PRIVACY.headsUp(clockLabel(until, 0)), { duration: 0, haptic: false, action: { label: TIMED_PRIVACY.again.GHOST, onClick: () => {} } });
+    notify.success(TIMED_PRIVACY.ended.sos, { duration: 0, haptic: false });
+  }, [until]);
+  const base = { active: true, offset: 0, pending: false, onPick: () => {} };
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--color-bg)' }}>
+      <CommsFeed />
+      <div className="px-4 pt-48 pb-8 flex flex-col gap-6">
+        <SharingChip mode="FROZEN" />
+        <SharingControl mode="FROZEN" onChange={() => {}} timed={{ ...base, hold: { mode: 'FROZEN', until }, allowanceLeftMs: 12 * 60_000 }} />
+        <SharingControl mode="ACTIVE" onChange={() => {}} timed={{ ...base, hold: null, allowanceLeftMs: 12 * 60_000 }} />
+        <SharingControl mode="GHOST" onChange={() => {}} timed={{ ...base, hold: { mode: 'GHOST', until }, allowanceLeftMs: 0 }} />
+      </div>
     </div>
   );
 }
