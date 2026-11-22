@@ -59,6 +59,8 @@ const plugin = vi.hoisted(() => {
 });
 const shell = vi.hoisted(() => ({ hasPlugin: true }));
 
+// The app's switch, off here on purpose: this file is about the app with the feature switched off.
+vi.mock('../src/utils/timedPrivacy.js', async (importOriginal) => ({ ...(await importOriginal()), TIMED_PRIVACY_ENABLED: false }));
 vi.mock('socket.io-client', () => ({ io: () => fakeSocket }));
 vi.mock('../src/firebase.js', () => ({
   auth: { currentUser: { getIdToken: async () => 'id-token-123' } },

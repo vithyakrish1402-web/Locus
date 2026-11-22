@@ -29,6 +29,8 @@ const fakeSocket = vi.hoisted(() => {
   };
 });
 
+// The app's switch, off here on purpose: this file is about the app with the feature switched off.
+vi.mock('../src/utils/nearby.js', async (importOriginal) => ({ ...(await importOriginal()), NEARBY_ENABLED: false }));
 vi.mock('socket.io-client', () => ({ io: () => fakeSocket }));
 vi.mock('../src/firebase.js', () => ({ auth: { currentUser: null }, googleProvider: {}, db: {} }));
 vi.mock('firebase/auth', () => ({

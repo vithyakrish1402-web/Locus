@@ -64,7 +64,7 @@ afterEach(() => {
 });
 
 describe('the rules', () => {
-  it('the switch is off as shipped', () => expect(LEAVE_APPROVAL_ENABLED).toBe(false));
+  it('the switch is on in this release (a Group needs the server to say so too)', () => expect(LEAVE_APPROVAL_ENABLED).toBe(true));
 
   it('a Leave is a request only with the switch on and the Group saying so', () => {
     expect(leaveNeedsRequest(true, GATED, ROOM)).toBe(true);

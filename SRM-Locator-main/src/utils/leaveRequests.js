@@ -8,7 +8,7 @@
 // so the app and the server can be released in either order.
 
 /** The app's switch. Off until the server's LOCUS_LEAVE_APPROVAL_ENABLED is on in production. */
-export const LEAVE_APPROVAL_ENABLED = false;
+export const LEAVE_APPROVAL_ENABLED = true;
 
 /** How long the app waits for the server's answer before saying it could not be reached. */
 export const LEAVE_REQUEST_TIMEOUT_MS = 8000;

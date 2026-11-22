@@ -9,8 +9,8 @@ import { TIMED_PRIVACY } from '../src/copy/group.js';
 const MIN = 60_000;
 
 describe('the switch and the limits', () => {
-  it('is off as shipped, with 30-minute holds and a 2-minute heads-up', () => {
-    expect(TIMED_PRIVACY_ENABLED).toBe(false);
+  it('is on in this release (shown only once the server says so), with 30-minute holds and a 2-minute heads-up', () => {
+    expect(TIMED_PRIVACY_ENABLED).toBe(true);
     expect(MAX_HOLD_MINUTES).toBe(30);
     expect(HEADS_UP_BEFORE_MS).toBe(2 * MIN);
   });

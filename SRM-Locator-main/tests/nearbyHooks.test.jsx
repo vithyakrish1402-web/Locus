@@ -55,7 +55,7 @@ afterEach(() => {
 });
 
 describe('the helpers', () => {
-  it('the switch is off as shipped', () => expect(NEARBY_ENABLED).toBe(false));
+  it('the switch is on in this release (shown only once the server says so)', () => expect(NEARBY_ENABLED).toBe(true));
 
   it('send a position with its accuracy, and none when the phone gave none', () => {
     expect(fixPayload({ latitude: 1, longitude: 2, accuracy: 6 })).toEqual({ lat: 1, lng: 2, accuracy: 6 });

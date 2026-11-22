@@ -7,7 +7,7 @@
 // the same old behaviour, so the app and the server can be released in either order.
 
 /** The app's switch. Off until the server's LOCUS_TIMED_PRIVACY_ENABLED is on in production. */
-export const TIMED_PRIVACY_ENABLED = false;
+export const TIMED_PRIVACY_ENABLED = true;
 
 /** The longest one Pause or Hidden may be asked for (the server's MAX_HOLD_MINUTES). */
 export const MAX_HOLD_MINUTES = 30;

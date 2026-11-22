@@ -7,7 +7,7 @@
 // released in either order.
 
 /** The app's switch. Off until the server's LOCUS_NEARBY_ENABLED is on in production. */
-export const NEARBY_ENABLED = false;
+export const NEARBY_ENABLED = true;
 
 /** While discoverable, a fresh lobby position at most this often (the server wants one under 20 s). */
 export const NEARBY_POSITION_EVERY_MS = 5000;
