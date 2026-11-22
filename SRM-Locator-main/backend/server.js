@@ -35,7 +35,8 @@ import {
   ROLE_ADMIN, ROLE_MODERATOR, roleOf, can, mayDo, refusal, canActOn, isOwnAdmin, setModerator, dropModerator,
   rememberBlocked, forgetBlocked, blockedList,
 } from './groupRoles.js';
-import { ACTIVITY, logActivity, activityOf, noteSharingMode, forgetSharingMode } from './activityLog.js';
+import { ACTIVITY, logActivity, activityOf, noteSharingMode, notePausedMode, forgetSharingMode } from './activityLog.js';
+import { createHoldStore, holdMinuteMs, timedPrivacyEnabled, HOLD_MODES, END_REASON } from './sharingHolds.js';
 import { createJoinNotifier } from './joinNotify.js';
 import { createFriendsStore, friendsLoaderFromEnv, friendsStartupLine, sosAudience } from './friends.js';
 import { createRateLimiter } from './rateLimit.js';
@@ -385,6 +386,148 @@ function recordActivity(roomCode, entry) {
 const nameOf = (squad, socketId) =>
   io.sockets.sockets.get(socketId)?.data?.profile?.name ?? users[socketId]?.name ?? squad?.profiles?.[uidOfSocket(squad, socketId)]?.name ?? null;
 
+// --- TIMED PAUSE AND HIDDEN (sharingHolds.js) ---
+// Off unless LOCUS_TIMED_PRIVACY_ENABLED=true. Off, nothing below runs and every handler behaves as
+// it did: Paused and Hidden are whatever each phone reports. On, a Pause or Hidden is a hold the
+// server grants ('set-sharing-mode'), keeps on the person's account and ends itself, and what the
+// Group is shown of someone's sharing is read from that hold, never from what their phone says.
+const TIMED_PRIVACY = timedPrivacyEnabled();
+const holdStore = createHoldStore({ minuteMs: holdMinuteMs() });
+console.log(`[PRIVACY] Timed Pause and Hidden: ${TIMED_PRIVACY ? 'ON' : 'off (LOCUS_TIMED_PRIVACY_ENABLED=true turns it on)'}`);
+if (holdMinuteMs() !== 60_000) console.warn(`[⚠️  GUARD] LOCUS_HOLD_MINUTE_MS makes a hold "minute" ${holdMinuteMs()} ms. Tests only.`);
+
+const HOLD_STATUSES = new Set(HOLD_MODES);
+
+/**
+ * What the Group is shown of `uid`'s sharing at `now`, when their phone reports `reported`:
+ * { status, holdUntil?, spot?, withhold }. `withhold`: no position of theirs is kept or shown.
+ * - A running hold decides: Hidden shows no position; Paused shows only where they paused.
+ * - Paused or Hidden reported with no hold (an older app, a hold that has just ended, or a phone
+ *   claiming a pause it was never granted) is shown as Live without a position: listed, not on the
+ *   map, and never a stale spot presented as live.
+ */
+function heldSharing(uid, reported, now) {
+  const hold = uid ? holdStore.active(uid, now) : null;
+  if (hold) {
+    const spot = hold.mode === 'FROZEN' ? hold.spot : null;
+    return { status: hold.mode, holdUntil: hold.until, spot, withhold: !spot };
+  }
+  if (HOLD_STATUSES.has(reported)) return { status: 'ACTIVE', withhold: true };
+  return { status: reported, withhold: false };
+}
+
+// The connected sockets signed in as `uid`, in any Group or none.
+const socketsOfUid = (uid) => [...io.sockets.sockets.values()].filter((s) => uid && s.data?.uid === uid);
+
+// Every live Group `uid` is a member of (by account, not by connection).
+const roomsOfUid = (uid) => Object.keys(activeSquads).filter((room) => uid && isKnownMember(activeSquads[room], uid));
+
+// The name a Group knows `uid` by.
+function nameOfUid(squad, uid) {
+  const id = Object.keys(squad?.memberUids ?? {}).find((socketId) => squad.memberUids[socketId] === uid);
+  return (id && nameOf(squad, id)) ?? squad?.profiles?.[uid]?.name ?? presenceOf(squad, uid, Date.now())?.name ?? null;
+}
+
+// Where `uid` is now, as the server last heard it: their newest real fix on any connection, else
+// their background sharing's. Null when there is none (a Pause then holds no spot).
+function latestSpotOf(uid, now) {
+  let best = null;
+  for (const room of roomsOfUid(uid)) {
+    const squad = activeSquads[room];
+    for (const [id, owner] of Object.entries(squad.memberUids ?? {})) {
+      const entry = owner === uid ? users[id] : null;
+      if (entry && isRealFix(entry.lat, entry.lng) && (!best || entry.lastSeen > best.at)) best = { lat: entry.lat, lng: entry.lng, at: entry.lastSeen };
+    }
+    const bg = presenceOf(squad, uid, now);
+    if (bg && isRealFix(bg.lat, bg.lng) && (!best || bg.lastSeen > best.at)) best = { lat: bg.lat, lng: bg.lng, at: bg.lastSeen };
+  }
+  return best ? { lat: best.lat, lng: best.lng } : null;
+}
+
+// What the person's phone is told about their own hold. serverNow lets it count down in step
+// with the server whatever its own clock says.
+const holdState = (uid, now) => {
+  const hold = holdStore.active(uid, now);
+  return {
+    mode: hold?.mode ?? 'ACTIVE',
+    until: hold?.until ?? null,
+    allowanceLeftMs: holdStore.leftMs(uid, now),
+    serverNow: now,
+  };
+};
+
+// Tells one connection (just let into a Group) the hold its account has, if timed holds are on.
+function sendSharingHold(target, roomCode) {
+  const uid = target?.data?.uid;
+  if (!TIMED_PRIVACY || !uid) return;
+  target.emit('sharing-hold', { roomCode, ...holdState(uid, Date.now()) });
+}
+
+// The Group's view of `uid` changed (a hold began or ended): every stored position of theirs is
+// brought in line with it (Hidden keeps none; Paused keeps only the spot), the change goes in each
+// Group's activity log, and everyone is sent the new member list.
+function applySharingChange(uid, now) {
+  const held = holdStore.active(uid, now);
+  const spot = held?.mode === 'FROZEN' ? held.spot : null;
+  for (const room of roomsOfUid(uid)) {
+    const squad = activeSquads[room];
+    for (const [id, owner] of Object.entries(squad.memberUids ?? {})) {
+      if (owner !== uid || !users[id]) continue;
+      // eslint-disable-next-line no-unused-vars
+      const { lat, lng, building, floor, accuracy, positionSource, ...rest } = users[id];
+      const noPosition = { battery: locationCache[id]?.battery ?? 0, lastSeen: locationCache[id]?.lastSeen ?? now };
+      if (held && !spot) {
+        // Hidden, or Paused with no spot to hold: nothing of where they are is kept.
+        users[id] = { ...rest, status: held.mode };
+        locationCache[id] = noPosition;
+      } else if (held) {
+        users[id] = { ...rest, lat: spot.lat, lng: spot.lng, status: 'FROZEN' };
+        locationCache[id] = { ...locationCache[id], lat: spot.lat, lng: spot.lng };
+      } else {
+        // Ended: Live again, with no position until the phone sends a live one.
+        users[id] = { ...rest, status: 'ACTIVE' };
+      }
+    }
+    logSharingMode(room, squad, uid, nameOfUid(squad, uid), held?.mode ?? 'ACTIVE');
+    broadcastSquadUpdate(room);
+  }
+}
+
+// Going hidden or paused, and coming back, in a Group's activity log. Pause is only logged while
+// timed holds are on: an older app has no words for it.
+function logSharingMode(roomCode, squad, uid, name, status) {
+  const hidden = noteSharingMode(squad, { uid, name, status });
+  const paused = TIMED_PRIVACY ? notePausedMode(squad, { uid, name, status }) : null;
+  // Coming back from one is logged before going into the other (Paused straight to Hidden).
+  const changes = [hidden, paused].filter(Boolean).sort((a, b) => Number(isReturn(b)) - Number(isReturn(a)));
+  for (const change of changes) recordActivity(roomCode, change);
+}
+const isReturn = (entry) => entry.kind === ACTIVITY.BACK_FROM_HIDDEN || entry.kind === ACTIVITY.BACK_FROM_PAUSED;
+
+// Ends `uid`'s hold now, for `reason`, and tells every phone signed in as them.
+function endHold(uid, reason, now) {
+  const ended = holdStore.end(uid, now);
+  if (!ended) return null;
+  holdEnded(uid, ended, reason, now);
+  return ended;
+}
+function holdEnded(uid, hold, reason, now) {
+  applySharingChange(uid, now);
+  for (const target of socketsOfUid(uid)) {
+    target.emit('sharing-hold-ended', { reason, endedMode: hold.mode, ...holdState(uid, now) });
+  }
+}
+
+// Holds that have run out are ended within this long. (Only the e2e tests shorten it.)
+const HOLD_SWEEP_MS = Number(process.env.LOCUS_HOLD_SWEEP_MS) || 1000;
+if (TIMED_PRIVACY) {
+  const holdTimer = setInterval(() => {
+    const now = Date.now();
+    for (const { uid, hold } of holdStore.expire(now)) holdEnded(uid, hold, END_REASON.EXPIRED, now);
+  }, HOLD_SWEEP_MS);
+  holdTimer.unref?.();
+}
+
 // --- JOIN REQUESTS WAITING (joinNotify.js) ---
 // One message per burst of requests to everyone who may admit, with how many are waiting then:
 // connected admitters on their socket, and admitters whose app is closed through the same route
@@ -587,23 +730,34 @@ function broadcastSquadUpdate(roomCode) {
     // No position on this connection, one from the background: that one is shown below, never both.
     if (!telemetry && uid && fixless.has(uid)) return;
     const profile = live?.data?.profile || {};
+    // Timed holds on: what the Group sees is the person's hold, not what their phone last said
+    // (heldSharing). Each entry of someone holding Paused or Hidden carries when it ends.
+    const held = TIMED_PRIVACY ? heldSharing(uid, telemetry?.status ?? 'ACTIVE', Date.now()) : null;
+    const holdUntil = held?.holdUntil ? { holdUntil: held.holdUntil } : {};
     // Hidden means hidden: a member sharing as GHOST is listed, but nobody is sent where they are.
-    const hidden = telemetry?.status === 'GHOST';
+    const hidden = held ? held.status === 'GHOST' : telemetry?.status === 'GHOST';
+    // Listed without a position: a Pause with no spot to hold, a pause or hide never granted, or one
+    // whose hold has just ended and whose phone has not yet sent a live position (stored as Live
+    // with none, which must not be sent as having one).
+    const withheld = Boolean(held) && !hidden && (held.withhold || !isRealFix(telemetry?.lat, telemetry?.lng));
     roomUsers[id] = telemetry
       ? (hidden
-          ? { uid, roomCode, name: telemetry.name, photo: telemetry.photo, status: 'GHOST', speed: 0, heading: 0, battery: telemetry.battery, lastSeen: telemetry.lastSeen, hasFix: false, role: roleOf(squad, id, uid) }
-          : { ...telemetry, uid, hasFix: true, role: roleOf(squad, id, uid) })
+          ? { uid, roomCode, name: telemetry.name, photo: telemetry.photo, status: 'GHOST', speed: 0, heading: 0, battery: telemetry.battery, lastSeen: telemetry.lastSeen, hasFix: false, role: roleOf(squad, id, uid), ...holdUntil }
+          : withheld
+            ? { uid, roomCode, name: telemetry.name, photo: telemetry.photo, status: held.status, speed: 0, heading: 0, battery: telemetry.battery, lastSeen: telemetry.lastSeen, hasFix: false, role: roleOf(squad, id, uid), ...holdUntil }
+            : { ...telemetry, ...(held ? { status: held.status } : {}), ...(held?.spot ? { lat: held.spot.lat, lng: held.spot.lng } : {}), uid, hasFix: true, role: roleOf(squad, id, uid), ...holdUntil })
       : {
           uid,
           roomCode,
           name: profile.name,
           photo: profile.photo,
-          status: 'ACTIVE',
+          status: held?.holdUntil ? held.status : 'ACTIVE',
           speed: 0,
           heading: 0,
           battery: 0,
           hasFix: false,
           role: roleOf(squad, id, uid),
+          ...holdUntil,
         };
   });
 
@@ -614,21 +768,25 @@ function broadcastSquadUpdate(roomCode) {
     const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
     for (const entry of livePresence(squad, Date.now())) {
       if (connected.has(entry.uid) && !winners.has(entry.uid) && !fixless.has(entry.uid)) continue;
+      // Timed holds on: the hold decides here too (heldSharing). Hidden, or a pause never granted,
+      // shows no position; Paused shows only where they paused.
+      const held = TIMED_PRIVACY ? heldSharing(entry.uid, entry.status, Date.now()) : null;
+      const position = !held ? { lat: entry.lat, lng: entry.lng } : held.withhold ? null : (held.spot ?? { lat: entry.lat, lng: entry.lng });
       roomUsers[presenceKey(entry.uid)] = {
         uid: entry.uid,
         roomCode,
         name: entry.name,
         photo: entry.photo,
-        lat: entry.lat,
-        lng: entry.lng,
-        speed: entry.speed,
-        heading: entry.heading,
+        ...(position ? { lat: position.lat, lng: position.lng } : {}),
+        speed: position ? entry.speed : 0,
+        heading: position ? entry.heading : 0,
         battery: entry.battery,
-        ...(entry.accuracy === null ? {} : { accuracy: entry.accuracy }),
-        status: entry.status,
+        ...(entry.accuracy === null || !position ? {} : { accuracy: entry.accuracy }),
+        status: held ? held.status : entry.status,
         lastSeen: entry.lastSeen,
-        hasFix: true,
+        hasFix: Boolean(position),
         presence: true,
+        ...(held?.holdUntil ? { holdUntil: held.holdUntil } : {}),
       };
     }
   }
@@ -646,6 +804,10 @@ function expireLeases(now) {
     const connected = liveUids(squad, (id) => io.sockets.sockets.has(id));
     for (const entry of expired) {
       if (connected.has(entry.uid)) continue;
+      // Timed holds on: someone whose position is withheld (Hidden above all) is not announced with
+      // the position they are holding back, as a Hidden member's dropped connection never is.
+      const held = TIMED_PRIVACY ? heldSharing(entry.uid, entry.status, now) : null;
+      if (held?.withhold) continue;
       io.to(roomCode).emit('member-signal-lost', {
         targetId: presenceKey(entry.uid),
         uid: entry.uid,
@@ -654,8 +816,8 @@ function expireLeases(now) {
         // Where they last really were. No speed or heading: those only ever fed the app's
         // dead reckoning, which moved a lost member's marker to places they were never seen.
         lastKnownLocation: {
-          latitude: entry.lat,
-          longitude: entry.lng,
+          latitude: held?.spot?.lat ?? entry.lat,
+          longitude: held?.spot?.lng ?? entry.lng,
           batteryLevel: entry.battery,
         },
         timeDelta: (now - entry.lastSeen) / 1000,
@@ -943,7 +1105,10 @@ socket.on('check-ping', (clientTimestamp) => {
     const fixless = fixlessPresenceUids(squad, roomCode, Date.now());
     for (const entry of livePresence(squad, Date.now())) {
       if (connected.has(entry.uid) && !winners.has(entry.uid) && !fixless.has(entry.uid)) continue;
-      const record = toTelemetryRecord({ lat: entry.lat, lng: entry.lng, lastSeen: entry.lastSeen, battery: entry.battery });
+      // Timed holds on: nothing for someone whose position is withheld; a Pause's spot for a pause.
+      const held = TIMED_PRIVACY ? heldSharing(entry.uid, entry.status, Date.now()) : null;
+      if (held?.withhold) continue;
+      const record = toTelemetryRecord({ lat: held?.spot?.lat ?? entry.lat, lng: held?.spot?.lng ?? entry.lng, lastSeen: entry.lastSeen, battery: entry.battery });
       if (record) squadTelemetry[presenceKey(entry.uid)] = record;
     }
     socket.emit('telemetry-sync-complete', squadTelemetry);
@@ -1098,6 +1263,7 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.emit('access-granted', { role: 'OWNER', roomCode });
       sendRallyPoint(socket, activeSquads[roomCode]);
       sendGroupSettings(socket, activeSquads[roomCode], roomCode);
+      sendSharingHold(socket, roomCode);
       sendGroupRole(socket, activeSquads[roomCode], roomCode);
       return;
     }
@@ -1147,6 +1313,7 @@ socket.on('check-ping', (clientTimestamp) => {
       sendJoinQueue(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
+      sendSharingHold(socket, roomCode);
       broadcastSquadUpdate(roomCode);
       broadcastGroupRoles(roomCode);
       return;
@@ -1180,6 +1347,7 @@ socket.on('check-ping', (clientTimestamp) => {
       sendJoinQueue(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
+      sendSharingHold(socket, roomCode);
       broadcastSquadUpdate(roomCode);
       broadcastGroupRoles(roomCode);
       return;
@@ -1206,6 +1374,7 @@ socket.on('check-ping', (clientTimestamp) => {
       if (can(roleOfSocket(existing, socket.id), 'seeJoinQueue')) sendJoinQueue(existing, roomCode, socket.id);
       sendRallyPoint(socket, existing);
       sendGroupSettings(socket, existing, roomCode);
+      sendSharingHold(socket, roomCode);
       broadcastSquadUpdate(roomCode);
       broadcastGroupRoles(roomCode);
       return;
@@ -1304,6 +1473,7 @@ socket.on('check-ping', (clientTimestamp) => {
         rememberMember(squad, targetSocket.data?.uid);
         sendRallyPoint(targetSocket, squad);
         sendGroupSettings(targetSocket, squad, roomCode);
+        sendSharingHold(targetSocket, roomCode);
         // Put them on everyone's roster now. Previously the squad only learned of a new
         // member when that member's first telemetry arrived, so a mid-session joiner was
         // missing from the list for a polling interval (up to 15s in eco mode) — and
@@ -1522,7 +1692,7 @@ socket.on('check-ping', (clientTimestamp) => {
   // --- 🌐 LOCATION & ROOM ENGINE (CENTRALIZED) ---
   socket.on('update-location', (data) => {
     if (!data) return;
-    const { lat, lng, speed, battery, heading } = data;
+    const { speed, battery, heading } = data;
     const newRoom = data.roomCode || 'GLOBAL';
 
     // 🔒 GATEKEEPER ENFORCEMENT: this used to join any roomCode the client sent,
@@ -1534,11 +1704,19 @@ socket.on('check-ping', (clientTimestamp) => {
     if (!squad || !squad.members.includes(socket.id)) {
       return;
     }
-    // Hidden: no position is kept, whatever an older app still sends.
-    const hidden = data.status === 'GHOST';
+    // Timed holds on (sharingHolds.js): the person's hold decides what is kept, never the status the
+    // phone sends. Off: the reported status, as it always was.
+    const held = TIMED_PRIVACY ? heldSharing(squad.memberUids?.[socket.id] || socket.data?.uid, data.status, Date.now()) : null;
+    const status = held ? held.status : data.status;
+    // Hidden: no position is kept, whatever an older app still sends. Nor while one is withheld.
+    const hidden = status === 'GHOST';
+    const keepsNoPosition = hidden || Boolean(held?.withhold);
+    // Paused under a hold: only the spot they paused at, whatever the phone sends now.
+    const lat = held?.spot ? held.spot.lat : data.lat;
+    const lng = held?.spot ? held.spot.lng : data.lng;
     // A position that is no position (text, NaN, off the globe) is refused whole: everyone's
     // map would otherwise be handed it.
-    if (!hidden && (lat != null || lng != null) && !isRealFix(lat, lng)) {
+    if (!keepsNoPosition && (lat != null || lng != null) && !isRealFix(lat, lng)) {
       console.warn(`[LIMIT] Dropped a position from ${socket.id} in ${newRoom}: not a real fix`);
       return;
     }
@@ -1550,9 +1728,8 @@ socket.on('check-ping', (clientTimestamp) => {
     if (reporter) {
       squad.profiles ??= Object.create(null);
       squad.profiles[reporter] = { name, photo };
-      // Going hidden, or coming back from it, goes in the activity log.
-      const changed = noteSharingMode(squad, { uid: reporter, name, status: data.status });
-      if (changed) recordActivity(newRoom, changed);
+      // Going hidden (and, with timed holds on, paused), or coming back, goes in the activity log.
+      logSharingMode(newRoom, squad, reporter, name, status);
     }
 
     const oldRoom = users[socket.id]?.roomCode;
@@ -1565,14 +1742,14 @@ socket.on('check-ping', (clientTimestamp) => {
     // update. It used to be the whole payload (`...data`), so anything a phone attached, up to the
     // 100 KB message limit, was stored and sent to everyone, members squared times a second.
     users[socket.id] = {
-      ...(hidden ? {} : {
+      ...(keepsNoPosition ? {} : held?.spot ? { lat, lng } : {
         lat, lng,
         building: shortText(data.building, MAX_PLACE_NAME_LENGTH),
         floor: Number.isFinite(data.floor) ? data.floor : shortText(data.floor, 16),
         accuracy: finiteOr(data.accuracy, undefined),
         positionSource: shortText(data.positionSource, 16),
       }),
-      status: shortText(data.status, 16),
+      status: shortText(status, 16),
       speed: finiteOr(speed, 0),
       battery: finiteOr(battery, undefined),
       name,
@@ -1587,7 +1764,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // actually has real speed/heading/lastSeen instead of permanently-undefined fields.
     // Hidden: the position it had is dropped, so neither the Lead's table nor a lost-signal
     // marker can show where a hidden person is.
-    locationCache[socket.id] = hidden
+    locationCache[socket.id] = keepsNoPosition
       ? { battery: finiteOr(battery, 0), lastSeen: Date.now() }
       : {
           ...locationCache[socket.id],
@@ -1698,6 +1875,10 @@ socket.on('check-ping', (clientTimestamp) => {
       socket.emit('alert-result', { type: 'sos', roomCode, allowed: true, mode: 'allow', reasonCode: null, clientId, duplicate: true });
       return;
     }
+    // An SOS ends any Pause or Hidden of the sender's (sharingHolds.js), whether or not it is relayed,
+    // and their phone is told. Who hears it is unchanged: trusted friends, the main admin and
+    // moderators (audienceOf), however they were sharing.
+    if (TIMED_PRIVACY) endHold(uidOfSocket(squad, socket.id), END_REASON.SOS, now);
     // The only way an SOS is relayed: asked of alertRules.js first (see decideAlert). An
     // SOS is only ever refused by the Group Lead's switch, or by the quiet-zone setting
     // when that is 'blocked'; otherwise at worst it goes out flagged.
@@ -1741,6 +1922,35 @@ socket.on('check-ping', (clientTimestamp) => {
     }
     sosWatch.notify(roomCode); // and the phones listening from the background
     reportAlert(socket, squad, roomCode, 'sos', verdict, now, { ...(coalesced ? { coalesced: true } : {}), ...(clientId ? { clientId } : {}) });
+  });
+
+  // --- TIMED PAUSE AND HIDDEN (sharingHolds.js) ---
+  // { roomCode, mode: 'ACTIVE' | 'FROZEN' | 'GHOST', minutes }: Paused or Hidden for that many
+  // minutes, or Live again now. Acknowledged with { ok: true, mode, until, allowanceLeftMs,
+  // serverNow } or { ok: false, reason, allowanceLeftMs? }: 'disabled' (timed holds are off),
+  // 'not-in-squad', 'no-identity', 'bad-mode', 'bad-minutes', or 'allowance' (more than is left of
+  // the rolling hour; allowanceLeftMs says how much is). Every phone signed in as the person is
+  // sent 'sharing-hold' with the same state.
+  socket.on('set-sharing-mode', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!TIMED_PRIVACY) return reply({ ok: false, reason: 'disabled' });
+    const { roomCode, mode, minutes } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    const uid = uidOfSocket(squad, socket.id);
+    if (!uid) return reply({ ok: false, reason: 'no-identity' });
+    const now = Date.now();
+    if (mode === 'ACTIVE') {
+      endHold(uid, END_REASON.RESUMED, now);
+      return reply({ ok: true, ...holdState(uid, now) });
+    }
+    // A Pause holds the spot of a Pause already running, else where they last were.
+    const spot = holdStore.active(uid, now)?.spot ?? latestSpotOf(uid, now);
+    const started = holdStore.start(uid, { mode, minutes, spot }, now);
+    if (!started.ok) return reply({ ok: false, reason: started.reason, allowanceLeftMs: started.leftMs });
+    applySharingChange(uid, now);
+    for (const target of socketsOfUid(uid)) target.emit('sharing-hold', { roomCode, ...holdState(uid, now) });
+    reply({ ok: true, ...holdState(uid, now) });
   });
 
   // --- GROUP SWITCHES AND MUTES ---
