@@ -73,7 +73,14 @@ import { useFriends } from './hooks/useFriends';
 import { exportActivityLog } from './utils/activityLogExport';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS } from './copy/group';
+import { LeaveRequestWaiting } from './components/group/LeaveRequestStatus';
+import { useLeaveRequests } from './hooks/useLeaveRequests';
+import { useDiscoverable } from './hooks/useDiscoverable';
+import { useNearbyScan } from './hooks/useNearbyScan';
+import { useNearbyAvailable } from './hooks/useNearbyAvailable';
+import { DiscoverableIndicator, DiscoverableToggle, InvitePrompt, NearbyButton, NearbySheet } from './components/nearby/Nearby';
+import { NEARBY_ENABLED } from './utils/nearby';
+import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS, TIMED_PRIVACY, LEAVE_REQUEST, NEARBY } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -127,6 +134,8 @@ import { pushBackHandler } from './utils/backHandlers';
 import { useBlurOnKeyboardHide } from './hooks/useBlurOnKeyboardHide';
 import { useWifiFusion } from './hooks/useWifiFusion';
 import { useBackgroundSharing } from './hooks/useBackgroundSharing';
+import { useTimedPrivacy } from './hooks/useTimedPrivacy';
+import { TIMED_PRIVACY_ENABLED, MAX_HOLD_MINUTES, wholeMinutes } from './utils/timedPrivacy';
 import { stopBackgroundSharing, LocusBackground } from './utils/backgroundSharing';
 import { rememberGroup, rememberedGroup, forgetGroup } from './utils/rememberedGroup';
 import { useIndoorView } from './hooks/useIndoorView';
@@ -1041,6 +1050,8 @@ const App = () => {
   const canModerateRef = useRef(false);
   canModerateRef.current = canModerate;
   const liveLocationRef = useRef(null);
+  // The GPS accuracy (metres) of the latest fix, sent with every position (Nearby needs it).
+  const liveAccuracyRef = useRef(null);
   // Shared with ARCompass.jsx (src/hooks/useDeviceHeading.js) so both the AR
   // targeting view and this device's own map marker read the compass the same way.
   // `heading` is throttled for rendering; `headingRef` always holds the newest
@@ -1122,8 +1133,12 @@ const App = () => {
     // Don't do anything if the input is empty
     if (!squadCode || !squadCode.trim()) return;
 
-    const targetRoom = squadCode.trim().toUpperCase();
+    joinWith(squadCode.trim().toUpperCase(), squadMode);
+  };
 
+  // A join by code: the lobby's Create or Join, a group started from Nearby (`extra.nearby`: the server
+  // marks it as one), and an accepted Nearby invite (a join the server lets straight in).
+  const joinWith = (targetRoom, mode, extra = {}) => {
     // 1. Send the knock to the server FIRST
     emitJoin({
       roomCode: targetRoom,
@@ -1132,13 +1147,14 @@ const App = () => {
       // missing, join if present" for both: a JOIN for a code whose squad wasn't live yet
       // (its creator hadn't tapped INITIALIZE) made the joiner its Commander, and a CREATE
       // under a live code queued the creator for a stranger's approval.
-      intent: squadMode === 'create' ? 'create' : 'join',
+      intent: mode === 'create' ? 'create' : 'join',
+      ...extra,
     });
 
     setLobbyNotice(null);
     setHasJoinedSquad(true);
 
-    if (squadMode === 'create') {
+    if (mode === 'create') {
       //  INSTANT CLEARANCE FOR SQUAD CREATORS (0ms delay) — you can't need your
       // own approval to enter a squad you're creating.
       setAccessStatus('granted');
@@ -1456,7 +1472,9 @@ const App = () => {
           if (id === socket.id) return;
           if (data.uid && myUidRef.current && data.uid === myUidRef.current) return;
           if (data.roomCode !== squadCode) return;
-          if (data.status === 'GHOST') return;
+          // Timed holds (Stage 4): someone Hidden for a set time stays listed, with when they are
+          // back and no position, rather than silently disappearing. Untimed, as before.
+          if (data.status === 'GHOST' && !(TIMED_PRIVACY_ENABLED && Number.isFinite(data.holdUntil))) return;
 
           // A member with no fix yet (indoors, location permission denied, just approved)
           // is still a member: they belong on the roster, just not on the map. Dropping
@@ -1477,6 +1495,8 @@ const App = () => {
             battery: data.battery || 0,
             status: data.status || 'ACTIVE',
             lastSeen: memberSeenRef.current[id]?.local ?? null,
+            // When a timed Pause or Hidden ends (server clock), for "Paused until 14:05".
+            ...(TIMED_PRIVACY_ENABLED && Number.isFinite(data.holdUntil) ? { holdUntil: data.holdUntil } : {}),
             // WiFi Arc Stage 7: the member's building + floor, when their latest update
             // carried them (they are left out, never null, when they didn't). Absent here
             // too in that case, so their floor chip and pill go as soon as they leave
@@ -1850,6 +1870,10 @@ const App = () => {
   // still goes, so the group (and the activity log) know this member is hidden; the position
   // used to go too, every few seconds, and was relayed to everyone (2026-10 fix).
   const sharedPosition = (fix) => (telemetryModeRef.current === 'GHOST' ? {} : positionFor(fix));
+  // A position goes with how accurate it is, when the phone said (none while Hidden: no position).
+  const withAccuracy = (position) => (
+    Number.isFinite(position?.lat) && Number.isFinite(liveAccuracyRef.current) ? { ...position, accuracy: liveAccuracyRef.current } : position
+  );
 
   /// 2. Broadcast your live GPS data to the network
   // 2. Broadcast your live GPS data to the network
@@ -1879,6 +1903,7 @@ const App = () => {
         setLiveLocation(fix);
         liveLocationRef.current = fix;
         setLiveAccuracy(accuracy || null);
+        liveAccuracyRef.current = Number.isFinite(accuracy) && accuracy > 0 ? accuracy : null;
         setLocationError(null);
         noteRealFix();
 
@@ -1886,7 +1911,7 @@ const App = () => {
         if (telemetryModeRef.current === 'FROZEN') return;
         emitLive('update-location', {
           name: user.displayName, photo: user.photoURL,
-          ...sharedPosition(fix),
+          ...withAccuracy(sharedPosition(fix)),
           speed: 0, battery: 100,
           status: telemetryModeRef.current,
           roomCode: squadCode,
@@ -1932,7 +1957,7 @@ const App = () => {
       if (telemetryModeRef.current === 'ACTIVE') {
         emitLive('update-location', {
           name: user.displayName, photo: user.photoURL,
-          ...positionFor(currentLoc),
+          ...withAccuracy(positionFor(currentLoc)),
           speed: 0, battery: currentBattery,
           status: telemetryModeRef.current,
           roomCode: squadCode,
@@ -1951,6 +1976,7 @@ const App = () => {
         liveLocationRef.current = fix;
         setLiveSpeed(speed || 0);
         setLiveAccuracy(accuracy || null);
+        liveAccuracyRef.current = Number.isFinite(accuracy) && accuracy > 0 ? accuracy : null;
         setLocationError(null);
         noteRealFix();
 
@@ -1971,7 +1997,7 @@ const App = () => {
         // to override movement-based updates, you'd need to clear this watch and rely purely on the interval.
         emitLive('update-location', {
           name: user.displayName, photo: user.photoURL,
-          ...sharedPosition(fix),
+          ...withAccuracy(sharedPosition(fix)),
           speed: speed ? Math.round(speed * 3.6) : 0,
           battery: batteryLevel,
           status: telemetryModeRef.current,
@@ -2016,7 +2042,7 @@ const App = () => {
     setPausedHasSpot(pausedPositionRef.current !== null);
     emitLive('update-location', {
       name: user.displayName, photo: user.photoURL,
-      ...(telemetryMode === 'GHOST' ? {} : position),
+      ...(telemetryMode === 'GHOST' ? {} : withAccuracy(position)),
       speed: 0, battery: 100,
       status: telemetryMode, // use state here — this effect re-runs when it changes
       roomCode: squadCode,
@@ -2265,8 +2291,90 @@ const App = () => {
     return null;
   };
 
+  // Request to leave (Stage 5, hooks/useLeaveRequests.js). In a Group made through Nearby Join, with
+  // the switch on, a member's Leave is a request; whoever holds command still leaves directly. Off,
+  // or the Group not needing it, Leave is as in js-1.1.87.
+  const leave = useLeaveRequests({
+    socket,
+    roomCode: squadCode,
+    inGroup: Boolean(user && hasJoinedSquad && accessStatus === 'granted'),
+    settings: groupSettings,
+    canAnswer: canModerate,
+    myUid: user?.uid ?? null,
+    // Approved (by the Group Lead, a moderator, or the clock): back to the lobby, as after a Leave.
+    onApproved: () => handleLeaveSquad(),
+  });
+  const leaveIsRequest = leave.needsRequest && squadRole !== 'OWNER';
+
+  // Nearby Join (Stage 6, utils/nearby.js). Off (NEARBY_ENABLED), or the server saying Nearby is off,
+  // none of it shows and nothing is sent: as in js-1.1.87 with Stages 4 and 5.
+  const [nearbyServerOff, setNearbyServerOff] = useState(false);
+  // Shown only once the server says it has Nearby on (hooks/useNearbyAvailable.js): until then, and
+  // with an older server, the app is exactly as in js-1.1.87 with Stages 4 and 5.
+  const nearbyAvailable = useNearbyAvailable({ socket, enabled: NEARBY_ENABLED });
+  const nearbyOn = NEARBY_ENABLED && nearbyAvailable && !nearbyServerOff;
+  const [showNearby, setShowNearby] = useState(false);
+  const [nearbyAfterCreate, setNearbyAfterCreate] = useState(false);
+  const discoverable = useDiscoverable({
+    socket,
+    enabled: nearbyOn,
+    inLobby: Boolean(user) && !hasJoinedSquad,
+    user,
+    getIdToken: () => auth.currentUser?.getIdToken(),
+    onServerOff: () => setNearbyServerOff(true),
+    // The server has admitted them: the app joins that group the usual way, and is let straight in.
+    onAccepted: (roomCode) => {
+      setSquadMode('join');
+      setSquadCode(roomCode);
+      joinWith(roomCode, 'join');
+    },
+  });
+  const nearby = useNearbyScan({ socket, roomCode: hasJoinedSquad ? squadCode.trim().toUpperCase() : null, onServerOff: () => setNearbyServerOff(true) });
+  const openNearby = () => {
+    setShowNearby(true);
+    nearby.scan();
+  };
+  // Nearby from the lobby: first make sure the server has it on (a scan from no group is answered
+  // 'disabled' or 'not-in-squad'), then start a group the usual way, marked as made through Nearby,
+  // and scan once in.
+  const startNearbyGroup = () => {
+    socket.emit('nearby-scan', { roomCode: null }, (reply) => {
+      if (reply?.reason === 'disabled') {
+        setNearbyServerOff(true);
+        notify.info(NEARBY.unavailable, { haptic: false });
+        return;
+      }
+      const code = squadMode === 'create' && squadCode.trim() ? squadCode.trim().toUpperCase() : generateRandomSquadCode();
+      setSquadMode('create');
+      setSquadCode(code);
+      setNearbyAfterCreate(true);
+      joinWith(code, 'create', { nearby: true });
+    });
+  };
+  useEffect(() => {
+    if (!nearbyAfterCreate || !hasJoinedSquad || accessStatus !== 'granted' || squadRole !== 'OWNER') return;
+    setNearbyAfterCreate(false);
+    openNearby();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearbyAfterCreate, hasJoinedSquad, accessStatus, squadRole]);
+  // The Leave sheet's button: a request where one is needed, falling back to the old Leave when the
+  // server says this Group does not need one (or that this person holds command).
+  const confirmLeave = () => {
+    setShowLeaveConfirm(false);
+    if (!leaveIsRequest) {
+      handleLeaveSquad();
+      return;
+    }
+    leave.request().then((answer) => {
+      if (!answer.ok && (answer.reason === 'not-required' || answer.reason === 'admin')) handleLeaveSquad();
+    });
+  };
+
   // ---  KILL SWITCH LOGOUT HANDLER ---
   const handleLogout = () => {
+    // A member of a Group whose Leave is a request stays a member after signing out (the server files
+    // or keeps their request): their sharing stops, and they are told so in plain words.
+    if (leaveIsRequest) notify.info(LEAVE_REQUEST.signedOut, { duration: 0, haptic: false });
     stopBackgroundSharing();
     const online = socket.connected;
     const leaving = sendLeave(hasJoinedSquad ? squadCode.trim().toUpperCase() : null);
@@ -2335,11 +2443,37 @@ const App = () => {
 
   // Live, Paused or Hidden, chosen in the app. Background sharing follows, so the notification,
   // this screen and the Group always agree (Hidden stops it: see useBackgroundSharing).
-  const changeSharingMode = (mode) => {
+  const changeSharingMode = (mode, { minutes = 0 } = {}) => {
     telemetryModeRef.current = mode;
     setTelemetryMode(mode);
-    if (mode === 'FROZEN') backgroundSharing.pause();
+    if (mode === 'FROZEN') backgroundSharing.pause(minutes);
     else if (mode === 'ACTIVE') backgroundSharing.resume();
+  };
+
+  // Timed Pause and Hidden (Stage 4, hooks/useTimedPrivacy.js): the server keeps the time and ends
+  // it. Off (TIMED_PRIVACY_ENABLED), or the server's own switch off, Pause and Hidden are as in
+  // js-1.1.87, so the app and the server can ship in either order.
+  const timed = useTimedPrivacy({
+    socket,
+    roomCode: squadCode,
+    inGroup: Boolean(user && hasJoinedSquad && accessStatus === 'granted'),
+    applyMode: (mode, options) => changeSharingMode(mode, options),
+  });
+  // A pick in the sharing control. Live is always allowed at once (and ends a hold on the server);
+  // Paused or Hidden is asked of the server, and only happens once it agrees.
+  const pickSharingMode = (mode, minutes) => {
+    if (!timed.active) {
+      changeSharingMode(mode);
+      return;
+    }
+    if (mode === 'ACTIVE') {
+      changeSharingMode('ACTIVE');
+      if (timed.hold) timed.request('ACTIVE');
+      return;
+    }
+    timed.request(mode, minutes).then((answer) => {
+      if (answer?.reason === 'disabled') changeSharingMode(mode); // the server's switch is off: as before
+    });
   };
 
   // ... and the other way: Pause, Resume, or a pause running out, on the sharing notification.
@@ -2354,10 +2488,24 @@ const App = () => {
     if (backgroundState === 'paused' && mode === 'ACTIVE') {
       telemetryModeRef.current = 'FROZEN';
       setTelemetryMode('FROZEN');
+      // Timed: the notification's Pause is a hold like any other, as long as what is left allows
+      // (at most MAX_HOLD_MINUTES). Refused, sharing goes on: Live again, the service resumed.
+      if (timed.active) {
+        const minutes = Math.min(MAX_HOLD_MINUTES, timed.allowanceLeftMs == null ? MAX_HOLD_MINUTES : wholeMinutes(timed.allowanceLeftMs));
+        if (minutes < 1) {
+          notify.warning(TIMED_PRIVACY.refused(0));
+          changeSharingMode('ACTIVE');
+        } else {
+          timed.request('FROZEN', minutes).then((answer) => {
+            if (!answer?.ok && answer?.reason !== 'disabled') changeSharingMode('ACTIVE');
+          });
+        }
+      }
     } else if (backgroundState === 'running' && mode === 'FROZEN') {
       if (before === 'paused') {
         telemetryModeRef.current = 'ACTIVE';
         setTelemetryMode('ACTIVE');
+        if (timed.active && timed.hold) timed.request('ACTIVE');
       } else {
         // Sharing has just started while the app is paused: the service pauses too.
         backgroundSharing.pause();
@@ -3193,6 +3341,8 @@ const App = () => {
       >
         {beforeMapOverlay}
         <main className="w-full max-w-md mx-auto flex-1">
+          {/* While people nearby can find this person: said, all the while, with a one-tap off. */}
+          {nearbyOn && discoverable.on && <div className="mb-4 flex"><DiscoverableIndicator onOff={() => discoverable.setOn(false)} /></div>}
           <p className="text-body text-text-secondary">{LOBBY.hello(firstNameOf(user.displayName))}</p>
           <h1 className="mt-1 text-display">{LOBBY.title}</h1>
 
@@ -3242,6 +3392,15 @@ const App = () => {
               </>
             )}
           </Card>
+          {/* Nearby Join (Stage 6): start a group with people close by, and let them find you. */}
+          {nearbyOn && !joining && (
+            <div className="mt-4 flex flex-col gap-2">
+              <NearbyButton label={NEARBY.startButton} onClick={startNearbyGroup} />
+              <p className="px-1 text-secondary text-text-secondary">{NEARBY.startHelp}</p>
+            </div>
+          )}
+          {nearbyOn && <DiscoverableToggle on={discoverable.on} starting={discoverable.starting} onChange={discoverable.setOn} />}
+          {nearbyOn && <InvitePrompt invite={discoverable.invite} onRespond={discoverable.respond} />}
         </main>
 
         <div className="w-full max-w-md mx-auto mt-6">
@@ -3362,6 +3521,7 @@ const App = () => {
                 onActivityLog={openActivityLog}
                 onBlocked={isOwnAdmin ? openBlocked : undefined}
                 requests={pendingRequests.length}
+                leaveRequests={leave.requests.length}
                 onRequests={() => setShowRequestsModal(true)}
                 refresh={telemetrySync}
                 onRefresh={requestTelemetrySync}
@@ -3385,11 +3545,16 @@ const App = () => {
                 } : undefined}
               />
             )}
+            {/* Nearby Join (Stage 6): the Group Lead and moderators look for people close by. */}
+            {activeTab === 'users' && canModerate && nearbyOn && !keyboardUp && (
+              <div className="pt-1"><NearbyButton onClick={openNearby} /></div>
+            )}
             {/* Your location: Live, Paused or Hidden (components/group/SharingControl.jsx). */}
             {activeTab === 'users' && (
               <SharingControl
                 mode={telemetryMode}
-                onChange={changeSharingMode}
+                onChange={pickSharingMode}
+                timed={timed.active ? { ...timed, onPick: pickSharingMode } : null}
                 waiting={!liveLocation}
                 pausedNoSpot={!pausedHasSpot}
                 polling={sysConfig.polling}
@@ -3483,7 +3648,9 @@ const App = () => {
               )}
             </AnimatePresence>
             )}
-            {activeTab === 'users' && <LeaveGroupButton onClick={() => setShowLeaveConfirm(true)} />}
+            {activeTab === 'users' && (leave.mine
+              ? <LeaveRequestWaiting deadline={leave.mine.deadline} offset={leave.offset} pending={leave.pending} onCancel={leave.cancel} />
+              : <LeaveGroupButton request={leaveIsRequest} onClick={() => setShowLeaveConfirm(true)} />)}
             {/* The panel rests lower than full by this much: room to scroll the last rows up into
               view at half. */}
 
@@ -3582,7 +3749,9 @@ const App = () => {
           mode={telemetryMode}
           waiting={!liveLocation}
           pausedNoSpot={!pausedHasSpot}
-          hidden={isNavigatingMode || (isTargetingMode && isMobile) || Boolean(locationError) || showDeclinedCard}
+          // Timed (Stage 4): while Paused or Hidden it stays up over the banners too, so nobody is
+          // unsure whether they are being shared. Not while navigating: the route takes the top.
+          hidden={isNavigatingMode || ((!TIMED_PRIVACY_ENABLED || telemetryMode === 'ACTIVE') && ((isTargetingMode && isMobile) || Boolean(locationError) || showDeclinedCard))}
         />
         <AnimatePresence initial={false}>
           {/* Choosing a meeting point (a phone's meeting point button). */}
@@ -3986,6 +4155,20 @@ const App = () => {
         onCancel={() => setRallyToClear(null)}
       />
 
+      {/* Nearby Join (Stage 6): who is close by, names only (components/nearby/Nearby.jsx). */}
+      {nearbyOn && (
+        <NearbySheet
+          open={showNearby && hasJoinedSquad && canModerate}
+          onClose={() => { setShowNearby(false); nearby.reset(); }}
+          state={nearby.state}
+          rows={nearby.rows}
+          onScan={nearby.scan}
+          onToggle={nearby.toggle}
+          onInvite={nearby.invite}
+          onInviteAll={nearby.inviteAll}
+        />
+      )}
+
       {/* The Group Lead's join requests (components/group/JoinRequests.jsx): Waiting only. */}
       <JoinRequests
         open={showRequestsModal && canModerate}
@@ -3993,6 +4176,12 @@ const App = () => {
         requests={pendingRequests}
         code={squadCode}
         onAdmitAll={isOwnAdmin ? admitAll : undefined}
+        leave={leave.requests.length ? {
+          requests: leave.requests,
+          offset: leave.offset,
+          pending: leave.pending,
+          onAnswer: (request, approved) => leave.answer(request.uid, approved),
+        } : undefined}
         onAnswer={(request, approved) => {
           // The squad the request was made to, not merely the one on screen.
           socket.emit('resolve-access', { targetId: request.targetId, roomCode: request.roomCode || squadCode, approved });
@@ -4146,7 +4335,7 @@ const App = () => {
             { id: 'grid', label: TABS.map, Icon: Map, flourish: 'lift' },
             { id: 'matrix', label: 'Buildings', Icon: Building2, flourish: 'lift' },
             // The people waiting to join, on Group, for whoever may let them in.
-            { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop', badge: canModerate ? { count: pendingRequests.length, label: LEAD_TOOLS.waiting(pendingRequests.length) } : undefined },
+            { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop', badge: canModerate ? { count: pendingRequests.length + leave.requests.length, label: LEAD_TOOLS.waiting(pendingRequests.length + leave.requests.length) } : undefined },
           ]}
           sosTrigger={
             accessStatus === 'granted' ? (
@@ -4158,6 +4347,7 @@ const App = () => {
                 outbox={sosOutbox}
                 held={sosHeld}
                 sharingMode={telemetryMode}
+                onSend={timed.onSosSent}
                 layout="tab"
               />
             ) : null
@@ -4191,7 +4381,8 @@ const App = () => {
         isLead={squadRole === 'OWNER'}
         alone={users.length === 0 && ghostMembers.length === 0}
         onCancel={() => setShowLeaveConfirm(false)}
-        onLeave={() => { setShowLeaveConfirm(false); handleLeaveSquad(); }}
+        request={leaveIsRequest}
+        onLeave={confirmLeave}
       />
 
       {/* A member's options (components/group/MemberOptions.jsx): Ping, Show on map, Find with
@@ -4259,6 +4450,7 @@ const App = () => {
             outbox={sosOutbox}
             held={sosHeld}
             sharingMode={telemetryMode}
+            onSend={timed.onSosSent}
             layout="floating"
           />
         </div>

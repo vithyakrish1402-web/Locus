@@ -2,6 +2,7 @@
 // Buildings tabs, your sharing control, the Group Lead's tools, member rows and their options,
 // join requests, leaving, and the panel's states. One place, so the wording is reviewed whole.
 import { spacedCode } from './access';
+import { MAX_HOLD_MINUTES, wholeMinutes } from '../utils/timedPrivacy';
 
 export const GROUP_HEADER = {
   // There is no group name in the data: every group is "Your group" (owner, 2026-10-05).
@@ -47,6 +48,29 @@ export const SHARING_CONTROL = {
   },
 };
 
+// Timed Pause and Hidden (Stage 4, utils/timedPrivacy.js). Plain words for how long, how much is
+// left, and when the group sees you again. Only ever about your own sharing.
+const minutesWord = (m) => `${m} min`;
+export const TIMED_PRIVACY = {
+  pickTitle: { FROZEN: 'Pause for how long?', GHOST: 'Hide for how long?' },
+  minutes: minutesWord,
+  cancel: 'Cancel',
+  allowanceLeft: (ms) => `${minutesWord(wholeMinutes(ms))} of Pause and Hidden left this hour`,
+  allowanceNone: `You've used all ${MAX_HOLD_MINUTES} minutes of Pause and Hidden for this hour. More frees up as the hour goes on.`,
+  refused: (ms) => (wholeMinutes(ms) >= 1
+    ? `Only ${minutesWord(wholeMinutes(ms))} of Pause and Hidden is left this hour. Pick that or less.`
+    : `You've used all ${MAX_HOLD_MINUTES} minutes of Pause and Hidden for this hour. More frees up as the hour goes on.`),
+  unreachable: "Couldn't reach the server, so nothing changed. Try again in a moment.",
+  countdown: { FROZEN: (left, clock) => `Paused for ${left} more, until ${clock}`, GHOST: (left, clock) => `Hidden for ${left} more, until ${clock}` },
+  headsUp: (clock) => `You'll be visible again at ${clock}`,
+  again: { FROZEN: 'Pause again', GHOST: 'Hide again' },
+  ended: {
+    expired: "You're visible to your group again.",
+    resumed: "You're visible to your group again.",
+    sos: "You're visible to your group again: sharing resumed because you sent an SOS.",
+  },
+};
+
 // A member's row and their options sheet.
 export const MEMBERS = {
   liveNow: 'Live now',
@@ -54,6 +78,9 @@ export const MEMBERS = {
   paused: 'Paused',
   // No coordinates have come through for them yet (owner's wording).
   waiting: 'Waiting for location',
+  // A timed Pause or Hidden (Stage 4), in this phone's own clock.
+  pausedUntil: (clock) => `Paused until ${clock}`,
+  hiddenUntil: (clock) => `Hidden until ${clock}`,
   lastUpdate: (minutes) => `Last update ${minutes} min ago`,
   withYou: 'With you',
   lostConnection: (elapsed) => `Lost connection ${elapsed} ago`,
@@ -142,6 +169,8 @@ export const ACTIVITY_LOG = {
   kinds: {
     'went-hidden': 'Hid their location',
     'back-from-hidden': 'Showed their location again',
+    'went-paused': 'Paused their location',
+    'back-from-paused': 'Shared their location again after a pause',
     'left-group': 'Left the group',
     'connection-lost': 'Lost connection',
     kicked: 'Was removed',
@@ -211,6 +240,98 @@ export const LEAVE_GROUP = {
   leadAlone: "You're the only one in it, so the group ends when you leave.",
   confirm: 'Leave group',
   cancel: 'Stay in the group',
+};
+
+// Request to leave (Stage 5, utils/leaveRequests.js): a member's own request, in a Group that needs
+// approval to leave. Plain and calm: nobody is trapped, and nothing is said about anyone else.
+export const LEAVE_REQUEST = {
+  button: 'Request to leave',
+  confirmTitle: 'Ask to leave the group?',
+  confirmBody: 'The Group Lead or a moderator is asked to let you go. If nobody answers, you leave automatically after 15 minutes. Until then you stay in the group and keep sharing as you are now.',
+  confirm: 'Request to leave',
+  stay: 'Stay in the group',
+  waitingTitle: 'Waiting for the Group Lead',
+  waitingBody: (left, clock) => `If nobody answers, you leave automatically in ${left}, at ${clock}.`,
+  cancel: 'Cancel request',
+  sent: 'Your request to leave was sent to the Group Lead.',
+  cancelled: 'You cancelled your request to leave. You stay in the group and keep sharing as before.',
+  approved: "Your request to leave was approved. You've left the group.",
+  approvedAuto: "Nobody answered your request to leave in time, so you've left the group.",
+  rejected: (byName) => (byName
+    ? `${byName} turned down your request to leave. You stay in the group.`
+    : 'Your request to leave was turned down. You stay in the group.'),
+  gone: 'Your request to leave is no longer waiting. You stay in the group.',
+  tookCommand: 'You now lead the group, so your request to leave was cancelled. You can leave directly.',
+  signedOut: "You've signed out. Your location is no longer shared, but you stay a member of the group until your request to leave is approved.",
+  unreachable: "Couldn't reach the server, so nothing was sent. Try again in a moment.",
+};
+
+// Leave requests, for the Group Lead and moderators: shown in the join requests sheet, in its style.
+export const LEAVE_REQUESTS = {
+  tile: 'Requests',
+  leaveSection: 'Asking to leave',
+  joinSection: 'Asking to join',
+  wants: 'Wants to leave',
+  autoIn: (left, clock) => `Leaves automatically in ${left}, at ${clock}`,
+  approve: 'Approve',
+  reject: 'Reject',
+  approveFor: (name) => `Let ${name} leave`,
+  rejectFor: (name) => `Ask ${name} to stay`,
+  commanderRule: "This is the group's own Group Lead. Their request can be approved or left to run out, but not rejected.",
+  moderatorRule: "A moderator's request: only you, as Group Lead, can answer it.",
+  newNotice: (name) => `${name || 'A member'} is asking to leave the group`,
+  gone: 'That request is no longer waiting.',
+  refused: {
+    'cannot-refuse-commander': "The Group Lead's own request can't be rejected.",
+    'admin-only': "Only the Group Lead can answer a moderator's request.",
+    'not-allowed': 'Only the Group Lead and moderators can answer requests to leave.',
+    'own-request': "You can't answer your own request.",
+  },
+};
+
+// Nearby Join (Stage 6, utils/nearby.js). Names only, never where anyone is; nobody joins without
+// their own tap; and it is said so, in plain words, wherever it matters.
+export const NEARBY = {
+  // In the lobby, for someone in no group.
+  toggle: 'Let people nearby find me',
+  toggleHelp: 'Only your name is shown, only to someone within about 15 m who presses Nearby. Nobody can add you to a group without your own tap.',
+  permissionHelp: 'Turning this on asks for your location. It is used only to tell whether you are close to the person pressing Nearby, and only while this is on.',
+  permissionDenied: "LOCUS can't see your location, so people nearby can't find you. Allow location for LOCUS in your phone's settings to use this.",
+  finding: 'Finding your location…',
+  visible: 'Visible to people nearby',
+  turnOff: 'Turn off',
+  stoppedHidden: 'People nearby can no longer find you: LOCUS stopped while the app was in the background.',
+  unavailable: "Nearby isn't available right now.",
+  // The Nearby button.
+  button: 'Nearby',
+  startButton: 'Start a group with people nearby',
+  startHelp: "You'll be the Group Lead. LOCUS looks for people within about 15 m who have let people nearby find them.",
+  title: 'People nearby',
+  scanning: 'Looking for people nearby…',
+  eachAccepts: 'Each person gets an invite and joins only if they accept it.',
+  addAll: (count) => `Add all ${count}`,
+  inviteSelected: (count) => `Invite ${count}`,
+  scanAgain: 'Scan again',
+  empty: 'Nobody nearby has let people find them right now. They can turn on “Let people nearby find me” in LOCUS, then you can scan again.',
+  tooRough: "Your own position is too rough right now to tell who is close. Try moving outdoors or near a window, then scan again.",
+  tooMany: "You've scanned a lot just now. Try again in a moment.",
+  unreachable: "Couldn't reach the server. Try again in a moment.",
+  rowStatus: { invited: 'Invited', joined: 'Joined', declined: 'Declined', expired: 'Invite expired' },
+  select: (name) => `Select ${name}`,
+  joinedNotice: (name) => `${name || 'Someone'} joined your group`,
+  declinedNotice: (name) => `${name || 'Someone'} declined your invite`,
+  expiredNotice: (name) => `${name || 'Someone'} didn't answer in time; the invite expired`,
+  // An invite.
+  inviteTitle: (from) => `Join ${from || 'a'}'s group?`,
+  inviteBody: (from) => `${from || 'Someone nearby'} invited you to their LOCUS group. If you join, the group sees your location on its map. Leaving it may need the Group Lead's approval.`,
+  inviteExpiresIn: (left) => `This invite expires in ${left}.`,
+  accept: 'Join group',
+  decline: 'Not now',
+  inviteExpired: 'That invite has expired. You can ask them to send another.',
+  inviteUsed: 'That invite has already been answered.',
+  inviteGone: 'That invite is no longer open.',
+  inviteBlocked: "You can't join that group.",
+  inviteInGroup: "You're already in a group, so the invite wasn't used.",
 };
 
 // The Group Lead's join requests: Waiting only (there is no Unblock, so no Blocked tab).

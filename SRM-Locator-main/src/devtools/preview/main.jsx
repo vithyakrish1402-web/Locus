@@ -26,6 +26,15 @@ import AdminTools, { RecordingBar } from '../../components/admin/AdminTools';
 import AddPlaceSheet, { PlacingBar } from '../../components/admin/AddPlace';
 import SosOverlay from '../../components/SosOverlay';
 import CommsFeed from '../../components/CommsFeed';
+import SharingControl from '../../components/group/SharingControl';
+import { LeaveRequestWaiting, LeaveRequestList } from '../../components/group/LeaveRequestStatus';
+import { LeaveGroupButton } from '../../components/group/LeaveGroup';
+import LeadTools from '../../components/group/LeadTools';
+import { DiscoverableIndicator, DiscoverableToggle, InvitePrompt, NearbyButton, NearbySheet } from '../../components/nearby/Nearby';
+import { NEARBY } from '../../copy/group';
+import { SharingChip } from '../../components/map/TopBar';
+import { TIMED_PRIVACY } from '../../copy/group';
+import { clockLabel } from '../../utils/timedPrivacy';
 import UpdateModal from '../../components/UpdateModal';
 import LiveUpdateToast from '../../components/LiveUpdateToast';
 import SquadMemberCard from '../../components/SquadMemberCard';
@@ -91,6 +100,26 @@ const SCREENS = {
   'emergency-received': {
     label: 'Emergency alert received (2 queued)',
     render: () => <SosOverlay {...SOS} onAcknowledge={() => {}} />,
+  },
+  'nearby-lobby': {
+    label: 'Nearby: in the lobby (Stage 6)',
+    render: () => <NearbyLobbyDemo />,
+  },
+  'nearby-list': {
+    label: 'Nearby: people close by (Stage 6)',
+    render: () => <NearbyListDemo />,
+  },
+  'nearby-invite': {
+    label: 'Nearby: an invite (Stage 6)',
+    render: () => <NearbyInviteDemo />,
+  },
+  'leave-requests': {
+    label: 'Leave requests (Stage 5)',
+    render: () => <LeaveRequestsDemo />,
+  },
+  'timed-sharing': {
+    label: 'Timed Pause and Hidden (Stage 4)',
+    render: () => <TimedSharingDemo />,
   },
   notifications: {
     label: 'Notifications (all four types)',
@@ -643,6 +672,89 @@ function SheetDemo() {
           <Button variant="secondary" block onClick={() => setOpen(false)}>Cancel</Button>
         </div>
       </Sheet>
+    </div>
+  );
+}
+
+// Nearby Join (Stage 6): the lobby's start button and opt-in (off, then on with its indicator).
+function NearbyLobbyDemo() {
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--color-bg)' }}>
+      <div className="px-4 pt-6 pb-8 flex flex-col gap-3">
+        <NearbyButton label={NEARBY.startButton} onClick={() => {}} />
+        <p className="px-1 text-secondary text-text-secondary">{NEARBY.startHelp}</p>
+        <DiscoverableToggle on={false} onChange={() => {}} />
+        <div className="mt-4 flex"><DiscoverableIndicator onOff={() => {}} /></div>
+        <DiscoverableToggle on onChange={() => {}} />
+      </div>
+    </div>
+  );
+}
+
+// The presser's list: two to choose from (one chosen), and three invites already answered.
+function NearbyListDemo() {
+  const rows = [
+    { id: 'a', name: 'Aarav Shah', selected: true, status: 'idle' },
+    { id: 'b', name: 'Ishita Rao', selected: false, status: 'idle' },
+    { id: 'c', name: 'Rohan Das', selected: false, status: 'joined' },
+    { id: 'd', name: 'Meera Iyer', selected: false, status: 'declined' },
+    { id: 'e', name: 'Kabir Nair', selected: false, status: 'expired' },
+  ];
+  return <div style={{ height: '100%', background: 'var(--color-bg)' }}><NearbySheet open onClose={() => {}} state="done" rows={rows} onScan={() => {}} onToggle={() => {}} onInvite={() => {}} onInviteAll={() => {}} /></div>;
+}
+
+// An invite, with two minutes to answer.
+function NearbyInviteDemo() {
+  const [invite] = useState(() => ({ inviteId: 'demo', fromName: 'Asha', expiresAt: Date.now() + 120_000, offset: 0, shownAt: Date.now() }));
+  return <div style={{ height: '100%', background: 'var(--color-bg)' }}><InvitePrompt invite={invite} onRespond={() => {}} /></div>;
+}
+
+// Request to leave (Stage 5): a member's "Request to leave" and their wait, then the Group Lead's
+// side: the Requests tile with its count, and the list (a member's, the Group's own Lead's with no
+// Reject, and a moderator's).
+function LeaveRequestsDemo() {
+  const [now] = useState(() => Date.now());
+  const request = (uid, name, minutes, extra = {}) => ({ uid, name, requestedAt: now, deadline: now + minutes * 60_000, fromModerator: false, fromCommander: false, ...extra });
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--color-bg)' }}>
+      <div className="px-4 pt-6 pb-8 flex flex-col gap-4">
+        <LeaveGroupButton request onClick={() => {}} />
+        <LeaveRequestWaiting deadline={now + 12 * 60_000} offset={0} onCancel={() => {}} />
+        <LeadTools requests={1} leaveRequests={3} onRequests={() => {}} refresh={{ status: 'idle', message: null }} onRefresh={() => {}} choosing={false} onMeetingPoint={() => {}} hasMeetingPoint={false} onRemoveMeetingPoint={() => {}} />
+        <LeaveRequestList
+          offset={0}
+          onAnswer={() => {}}
+          requests={[
+            request('u1', 'Aarav Shah', 14),
+            request('u2', 'Ishita Rao', 9, { fromCommander: true }),
+            request('u3', 'Rohan Das', 3, { fromModerator: true }),
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Timed Pause and Hidden (Stage 4): the sharing chip while Paused, the sharing control counting
+// down (tap Paused or Hidden on the middle one to see the duration picker), one with nothing left,
+// and the heads-up with its "Hide again" button over them.
+function TimedSharingDemo() {
+  const [until] = useState(() => Date.now() + 7 * 60_000);
+  useEffect(() => {
+    __resetNotifications();
+    notify.info(TIMED_PRIVACY.headsUp(clockLabel(until, 0)), { duration: 0, haptic: false, action: { label: TIMED_PRIVACY.again.GHOST, onClick: () => {} } });
+    notify.success(TIMED_PRIVACY.ended.sos, { duration: 0, haptic: false });
+  }, [until]);
+  const base = { active: true, offset: 0, pending: false, onPick: () => {} };
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--color-bg)' }}>
+      <CommsFeed />
+      <div className="px-4 pt-48 pb-8 flex flex-col gap-6">
+        <SharingChip mode="FROZEN" />
+        <SharingControl mode="FROZEN" onChange={() => {}} timed={{ ...base, hold: { mode: 'FROZEN', until }, allowanceLeftMs: 12 * 60_000 }} />
+        <SharingControl mode="ACTIVE" onChange={() => {}} timed={{ ...base, hold: null, allowanceLeftMs: 12 * 60_000 }} />
+        <SharingControl mode="GHOST" onChange={() => {}} timed={{ ...base, hold: { mode: 'GHOST', until }, allowanceLeftMs: 0 }} />
+      </div>
     </div>
   );
 }

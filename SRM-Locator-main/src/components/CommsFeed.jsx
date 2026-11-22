@@ -8,6 +8,7 @@ import { LAYER } from '../utils/layers';
 import { BELOW_TOP_BAR } from '../utils/mapChrome';
 import { useSettingsOpen } from '../utils/settingsOpen';
 import IconButton from './ui/IconButton';
+import Button from './ui/Button';
 
 // Renders the notifications (src/utils/notify.js): the app's non-blocking replacement for
 // window.alert(). Notices drop in from the top and stack under the top bar; each shows how
@@ -149,6 +150,22 @@ function Notice({ item, reduceMotion, coveredBy }) {
             <p className="text-secondary text-text-secondary leading-relaxed break-words mt-0.5">
               {more}
             </p>
+          )}
+          {/* One small button under the words (notify's `action`): it does its thing and the
+              notice goes. A tap on it is not a tap on the notice. */}
+          {item.action?.label && (
+            <Button
+              variant="secondary"
+              className="mt-2 !min-h-9 px-4"
+              data-testid="notice-action"
+              onClick={(event) => {
+                event.stopPropagation();
+                dismiss(item.id);
+                item.action.onClick?.();
+              }}
+            >
+              {item.action.label}
+            </Button>
           )}
         </div>
 
