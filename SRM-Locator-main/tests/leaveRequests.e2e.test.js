@@ -179,6 +179,53 @@ describe('in a Group made through Nearby, with the switch on', () => {
     expect(listed(alpha, uid.b)).toBeDefined();
   });
 
+  it('the member can take their request back before it is answered, and goes on as a member', async () => {
+    const { room, uid, alpha, bravo } = await group(on);
+    const withdrawn = collect(alpha, 'leave-request-withdrawn');
+    await ask(bravo, 'request-leave', { roomCode: room });
+    await waitFor(() => listed(alpha, uid.b)?.leaveRequestedUntil);
+    const cancelled = once(bravo, 'leave-request-cancelled');
+    expect(await ask(bravo, 'cancel-leave', { roomCode: room })).toEqual({ ok: true });
+    expect(await cancelled).toEqual({ roomCode: room, reason: 'cancelled' });
+    await waitFor(() => withdrawn.some((w) => w.uid === uid.b && w.reason === 'cancelled'));
+    await waitFor(() => listed(alpha, uid.b) && listed(alpha, uid.b).leaveRequestedUntil === undefined);
+    expect((await ask(alpha, 'get-leave-requests', { roomCode: room })).requests).toEqual([]);
+    // Sharing as normal, and nothing left for the clock to approve.
+    bravo.emit('update-location', { roomCode: room, lat: 12.82, lng: 80.04, status: 'ACTIVE' });
+    await waitFor(() => listed(alpha, uid.b)?.hasFix);
+    await sleep(AUTO_MS + 100);
+    expect(listed(alpha, uid.b)).toBeDefined();
+    expect(await ask(bravo, 'cancel-leave', { roomCode: room })).toEqual({ ok: false, reason: 'no-request' });
+  });
+
+  it("nobody can take back someone else's request, and one cancelled leaves the others' deadlines alone", async () => {
+    const { room, uid, alpha, bravo, charlie, delta } = await group(on);
+    const b = await ask(bravo, 'request-leave', { roomCode: room });
+    const c = await ask(charlie, 'request-leave', { roomCode: room });
+    // Delta (and the admin) naming Bravo's uid cancel nothing: a request is found by who is asking.
+    expect(await ask(delta, 'cancel-leave', { roomCode: room, uid: uid.b })).toEqual({ ok: false, reason: 'no-request' });
+    expect(await ask(alpha, 'cancel-leave', { roomCode: room, uid: uid.b })).toEqual({ ok: false, reason: 'no-request' });
+    expect(await ask(bravo, 'cancel-leave', { roomCode: room })).toEqual({ ok: true });
+    const open = (await ask(alpha, 'get-leave-requests', { roomCode: room })).requests;
+    expect(open.map((r) => [r.uid, r.deadline])).toEqual([[uid.c, c.deadline]]);
+    expect(b.deadline).toBeLessThanOrEqual(c.deadline);
+  });
+
+  it('cannot be taken back once approved', async () => {
+    const { room, uid, alpha, bravo } = await group(on);
+    await ask(bravo, 'request-leave', { roomCode: room });
+    const approved = once(bravo, 'leave-approved');
+    await ask(alpha, 'resolve-leave', { roomCode: room, uid: uid.b, approved: true });
+    await approved;
+    expect(await ask(bravo, 'cancel-leave', { roomCode: room })).toEqual({ ok: false, reason: 'not-in-squad' });
+    await waitFor(() => listed(alpha, uid.b) === undefined);
+  });
+
+  it('cancel-leave in a Group that does not need approval answers not-required', async () => {
+    const { room, bravo } = await group(on, { nearby: false });
+    expect(await ask(bravo, 'cancel-leave', { roomCode: room })).toEqual({ ok: false, reason: 'not-required' });
+  });
+
   it('unanswered, it is approved on its own when its 15 minutes are up', async () => {
     const { room, uid, alpha, bravo } = await group(on);
     const reply = await ask(bravo, 'request-leave', { roomCode: room });
@@ -388,7 +435,7 @@ describe('everything else in a Nearby Group behaves as before', () => {
 
   it('copes with malformed leave events', async () => {
     const { bravo } = await group(on);
-    for (const event of ['request-leave', 'resolve-leave', 'get-leave-requests']) {
+    for (const event of ['request-leave', 'cancel-leave', 'resolve-leave', 'get-leave-requests']) {
       for (const bad of [undefined, null, 7, 'x', { roomCode: 5 }, { roomCode: 'NOPE', uid: 'x', approved: true }]) bravo.emit(event, bad);
     }
     await settle(bravo);

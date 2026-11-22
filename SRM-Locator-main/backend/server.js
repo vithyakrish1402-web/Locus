@@ -1188,7 +1188,7 @@ io.on('connection', (socket) => {
   // is dropped, the connection kept. A phone back from a dead zone flushes everything it buffered
   // at once, so joining, leaving, admitting and anything about an SOS count in a bucket of their
   // own and are never crowded out by its stale positions.
-  const ALWAYS_THROUGH = new Set(['request-leave', 'resolve-leave', 'request-join', 'cancel-join', 'leave-squad', 'sos-broadcast', 'sos-sync', 'sos-ack', 'resolve-access', 'admit-all', 'kick-member', 'block-user']);
+  const ALWAYS_THROUGH = new Set(['request-leave', 'cancel-leave', 'resolve-leave', 'request-join', 'cancel-join', 'leave-squad', 'sos-broadcast', 'sos-sync', 'sos-ack', 'resolve-access', 'admit-all', 'kick-member', 'block-user']);
   const sent = { usual: { start: 0, count: 0 }, vital: { start: 0, count: 0 } };
   socket.use(([event], next) => {
     const bucket = ALWAYS_THROUGH.has(event) ? sent.vital : sent.usual;
@@ -2228,6 +2228,23 @@ socket.on('check-ping', (clientTimestamp) => {
     if (!isKnownMember(squad, uid)) return reply({ ok: false, reason: 'no-identity' });
     const request = fileLeave(squad, roomCode, uid, nameOf(squad, socket.id));
     reply({ ok: true, requestedAt: request.requestedAt, deadline: request.deadline });
+  });
+
+  // 'cancel-leave' { roomCode } -> { ok: true } or { ok: false, reason: 'not-in-squad' | 'not-required'
+  // | 'no-request' }: the person takes back their own request before it is answered (only their own:
+  // the request is found by who this connection is, never by a uid in the message). It closes, every
+  // list that shows it is told, and they go on as a member as before.
+  socket.on('cancel-leave', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const { roomCode } = payload ?? {};
+    const squad = activeSquads[roomCode];
+    if (!squad || !squad.members.includes(socket.id)) return reply({ ok: false, reason: 'not-in-squad' });
+    if (!leaveGated(squad)) return reply({ ok: false, reason: 'not-required' });
+    const uid = uidOfSocket(squad, socket.id);
+    if (!closeLeaveRequest(squad, roomCode, uid, 'cancelled')) return reply({ ok: false, reason: 'no-request' });
+    tellPerson(uid, 'leave-request-cancelled', { roomCode, reason: 'cancelled' });
+    broadcastSquadUpdate(roomCode);
+    reply({ ok: true });
   });
 
   // 'resolve-leave' { roomCode, uid, approved } -> { ok: true } or { ok: false, reason: 'not-in-squad'
