@@ -242,6 +242,53 @@ export const LEAVE_GROUP = {
   cancel: 'Stay in the group',
 };
 
+// Request to leave (Stage 5, utils/leaveRequests.js): a member's own request, in a Group that needs
+// approval to leave. Plain and calm: nobody is trapped, and nothing is said about anyone else.
+export const LEAVE_REQUEST = {
+  button: 'Request to leave',
+  confirmTitle: 'Ask to leave the group?',
+  confirmBody: 'The Group Lead or a moderator is asked to let you go. If nobody answers, you leave automatically after 15 minutes. Until then you stay in the group and keep sharing as you are now.',
+  confirm: 'Request to leave',
+  stay: 'Stay in the group',
+  waitingTitle: 'Waiting for the Group Lead',
+  waitingBody: (left, clock) => `If nobody answers, you leave automatically in ${left}, at ${clock}.`,
+  cancel: 'Cancel request',
+  sent: 'Your request to leave was sent to the Group Lead.',
+  cancelled: 'You cancelled your request to leave. You stay in the group and keep sharing as before.',
+  approved: "Your request to leave was approved. You've left the group.",
+  approvedAuto: "Nobody answered your request to leave in time, so you've left the group.",
+  rejected: (byName) => (byName
+    ? `${byName} turned down your request to leave. You stay in the group.`
+    : 'Your request to leave was turned down. You stay in the group.'),
+  gone: 'Your request to leave is no longer waiting. You stay in the group.',
+  tookCommand: 'You now lead the group, so your request to leave was cancelled. You can leave directly.',
+  signedOut: "You've signed out. Your location is no longer shared, but you stay a member of the group until your request to leave is approved.",
+  unreachable: "Couldn't reach the server, so nothing was sent. Try again in a moment.",
+};
+
+// Leave requests, for the Group Lead and moderators: shown in the join requests sheet, in its style.
+export const LEAVE_REQUESTS = {
+  tile: 'Requests',
+  leaveSection: 'Asking to leave',
+  joinSection: 'Asking to join',
+  wants: 'Wants to leave',
+  autoIn: (left, clock) => `Leaves automatically in ${left}, at ${clock}`,
+  approve: 'Approve',
+  reject: 'Reject',
+  approveFor: (name) => `Let ${name} leave`,
+  rejectFor: (name) => `Ask ${name} to stay`,
+  commanderRule: "This is the group's own Group Lead. Their request can be approved or left to run out, but not rejected.",
+  moderatorRule: "A moderator's request: only you, as Group Lead, can answer it.",
+  newNotice: (name) => `${name || 'A member'} is asking to leave the group`,
+  gone: 'That request is no longer waiting.',
+  refused: {
+    'cannot-refuse-commander': "The Group Lead's own request can't be rejected.",
+    'admin-only': "Only the Group Lead can answer a moderator's request.",
+    'not-allowed': 'Only the Group Lead and moderators can answer requests to leave.',
+    'own-request': "You can't answer your own request.",
+  },
+};
+
 // The Group Lead's join requests: Waiting only (there is no Unblock, so no Blocked tab).
 export const JOIN_REQUESTS = {
   title: 'Join requests',

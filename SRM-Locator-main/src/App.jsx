@@ -73,7 +73,9 @@ import { useFriends } from './hooks/useFriends';
 import { exportActivityLog } from './utils/activityLogExport';
 import { MembersEmpty, MembersHeading, MembersLoading } from './components/group/MembersHeading';
 import { LeaveGroupButton, LeaveGroupConfirm } from './components/group/LeaveGroup';
-import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS, TIMED_PRIVACY } from './copy/group';
+import { LeaveRequestWaiting } from './components/group/LeaveRequestStatus';
+import { useLeaveRequests } from './hooks/useLeaveRequests';
+import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS, TIMED_PRIVACY, LEAVE_REQUEST } from './copy/group';
 import { FindingLocation, LocationProblemCard, MeetingPointBanner } from './components/map/MapBanners';
 import { TABS } from './copy/map';
 import { mapStylesFor } from './utils/mapStyles';
@@ -2279,8 +2281,38 @@ const App = () => {
     return null;
   };
 
+  // Request to leave (Stage 5, hooks/useLeaveRequests.js). In a Group made through Nearby Join, with
+  // the switch on, a member's Leave is a request; whoever holds command still leaves directly. Off,
+  // or the Group not needing it, Leave is as in js-1.1.87.
+  const leave = useLeaveRequests({
+    socket,
+    roomCode: squadCode,
+    inGroup: Boolean(user && hasJoinedSquad && accessStatus === 'granted'),
+    settings: groupSettings,
+    canAnswer: canModerate,
+    myUid: user?.uid ?? null,
+    // Approved (by the Group Lead, a moderator, or the clock): back to the lobby, as after a Leave.
+    onApproved: () => handleLeaveSquad(),
+  });
+  const leaveIsRequest = leave.needsRequest && squadRole !== 'OWNER';
+  // The Leave sheet's button: a request where one is needed, falling back to the old Leave when the
+  // server says this Group does not need one (or that this person holds command).
+  const confirmLeave = () => {
+    setShowLeaveConfirm(false);
+    if (!leaveIsRequest) {
+      handleLeaveSquad();
+      return;
+    }
+    leave.request().then((answer) => {
+      if (!answer.ok && (answer.reason === 'not-required' || answer.reason === 'admin')) handleLeaveSquad();
+    });
+  };
+
   // ---  KILL SWITCH LOGOUT HANDLER ---
   const handleLogout = () => {
+    // A member of a Group whose Leave is a request stays a member after signing out (the server files
+    // or keeps their request): their sharing stops, and they are told so in plain words.
+    if (leaveIsRequest) notify.info(LEAVE_REQUEST.signedOut, { duration: 0, haptic: false });
     stopBackgroundSharing();
     const online = socket.connected;
     const leaving = sendLeave(hasJoinedSquad ? squadCode.trim().toUpperCase() : null);
@@ -3416,6 +3448,7 @@ const App = () => {
                 onActivityLog={openActivityLog}
                 onBlocked={isOwnAdmin ? openBlocked : undefined}
                 requests={pendingRequests.length}
+                leaveRequests={leave.requests.length}
                 onRequests={() => setShowRequestsModal(true)}
                 refresh={telemetrySync}
                 onRefresh={requestTelemetrySync}
@@ -3538,7 +3571,9 @@ const App = () => {
               )}
             </AnimatePresence>
             )}
-            {activeTab === 'users' && <LeaveGroupButton onClick={() => setShowLeaveConfirm(true)} />}
+            {activeTab === 'users' && (leave.mine
+              ? <LeaveRequestWaiting deadline={leave.mine.deadline} offset={leave.offset} pending={leave.pending} onCancel={leave.cancel} />
+              : <LeaveGroupButton request={leaveIsRequest} onClick={() => setShowLeaveConfirm(true)} />)}
             {/* The panel rests lower than full by this much: room to scroll the last rows up into
               view at half. */}
 
@@ -4050,6 +4085,12 @@ const App = () => {
         requests={pendingRequests}
         code={squadCode}
         onAdmitAll={isOwnAdmin ? admitAll : undefined}
+        leave={leave.requests.length ? {
+          requests: leave.requests,
+          offset: leave.offset,
+          pending: leave.pending,
+          onAnswer: (request, approved) => leave.answer(request.uid, approved),
+        } : undefined}
         onAnswer={(request, approved) => {
           // The squad the request was made to, not merely the one on screen.
           socket.emit('resolve-access', { targetId: request.targetId, roomCode: request.roomCode || squadCode, approved });
@@ -4203,7 +4244,7 @@ const App = () => {
             { id: 'grid', label: TABS.map, Icon: Map, flourish: 'lift' },
             { id: 'matrix', label: 'Buildings', Icon: Building2, flourish: 'lift' },
             // The people waiting to join, on Group, for whoever may let them in.
-            { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop', badge: canModerate ? { count: pendingRequests.length, label: LEAD_TOOLS.waiting(pendingRequests.length) } : undefined },
+            { id: 'squad', label: TABS.group, Icon: Users, flourish: 'pop', badge: canModerate ? { count: pendingRequests.length + leave.requests.length, label: LEAD_TOOLS.waiting(pendingRequests.length + leave.requests.length) } : undefined },
           ]}
           sosTrigger={
             accessStatus === 'granted' ? (
@@ -4249,7 +4290,8 @@ const App = () => {
         isLead={squadRole === 'OWNER'}
         alone={users.length === 0 && ghostMembers.length === 0}
         onCancel={() => setShowLeaveConfirm(false)}
-        onLeave={() => { setShowLeaveConfirm(false); handleLeaveSquad(); }}
+        request={leaveIsRequest}
+        onLeave={confirmLeave}
       />
 
       {/* A member's options (components/group/MemberOptions.jsx): Ping, Show on map, Find with

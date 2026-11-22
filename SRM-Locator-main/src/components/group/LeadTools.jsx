@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertCircle, Ban, Flag, History, Loader2, RefreshCw, UserPlus, X } from 'lucide-react';
 import { Badge, Button, SegmentedControl, Switch } from '../ui';
-import { LEAD_TOOLS, REFRESH_FAILED, SOS_CONTROLS } from '../../copy/group';
+import { LEAD_TOOLS, LEAVE_REQUESTS, REFRESH_FAILED, SOS_CONTROLS } from '../../copy/group';
 
 // The Group Lead's tools (redesign Group panel batch, piece 4): Join requests with its count,
 // Refresh locations (the old SYNC_TELEMETRY, which also opens the location table as before)
@@ -20,17 +20,19 @@ const TILE = 'relative flex-1 min-w-0 min-h-[5.5rem] px-2 py-3 rounded-2xl glass
  *   hasMeetingPoint: boolean, onRemoveMeetingPoint: () => void,
  *   sos?: { enabled: boolean, cooldownMs: number, presetsMs: number[],
  *     onEnabled: (on: boolean) => void, onCooldown: (ms: number) => void },
- *   moderatorOnly?: boolean, onActivityLog?: () => void, onBlocked?: () => void }} props
+ *   moderatorOnly?: boolean, onActivityLog?: () => void, onBlocked?: () => void, leaveRequests?: number }} props
+ *   leaveRequests: requests to leave waiting (Stage 5): counted with the join requests, and the tile says Requests
  */
-export default function LeadTools({ requests, onRequests, refresh, onRefresh, choosing, onMeetingPoint, hasMeetingPoint, onRemoveMeetingPoint, sos, moderatorOnly = false, onActivityLog, onBlocked }) {
+export default function LeadTools({ requests, onRequests, refresh, onRefresh, choosing, onMeetingPoint, hasMeetingPoint, onRemoveMeetingPoint, sos, moderatorOnly = false, onActivityLog, onBlocked, leaveRequests = 0 }) {
+  const waiting = requests + leaveRequests;
   const refreshing = refresh.status === 'pending';
   return (
     <section data-testid="lead-tools" className="pt-2 flex flex-col gap-3">
       <div className="flex gap-2">
         <button type="button" className={TILE} onClick={onRequests}>
           <UserPlus size={22} aria-hidden="true" />
-          {LEAD_TOOLS.joinRequests}
-          <Badge count={requests} label={LEAD_TOOLS.waiting(requests)} className="absolute top-2 right-2" />
+          {leaveRequests > 0 ? LEAVE_REQUESTS.tile : LEAD_TOOLS.joinRequests}
+          <Badge count={waiting} label={LEAD_TOOLS.waiting(waiting)} className="absolute top-2 right-2" />
         </button>
         {!moderatorOnly && (<>
         <button type="button" className={TILE} onClick={onRefresh} disabled={refreshing} aria-busy={refreshing}>

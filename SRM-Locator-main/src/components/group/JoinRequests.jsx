@@ -1,7 +1,8 @@
 import React from 'react';
 import { UserPlus } from 'lucide-react';
 import { Avatar, Button, Sheet } from '../ui';
-import { JOIN_REQUESTS } from '../../copy/group';
+import { JOIN_REQUESTS, LEAVE_REQUESTS } from '../../copy/group';
+import { LeaveRequestList } from './LeaveRequestStatus';
 
 // Join requests (redesign Group panel batch, piece 5), for the Group Lead and moderators: who is
 // waiting, with Approve and Decline, answered exactly as before. The Group Lead alone also has
@@ -10,12 +11,18 @@ import { JOIN_REQUESTS } from '../../copy/group';
 
 /**
  * @param {{ open: boolean, onClose: () => void, requests: Array<{targetId: string, name: string}>,
- *   code: string, onAnswer: (request: object, approved: boolean) => void, onAdmitAll?: () => void }} props
+ *   code: string, onAnswer: (request: object, approved: boolean) => void, onAdmitAll?: () => void,
+ *   leave?: { requests: Array<object>, offset: number, pending?: boolean,
+ *     onAnswer: (request: object, approved: boolean) => void } }} props
+ *   leave: requests to leave (Stage 5), shown first, in this sheet's style
  */
-export default function JoinRequests({ open, onClose, requests, code, onAnswer, onAdmitAll }) {
+export default function JoinRequests({ open, onClose, requests, code, onAnswer, onAdmitAll, leave }) {
+  const leaving = leave?.requests?.length ? leave : null;
   return (
-    <Sheet open={open} onClose={onClose} title={JOIN_REQUESTS.title}>
+    <Sheet open={open} onClose={onClose} title={leaving ? LEAVE_REQUESTS.tile : JOIN_REQUESTS.title}>
       <div data-testid="join-requests" className="px-4 flex flex-col gap-3">
+        {leaving && <LeaveRequestList requests={leaving.requests} offset={leaving.offset} pending={leaving.pending} onAnswer={leaving.onAnswer} />}
+        {leaving && <h3 className="font-ui text-label text-text-secondary uppercase tracking-wide pt-2">{LEAVE_REQUESTS.joinSection}</h3>}
         <p className="text-secondary text-text-secondary">{JOIN_REQUESTS.help}</p>
         {onAdmitAll && requests.length > 1 && (
           <Button block onClick={onAdmitAll}>{JOIN_REQUESTS.admitAll(requests.length)}</Button>

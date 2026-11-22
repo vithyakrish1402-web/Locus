@@ -27,6 +27,9 @@ import AddPlaceSheet, { PlacingBar } from '../../components/admin/AddPlace';
 import SosOverlay from '../../components/SosOverlay';
 import CommsFeed from '../../components/CommsFeed';
 import SharingControl from '../../components/group/SharingControl';
+import { LeaveRequestWaiting, LeaveRequestList } from '../../components/group/LeaveRequestStatus';
+import { LeaveGroupButton } from '../../components/group/LeaveGroup';
+import LeadTools from '../../components/group/LeadTools';
 import { SharingChip } from '../../components/map/TopBar';
 import { TIMED_PRIVACY } from '../../copy/group';
 import { clockLabel } from '../../utils/timedPrivacy';
@@ -95,6 +98,10 @@ const SCREENS = {
   'emergency-received': {
     label: 'Emergency alert received (2 queued)',
     render: () => <SosOverlay {...SOS} onAcknowledge={() => {}} />,
+  },
+  'leave-requests': {
+    label: 'Leave requests (Stage 5)',
+    render: () => <LeaveRequestsDemo />,
   },
   'timed-sharing': {
     label: 'Timed Pause and Hidden (Stage 4)',
@@ -651,6 +658,32 @@ function SheetDemo() {
           <Button variant="secondary" block onClick={() => setOpen(false)}>Cancel</Button>
         </div>
       </Sheet>
+    </div>
+  );
+}
+
+// Request to leave (Stage 5): a member's "Request to leave" and their wait, then the Group Lead's
+// side: the Requests tile with its count, and the list (a member's, the Group's own Lead's with no
+// Reject, and a moderator's).
+function LeaveRequestsDemo() {
+  const [now] = useState(() => Date.now());
+  const request = (uid, name, minutes, extra = {}) => ({ uid, name, requestedAt: now, deadline: now + minutes * 60_000, fromModerator: false, fromCommander: false, ...extra });
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--color-bg)' }}>
+      <div className="px-4 pt-6 pb-8 flex flex-col gap-4">
+        <LeaveGroupButton request onClick={() => {}} />
+        <LeaveRequestWaiting deadline={now + 12 * 60_000} offset={0} onCancel={() => {}} />
+        <LeadTools requests={1} leaveRequests={3} onRequests={() => {}} refresh={{ status: 'idle', message: null }} onRefresh={() => {}} choosing={false} onMeetingPoint={() => {}} hasMeetingPoint={false} onRemoveMeetingPoint={() => {}} />
+        <LeaveRequestList
+          offset={0}
+          onAnswer={() => {}}
+          requests={[
+            request('u1', 'Aarav Shah', 14),
+            request('u2', 'Ishita Rao', 9, { fromCommander: true }),
+            request('u3', 'Rohan Das', 3, { fromModerator: true }),
+          ]}
+        />
+      </div>
     </div>
   );
 }
