@@ -77,6 +77,7 @@ import { LeaveRequestWaiting } from './components/group/LeaveRequestStatus';
 import { useLeaveRequests } from './hooks/useLeaveRequests';
 import { useDiscoverable } from './hooks/useDiscoverable';
 import { useNearbyScan } from './hooks/useNearbyScan';
+import { useNearbyAvailable } from './hooks/useNearbyAvailable';
 import { DiscoverableIndicator, DiscoverableToggle, InvitePrompt, NearbyButton, NearbySheet } from './components/nearby/Nearby';
 import { NEARBY_ENABLED } from './utils/nearby';
 import { GROUP_HEADER, GROUP_TABS, MEMBERS as GROUP_MEMBERS, MEMBERS_LIST as GROUP_MEMBERS_LIST, REFRESH_FAILED, SOS_CONTROLS, ROLE_REFUSED, ACTIVITY_LOG, LEAD_TOOLS, FRIENDS, TIMED_PRIVACY, LEAVE_REQUEST, NEARBY } from './copy/group';
@@ -2308,7 +2309,10 @@ const App = () => {
   // Nearby Join (Stage 6, utils/nearby.js). Off (NEARBY_ENABLED), or the server saying Nearby is off,
   // none of it shows and nothing is sent: as in js-1.1.87 with Stages 4 and 5.
   const [nearbyServerOff, setNearbyServerOff] = useState(false);
-  const nearbyOn = NEARBY_ENABLED && !nearbyServerOff;
+  // Shown only once the server says it has Nearby on (hooks/useNearbyAvailable.js): until then, and
+  // with an older server, the app is exactly as in js-1.1.87 with Stages 4 and 5.
+  const nearbyAvailable = useNearbyAvailable({ socket, enabled: NEARBY_ENABLED });
+  const nearbyOn = NEARBY_ENABLED && nearbyAvailable && !nearbyServerOff;
   const [showNearby, setShowNearby] = useState(false);
   const [nearbyAfterCreate, setNearbyAfterCreate] = useState(false);
   const discoverable = useDiscoverable({

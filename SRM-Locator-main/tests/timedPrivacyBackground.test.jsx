@@ -140,6 +140,8 @@ const sharingInAGroup = async () => {
   await waitFor(() => expect(emitted('request-join').length).toBeGreaterThan(0)); // after its sign-in token
   code = emitted('request-join').at(-1).roomCode;
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode: code }));
+  // The server has timed holds on: it says so on admission.
+  act(() => fakeSocket.receive('sharing-hold', { roomCode: code, mode: 'ACTIVE', until: null, allowanceLeftMs: 30 * MIN, serverNow: Date.now() }));
   await flush();
   await waitFor(() => expect(plugin.start).toHaveBeenCalledTimes(1));
   say({ state: 'running' });

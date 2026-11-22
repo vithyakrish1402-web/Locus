@@ -33,7 +33,10 @@ export function useTimedPrivacy({ socket, roomCode, inGroup, applyMode, enabled 
   const hold = inGroup ? heldState : null;
   const [allowanceLeftMs, setAllowanceLeftMs] = useState(null);
   const [offset, setOffset] = useState(0);
-  const [serverOff, setServerOff] = useState(false);
+  // Whether the server has timed holds on: only once it says so (a 'sharing-hold', which it sends on
+  // every admission when they are on and never when they are off, or a granted hold). Until then the app
+  // is exactly as in js-1.1.87, whatever its own switch says.
+  const [serverOn, setServerOn] = useState(false);
   const [pending, setPending] = useState(false);
 
   // Read at the moment something happens (socket handlers, timers), not when they were set up.
@@ -76,7 +79,7 @@ export function useTimedPrivacy({ socket, roomCode, inGroup, applyMode, enabled 
     notify.success(TIMED_PRIVACY.ended[reason] ?? TIMED_PRIVACY.ended.expired, { haptic: false });
   }, []);
 
-  const active = Boolean(enabled) && !serverOff;
+  const active = Boolean(enabled) && serverOn;
 
   /** Asks the server for `mode` (Paused or Hidden for `minutes`, or Live). Resolves with its answer. */
   const request = useCallback((mode, minutes) => new Promise((resolve) => {
@@ -101,7 +104,7 @@ export function useTimedPrivacy({ socket, roomCode, inGroup, applyMode, enabled 
       const answer = reply ?? { ok: false, reason: 'no-answer' };
       learn(answer, Date.now());
       if (answer.ok) {
-        setServerOff(false);
+        setServerOn(true);
         const next = holdFrom(answer);
         if (next) {
           setHoldNow(next);
@@ -112,7 +115,7 @@ export function useTimedPrivacy({ socket, roomCode, inGroup, applyMode, enabled 
         }
       } else if (answer.reason === 'disabled') {
         // The server's own switch is off: the caller does what js-1.1.87 did.
-        setServerOff(true);
+        setServerOn(false);
       } else if (answer.reason === 'allowance' || answer.reason === 'bad-minutes') {
         notify.warning(TIMED_PRIVACY.refused(answer.allowanceLeftMs ?? 0));
       }
@@ -123,12 +126,13 @@ export function useTimedPrivacy({ socket, roomCode, inGroup, applyMode, enabled 
   // The server's word: a hold (on admission, on every return, and when one starts on another phone of
   // theirs) and the end of one.
   useEffect(() => {
-    if (!enabled || !socket || !inGroup) return undefined;
+    // Listened for from before admission: the server sends 'sharing-hold' with 'access-granted'.
+    if (!enabled || !socket) return undefined;
     const forThisGroup = (payload) => !payload?.roomCode || payload.roomCode === roomCode;
     const onHold = (payload) => {
       if (!forThisGroup(payload)) return;
       learn(payload, Date.now());
-      setServerOff(false);
+      setServerOn(true);
       const next = holdFrom(payload);
       if (next) {
         const fresh = holdRef.current?.until !== next.until || holdRef.current?.mode !== next.mode;
@@ -187,5 +191,5 @@ export function useTimedPrivacy({ socket, roomCode, inGroup, applyMode, enabled 
     if (enabled) endHold('sos');
   }, [enabled, endHold]);
 
-  return { active, hold, allowanceLeftMs, offset, pending, serverOff, request, onSosSent };
+  return { active, hold, allowanceLeftMs, offset, pending, serverOn, request, onSosSent };
 }

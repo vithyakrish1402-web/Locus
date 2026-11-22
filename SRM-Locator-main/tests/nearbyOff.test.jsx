@@ -92,9 +92,13 @@ const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0))
 let watchers; // every watchPosition success callback, in order
 let currents; // every getCurrentPosition success callback, in order
 
-const renderLobby = async () => {
+// The server says whether it has Nearby on (a scan from no group): 'not-in-squad' is on. The check is
+// answered, then forgotten, so each test sees only what it does itself.
+const renderLobby = async ({ serverNearby = 'not-in-squad' } = {}) => {
   render(<App />);
   await flush();
+  if (emitted('nearby-scan').length) await answer('nearby-scan', { ok: false, reason: serverNearby });
+  fakeSocket.emit.mockClear();
 };
 const toggle = () => screen.queryByRole('switch', { name: new RegExp(NEARBY.toggle) });
 // Signed in -> lobby -> Create group, let in as `role`, then the Members panel.

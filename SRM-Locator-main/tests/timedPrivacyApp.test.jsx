@@ -105,12 +105,14 @@ const fixAt = (spot, accuracy = 6) => act(async () => {
 
 // Signed in -> lobby -> Create group (granted), with a first fix, then the Members panel, where the
 // sharing control is.
-const inGroup = async () => {
+const inGroup = async ({ serverTimed = true } = {}) => {
   navigator.geolocation.getCurrentPosition.mockImplementation((ok) => ok({ coords: { latitude: A.lat, longitude: A.lng, speed: 0, accuracy: 6 } }));
   render(<App />);
   fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
   roomCode = emitted('request-join').at(-1).roomCode;
   act(() => fakeSocket.receive('access-granted', { role: 'OWNER', roomCode }));
+  // The server has timed holds on: it says so on admission (with what is left of the hour).
+  if (serverTimed) act(() => fakeSocket.receive('sharing-hold', { roomCode, mode: 'ACTIVE', until: null, allowanceLeftMs: 30 * MIN, serverNow: serverNow() }));
   await act(async () => {});
   await fixAt(A);
   fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
@@ -183,6 +185,45 @@ describe('picking Paused or Hidden', () => {
     expect(screen.queryByTestId('duration-picker')).toBeNull();
     expect(lastStatus()).toBe('GHOST');
     expect(emitted('set-sharing-mode')).toEqual([]);
+  });
+});
+
+describe("a server that has not said timed holds are on (its switch off, or too old)", () => {
+  it('Pause and Hidden are exactly as in js-1.1.87: no picker, nothing asked, paused at once', async () => {
+    await inGroup({ serverTimed: false });
+    fakeSocket.emit.mockClear();
+    pick('Paused');
+    expect(screen.queryByTestId('duration-picker')).toBeNull();
+    expect(emitted('set-sharing-mode')).toEqual([]);
+    expect(lastStatus()).toBe('FROZEN');
+    expect(screen.queryByTestId('sharing-allowance')).toBeNull();
+    pick('Hidden');
+    expect(lastStatus()).toBe('GHOST');
+    pick('Live');
+    expect(lastStatus()).toBe('ACTIVE');
+    expect(emitted('set-sharing-mode')).toEqual([]);
+  });
+});
+
+describe('someone joining by code', () => {
+  it("hears that timed holds are on even though it comes with being let in, before the screen is in the group", async () => {
+    navigator.geolocation.getCurrentPosition.mockImplementation((ok) => ok({ coords: { latitude: A.lat, longitude: A.lng, speed: 0, accuracy: 6 } }));
+    render(<App />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Join a group' }));
+    fireEvent.change(screen.getByLabelText('Group code'), { target: { value: 'JOINME' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Join group' }));
+    await act(async () => {});
+    roomCode = emitted('request-join').at(-1).roomCode;
+    // The server lets them in and says timed holds are on, in the same moment.
+    act(() => {
+      fakeSocket.receive('access-granted', { role: 'MEMBER', roomCode });
+      fakeSocket.receive('sharing-hold', { roomCode, mode: 'ACTIVE', until: null, allowanceLeftMs: 30 * MIN, serverNow: serverNow() });
+    });
+    await act(async () => {});
+    await fixAt(A);
+    fireEvent.click(screen.getByRole('radio', { name: 'Members' }));
+    pick('Paused');
+    expect(screen.getByTestId('duration-picker')).toBeTruthy();
   });
 });
 

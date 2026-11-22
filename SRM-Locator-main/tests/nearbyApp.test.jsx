@@ -92,9 +92,13 @@ const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0))
 let watchers; // every watchPosition success callback, in order
 let currents; // every getCurrentPosition success callback, in order
 
-const renderLobby = async () => {
+// The server says whether it has Nearby on (a scan from no group): 'not-in-squad' is on. The check is
+// answered, then forgotten, so each test sees only what it does itself.
+const renderLobby = async ({ serverNearby = 'not-in-squad' } = {}) => {
   render(<App />);
   await flush();
+  if (emitted('nearby-scan').length) await answer('nearby-scan', { ok: false, reason: serverNearby });
+  fakeSocket.emit.mockClear();
 };
 const toggle = () => screen.queryByRole('switch', { name: new RegExp(NEARBY.toggle) });
 // Signed in -> lobby -> Create group, let in as `role`, then the Members panel.
@@ -193,6 +197,23 @@ describe('being discoverable, in the lobby', () => {
     expect(emitted('nearby-respond')).toEqual([{ inviteId: 'inv1', accept: true }]);
     await answer('nearby-respond', { ok: true, roomCode: 'NYASHA' });
     await waitFor(() => expect(emitted('request-join').at(-1)).toMatchObject({ roomCode: 'NYASHA', intent: 'join' }));
+  });
+});
+
+describe('a server that has not said Nearby is on', () => {
+  it('with Nearby off there: no opt-in, no Nearby start, nothing sent, exactly as before', async () => {
+    await renderLobby({ serverNearby: 'disabled' });
+    expect(toggle()).toBeNull();
+    expect(screen.queryByRole('button', { name: NEARBY.startButton })).toBeNull();
+    expect(emitted('nearby-discoverable')).toEqual([]);
+  });
+
+  it('too old to answer: the same', async () => {
+    render(<App />);
+    await flush();
+    expect(emitted('nearby-scan')).toEqual([{ roomCode: null }]); // asked once, never answered
+    expect(toggle()).toBeNull();
+    expect(screen.queryByRole('button', { name: NEARBY.startButton })).toBeNull();
   });
 });
 
