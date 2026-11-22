@@ -5,6 +5,7 @@
 // time even with the app closed (the v1.1.75 shell's pause({ minutes })).
 // The real App.jsx, a fake socket and a fake LocusBackground plugin (the mocks are
 // backgroundPauseSync.test.jsx's own).
+/* eslint-disable no-unused-vars -- the harness is shared with timedPrivacyOff.test.jsx; watchCallback is used there */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { MotionGlobalConfig } from 'framer-motion';
