@@ -1149,18 +1149,30 @@ function handleSquadSuccession(disconnectedId) {
         squad.ownerUid = null;
       }
     } else if (squad.ownerId === disconnectedId) {
+      // Who may take over: not someone admitted through a Nearby invite within
+      // NEARBY_CARETAKER_WAIT_MS (nearby.js), as for a stand-in. Everyone else, as before.
+      const now = Date.now();
+      const eligible = (id) => !tooNewToStandIn(squad, squad.memberUids?.[id] || io.sockets.sockets.get(id)?.data?.uid, now, NEARBY_TIMINGS.caretakerWaitMs);
       // A connected member, if there is one. members[0] could be a dead socket still on
       // the roster (typically the Commander's, while they're away), and promoting it
       // left nobody holding command and the promotion addressed to no one.
-      squad.ownerId = squad.members.find(id => io.sockets.sockets.has(id)) ?? squad.members[0];
-      // Ownership goes by uid too. The departing Commander's uid used to stay on as
-      // ownerUid, so they could walk back in later and be made owner again (request-join
-      // Case 3), silently taking the squad from the member promoted here, whose client
-      // still said OWNER while every Commander action they took was refused.
-      squad.ownerUid = squad.memberUids?.[squad.ownerId] || io.sockets.sockets.get(squad.ownerId)?.data?.uid || null;
-      io.to(squad.ownerId).emit('promoted-to-owner', { roomCode });
-      sendJoinQueue(squad, roomCode, squad.ownerId);
-      commandTaken(squad, roomCode, squad.ownerId);
+      const successor = squad.members.find(id => io.sockets.sockets.has(id) && eligible(id)) ?? squad.members.find(eligible) ?? null;
+      if (successor === null) {
+        // Only new Nearby invitees are left: nobody holds command for now, as when everyone has
+        // gone. Whoever of the admitted may take it comes back first takes it (request-join Case 4).
+        squad.ownerId = null;
+        squad.ownerUid = null;
+      } else {
+        squad.ownerId = successor;
+        // Ownership goes by uid too. The departing Commander's uid used to stay on as
+        // ownerUid, so they could walk back in later and be made owner again (request-join
+        // Case 3), silently taking the squad from the member promoted here, whose client
+        // still said OWNER while every Commander action they took was refused.
+        squad.ownerUid = squad.memberUids?.[squad.ownerId] || io.sockets.sockets.get(squad.ownerId)?.data?.uid || null;
+        io.to(squad.ownerId).emit('promoted-to-owner', { roomCode });
+        sendJoinQueue(squad, roomCode, squad.ownerId);
+        commandTaken(squad, roomCode, squad.ownerId);
+      }
     }
 
     // The Commander leaving on purpose (or voted out) gives up the squad for good: it

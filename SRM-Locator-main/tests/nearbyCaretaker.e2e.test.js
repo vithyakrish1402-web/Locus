@@ -115,6 +115,74 @@ describe('a member admitted through a Nearby invite', () => {
   });
 });
 
+describe('when whoever holds command leaves on purpose', () => {
+  it('a fresh invitee is skipped; a normal member takes over', async () => {
+    const { room, alpha, n } = await leader();
+    const invitee = await inviteIn(alpha, room, `ct-exit-inv-${n}`); // first in line after the admin
+    const member = await api.connect();
+    await api.admit(alpha, member, room, `ct-exit-mem-${n}`);
+    const inviteePromoted = collect(invitee, 'promoted-to-owner');
+    const promoted = once(member, 'promoted-to-owner');
+    alpha.emit('leave-squad');
+    expect(await promoted).toEqual({ roomCode: room });
+    await settle(invitee);
+    expect(inviteePromoted).toEqual([]);
+  });
+
+  it('with only a fresh invitee left, the Group has no leader for now, as when its leader is offline', async () => {
+    const { room, alpha, n } = await leader();
+    const invitee = await inviteIn(alpha, room, `ct-exit-only-${n}`);
+    const promoted = collect(invitee, 'promoted-to-owner');
+    const roles = collect(invitee, 'group-role');
+    alpha.emit('leave-squad');
+    await settle(alpha);
+    await settle(invitee);
+    await sleep(100);
+    expect(promoted).toEqual([]);
+    expect(roles.at(-1)).toMatchObject({ role: 'member' });
+    // A stranger asking waits: nobody to answer, and the invitee is not made to.
+    await strangerAsks(room);
+    await settle(invitee);
+    expect(promoted).toEqual([]);
+    // Nor does the invitee take over by coming back.
+    invitee.disconnect();
+    await sleep(50);
+    const again = await api.connect();
+    expect(await api.returnToSquad(again, room, `ct-exit-only-${n}`)).toMatchObject({ outcome: 'granted', role: 'MEMBER' });
+  });
+
+  it('after the wait, an invitee takes over as any member would', async () => {
+    const { room, alpha, n } = await leader();
+    const invitee = await inviteIn(alpha, room, `ct-exit-old-${n}`);
+    await sleep(WAIT + 100);
+    const promoted = once(invitee, 'promoted-to-owner');
+    alpha.emit('leave-squad');
+    expect(await promoted).toEqual({ roomCode: room });
+  });
+
+  it('a stand-in leaving on purpose skips a fresh invitee too', async () => {
+    const { room, alpha, n } = await leader();
+    const standInUid = `ct-standin-${n}`;
+    let standIn = await api.connect();
+    await api.admit(alpha, standIn, room, standInUid);
+    const invitee = await inviteIn(alpha, room, `ct-si-inv-${n}`);
+    const member = await api.connect();
+    await api.admit(alpha, member, room, `ct-si-mem-${n}`);
+    // The admin goes offline; the first member back takes over as caretaker.
+    alpha.disconnect();
+    standIn.disconnect();
+    await sleep(50);
+    standIn = await api.connect();
+    expect(await api.returnToSquad(standIn, room, standInUid)).toMatchObject({ role: 'OWNER' });
+    const inviteePromoted = collect(invitee, 'promoted-to-owner');
+    const promoted = once(member, 'promoted-to-owner');
+    standIn.emit('leave-squad');
+    expect(await promoted).toEqual({ roomCode: room });
+    await settle(invitee);
+    expect(inviteePromoted).toEqual([]);
+  });
+});
+
 describe('a member admitted the usual way', () => {
   it('is promoted as before', async () => {
     const { room, alpha, n } = await leader();

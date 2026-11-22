@@ -118,7 +118,7 @@ The system uses Socket.IO to broadcast real-time telemetry across squad rooms (`
     - Declining only closes the invite.
     - An invite can be answered only by the person it is for, and only once. A used or expired invite is kept as a record for at least a minute, so a late answer is told `used` or `expired`.
     - Whoever invited gets `nearby-invite-answered` (`{ roomCode, name, accepted }`). Nobody joins without their own Accept.
-  - Someone admitted through a Nearby invite is not picked to stand in for an absent admin until `NEARBY_CARETAKER_WAIT_MS` (24 h) after joining. That covers both a caretaker on return (request-join Case 4) and a member promoted to hold the join or leave queue. They come back as a member, and with nobody else connected the Group has no stand-in for now. Admitted the usual way (approved by the admin) clears this. A deliberate exit by whoever holds command (`handleSquadSuccession`) is unchanged.
+  - Someone admitted through a Nearby invite is not picked to stand in for an absent admin until `NEARBY_CARETAKER_WAIT_MS` (24 h) after joining. That covers both a caretaker on return (request-join Case 4) and a member promoted to hold the join or leave queue. They come back as a member, and with nobody else connected the Group has no stand-in for now. Admitted the usual way (approved by the admin) clears this. The same goes for a deliberate exit by whoever holds command (`handleSquadSuccession`): a fresh invitee is skipped, and with only fresh invitees left the Group has no leader for now.
 
 ### 4.2 Telemetry & Position Engine
 - `update-location` (`{ roomCode, lat, lng, speed, battery, status, name, photo, heading }`): Operative position ping broadcasted every 1s-15s (based on telemetry mode).
