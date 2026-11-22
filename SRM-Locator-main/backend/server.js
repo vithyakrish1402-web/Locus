@@ -922,6 +922,8 @@ const leaveRequestPayload = (squad, roomCode, request) => ({
   fromModerator: isModeratorUid(squad, request.uid),
   // Approved or left to run out, never refused (leaveRequests.js).
   fromCommander: request.uid === commanderOf(squad),
+  // The server's clock now, so a phone counts down to `deadline` by it, whatever its own says.
+  serverNow: Date.now(),
 });
 
 // The connected sockets that may answer `request`: the admin and moderators, a moderator's own
@@ -963,7 +965,7 @@ function fileLeave(squad, roomCode, uid, name, now = Date.now()) {
     if (!io.sockets.sockets.has(squad.ownerId)) promoteStandIn(squad, roomCode);
     broadcastSquadUpdate(roomCode);
   }
-  tellPerson(uid, 'leave-request-pending', { roomCode, requestedAt: request.requestedAt, deadline: request.deadline });
+  tellPerson(uid, 'leave-request-pending', { roomCode, requestedAt: request.requestedAt, deadline: request.deadline, serverNow: Date.now() });
   return request;
 }
 
@@ -1024,7 +1026,7 @@ function commandTaken(squad, roomCode, socketId) {
 function sendOwnLeaveRequest(target, roomCode) {
   const squad = activeSquads[roomCode];
   const request = leaveGated(squad) ? leaveRequestOf(squad, target?.data?.uid) : null;
-  if (request) target.emit('leave-request-pending', { roomCode, requestedAt: request.requestedAt, deadline: request.deadline });
+  if (request) target.emit('leave-request-pending', { roomCode, requestedAt: request.requestedAt, deadline: request.deadline, serverNow: Date.now() });
 }
 
 // The member list marks whoever is waiting to leave (Stage 5 shows it).
@@ -2439,7 +2441,7 @@ socket.on('check-ping', (clientTimestamp) => {
     const uid = uidOfSocket(squad, socket.id);
     if (!isKnownMember(squad, uid)) return reply({ ok: false, reason: 'no-identity' });
     const request = fileLeave(squad, roomCode, uid, nameOf(squad, socket.id));
-    reply({ ok: true, requestedAt: request.requestedAt, deadline: request.deadline });
+    reply({ ok: true, requestedAt: request.requestedAt, deadline: request.deadline, serverNow: Date.now() });
   });
 
   // 'cancel-leave' { roomCode } -> { ok: true } or { ok: false, reason: 'not-in-squad' | 'not-required'
@@ -2495,7 +2497,7 @@ socket.on('check-ping', (clientTimestamp) => {
     if (!leaveGated(squad)) return reply({ ok: false, reason: 'not-required' });
     if (!can(roleOfSocket(squad, socket.id), 'admitOne')) return reply({ ok: false, reason: 'not-allowed' });
     const requests = leaveRequestsOf(squad).filter((request) => leaveAnswerers(squad, request).includes(socket.id));
-    reply({ ok: true, requests: requests.map((request) => leaveRequestPayload(squad, roomCode, request)) });
+    reply({ ok: true, requests: requests.map((request) => leaveRequestPayload(squad, roomCode, request)), serverNow: Date.now() });
   });
 
   // --- TIMED PAUSE AND HIDDEN (sharingHolds.js) ---

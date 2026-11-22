@@ -129,6 +129,23 @@ describe('in a Group made through Nearby, with the switch on', () => {
     expect(await ask(delta, 'get-leave-requests', { roomCode: room })).toEqual({ ok: false, reason: 'not-allowed' });
   });
 
+  it("carries the server's clock with every deadline, so a phone counts down by it", async () => {
+    const { room, alpha, bravo, requests } = await group(on);
+    const before = Date.now();
+    const pending = once(bravo, 'leave-request-pending');
+    const reply = await ask(bravo, 'request-leave', { roomCode: room });
+    const after = Date.now();
+    for (const payload of [reply, await pending]) {
+      expect(payload.serverNow).toBeGreaterThanOrEqual(before);
+      expect(payload.serverNow).toBeLessThanOrEqual(after + 50);
+    }
+    await waitFor(() => requests.alpha.length);
+    expect(Number.isFinite(requests.alpha[0].serverNow)).toBe(true);
+    const list = await ask(alpha, 'get-leave-requests', { roomCode: room });
+    expect(Number.isFinite(list.serverNow)).toBe(true);
+    expect(Number.isFinite(list.requests[0].serverNow)).toBe(true);
+  });
+
   it('approved: they are removed, their sharing stops, and coming back means asking again', async () => {
     const { room, uid, alpha, bravo, charlie } = await group(on);
     await makeModerator(alpha, room, charlie);
