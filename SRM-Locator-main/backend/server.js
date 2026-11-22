@@ -44,6 +44,7 @@ import {
 } from './leaveRequests.js';
 import {
   NEARBY_RADIUS_M, NEARBY_SCANS_PER_MIN, nearbyEnabled, nearbyTimings, cleanFix, isNearby, createInviteBook,
+  noteNearbyAdmission, forgetNearbyAdmission, tooNewToStandIn,
 } from './nearby.js';
 import { createJoinNotifier } from './joinNotify.js';
 import { createFriendsStore, friendsLoaderFromEnv, friendsStartupLine, sosAudience } from './friends.js';
@@ -1179,7 +1180,9 @@ function handleSquadSuccession(disconnectedId) {
 function promoteStandIn(squad, roomCode) {
   const standInId = squad.members.find(
     // Never someone asking to leave (only ever in a Group that needs approval to leave).
+    // Nor someone admitted through a Nearby invite within NEARBY_CARETAKER_WAIT_MS.
     id => io.sockets.sockets.has(id) && isKnownMember(squad, squad.memberUids?.[id]) && !leaveRequestOf(squad, squad.memberUids?.[id])
+      && !tooNewToStandIn(squad, squad.memberUids?.[id], Date.now(), NEARBY_TIMINGS.caretakerWaitMs)
   );
   if (!standInId) return false;
   squad.ownerId = standInId;
@@ -1654,7 +1657,9 @@ socket.on('check-ping', (clientTimestamp) => {
     // code, arriving while the Commander's phone had dropped off, made them Commander
     // with no approval. A stranger's request now waits (Case 5).
     const ownerIsLive = io.sockets.sockets.has(existing.ownerId);
-    if (!ownerIsLive && isKnownMember(existing, requesterUid)) {
+    // Not someone admitted through a Nearby invite within NEARBY_CARETAKER_WAIT_MS: they come back as a
+    // member (Case 4b), and the Group has no stand-in for now.
+    if (!ownerIsLive && isKnownMember(existing, requesterUid) && !tooNewToStandIn(existing, requesterUid, Date.now(), NEARBY_TIMINGS.caretakerWaitMs)) {
       // The caretaker may themselves be arriving on a new socket, so tear their old one
       // down here too — same reason as Case 3 above.
       const staleIds = collectStaleSocketIds(existing, requesterUid, socket.id);
@@ -1802,6 +1807,7 @@ socket.on('check-ping', (clientTimestamp) => {
         squad.memberUids[targetId] = targetSocket.data?.uid || null;
         // Approved once; remembered by uid so a reconnect isn't a fresh request.
         rememberMember(squad, targetSocket.data?.uid);
+        forgetNearbyAdmission(squad, targetSocket.data?.uid); // approved the usual way: a member like any other
         sendRallyPoint(targetSocket, squad);
         sendGroupSettings(targetSocket, squad, roomCode);
         sendSharingHold(targetSocket, roomCode);
@@ -2398,6 +2404,7 @@ socket.on('check-ping', (clientTimestamp) => {
     // Their own tap is the approval: on the admitted list, then the join every app makes, which lets
     // an admitted member straight in.
     rememberMember(squad, uid);
+    noteNearbyAdmission(squad, uid, Date.now());
     requestJoin({ roomCode: invite.roomCode, user: { uid, name: entry?.name }, intent: 'join' }, { uid, name: entry?.name });
     answered(true);
     reply({ ok: true, roomCode: invite.roomCode });

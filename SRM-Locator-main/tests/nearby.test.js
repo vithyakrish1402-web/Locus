@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   NEARBY_RADIUS_M, NEARBY_MAX_FIX_AGE_MS, NEARBY_INVITE_TTL_MS, nearbyEnabled, nearbyTimings,
   distanceM, cleanFix, isNearby, createInviteBook,
+  NEARBY_CARETAKER_WAIT_MS, noteNearbyAdmission, forgetNearbyAdmission, tooNewToStandIn,
 } from '../backend/nearby.js';
 
 // One metre of latitude, near SRM (12.82 N).
@@ -23,9 +24,12 @@ describe('the constants', () => {
   });
 
   it('the test timings are ignored in production', () => {
-    expect(nearbyTimings({})).toEqual({ inviteTtlMs: 120_000, maxFixAgeMs: 20_000 });
-    expect(nearbyTimings({ LOCUS_NEARBY_INVITE_TTL_MS: '300', LOCUS_NEARBY_MAX_FIX_AGE_MS: '400' })).toEqual({ inviteTtlMs: 300, maxFixAgeMs: 400 });
-    expect(nearbyTimings({ LOCUS_NEARBY_INVITE_TTL_MS: '300', NODE_ENV: 'production' })).toEqual({ inviteTtlMs: 120_000, maxFixAgeMs: 20_000 });
+    const DAY = 24 * 60 * 60 * 1000;
+    expect(nearbyTimings({})).toEqual({ inviteTtlMs: 120_000, maxFixAgeMs: 20_000, caretakerWaitMs: DAY });
+    expect(nearbyTimings({ LOCUS_NEARBY_INVITE_TTL_MS: '300', LOCUS_NEARBY_MAX_FIX_AGE_MS: '400', LOCUS_NEARBY_CARETAKER_WAIT_MS: '500' }))
+      .toEqual({ inviteTtlMs: 300, maxFixAgeMs: 400, caretakerWaitMs: 500 });
+    expect(nearbyTimings({ LOCUS_NEARBY_INVITE_TTL_MS: '300', LOCUS_NEARBY_CARETAKER_WAIT_MS: '500', NODE_ENV: 'production' }))
+      .toEqual({ inviteTtlMs: 120_000, maxFixAgeMs: 20_000, caretakerWaitMs: DAY });
   });
 });
 
@@ -123,5 +127,25 @@ describe('the invite book', () => {
     expect(book.use(b.id, 'b', 60_099)).toEqual({ ok: false, reason: 'used' });
     book.sweep(60_100);
     expect(book.use(b.id, 'b', 60_101)).toEqual({ ok: false, reason: 'no-invite' });
+  });
+});
+
+describe('standing in, for someone admitted through Nearby', () => {
+  it('waits 24 hours', () => expect(NEARBY_CARETAKER_WAIT_MS).toBe(24 * 60 * 60 * 1000));
+
+  it('is not allowed until the wait is over, then is', () => {
+    const squad = {};
+    noteNearbyAdmission(squad, 'u', 1000);
+    expect(tooNewToStandIn(squad, 'u', 1000 + NEARBY_CARETAKER_WAIT_MS - 1)).toBe(true);
+    expect(tooNewToStandIn(squad, 'u', 1000 + NEARBY_CARETAKER_WAIT_MS)).toBe(false);
+  });
+
+  it('never applies to anyone else, or after a usual approval', () => {
+    const squad = {};
+    expect(tooNewToStandIn(squad, 'v', 0)).toBe(false);
+    expect(tooNewToStandIn(undefined, 'v', 0)).toBe(false);
+    noteNearbyAdmission(squad, 'u', 0);
+    forgetNearbyAdmission(squad, 'u');
+    expect(tooNewToStandIn(squad, 'u', 1)).toBe(false);
   });
 });

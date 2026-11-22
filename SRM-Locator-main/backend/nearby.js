@@ -19,6 +19,10 @@ export const NEARBY_RADIUS_M = 15; // the "nearby" distance, and the worst accur
 export const NEARBY_MAX_FIX_AGE_MS = 20_000; // a position older than this is not used
 export const NEARBY_INVITE_TTL_MS = 2 * 60 * 1000; // an invite unanswered this long is gone
 export const NEARBY_SCANS_PER_MIN = 6; // scans one person may make a minute
+// Someone admitted through a Nearby invite is not picked to stand in for an absent admin (caretaker,
+// or a member promoted to hold the join queue) until this long after joining. Then they count as any
+// member does.
+export const NEARBY_CARETAKER_WAIT_MS = 24 * 60 * 60 * 1000;
 
 /** Whether Nearby Join is on. Off unless LOCUS_NEARBY_ENABLED is "true". */
 export const nearbyEnabled = (env = process.env) => env.LOCUS_NEARBY_ENABLED === 'true';
@@ -32,8 +36,27 @@ export function nearbyTimings(env = process.env) {
   return {
     inviteTtlMs: override('LOCUS_NEARBY_INVITE_TTL_MS', NEARBY_INVITE_TTL_MS),
     maxFixAgeMs: override('LOCUS_NEARBY_MAX_FIX_AGE_MS', NEARBY_MAX_FIX_AGE_MS),
+    caretakerWaitMs: override('LOCUS_NEARBY_CARETAKER_WAIT_MS', NEARBY_CARETAKER_WAIT_MS),
   };
 }
+
+/** Records that `uid` was admitted to `squad` through a Nearby invite, at `now`. */
+export function noteNearbyAdmission(squad, uid, now) {
+  if (!squad || !uid) return;
+  squad.nearbyAdmittedAt ??= Object.create(null);
+  squad.nearbyAdmittedAt[uid] = now;
+}
+
+/** Admitted another way (a normal approval): they count as any member does. */
+export function forgetNearbyAdmission(squad, uid) {
+  if (squad?.nearbyAdmittedAt && uid) delete squad.nearbyAdmittedAt[uid];
+}
+
+/** Whether `uid` joined `squad` through a Nearby invite less than `waitMs` ago (not a stand-in yet). */
+export const tooNewToStandIn = (squad, uid, now, waitMs = NEARBY_CARETAKER_WAIT_MS) => {
+  const at = uid ? squad?.nearbyAdmittedAt?.[uid] : undefined;
+  return Number.isFinite(at) && now - at < waitMs;
+};
 
 const EARTH_RADIUS_M = 6_371_000;
 const toRad = (deg) => (deg * Math.PI) / 180;
