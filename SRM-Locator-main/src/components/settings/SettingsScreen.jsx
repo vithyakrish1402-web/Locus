@@ -78,8 +78,7 @@ export default function SettingsScreen({
   useEffect(() => subscribeTheme(({ preference }) => setTheme(preference)), []);
   useEffect(() => { headingRef.current?.focus(); }, []);
 
-  // theme.js runs the switch (one effect per phone); the pressed option is where a
-  // circular reveal would start.
+  // Apply immediately through the same store as the light/dark shortcut.
   const handleThemeChange = (next) => transitionTheme(next);
 
   const checking = update.status === 'checking';

@@ -1,39 +1,10 @@
-import { flushSync } from 'react-dom';
-import { setThemePreference, getThemePreference, resolveTheme, systemPrefersDark } from './theme';
+import { setThemePreference } from './theme';
 
-let running = false;
-
-// Keep the existing theme store, system preference, and native subscribers in sync.
-export async function transitionTheme(preference, type = 'vertical') {
-  if (running) return;
-  const apply = () => flushSync(() => setThemePreference(preference));
-  const next = resolveTheme(preference, systemPrefersDark());
-  const current = resolveTheme(getThemePreference(), systemPrefersDark());
-  if (next === current || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ||
-      typeof document.startViewTransition !== 'function' ||
-      typeof document.documentElement.animate !== 'function') {
-    apply();
-    return;
-  }
-  running = true;
-  let applied = false;
-  const update = () => { apply(); applied = true; };
-  try {
-    const transition = document.startViewTransition(update);
-    // Observe finished immediately, including when a hidden document skips the transition.
-    const finished = transition.finished.catch(() => {});
-    try {
-      await transition.ready;
-      document.documentElement.animate({
-        clipPath: [type === 'vertical' ? 'inset(0 50% 0 50%)' : 'inset(50% 0 50% 0)', 'inset(0 0 0 0)'],
-      }, { duration: 700, easing: 'ease-in-out', pseudoElement: '::view-transition-new(root)' });
-    } catch {
-      transition.skipTransition();
-    }
-    await finished;
-  } catch {
-    if (!applied) update();
-  } finally {
-    running = false;
-  }
+// Theme choice must never wait for a View Transition or an animation frame: Android
+// can suspend both while a dialog is open or the app goes into the background.
+// The store applies tokens, status-bar style and subscribers together; its existing
+// brief transition suppression avoids hundreds of individual colour animations.
+export function transitionTheme(preference) {
+  setThemePreference(preference);
+  return Promise.resolve();
 }
